@@ -154,6 +154,21 @@ describe('transcript translation jobs', () => {
 		assert.ok('refused' in refused, 'the same user without the waiver is still refused');
 	});
 
+	it('a waived job reads no tier: a super admin translating on their own channel keeps their automatic Unlimited row', async () => {
+		const { asEnv, d1 } = await setup();
+		await d1.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('boss', 'unlimited', 'admin', 'system:super-admin', 'now')").run();
+		const own = await requestTranslationJob(asEnv, { video: video({ userId: 'boss' }), userId: 'boss', roles: null, sourceLanguage: 'ar', language: 'en', replace: false, waive: true }, NOV);
+		assert.ok('job' in own);
+		const row = await d1.prepare("SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = 'boss'").first();
+		assert.deepEqual(row, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
+		const subject = await d1.prepare('SELECT subject_id, waived FROM caption_jobs WHERE id = ?').bind(own.job.id).first();
+		assert.deepEqual(subject, { subject_id: 'boss', waived: 1 });
+		// On someone else's video the job is recorded against the channel owner, as before
+		const other = await requestTranslationJob(asEnv, { video: video(), userId: 'boss', roles: null, sourceLanguage: 'ar', language: 'fr', replace: false, waive: true }, NOV);
+		assert.ok('job' in other);
+		assert.equal((await d1.prepare('SELECT subject_id FROM caption_jobs WHERE id = ?').bind(other.job.id).first<{ subject_id: string }>())?.subject_id, 'alice');
+	});
+
 	it('refuses: same language, no source, a translation as source, an existing draft, a video not ready, paused by the admin', async () => {
 		const { env, asEnv } = await setup();
 		await assert.rejects(translate(asEnv, { language: 'ar' }), /same_language/);

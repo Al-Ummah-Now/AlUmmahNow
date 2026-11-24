@@ -645,6 +645,20 @@ describe('creator tiers: channels, access and admin', () => {
     assert.deepEqual((await creatorAccess(h.d1, 'alice', [])).uploadChannelIds, []);
   });
 
+  it('roles unknown (null or undefined) never drop or overwrite the automatic super admin row; known roles still reconcile', async () => {
+    const h = await harness();
+    await creatorAccess(h.d1, 'boss', ['Super Admin']);
+    const stored = () => h.db.db.prepare("SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = 'boss'").get() as { tier_id: string; assigned_by: string } | undefined;
+    for (const roles of [null, undefined]) {
+      const out = await resolveCreator(h.d1, { userId: 'boss', roles });
+      assert.deepEqual([out.subjectId, out.via, out.tier?.unlimited], ['boss', 'super_admin', true]);
+      assert.deepEqual(stored(), { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
+    }
+    // A caller's own roles (known, without Super Admin) still remove it, as before
+    await resolveCreator(h.d1, { userId: 'boss', roles: [] });
+    assert.equal(stored(), undefined);
+  });
+
   it("an automatic super admin row never grants on someone else's channel", async () => {
     const h = await harness();
     await creatorAccess(h.d1, 'boss', ['Super Admin']);

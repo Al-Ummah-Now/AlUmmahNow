@@ -18,7 +18,7 @@ import { CLIENT_HEADER } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { checkHuman, TURNSTILE_HEADER } from '../../lib/bot-guard';
 import { loadChannelRecord, roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
-import { resolveCreator } from '../../lib/creatorTiers';
+import { channelOwnerTier } from '../../lib/creatorTiers';
 import { featureOff } from '../../lib/features/off';
 import { logger } from '../../lib/logger';
 import { CheckoutError, myCheckout, mySupport, quote, saveChannelSupportSettings, startSupportCheckout, stopMyPledge } from '../../lib/support/checkout';
@@ -49,7 +49,7 @@ async function receivingChannel(c: Context, env: Env) {
 	if (!record) return null;
 	const channel = { channelId, ownerId: record.userId ?? null, deleted: !!record.isDeleted, suspended: !!record.isSuspended };
 	const db = env.SEARCH_DB!;
-	const ok = await receiverEligibility(env, channel, async (ownerId) => (await resolveCreator(db as unknown as D1Database, { userId: ownerId, roles: null })).tier?.supportReceive === true);
+	const ok = await receiverEligibility(env, channel, async (ownerId) => (await channelOwnerTier(db as unknown as D1Database, ownerId))?.supportReceive === true);
 	return ok.ok ? { ...channel, record } : null;
 }
 

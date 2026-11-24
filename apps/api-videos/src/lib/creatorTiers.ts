@@ -331,6 +331,11 @@ async function dropSuperAdminTier(db: D1Database, userId: string): Promise<void>
 	}
 }
 
+/** Roles are known only when the caller passed an array (a token's roles, possibly empty). */
+function rolesKnown(roles: readonly string[] | null | undefined): roles is readonly string[] {
+	return Array.isArray(roles);
+}
+
 /**
  * The tier that applies to `userId` acting (optionally) on a channel owned by
  * `channelOwnerId`. Throws when D1 cannot answer (fail closed).
@@ -348,9 +353,14 @@ export async function resolveCreator(
 	const subjectId = ownChannel ? who.userId : (who.channelOwnerId as string);
 	let assignment = await readAssignment(db, subjectId);
 	// An automatic super admin row is only as good as the role: it never grants
-	// on someone else's channel, and once the role is gone it is removed
+	// on someone else's channel, and once the role is gone it is removed. Only a
+	// caller whose roles are known can show the role is gone: with roles unknown
+	// (null or undefined: a server path with no token) the stored row stands.
 	if (assignment?.assignedBy === SUPER_ADMIN_ASSIGNER) {
-		if (subjectId === who.userId && !isSuperAdmin(who.roles)) await dropSuperAdminTier(db, subjectId);
+		if (subjectId === who.userId) {
+			if (!rolesKnown(who.roles)) return { subjectId, tier: unlimited, via: 'super_admin' };
+			if (!isSuperAdmin(who.roles)) await dropSuperAdminTier(db, subjectId);
+		}
 		assignment = null;
 	}
 	if (!assignment) {
