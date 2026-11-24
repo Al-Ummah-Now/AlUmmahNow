@@ -25,6 +25,7 @@ that product/legal should confirm.
 | `channel_sections/{channelId}/...`, `channel_tabs/channel-tabs/{channelId}` | Channel layout | Contract (b) | With the channel |
 | `videos/{videoId}` | Owner `userId`; embedded `comments[]`, `likes[]`, `dislikes[]` with user ids and comment text | Contract (b) | Until erasure / video deletion |
 | `watch_history/{userId}:{videoId}` | What a user watched, when, how far | Contract (b): history and resume feature, user-controlled (clear/remove in Watch History) | **18 months after last watched** (enforced daily) |
+| `admin-backups`: `profile-emails/` (admin check of profile emails, lib/admin/profile-email-reports.ts) | Email stored on a profile or channel and the account's, by user id; super admins only | Legitimate interest (f): correct account data | **30 days** (enforced daily); deleted with the account |
 | `community_posts/posts/...`, `comments/...`, `likes/{postId}/{userId}.json`, `votes/{postId}/{userId}.json`, `comment-likes/...` | Posts, comments, likes, poll votes | Contract (b) | Until erasure / content deletion |
 | `playlists/{playlistId}` | Owner `userId` | Contract (b) | Until erasure |
 | `upload-defaults/{userId}/...` | Upload templates | Contract (b) | Until erasure |

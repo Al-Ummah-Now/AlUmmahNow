@@ -52,6 +52,7 @@ import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseLiveSessionOwner } from '../live/store';
 import { LIVE_DELETE_BATCH, eraseLiveChat, eraseLiveReminders, exportLiveChat, exportLiveReminders, isMissingTable } from '../live/metadata';
 import { eraseImageOwners } from '../csam/imageOwners';
+import { eraseProfileEmailReports } from '../admin/profile-email-reports';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
@@ -85,6 +86,8 @@ export interface PrivacyBuckets {
 	'scheduled-videos'?: unknown;
 	/** Channel subscriptions (lib/subscription-store.ts) */
 	NOTIFICATIONS_DB?: D1Database;
+	/** Profile email reports (lib/admin/profile-emails.ts) */
+	ADMIN_BACKUPS?: unknown;
 	/** Ownership index and privacy footprints: the erase reads them instead of scanning (#1073) */
 	SEARCH_DB?: unknown;
 }
@@ -1250,6 +1253,9 @@ export async function eraseUserData(
 				await deleteKeys(profiles, [userId], ctx.budget);
 				bump(summary.deleted, 'profile');
 			}
+			// Profile email reports that name the user, found by their own key prefix. After the profile: a
+			// check running now either sees the profile gone or has its pointer here
+			if (env.ADMIN_BACKUPS) bump(summary.deleted, 'profileEmailReports', await eraseProfileEmailReports(asBucket(env.ADMIN_BACKUPS), userId, ctx.budget));
 			// Who uploaded which image (lib/csam/imageOwners.ts). CSAM evidence is not here: it
 			// lives in its own bucket that no erasure touches (docs/specs/CSAM-RESPONSE.md §4)
 			if (db) {

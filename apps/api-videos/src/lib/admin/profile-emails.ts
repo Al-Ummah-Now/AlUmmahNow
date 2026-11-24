@@ -10,9 +10,9 @@
  *            hours. The report page is stored before the first write, so it always holds what was there.
  *
  * Profiles whose user id has no account are left as they are and listed. The result holds counts only;
- * the report (ADMIN_BACKUPS, private) holds the ids and emails, for super admins, and is deleted after
- * 30 days (swept when the next job starts). One page of profiles per step, idempotent, so a retry
- * resumes where it stopped.
+ * the report (ADMIN_BACKUPS, private) holds the ids and emails, for super admins. One page of profiles
+ * per step, idempotent, so a retry resumes where it stopped.
+ * The report's layout, retention and erasure: profile-email-reports.ts.
  */
 import {
 	OWNERSHIP_TABLE,
@@ -26,9 +26,10 @@ import {
 	type SearchDb,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import R2Repository, { CREATE_ONLY } from '../r2Repo';
+import R2Repository from '../r2Repo';
 import { authEmails, normalizeEmail } from './authUsers';
 import { createJob, getJob, listJobs, type JobEnv, type JobOutcome } from './jobs';
+import { JSON_META, inParallel, readStep, recordKey, stepPath, storeRecord, type UserRecord } from './profile-email-reports';
 import { AdminError } from './service';
 
 export interface ProfileEmailsEnv extends JobEnv {
@@ -42,13 +43,9 @@ export interface ProfileEmailsEnv extends JobEnv {
 type Row = Record<string, unknown>;
 
 export const PROFILE_EMAILS_PAGE = 50;
-export const REPORT_PREFIX = 'profile-emails/';
-export const REPORT_DAYS = 30;
 const READ_CONCURRENCY = 8;
 /** Channel ids read from one profile's own list (the index gives the rest). */
 const CHANNELS_PER_OWNER = 200;
-
-const reportKey = (jobId: string, page: number) => `${REPORT_PREFIX}${jobId}/${String(page).padStart(6, '0')}.json`;
 
 /** What a record has stored as its email; placeholders ("unknown") count as none. */
 const storedEmail = (row: Row): string | null => {
@@ -156,23 +153,6 @@ async function repairOne(env: ProfileEmailsEnv, entry: ProfileEmailEntry): Promi
 	return saved ? outcome : 'gone';
 }
 
-async function readReport(env: ProfileEmailsEnv, jobId: string, page: number): Promise<ProfileEmailsReportPage | null> {
-	const object = await env.ADMIN_BACKUPS!.get(reportKey(jobId, page));
-	return object ? (JSON.parse(await object.text()) as ProfileEmailsReportPage) : null;
-}
-
-/** Reports older than 30 days (they hold emails) are deleted. */
-async function sweepReports(env: ProfileEmailsEnv): Promise<void> {
-	const before = Date.now() - REPORT_DAYS * 86_400_000;
-	let cursor: string | undefined;
-	do {
-		const page = await env.ADMIN_BACKUPS!.list({ prefix: REPORT_PREFIX, limit: 1000, cursor });
-		const old = page.objects.filter((o) => o.uploaded.getTime() < before).map((o) => o.key);
-		if (old.length) await env.ADMIN_BACKUPS!.delete(old);
-		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
-	} while (cursor);
-}
-
 const modeOf = (job: AdminJob): ProfileEmailsMode => (job.params.mode === 'repair' ? 'repair' : 'check');
 
 /** The job handler: one page of profiles per step. */
@@ -182,26 +162,43 @@ export async function runProfileEmails(env: ProfileEmailsEnv, job: AdminJob): Pr
 	const page = Math.max(0, Number(job.params.page) || 0);
 	const startAfter = typeof job.params.startAfter === 'string' ? job.params.startAfter : undefined;
 	const prior = (job.result ?? {}) as Partial<ProfileEmailsResult>;
-	if (page === 0) await sweepReports(env);
 
 	const plan = await planPage(env, startAfter);
-	// A retried repair step: what the first attempt found (and may already have written) stays in the report
-	const before = await readReport(env, job.id, page);
-	const seen = new Set((before?.entries ?? []).map((e) => `${e.kind}:${e.id}`));
-	const entries = [...(before?.entries ?? []), ...plan.entries.filter((e) => !seen.has(`${e.kind}:${e.id}`))];
-	const report: ProfileEmailsReportPage = { jobId: job.id, mode, page, entries, noAccount: plan.noAccount };
-	const filled = entries.length > 0 || plan.noAccount.length > 0;
-	const save = (onlyIf?: R2Conditional) => env.ADMIN_BACKUPS!.put(reportKey(job.id, page), JSON.stringify(report), { httpMetadata: { contentType: 'application/json' }, ...(onlyIf ? { onlyIf } : {}) });
-	if (filled) await save(before ? undefined : CREATE_ONLY);
+	const step = stepPath(job, page);
+	// A retried step: what the first attempt found (and may already have written) stays in the report
+	const before = await readStep(env.ADMIN_BACKUPS, step);
+	const records = new Map<string, UserRecord>();
+	const recordOf = (userId: string) => {
+		let record = records.get(userId);
+		if (!record) records.set(userId, (record = { entries: [...(before.get(userId)?.record.entries ?? [])] }));
+		return record;
+	};
+	for (const userId of before.keys()) recordOf(userId);
+	for (const entry of plan.entries) {
+		const { entries } = recordOf(entry.userId);
+		if (!entries.some((e) => e.kind === entry.kind && e.id === entry.id)) entries.push(entry);
+	}
+	for (const { userId, stored } of plan.noAccount) recordOf(userId).noAccount = { stored };
 
-	if (mode === 'repair') {
-		for (const entry of entries) {
+	await inParallel([...records], async ([userId, record]) => {
+		const etag = await storeRecord(env, step, userId, record, before.get(userId)?.etag);
+		if (!etag) {
+			// Erased meanwhile: nothing to keep, nothing to write
+			records.delete(userId);
+			return;
+		}
+		if (mode !== 'repair' || !record.entries.length) return;
+		for (const entry of record.entries) {
 			const outcome = await repairOne(env, entry);
 			// A retry finds its own earlier write in place: it was written by this job
-			entry.outcome = outcome === 'already' && before ? 'written' : outcome;
+			const known = before.get(userId)?.record.entries.some((e) => e.kind === entry.kind && e.id === entry.id);
+			entry.outcome = outcome === 'already' && known ? 'written' : outcome;
 		}
-		if (entries.length) await save();
-	}
+		// Only over the same record: one an erasure deleted meanwhile never comes back
+		await env.ADMIN_BACKUPS!.put(recordKey(step, userId), JSON.stringify(record), { ...JSON_META, onlyIf: { etagMatches: etag } });
+	});
+	const entries = [...records.values()].flatMap((r) => r.entries);
+	const filled = records.size > 0;
 
 	const n = (key: keyof ProfileEmailsResult) => Number(prior[key]) || 0;
 	const profiles = entries.filter((e) => e.kind === 'profile');
@@ -253,7 +250,15 @@ export async function startProfileEmails(env: ProfileEmailsEnv, input: { mode: P
 /** One page of a job's private report. */
 export async function profileEmailsReport(env: ProfileEmailsEnv, jobId: string, page: number): Promise<ProfileEmailsReportPage> {
 	if (!/^[A-Za-z0-9-]{8,64}$/.test(jobId) || !Number.isInteger(page) || page < 0) throw new AdminError(400, 'invalid_request');
-	const report = env.ADMIN_BACKUPS ? await readReport(env, jobId, page) : null;
-	if (!report) throw new AdminError(404, 'report_not_found', 'No such report page (reports are kept 30 days)');
-	return report;
+	const job = await getJob(env, jobId);
+	const records = job?.kind === 'profiles.repair-emails' && env.ADMIN_BACKUPS ? await readStep(env.ADMIN_BACKUPS, stepPath(job, page)) : null;
+	if (!job || !records?.size) throw new AdminError(404, 'report_not_found', 'No such report page (reports are kept 30 days)');
+	const users = [...records].sort(([a], [b]) => a.localeCompare(b));
+	return {
+		jobId,
+		mode: modeOf(job),
+		page,
+		entries: users.flatMap(([, { record }]) => record.entries),
+		noAccount: users.flatMap(([userId, { record }]) => (record.noAccount ? [{ userId, stored: record.noAccount.stored }] : [])),
+	};
 }

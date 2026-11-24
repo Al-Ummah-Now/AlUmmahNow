@@ -12,7 +12,11 @@ import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
-import { PROFILE_EMAILS_PAGE, REPORT_PREFIX } from '../src/lib/admin/profile-emails';
+import { PROFILE_EMAILS_PAGE } from '../src/lib/admin/profile-emails';
+import { REPORT_PREFIX, eraseProfileEmailReports, sweepProfileEmailReports } from '../src/lib/admin/profile-email-reports';
+import { eraseRunUserData } from '../src/lib/privacy/run-user-erase';
+import { OperationBudget } from '../src/lib/privacy/scan';
+import { eraseUserData } from '../src/lib/privacy/user-data';
 import { AuthDb } from './auth-db';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -94,6 +98,15 @@ async function setup(seed: { profiles: Record<string, unknown>; channels: Record
 
 const result = (job: AdminJob) => job.result as unknown as ProfileEmailsResult;
 const brief = (r: ProfileEmailsReportPage) => r.entries.map((e) => [e.kind, e.id, e.stored, e.account]).sort();
+
+const keysOf = (t: { raw: { ADMIN_BACKUPS: MemoryBucket } }) => {
+	const keys = [...t.raw.ADMIN_BACKUPS.store.keys()];
+	return { records: keys.filter((k) => k.startsWith(`${REPORT_PREFIX}reports/`)), pointers: keys.filter((k) => k.startsWith(`${REPORT_PREFIX}by-user/`)) };
+};
+const pointerOf = (record: string) => {
+	const [, , day, jobId, page, file] = record.split('/');
+	return `${REPORT_PREFIX}by-user/${file.replace('.json', '')}/${day}/${jobId}/${page}`;
+};
 
 const realInfo = logger.info;
 afterEach(() => {
@@ -233,16 +246,140 @@ describe('profile emails: repair', () => {
 });
 
 describe('profile emails: reports', () => {
-	it('older reports are deleted when a job starts; a missing page is 404', async () => {
+	it('a missing page is 404; the runs are listed', async () => {
 		const t = await setup();
-		await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}old-job/000000.json`, '{}');
-		await t.raw.ADMIN_BACKUPS.put('legacy-restore/keep.json', '{}');
-		for (const key of t.raw.ADMIN_BACKUPS.store.keys()) t.raw.ADMIN_BACKUPS.uploaded.set(key, new Date(Date.now() - 31 * 86_400_000));
 		const job = await t.run({ mode: 'check' });
-		assert.equal(t.raw.ADMIN_BACKUPS.store.has(`${REPORT_PREFIX}old-job/000000.json`), false);
-		assert.equal(t.raw.ADMIN_BACKUPS.store.has('legacy-restore/keep.json'), true);
 		assert.equal((await t.call('GET', `/profile-emails/jobs/${job.id}/report?page=7`)).status, 404);
 		assert.equal((await t.call('GET', `/profile-emails/jobs/${job.id}/report?page=x`)).status, 400);
+		assert.equal((await t.call('GET', '/profile-emails/jobs/no-such-job/report')).status, 404);
 		assert.deepEqual((await t.call('GET', '/profile-emails/jobs')).body.result.items.map((j: AdminJob) => j.id), [job.id]);
+	});
+
+	it('every record has its pointer, and emails are only in the records', async () => {
+		const t = await setup();
+		await t.run({ mode: 'check' });
+		const { records, pointers } = keysOf(t);
+		assert.deepEqual(records.map((k) => k.split('/').at(-1)).sort(), ['usr_differs.json', 'usr_gone.json', 'usr_noacct.json', 'usr_none.json', 'usr_same.json']);
+		assert.deepEqual(pointers.sort(), records.map(pointerOf).sort());
+		for (const key of pointers) assert.equal(t.raw.ADMIN_BACKUPS.store.get(key), '');
+		assert.doesNotMatch(JSON.stringify([...t.raw.ADMIN_BACKUPS.store.keys()]), /@/);
+	});
+
+	it('the daily sweep deletes records older than 30 days with their pointers, and reads no others', async () => {
+		const t = await setup();
+		const job = await t.run({ mode: 'check' });
+		const kept = keysOf(t);
+		const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+		for (const n of [31, 45]) {
+			await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}reports/${day(n)}/old-job/000000/usr_differs.json`, '{"entries":[]}');
+			await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}by-user/usr_differs/${day(n)}/old-job/000000`, '');
+		}
+		await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}reports/${day(30)}/edge-job/000000/usr_differs.json`, '{"entries":[]}');
+		await t.raw.ADMIN_BACKUPS.put('legacy-restore/keep.json', '{}');
+		t.raw.ADMIN_BACKUPS.calls = 0;
+		assert.equal(await sweepProfileEmailReports(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(10)), 2);
+		assert.equal(t.raw.ADMIN_BACKUPS.calls, 2, 'one list, one delete');
+		const left = keysOf(t);
+		assert.deepEqual(left.records.filter((k) => k.includes('old-job')), []);
+		assert.deepEqual(left.pointers.sort(), kept.pointers.sort());
+		assert.equal(left.records.length, kept.records.length + 1, 'the 30th day is kept');
+		assert.equal(t.raw.ADMIN_BACKUPS.store.has('legacy-restore/keep.json'), true);
+		assert.ok((await t.report(job.id)).entries.length);
+	});
+
+	it('the sweep works through more than one batch', async () => {
+		const t = await setup({ profiles: {}, channels: {}, auth: {} });
+		for (let n = 0; n < 1200; n++) {
+			const id = `usr_${String(n).padStart(5, '0')}`;
+			await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}reports/2020-01-01/old-job/000000/${id}.json`, '{"entries":[]}');
+			await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}by-user/${id}/2020-01-01/old-job/000000`, '');
+		}
+		assert.equal(await sweepProfileEmailReports(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(20)), 1200);
+		assert.equal(t.raw.ADMIN_BACKUPS.store.size, 0);
+	});
+
+	it("account erasure deletes the user's records and pointers in every report, and nobody else's", async () => {
+		const t = await setup();
+		const first = await t.run({ mode: 'check' });
+		const second = await t.run({ mode: 'check' });
+		const others = keysOf(t).records.filter((k) => !k.endsWith('/usr_differs.json'));
+		t.raw.ADMIN_BACKUPS.calls = 0;
+		assert.equal(await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_differs', new OperationBudget(10)), 2);
+		assert.equal(t.raw.ADMIN_BACKUPS.calls, 3, 'one list of their own prefix, two deletes');
+		const left = keysOf(t);
+		assert.deepEqual(left.records.sort(), others.sort());
+		assert.equal(left.pointers.some((k) => k.includes('usr_differs')), false);
+		for (const job of [first, second]) {
+			const r = await t.report(job.id);
+			assert.equal(JSON.stringify(r).includes('usr_differs'), false);
+			assert.ok(r.entries.length, 'the rest of the report stays');
+		}
+		// A user id that is the start of another one takes nothing of theirs
+		assert.equal(await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_no', new OperationBudget(10)), 0);
+	});
+
+	it('both erasures (the account and an E2E run account) include the reports', async () => {
+		const full = await setup();
+		await full.run({ mode: 'check' });
+		const env = { ...full.raw, watch_history: new MemoryBucket(), channel_sections: new MemoryBucket(), channel_tabs: new MemoryBucket(), 'upload-defaults': new MemoryBucket(), reports: new MemoryBucket() };
+		const summary = await eraseUserData(env as never, 'usr_none', new OperationBudget(2000));
+		assert.equal(summary.complete, true);
+		assert.equal(summary.deleted.profileEmailReports, 1);
+		assert.equal(keysOf(full).records.some((k) => k.includes('usr_none')), false);
+
+		const run = await setup();
+		await run.run({ mode: 'check' });
+		for (const kind of ['video'] as const) await runOwnershipPass(run.raw as never, kind, { maxPages: 10 });
+		const runEnv = { ...run.raw, watch_history: new MemoryBucket(), channel_sections: new MemoryBucket(), channel_tabs: new MemoryBucket(), 'upload-defaults': new MemoryBucket(), reports: new MemoryBucket() };
+		const erased = await eraseRunUserData(runEnv as never, 'usr_none', new OperationBudget(2000));
+		assert.equal(erased.complete, true);
+		assert.equal(erased.deleted.profileEmailReports, 1);
+		assert.equal(keysOf(run).records.some((k) => k.includes('usr_none')), false);
+	});
+
+	it('an erasure while a step runs leaves nothing behind: before the emails are written, or between them and the outcome', async () => {
+		for (const when of ['before', 'after'] as const) {
+			const t = await setup();
+			const check = await t.run({ mode: 'check' });
+			const erase = async () => {
+				await t.raw.profiles.delete('usr_differs');
+				await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_differs', new OperationBudget(50));
+			};
+			const put = t.raw.ADMIN_BACKUPS.put.bind(t.raw.ADMIN_BACKUPS);
+			let fired = false;
+			t.raw.ADMIN_BACKUPS.put = (async (key: string, value: string, options?: any) => {
+				const emails = key.endsWith('/usr_differs.json') && value.includes('@');
+				if (when === 'before' && emails && !fired) {
+					fired = true;
+					await erase();
+				}
+				const out = await put(key, value, options);
+				if (when === 'after' && emails && !fired) {
+					fired = true;
+					// The job is past its own check of the profile only once this put returned
+					queueMicrotask(() => void erase());
+				}
+				return out;
+			}) as never;
+			const job = await t.run({ mode: 'repair', checkJobId: check.id });
+			assert.equal(fired, true);
+			assert.equal(job.status, 'succeeded', job.lastError ?? '');
+			assert.equal([...t.raw.ADMIN_BACKUPS.store.keys()].some((k) => k.includes('usr_differs')), false, when);
+			assert.equal(t.raw.profiles.read('usr_differs'), null, 'the profile does not come back');
+		}
+	});
+
+	it('a record another delivery changed meanwhile fails the step (it retries) and is not deleted', async () => {
+		const t = await setup();
+		const put = t.raw.ADMIN_BACKUPS.put.bind(t.raw.ADMIN_BACKUPS);
+		let raced = 0;
+		t.raw.ADMIN_BACKUPS.put = (async (key: string, value: string, options?: any) => {
+			if (key.endsWith('/usr_none.json') && value.includes('@') && raced++ === 0) await put(key, JSON.stringify({ entries: [{ kind: 'profile', id: 'usr_none', userId: 'usr_none', stored: 'first@example.com', account: 'none@example.com' }] }));
+			return put(key, value, options);
+		}) as never;
+		const job = await t.run({ mode: 'check' });
+		assert.equal(job.status, 'succeeded', job.lastError ?? '');
+		assert.equal(job.attempts > 1, true, 'retried');
+		assert.equal((await t.report(job.id)).entries.find((e) => e.id === 'usr_none')?.stored, 'first@example.com', 'what was there first stays');
 	});
 });
