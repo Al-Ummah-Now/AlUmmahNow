@@ -42,6 +42,9 @@ export interface HomeLibraryResult {
 const isTransportOrAuthFailure = (res: ApiResult<unknown>): boolean =>
   res.status === null || res.status === 401 || res.status >= 500;
 
+/** Margin reserved before `budgetMs` so a slow cover lookup never trips the page's outer `withinBudget` timer. */
+export const THUMB_LOOKUP_MARGIN_MS = 200;
+
 /** Minimum remaining budget (ms) before doing anonymous visibility lookups for history thumbnails. */
 const MIN_THUMB_LOOKUP_BUDGET_MS = 50;
 
@@ -150,13 +153,14 @@ export async function getHomeLibrary(budgetMs = FIRST_DATA_BUDGET_MS): Promise<H
         ),
       ];
 
-      const remaining = deadline - Date.now();
+      const remaining = deadline - THUMB_LOOKUP_MARGIN_MS - Date.now();
       if (unknownSignedIds.length > 0 && remaining >= MIN_THUMB_LOOKUP_BUDGET_MS) {
-        const resolved = await withinBudget(
-          () => Promise.all(unknownSignedIds.map(async (id) => ((await loadPublicVideo(id))?.poster ? id : null))),
-          remaining,
+        const resolved = await Promise.all(
+          unknownSignedIds.map((id) =>
+            withinBudget(async () => ((await loadPublicVideo(id))?.poster ? id : null), remaining),
+          ),
         );
-        for (const id of resolved ?? []) {
+        for (const id of resolved) {
           if (id) publicIds.add(id);
         }
       }

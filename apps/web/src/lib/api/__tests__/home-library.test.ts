@@ -18,7 +18,8 @@ jest.mock('@/lib/embed/content', () => ({
   loadPublicVideo: (videoId: string) => mockLoadPublicVideo(videoId),
 }));
 
-import { getHomeLibrary } from '../home-library';
+import { getHomeLibrary, THUMB_LOOKUP_MARGIN_MS } from '../home-library';
+import { FIRST_DATA_BUDGET_MS, withinBudget } from '@/lib/ssr/first-data';
 import { stableImages } from '@/lib/ssr/stable-images';
 
 const historyEntry = (videoId: string) => ({
@@ -165,5 +166,41 @@ describe('getHomeLibrary (server-side home library loader)', () => {
       .mockResolvedValueOnce({ status: 500, data: null });
 
     await expect(getHomeLibrary()).resolves.toBeUndefined();
+  });
+
+  it('returns the library ahead of the outer page budget when loadPublicVideo is slow, stripping only the slow cover', async () => {
+    jest.useFakeTimers();
+    try {
+      mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1' });
+      mockApiRequestServerResult
+        .mockResolvedValueOnce({ status: 200, data: { paused: false } })
+        .mockResolvedValueOnce({ status: 200, data: { entries: [historyEntry('slow-h1'), historyEntry('fast-h2')], total: 2, hasMore: false } })
+        .mockResolvedValueOnce({ status: 200, data: { result: { items: [libraryVideo('w1')], total: 1, videoIds: ['w1'], nextCursor: null, playlistId: 'wl' } } })
+        .mockResolvedValueOnce({ status: 200, data: { result: { items: [], total: 0, nextCursor: null } } });
+
+      mockLoadPublicVideo.mockImplementation((id: string) => {
+        if (id === 'fast-h2') return Promise.resolve({ id, poster: `/thumb/${id}.jpg` });
+        // Hangs past the full page budget
+        return new Promise(() => undefined);
+      });
+
+      const pending = withinBudget(() => getHomeLibrary(FIRST_DATA_BUDGET_MS), FIRST_DATA_BUDGET_MS);
+      // Advance just past the inner lookup deadline (budget - margin), still well before the outer page budget
+      await jest.advanceTimersByTimeAsync(FIRST_DATA_BUDGET_MS - THUMB_LOOKUP_MARGIN_MS + 10);
+
+      const res = await pending;
+      expect(res).toBeDefined();
+      expect(res?.cards.map((c) => c.kind)).toEqual(['continue', 'watch-later']);
+
+      const stabilized = stableImages(res!.cards);
+      expect(stabilized.partial).toBe(true);
+      expect(JSON.stringify(stabilized.value)).not.toMatch(/token=|b-cdn/);
+      if (stabilized.value[0].kind === 'continue') {
+        expect(stabilized.value[0].top.videoThumbnail).toBeUndefined();
+        expect(stabilized.value[0].next[0].videoThumbnail).toBe('/thumb/fast-h2.jpg');
+      }
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
