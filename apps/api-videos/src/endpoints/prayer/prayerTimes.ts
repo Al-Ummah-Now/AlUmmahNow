@@ -117,7 +117,7 @@ export class PrayerTimesGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const { query } = await this.getValidatedData<typeof this.schema>();
-		const city = findCity(query.city);
+		const city = await findCity(query.city);
 		if (!city) return apiError(c, 400, 'invalid_request', { field: 'city' });
 		if (!allowedMonth(query.month)) return apiError(c, 400, 'invalid_request', { field: 'month' });
 		const requested = query.method === 'auto' ? 'auto' : Number(query.method);

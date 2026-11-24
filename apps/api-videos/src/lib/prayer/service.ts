@@ -2,7 +2,7 @@
  * Prayer times and Hijri dates by city and month (wiki Epic 21 §3, E21-D1 and E21-D2).
  *
  * Order of reads: the R2 last-good copy (fresh for FRESH_MS), else one upstream call through the
- * gate (coalesced per key within the isolate and across isolates by a D1 lease), else the stale
+ * gate (coalesced across requests and isolates by a D1 lease and an R2 poll), else the stale
  * copy marked `stale: true`, else `null` (the route answers 503). Nothing is ever computed or
  * interpolated here: every time and Hijri date comes from the provider.
  */
@@ -63,9 +63,6 @@ export function hijriKey(provider: string, hijri: HijriSource, month: string): s
 	return `prayer/${provider}/${hijri}/hijri/${month}.json`;
 }
 
-/** Coalescing within this isolate: concurrent misses for one key share one promise */
-const inFlight = new Map<string, Promise<unknown>>();
-
 async function readStored<T>(bucket: R2Bucket | undefined, key: string): Promise<Stored<T> | null> {
 	if (!bucket) return null;
 	try {
@@ -92,45 +89,44 @@ async function loadMonth<T>(
 	const db = env.SEARCH_DB;
 	if (!db || !env.global_settings) return staleAnswer;
 
-	const shared = inFlight.get(key) as Promise<MonthResult<T> | null> | undefined;
-	if (shared) return (await shared) ?? staleAnswer;
-
-	const work = (async (): Promise<MonthResult<T> | null> => {
-		const provider = settings.provider.id;
-		const gate = await acquire(db, provider, key, settings.limits, nowMs());
-		if (!gate.ok) {
-			if (gate.reason === 'busy') {
-				// Another isolate is fetching this key: wait for its copy
-				for (let waited = 0; waited < WAIT_FOR_OTHERS_MS; waited += WAIT_STEP_MS) {
-					await sleep(WAIT_STEP_MS);
-					const fresh = await readStored<T>(env.global_settings, key);
-					if (fresh && (!stored || fresh.fetchedAt !== stored.fetchedAt)) return { days: fresh.days, fetchedAt: fresh.fetchedAt, stale: false };
-				}
+	// Coalescing is the D1 lease plus the R2 poll below: no promise is shared between requests,
+	// because a Worker must not await I/O started by another request.
+	let gate = await acquire(db, settings.provider.id, key, settings.limits, nowMs());
+	const refusal = (g: typeof gate) => (g.ok ? null : (g as { ok: false; reason: string }).reason);
+	// Over the cap: wait up to WAIT_FOR_OTHERS_MS for a slot before falling back (spec §3)
+	for (let waited = 0; refusal(gate) === 'over_cap' && waited < WAIT_FOR_OTHERS_MS; waited += WAIT_STEP_MS) {
+		await sleep(WAIT_STEP_MS);
+		const fresh = await readStored<T>(env.global_settings, key);
+		if (fresh && (!stored || fresh.fetchedAt !== stored.fetchedAt)) return { days: fresh.days, fetchedAt: fresh.fetchedAt, stale: false };
+		gate = await acquire(db, settings.provider.id, key, settings.limits, nowMs());
+	}
+	const provider = settings.provider.id;
+	if (!gate.ok) {
+		if (refusal(gate) === 'busy') {
+			// Another isolate is fetching this key: wait for its copy
+			for (let waited = 0; waited < WAIT_FOR_OTHERS_MS; waited += WAIT_STEP_MS) {
+				await sleep(WAIT_STEP_MS);
+				const fresh = await readStored<T>(env.global_settings, key);
+				if (fresh && (!stored || fresh.fetchedAt !== stored.fetchedAt)) return { days: fresh.days, fetchedAt: fresh.fetchedAt, stale: false };
 			}
-			logger.debug('[Prayer] Gate refused', { key, reason: gate.reason });
-			return null;
 		}
-		try {
-			const days = await fetchDays();
-			const fetchedAt = new Date(nowMs()).toISOString();
-			const record: Stored<T> = { fetchedAt, provider, hijriSource: settings.hijriSource, days };
-			await env.global_settings!.put(key, JSON.stringify(record), { httpMetadata: { contentType: 'application/json' } });
-			await release(db, provider, key, gate.leaseId, { ok: true }, nowMs());
-			return { days, fetchedAt, stale: false };
-		} catch (error) {
-			const providerError = error instanceof ProviderError ? error : null;
-			// 429, 5xx and network failures count toward the breaker; a 4xx is our request's fault
-			const counts = !providerError || providerError.status === 0 || providerError.status === 429 || providerError.status >= 500;
-			await release(db, provider, key, gate.leaseId, { ok: false, retryAfterMs: providerError?.retryAfterMs ?? null, counts }, nowMs());
-			logger.warn('[Prayer] Provider call failed', { key, status: providerError?.status ?? 'error', error: error instanceof Error ? error.message : String(error) });
-			return null;
-		}
-	})();
-	inFlight.set(key, work);
+		logger.debug('[Prayer] Gate refused', { key, reason: refusal(gate) });
+		return staleAnswer;
+	}
 	try {
-		return (await work) ?? staleAnswer;
-	} finally {
-		inFlight.delete(key);
+		const days = await fetchDays();
+		const fetchedAt = new Date(nowMs()).toISOString();
+		const record: Stored<T> = { fetchedAt, provider, hijriSource: settings.hijriSource, days };
+		await env.global_settings.put(key, JSON.stringify(record), { httpMetadata: { contentType: 'application/json' } });
+		await release(db, provider, key, (gate as { leaseId: string }).leaseId, { ok: true }, nowMs());
+		return { days, fetchedAt, stale: false };
+	} catch (error) {
+		const providerError = error instanceof ProviderError ? error : null;
+		// 429, 5xx and network failures count toward the breaker; a 4xx is our request's fault
+		const counts = !providerError || providerError.status === 0 || providerError.status === 429 || providerError.status >= 500;
+		await release(db, provider, key, (gate as { leaseId: string }).leaseId, { ok: false, retryAfterMs: providerError?.retryAfterMs ?? null, counts }, nowMs());
+		logger.warn('[Prayer] Provider call failed', { key, status: providerError?.status ?? 'error', error: error instanceof Error ? error.message : String(error) });
+		return staleAnswer;
 	}
 }
 
@@ -149,7 +145,3 @@ export function hijriMonth(env: PrayerEnv, settings: PrayerSettings, month: stri
 	return loadMonth(env, settings, key, () => settings.provider.fetchHijriMonth(month, settings.hijriSource), nowMs);
 }
 
-/** For tests: forget in-isolate coalescing state */
-export function forgetPrayerInFlight(): void {
-	inFlight.clear();
-}

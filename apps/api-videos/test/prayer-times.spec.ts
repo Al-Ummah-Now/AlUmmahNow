@@ -5,14 +5,14 @@
  * (cap, backoff, breaker with a single probe, lease takeover), stale serving, 503 with nothing
  * known, and that nothing about the caller reaches the provider.
  */
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { HijriMonthGet, PrayerTimesGet, setPrayerSettingsForTests } from '../src/endpoints/prayer/prayerTimes';
 import { aladhanProvider, parseCalendar, ProviderError } from '../src/lib/prayer/aladhan';
 import { findCity } from '../src/lib/prayer/cities';
 import { resolveMethod } from '../src/lib/prayer/methods';
 import { acquire, release, OPEN_AFTER, OPEN_MS, LEASE_MS } from '../src/lib/prayer/gate';
-import { allowedMonth, forgetPrayerInFlight, prayerKey, prayerMonth, type PrayerSettings } from '../src/lib/prayer/service';
+import { allowedMonth, prayerKey, prayerMonth, type PrayerSettings } from '../src/lib/prayer/service';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, buildApp } from './helpers';
 
@@ -61,17 +61,16 @@ const app = () =>
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 
-beforeEach(() => forgetPrayerInFlight());
 afterEach(() => setPrayerSettingsForTests(null));
 
 describe('city catalogue and methods', () => {
-	it('finds a city by id only, and resolves auto per country', () => {
-		const makkah = findCity(MAKKAH)!;
+	it('finds a city by id only, and resolves auto per country', async () => {
+		const makkah = (await findCity(MAKKAH))!;
 		assert.equal(makkah.country, 'SA');
 		assert.equal(makkah.timeZone, 'Asia/Riyadh');
-		assert.equal(findCity('0'), null);
-		assert.equal(findCity('21.42,39.82'), null);
-		assert.equal(findCity('999999999'), null);
+		assert.equal(await findCity('0'), null);
+		assert.equal(await findCity('21.42,39.82'), null);
+		assert.equal(await findCity('999999999'), null);
 		assert.equal(resolveMethod('auto', 'SA'), 4);
 		assert.equal(resolveMethod('auto', 'EG'), 5);
 		assert.equal(resolveMethod('auto', 'ZZ'), 3);
@@ -93,7 +92,7 @@ describe('city catalogue and methods', () => {
 describe('AlAdhan adapter', () => {
 	it('asks with the city coordinates only and parses UTC instants and numeric Hijri parts', async () => {
 		const { fn, calls } = mockFetch(() => Response.json(monthBody('2026-11')));
-		const days = await aladhanProvider(fn, 'https://aladhan.test/v1').fetchMonth(findCity(MAKKAH)!, '2026-11', 4, 'hanafi', 'HJCoSA');
+		const days = await aladhanProvider(fn, 'https://aladhan.test/v1').fetchMonth((await findCity(MAKKAH))!, '2026-11', 4, 'hanafi', 'HJCoSA');
 		assert.equal(days.length, 30);
 		assert.equal(days[0].date, '2026-11-01');
 		assert.equal(days[0].times.fajr, '2026-11-01T02:10:00.000Z');
@@ -178,13 +177,34 @@ describe('GET /api/prayer-times', () => {
 			return Response.json(monthBody(thisMonth()));
 		});
 		const s = settings(fn);
-		const city = findCity(MAKKAH)!;
+		const city = (await findCity(MAKKAH))!;
 		const all = Array.from({ length: 8 }, () => prayerMonth(e as never, s, { city, month: thisMonth(), method: 4, asr: 'standard' }));
 		await new Promise((r) => setTimeout(r, 20));
 		release();
 		const results = await Promise.all(all);
 		assert.equal(calls.length, 1);
 		assert.ok(results.every((r) => r && r.days.length > 0));
+	});
+
+	it('over the cap a request waits for a slot instead of failing at once', async () => {
+		const e = env();
+		let releaseFirst!: () => void;
+		const slow = new Promise<void>((r) => (releaseFirst = r));
+		let n = 0;
+		const { fn, calls } = mockFetch(async () => {
+			if (n++ === 0) await slow;
+			return Response.json(monthBody(thisMonth()));
+		});
+		const s = settings(fn, { maxInFlight: 1, perSecond: 100 });
+		const makkah = (await findCity(MAKKAH))!;
+		const cairo = (await findCity('360630'))!;
+		const first = prayerMonth(e as never, s, { city: makkah, month: thisMonth(), method: 4, asr: 'standard' });
+		await new Promise((r) => setTimeout(r, 30));
+		const second = prayerMonth(e as never, s, { city: cairo, month: thisMonth(), method: 5, asr: 'standard' });
+		setTimeout(() => releaseFirst(), 300);
+		const [a, b] = await Promise.all([first, second]);
+		assert.ok(a && b, 'both answered');
+		assert.equal(calls.length, 2);
 	});
 
 	it('the Hijri route uses the same proxy and cache', async () => {

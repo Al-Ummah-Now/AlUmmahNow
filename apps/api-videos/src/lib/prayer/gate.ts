@@ -126,14 +126,15 @@ export async function release(
 		db.prepare('DELETE FROM prayer_fetch_leases WHERE cache_key = ? AND lease_id = ?').bind(key, leaseId),
 		db.prepare('DELETE FROM prayer_fetch_leases WHERE expires_at_ms <= ?').bind(now),
 	];
-	if (outcome.ok) {
+	const failure = outcome.ok ? null : (outcome as { ok: false; retryAfterMs: number | null; counts: boolean });
+	if (!failure) {
 		statements.push(
 			db.prepare('UPDATE prayer_provider_gate SET failures = 0, open_until_ms = 0, probe_until_ms = 0, next_allowed_ms = 0, updated_at = ? WHERE provider = ?').bind(at, provider),
 		);
-	} else if (outcome.counts) {
+	} else if (failure.counts) {
 		const row = await gateRow(db, provider);
 		const failures = row.failures + 1;
-		const wait = backoffMs(failures, outcome.retryAfterMs);
+		const wait = backoffMs(failures, failure.retryAfterMs);
 		statements.push(
 			db
 				.prepare('UPDATE prayer_provider_gate SET failures = ?, next_allowed_ms = ?, open_until_ms = ?, probe_until_ms = 0, updated_at = ? WHERE provider = ?')
