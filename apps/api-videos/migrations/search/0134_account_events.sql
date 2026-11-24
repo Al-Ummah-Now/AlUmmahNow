@@ -19,13 +19,15 @@ CREATE TABLE IF NOT EXISTS account_events_received (
 CREATE INDEX IF NOT EXISTS idx_account_events_received_open ON account_events_received (queued_at) WHERE status = 'received';
 CREATE INDEX IF NOT EXISTS idx_account_events_received_settled ON account_events_received (status, settled_at);
 
--- 2. Per account: the newest event applied (an older one is ignored; nothing follows a purge), and who works on it now.
+-- 2. Per account: the newest event applied (an older one is ignored; nothing follows a purge), whether it is done (it
+--    then never runs again, also after its row above was cleaned up), and who works on it now.
 CREATE TABLE IF NOT EXISTS account_event_users (
   user_id TEXT PRIMARY KEY,
   seq INTEGER NOT NULL,
   jti TEXT NOT NULL,
   type TEXT NOT NULL,
   purged INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0,
   lease TEXT,
   lease_until INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL

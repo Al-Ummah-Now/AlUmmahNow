@@ -33,6 +33,7 @@ received, not done, so the **worker** decides whether an event still applies:
 - **One conditional write per account** (`account_event_users`) takes the account for an event only when it is newer (`seq`) than
   the last one applied. An older one is ignored, also when a failed hide is retried after a later restore. Nothing
   follows `account-purged`.
+- An event that is **done never runs again**, also when Auth sends it again after its row was cleaned up.
 - **One event at a time works on an account** (a lease, longer than a queue invocation may run).
 - An action (`ACCOUNT_ACTIONS`) is idempotent and resumable: with `complete: false` it goes on in a new message from its `progress`.
 - A failure is retried with a backoff. After six tries the event is `failed` and an item on the admin Errors page, whose

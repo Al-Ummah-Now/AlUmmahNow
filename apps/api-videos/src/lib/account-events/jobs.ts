@@ -14,7 +14,7 @@
 import { reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { AccountEventType, SetEnv } from './set';
-import { claimUser, cleanReceived, markQueued, openEvents, readReceived, releaseUser, renewUser, reopen, saveProgress, settle, type ReceivedRow } from './store';
+import { claimUser, cleanReceived, markQueued, openEvents, readReceived, releaseUser, renewUser, reopen, saveProgress, settle, settleApplied, type ReceivedRow } from './store';
 
 export interface AccountEventMessage {
 	kind: 'account-event';
@@ -52,7 +52,7 @@ export const LEASE_MS = 16 * 60_000;
 const BUSY_DELAY_S = 60;
 const SWEEP_AFTER_MS = 60 * 60_000;
 const PAGE = 100;
-/** Settled events are kept this long; the account's newest `seq` stays, so a late repeat is still ignored. */
+/** Settled events are kept this long; the account keeps its newest event, so a late repeat of it or of an older one is ignored. */
 export const KEEP_MS = 35 * 24 * 60 * 60_000;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -101,7 +101,7 @@ export async function runAccountEvent(env: AccountEventsEnv, jti: string, action
 			await saveProgress(db, jti, result.progress ?? null);
 			return 'more';
 		}
-		await settle(db, jti, 'applied', now());
+		await settleApplied(db, row, lease, now());
 		return 'applied';
 	} finally {
 		await releaseUser(db, row.user_id, lease);
