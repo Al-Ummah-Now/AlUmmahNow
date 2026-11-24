@@ -197,7 +197,7 @@ UI: `/{en|ar}/settings/privacy` (`apps/web/src/components/privacySettings`, LTR 
 
 Each request is bounded by an operation budget (`PRIVACY_OP_BUDGET`, default 900 R2
 operations, under the Workers subrequest limit). Export scans R2 list pages of 100 objects.
-Interrupted pages are redone on resume. Export rolls back partial pages, so merged exports
+Interrupted pages are redone on resume. The client carries the progress between passes as a sealed `resumeToken` (`lib/privacy/resume-state.ts`), which continues the run it came from for 24 hours; any other token starts over (an export then says `restarted: true`). A run that needs another pass and cannot make a token answers 503 `resume_unavailable`. What is on a channel counts as its owner's, read from the live channel record: a record on someone else's channel that still names the erased account goes to the channel's owner. A channel record that cannot be read is left out (export, `unreadableChannels`) or left in place (erase, `errors`) and flagged on the admin Errors page. Export rolls back partial pages, so merged exports
 contain no duplicates.
 
 Erasure finds the user's records through indexes, so its cost follows the user, not the

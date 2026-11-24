@@ -91,6 +91,7 @@ function seed() {
 			[backupPointerKey(OTHER, 'job-1', 'v1')]: '',
 		}),
 		queue: new MemoryQueue(),
+		INTERNAL_API_KEY: 'k'.repeat(40),
 	};
 }
 

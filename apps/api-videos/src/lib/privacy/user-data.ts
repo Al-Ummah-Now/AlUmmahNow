@@ -16,7 +16,15 @@
  * Both run as a fixed sequence of phases over R2 list pages and stop when the
  * per-request operation budget is spent, returning a `resumeToken`; calling
  * again with that token continues from the same phase and page. Work inside a
- * page is idempotent, so re-running an interrupted page is safe.
+ * page is idempotent, so re-running an interrupted page is safe. The progress is
+ * sealed (./resume-state.ts): a token that does not open starts over.
+ *
+ * Progress only says which channels to look at and where to continue. Whether a
+ * channel (or a record on one) belongs to the user is decided from the live
+ * channel record right before it is read for an export or deleted (ownershipOf):
+ * what is on someone else's channel is never exported or deleted as the user's.
+ * The progress holds one batch of the user's channels (OWNED_BYTES); an account
+ * with more goes round again, batch by batch.
  *
  * R2 layout reference (see docs/compliance/GDPR.md for the full inventory):
  *   profiles/{userId}                                  profile (+ legacy watchHistory, subscribedTo, privacyConsent)
@@ -42,6 +50,7 @@ import { deleteVideoSideRecords } from '../videoSideRecords';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 import { isReportClaimOf, reportClaimKey } from '../report-claims';
+import { ResumeUnavailableError, openResume, sealResume, type ResumeEnv, type ResumeScope } from './resume-state';
 import { isOwnershipComplete } from '../search/ownership';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -55,7 +64,7 @@ import { LIVE_DELETE_BATCH, eraseLiveChat, eraseLiveReminders, exportLiveChat, e
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
 import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin/legacy-restore';
-import { eraseChannelComments } from '../channelComments';
+import { eraseChannelComments, eraseCommentsOfChannel } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 
@@ -65,10 +74,15 @@ export const DELETED_CHANNEL_ID = 'deleted-channel';
 
 export const EXPORT_FORMAT_VERSION = 1;
 
+/** Format of the export's progress: raise it when its phase list changes. */
+const EXPORT_STATE_VERSION = 1;
+/** The export's channels phase in its phase list, and where a further round of channels begins. */
+const EXPORT_CHANNELS_PHASE = 4;
+
 /** Objects per list page. Small enough that one page's work fits in a request budget. */
 export const DEFAULT_PAGE_SIZE = 100;
 
-export interface PrivacyBuckets {
+export interface PrivacyBuckets extends ResumeEnv {
 	profiles: unknown;
 	channels: unknown;
 	channel_sections: unknown;
@@ -107,51 +121,41 @@ interface Reaction {
 // ---------------------------------------------------------------------------
 
 interface Checkpoint {
-	/** Format: 1 (export), 2 (erase since #1073). A token of another format starts over. */
-	v?: number;
 	/** Index of the phase to (re)start. */
 	p: number;
+	/** When the run began (ms): a channel moved to another account since is nobody's to export or erase here. */
+	t: number;
 	/** R2 list cursor of the page to (re)start within that phase. */
 	c?: string;
-	/** Channel ids owned by the user (discovered in the channels phase). */
-	o: string[];
-	/** Keys of owned channels, deleted after their videos and posts. */
-	k: string[];
-	/** Index-driven phases: the last item finished (items run in sorted order). */
+	/** This batch of the user's channels: the id, or [id, key] where they differ. Erased ones go after their content. */
+	o: Array<string | [string, string]>;
+	/** The user has more channels than the batch holds: another round follows. */
+	more?: boolean;
+	/** Export: where the next round's channels begin, and the round (0: the first). */
+	q?: { c?: string; x?: string };
+	r?: number;
+	/** Item-driven phases: the last item finished (items run in sorted order). */
 	x?: string;
-	/** Index-driven phases: the item `c` belongs to (an item's own list pages). */
+	/** Item-driven phases: the item `c` belongs to (an item's own list pages). */
 	y?: string;
 	/** How the current phase finds its records: 'i' indexes, 's' bucket scan. */
 	m?: 'i' | 's';
 }
 
-export function encodeResumeToken(checkpoint: Checkpoint): string {
-	return btoa(JSON.stringify(checkpoint)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const freshCheckpoint = (): Checkpoint => ({ p: 0, t: Date.now(), o: [] });
+
+/** The checkpoint of a sealed state (written by this module for this format), or null. */
+function checkpointOf(state: Record<string, unknown>): Checkpoint | null {
+	const { p, t, o } = state as Partial<Checkpoint>;
+	if (!Number.isInteger(p) || (p as number) < 0 || !Number.isFinite(t) || !Array.isArray(o)) return null;
+	return state as unknown as Checkpoint;
 }
 
-export function decodeResumeToken(token: string | undefined | null, version = 1): Checkpoint {
-	const fresh: Checkpoint = { p: 0, o: [], k: [], ...(version !== 1 ? { v: version } : {}) };
-	if (!token) return fresh;
-	try {
-		const padded = token.replace(/-/g, '+').replace(/_/g, '/');
-		const parsed = JSON.parse(atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))) as Partial<Checkpoint>;
-		if (typeof parsed.p !== 'number' || parsed.p < 0) return fresh;
-		// A token from an older phase list (a deploy mid-erase) starts over: every phase is idempotent
-		if ((parsed.v ?? 1) !== version) return fresh;
-		return {
-			...(version !== 1 ? { v: version } : {}),
-			p: Math.floor(parsed.p),
-			c: typeof parsed.c === 'string' ? parsed.c : undefined,
-			o: Array.isArray(parsed.o) ? parsed.o.filter((v): v is string => typeof v === 'string').slice(0, 1000) : [],
-			k: Array.isArray(parsed.k) ? parsed.k.filter((v): v is string => typeof v === 'string').slice(0, 1000) : [],
-			x: typeof parsed.x === 'string' ? parsed.x : undefined,
-			y: typeof parsed.y === 'string' ? parsed.y : undefined,
-			m: parsed.m === 'i' || parsed.m === 's' ? parsed.m : undefined,
-		};
-	} catch {
-		return fresh;
-	}
-}
+/** Room for a batch of channels in the progress (the rest of a token is cursors and keys, see RESUME_TOKEN_MAX). */
+const OWNED_BYTES = 1500;
+const channelIdOf = (entry: string | [string, string]): string => (typeof entry === 'string' ? entry : entry[0]);
+const channelKeyOf = (entry: string | [string, string]): string => (typeof entry === 'string' ? entry : entry[1]);
+const ownedIds = (cp: Checkpoint): string[] => cp.o.map(channelIdOf);
 
 interface PhaseContext {
 	budget: OperationBudget;
@@ -197,9 +201,19 @@ async function runPhases(
 	budget: OperationBudget,
 	resumeToken: string | undefined,
 	pageSize: number,
-	version = 1,
-): Promise<{ complete: boolean; resumeToken?: string }> {
-	const checkpoint = decodeResumeToken(resumeToken, version);
+	env: ResumeEnv,
+	scope: ResumeScope,
+): Promise<{ complete: boolean; resumeToken?: string; restarted: boolean; unavailable?: ResumeUnavailableError }> {
+	let checkpoint: Checkpoint | null = null;
+	if (resumeToken) {
+		const opened = await openResume(env, scope, resumeToken);
+		if ('state' in opened) checkpoint = checkpointOf(opened.state);
+		const reason = 'restart' in opened ? opened.restart : 'unusable';
+		// Expired is ordinary; a state this server did not make for this run is worth a line
+		if (!checkpoint) logger[reason === 'expired' ? 'debug' : 'warn']('[Privacy] Run starts over', { purpose: scope.purpose, userId: scope.userId, reason });
+	}
+	const restarted = !!resumeToken && !checkpoint;
+	checkpoint ??= freshCheckpoint();
 	const ctx: PhaseContext = { budget, checkpoint, pageSize };
 	try {
 		while (checkpoint.p < phases.length) {
@@ -210,16 +224,142 @@ async function runPhases(
 			checkpoint.y = undefined;
 			checkpoint.m = undefined;
 		}
-		return { complete: true };
+		return { complete: true, restarted };
 	} catch (error) {
 		if (!(error instanceof BudgetExhausted)) throw error;
-		return { complete: false, resumeToken: encodeResumeToken(checkpoint) };
+		try {
+			return { complete: false, resumeToken: await sealResume(env, scope, checkpoint), restarted };
+		} catch (unavailable) {
+			if (!(unavailable instanceof ResumeUnavailableError)) throw unavailable;
+			return { complete: false, restarted, unavailable };
+		}
 	}
+}
+
+/**
+ * Run `work` for each item in sorted order, recording the last finished item
+ * (`x`) so a resumed call continues after it; `c` (an item's own list cursor)
+ * is only reused for the item it was recorded for (`y`).
+ */
+async function eachItem(ctx: PhaseContext, items: Iterable<string>, work: (item: string) => Promise<void>): Promise<void> {
+	const cp = ctx.checkpoint;
+	for (const item of [...new Set(items)].sort()) {
+		if (cp.x !== undefined && item <= cp.x) continue;
+		if (cp.y !== item) {
+			cp.y = item;
+			cp.c = undefined;
+		}
+		await work(item);
+		cp.x = item;
+		cp.y = undefined;
+		cp.c = undefined;
+	}
+}
+
+/** Whose a record is: the user's, the channel owner's (`follow`, when it names the user), nobody's to touch, or someone else's. */
+type Standing = { kind: 'mine' | 'leave' | 'other' } | { kind: 'follow'; ownerId: string };
+const MINE: Standing = { kind: 'mine' };
+const LEAVE: Standing = { kind: 'leave' };
+const NOT_MINE: Standing = { kind: 'other' };
+
+/**
+ * Who a channel, and a record on it, belongs to right now: read from the live records, never from the checkpoint.
+ *
+ *   the live channel is the user's            → the user's
+ *   ... and came to them after the run began  → left alone
+ *   the live channel is someone else's        → never the user's; a record that still names them follows the channel
+ *   there is no channel record                → the record's own owner decides (nobody owns the channel)
+ *   the channel record cannot be read         → left alone and reported (`onUnreadable`)
+ */
+function ownershipOf(env: PrivacyBuckets, userId: string, onUnreadable: (channelId: string) => void) {
+	const bucket = asBucket(env.channels);
+	const reported = new Set<string>();
+	const report = (channelId: string) => {
+		if (reported.has(channelId)) return;
+		reported.add(channelId);
+		onUnreadable(channelId);
+	};
+
+	/** The stored channel; 'unreadable' when it is not a channel record that names its owner. */
+	const readChannel = async (ctx: PhaseContext, key: string): Promise<Json | 'absent' | 'unreadable'> => {
+		ctx.budget.spend();
+		const stored = await bucket.get(key);
+		if (!stored) return 'absent';
+		try {
+			const channel = await stored.json<Json>();
+			return channel && typeof channel === 'object' && typeof channel.userId === 'string' && channel.userId ? channel : 'unreadable';
+		} catch (error) {
+			if (!(error instanceof SyntaxError)) throw error;
+			return 'unreadable';
+		}
+	};
+
+	/** Moved to another account after this run began. */
+	const movedSince = (ctx: PhaseContext, channel: Json): boolean => {
+		const at = typeof channel.transferredAt === 'string' ? Date.parse(channel.transferredAt) : NaN;
+		return Number.isFinite(at) && at >= ctx.checkpoint.t;
+	};
+
+	/** The channel is the user's, as it was when the run began. */
+	const isOwned = (ctx: PhaseContext, channel: Json | 'absent' | 'unreadable'): channel is Json =>
+		typeof channel === 'object' && channel.userId === userId && !movedSince(ctx, channel);
+
+	/** Adds a channel to the batch; false when the batch is full (the first one always fits). */
+	const remember = (ctx: PhaseContext, channelId: string, key: string): boolean => {
+		const { o } = ctx.checkpoint;
+		if (o.some((entry) => channelKeyOf(entry) === key)) return true;
+		const next: Checkpoint['o'] = [...o, channelId === key ? key : [channelId, key]];
+		if (o.length && new TextEncoder().encode(JSON.stringify(next)).length > OWNED_BYTES) return false;
+		ctx.checkpoint.o = next;
+		return true;
+	};
+
+	/** One of the batch's channels, still the user's. */
+	const ownsChannel = async (ctx: PhaseContext, channelId: string): Promise<boolean> => {
+		for (const entry of ctx.checkpoint.o) {
+			if (channelIdOf(entry) !== channelId) continue;
+			const channel = await readChannel(ctx, channelKeyOf(entry));
+			if (channel === 'unreadable') report(channelId);
+			if (isOwned(ctx, channel)) return true;
+		}
+		return false;
+	};
+
+	/** An unreadable channel met on the way: reported if the ownership index names the user as its owner. */
+	const reportIfMine = async (ctx: PhaseContext, channelId: string): Promise<void> => {
+		const db = env.SEARCH_DB as D1Database | undefined;
+		if (!db) return;
+		ctx.budget.spend();
+		if (await db.prepare(`SELECT 1 AS n FROM content_ownership WHERE kind = 'channel' AND id = ? AND owner_id = ?`).bind(channelId, userId).first()) report(channelId);
+	};
+
+	/** Whose a video, stream, post or playlist is. */
+	const standing = async (ctx: PhaseContext, record: Json, channelId: unknown = record.channelId): Promise<Standing> => {
+		if (record.userId !== userId) {
+			return typeof channelId === 'string' && ownedIds(ctx.checkpoint).includes(channelId) && (await ownsChannel(ctx, channelId)) ? MINE : NOT_MINE;
+		}
+		// No channel (a personal playlist; uploads without one carry the user id)
+		if (typeof channelId !== 'string' || !channelId || channelId === userId) return MINE;
+		const known = ctx.checkpoint.o.find((entry) => channelIdOf(entry) === channelId);
+		const channel = await readChannel(ctx, known ? channelKeyOf(known) : channelId);
+		if (channel === 'absent') return MINE;
+		if (channel === 'unreadable') {
+			report(channelId);
+			return LEAVE;
+		}
+		if (channel.userId !== userId) return { kind: 'follow', ownerId: channel.userId };
+		return movedSince(ctx, channel) ? LEAVE : MINE;
+	};
+	const isMine = async (ctx: PhaseContext, record: Json): Promise<boolean> => (await standing(ctx, record)).kind === 'mine';
+
+	return { readChannel, isOwned, remember, ownsChannel, reportIfMine, report, standing, isMine };
 }
 
 export interface RunOptions {
 	resumeToken?: string;
 	pageSize?: number;
+	/** A channel record that cannot be read: what it holds is left out (export) or left in place (erase). Must not throw. */
+	onChannelUnreadable?: (channelId: string) => void;
 }
 
 function isVideoKey(key: string): boolean {
@@ -247,6 +387,10 @@ export interface UserDataExport {
 	/** False when the operation budget ran out; call again with resumeToken and merge the arrays. */
 	complete: boolean;
 	resumeToken?: string;
+	/** The given token could not be continued: this pass is the first one again, drop what earlier passes returned. */
+	restarted?: boolean;
+	/** The user's channels whose stored record cannot be read (left out; the team is told). */
+	unreadableChannels?: string[];
 	notes: string[];
 	profile: Json | null;
 	privacyConsent: Json | null;
@@ -345,7 +489,9 @@ function summariseOwnedVideo(video: Json): Json {
 
 /**
  * Collect everything stored about `userId` (one bounded pass). When the
- * budget runs out the result has `complete: false` and a `resumeToken`.
+ * budget runs out the result has `complete: false` and a `resumeToken`. Throws
+ * ResumeUnavailableError when it needs another pass and cannot make the token:
+ * a part is never returned as if it were all.
  */
 export async function collectUserData(
 	env: PrivacyBuckets,
@@ -356,6 +502,10 @@ export async function collectUserData(
 	const out = emptyExport(userId);
 	const userSuffix = `/${userId}.json`;
 	const community = asBucket(env.community_posts);
+	const own = ownershipOf(env, userId, (channelId) => {
+		(out.unreadableChannels ??= []).push(channelId);
+		options.onChannelUnreadable?.(channelId);
+	});
 
 	// An interrupted unit of work is redone on resume, so roll back anything it
 	// already added: resumed exports concatenate without duplicates.
@@ -371,14 +521,14 @@ export async function collectUserData(
 		}
 	};
 
-	const readEach = (bucket: BucketLike, filter: (key: string) => boolean, onItem: (item: Json, key: string, ctx: PhaseContext) => void) =>
+	const readEach = (bucket: BucketLike, filter: (key: string) => boolean, onItem: (item: Json, key: string, ctx: PhaseContext) => void | Promise<void>) =>
 		async (ctx: PhaseContext, prefix?: string) =>
 			scanPages(bucket, prefix, ctx, (objects) =>
 				atomically(async () => {
 					for (const { key } of objects) {
 						if (!filter(key)) continue;
 						const item = await readJson<Json>(bucket, key, ctx.budget);
-						if (item) onItem(item, key, ctx);
+						if (item) await onItem(item, key, ctx);
 					}
 				}),
 			);
@@ -427,38 +577,65 @@ export async function collectUserData(
 			const { assets } = await readAssets(env.MEDIA_PRIVATE, userId);
 			if (kit || assets.length) out.studioBrandKit.push({ brandKit: kit, assets });
 		},
-		(ctx) =>
-			readEach(asBucket(env.channels), () => true, (channel, key, c) => {
-				const channelId = channel.id ?? key;
-				if (channel.userId === userId) {
-					if (!c.checkpoint.o.includes(channelId)) c.checkpoint.o.push(channelId);
-					const { subscriptions, ...rest } = channel;
-					out.channels.push({ ...rest, subscribersCount: Array.isArray(subscriptions) ? subscriptions.length : 0 });
-				}
-				for (const member of Array.isArray(channel.members) ? (channel.members as Json[]) : []) {
-					if (member?.userId === userId) out.channelMemberships.push({ channelId, channelName: channel.name, role: member.role, addedAt: member.addedAt ?? null });
-				}
-				for (const sub of (channel.subscriptions as Reaction[] | undefined) ?? []) {
-					// A member's own subscription is stored under a `user:` key, not a channel id
-					if (sub?.userId === userId) out.subscriptions.push({ ...sub, channelId: subscriberChannelOf(sub.channelId as string | undefined), subscribedToChannelId: channelId });
-				}
-			})(ctx),
-		(ctx) =>
-			atomically(async () => {
-				for (const channelId of ctx.checkpoint.o) {
-					const sections = asBucket(env.channel_sections);
-					for (const key of await allKeys(sections, `${channelId}/`, ctx.budget)) {
-						const section = await readJson<Json>(sections, key, ctx.budget);
-						if (section) out.channelSections.push(section);
+		// Channels, one at a time: the user's with their sections and tabs, their roles and subscriptions on others.
+		// A round ends when its batch is full; the next one goes on from there (the `posts` phase)
+		async (ctx) => {
+			const cp = ctx.checkpoint;
+			if (cp.q) {
+				({ c: cp.c, x: cp.x } = cp.q);
+				cp.q = undefined;
+			}
+			const bucket = asBucket(env.channels);
+			do {
+				ctx.budget.spend();
+				const page = await bucket.list({ cursor: cp.c, limit: ctx.pageSize });
+				for (const { key } of page.objects) {
+					if (cp.x !== undefined && key <= cp.x) continue;
+					let full = false;
+					await atomically(async () => {
+						const channel = await own.readChannel(ctx, key);
+						if (channel === 'absent') return;
+						if (channel === 'unreadable') return own.reportIfMine(ctx, key);
+						const channelId = channel.id ?? key;
+						if (own.isOwned(ctx, channel)) {
+							if (!own.remember(ctx, channelId, key)) {
+								full = true;
+								return;
+							}
+							const { subscriptions, ...rest } = channel;
+							out.channels.push({ ...rest, subscribersCount: Array.isArray(subscriptions) ? subscriptions.length : 0 });
+							const sections = asBucket(env.channel_sections);
+							for (const sectionKey of await allKeys(sections, `${channelId}/`, ctx.budget)) {
+								const section = await readJson<Json>(sections, sectionKey, ctx.budget);
+								if (section) out.channelSections.push(section);
+							}
+							const tabs = await readJson<Json>(asBucket(env.channel_tabs), `channel-tabs/${channelId}`, ctx.budget);
+							if (tabs) out.channelTabs.push(tabs);
+						}
+						for (const member of Array.isArray(channel.members) ? (channel.members as Json[]) : []) {
+							if (member?.userId === userId) out.channelMemberships.push({ channelId, channelName: channel.name, role: member.role, addedAt: member.addedAt ?? null });
+						}
+						for (const sub of (channel.subscriptions as Reaction[] | undefined) ?? []) {
+							// A member's own subscription is stored under a `user:` key, not a channel id
+							if (sub?.userId === userId) out.subscriptions.push({ ...sub, channelId: subscriberChannelOf(sub.channelId as string | undefined), subscribedToChannelId: channelId });
+						}
+					});
+					if (full) {
+						cp.q = { c: cp.c, x: cp.x };
+						return;
 					}
-					const tabs = await readJson<Json>(asBucket(env.channel_tabs), `channel-tabs/${channelId}`, ctx.budget);
-					if (tabs) out.channelTabs.push(tabs);
+					cp.x = key;
 				}
-			}),
+				cp.c = page.truncated ? page.cursor : undefined;
+			} while (cp.c);
+		},
 		(ctx) =>
-			readEach(asBucket(env.videos), isVideoKey, (video, key, c) => {
+			readEach(asBucket(env.videos), isVideoKey, async (video, key, c) => {
 				const videoId = video.id ?? key;
-				if (video.userId === userId || c.checkpoint.o.includes(video.channelId)) out.videos.push(summariseOwnedVideo(video));
+				// Later rounds: only what others put on that round's channels (the rest came with the first)
+				const again = !!c.checkpoint.r;
+				if ((!again || video.userId !== userId) && (await own.isMine(c, video))) out.videos.push(summariseOwnedVideo(video));
+				if (again) return;
 				for (const kind of ['likes', 'dislikes'] as const) {
 					for (const reaction of (video[kind] as Reaction[] | undefined) ?? []) {
 						if (reaction?.userId === userId) out.videoReactions.push({ ...reaction, videoId, kind });
@@ -476,10 +653,16 @@ export async function collectUserData(
 					}
 				});
 			})(ctx),
-		(ctx) =>
-			readEach(community, (key) => !key.endsWith('/index.json'), (post, _key, c) => {
-				if (post.userId === userId || c.checkpoint.o.includes(post.channelId)) out.communityPosts.push(post);
-			})(ctx, 'posts/'),
+		async (ctx) => {
+			await readEach(community, (key) => !key.endsWith('/index.json'), async (post, _key, c) => {
+				if ((!c.checkpoint.r || post.userId !== userId) && (await own.isMine(c, post))) out.communityPosts.push(post);
+			})(ctx, 'posts/');
+			// The next batch of channels, if the last one was full
+			if (!ctx.checkpoint.q) return;
+			ctx.checkpoint.o = [];
+			ctx.checkpoint.r = (ctx.checkpoint.r ?? 0) + 1;
+			ctx.checkpoint.p = EXPORT_CHANNELS_PHASE - 1;
+		},
 		(ctx) =>
 			readEach(community, (key) => !key.endsWith('/index.json') && !key.endsWith('/pinned.json') && !key.includes('/reply-parents/'), (comment) => {
 				if (comment.userId === userId) out.communityComments.push(comment);
@@ -488,8 +671,8 @@ export async function collectUserData(
 		(ctx) => readEach(community, (key) => key.endsWith(userSuffix), (r) => void out.pollVotes.push(r))(ctx, 'votes/'),
 		(ctx) => readEach(community, (key) => key.endsWith(userSuffix), (r) => void out.communityCommentLikes.push(r))(ctx, 'comment-likes/'),
 		(ctx) =>
-			readEach(asBucket(env.playlists), () => true, (playlist) => {
-				if (playlist.userId === userId) out.playlists.push(playlist);
+			readEach(asBucket(env.playlists), () => true, async (playlist, _key, c) => {
+				if (playlist.userId === userId && (await own.isMine(c, playlist))) out.playlists.push(playlist);
 			})(ctx),
 		(ctx) => readEach(asBucket(env.reports), (key) => key.endsWith(`:${userId}`), (r) => void out.reportsFiled.push(r))(ctx),
 		// Subscriptions stored in D1 (SCALABILITY-AUDIT AV-4)
@@ -559,8 +742,10 @@ export async function collectUserData(
 		(ctx) => exportPages(ctx, env.NOTIFICATIONS_DB, exportLiveReminders, out.liveReminders),
 	];
 
-	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE);
+	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, env, { purpose: 'export', userId, version: EXPORT_STATE_VERSION });
+	if (result.unavailable) throw result.unavailable;
 	out.complete = result.complete;
+	if (result.restarted) out.restarted = true;
 	if (result.resumeToken) out.resumeToken = result.resumeToken;
 	return out;
 }
@@ -574,6 +759,8 @@ export interface ErasureSummary {
 	complete: boolean;
 	/** Pass back to continue an incomplete erasure. */
 	resumeToken?: string;
+	/** The given token could not be continued: this pass was the first one again. */
+	restarted?: boolean;
 	deleted: Record<string, number>;
 	anonymized: Record<string, number>;
 	/** Owned video ids removed from R2 in this pass (their streaming media is removed via onVideoDeleted). */
@@ -585,6 +772,14 @@ export interface ErasureSummary {
 	affectedPosts: string[];
 	/** Non-fatal gaps recorded when a required binding was absent (e.g. ADMIN_BACKUPS unbound). */
 	errors?: string[];
+}
+
+/** `errors` entry of a channel whose record cannot be read: it and what is on it stay, and the team is told. */
+export const channelUnreadableError = (channelId: string) => `channel_unreadable:${channelId}`;
+
+/** A pass's summary, and why no further pass can follow it (the pass's own follow-ups still apply). */
+export interface ErasurePass extends ErasureSummary {
+	unavailable?: ResumeUnavailableError;
 }
 
 export interface ErasureHooks {
@@ -662,8 +857,10 @@ function anonymizeVideoComments(comments: unknown, userId: string, summary: Eras
 	return changed;
 }
 
-/** Format of erase resume tokens: 2 since the index-driven phases (#1073), 3 with the live chat phase (wiki E17). */
-const ERASE_TOKEN_VERSION = 3;
+/** Format of the erase's progress: raise it when its phase list changes (2: #1073, 3: wiki E17, 4: kept by the server). */
+const ERASE_STATE_VERSION = 4;
+/** The erase's channels phase in its phase list, and where a further round of channels begins. */
+const ERASE_CHANNELS_PHASE = 3;
 
 /** Bound parameters per IN (...) list (D1 allows 100). */
 const IN_CHUNK = 90;
@@ -702,26 +899,6 @@ export async function eraseIndexes(db: SearchDb | undefined): Promise<EraseIndex
 	}
 }
 
-/**
- * Run `work` for each item in sorted order, recording the last finished item
- * (`x`) so a resumed call continues after it; `c` (an item's own list cursor)
- * is only reused for the item it was recorded for (`y`).
- */
-async function eachItem(ctx: PhaseContext, items: Iterable<string>, work: (item: string) => Promise<void>): Promise<void> {
-	const cp = ctx.checkpoint;
-	for (const item of [...new Set(items)].sort()) {
-		if (cp.x !== undefined && item <= cp.x) continue;
-		if (cp.y !== item) {
-			cp.y = item;
-			cp.c = undefined;
-		}
-		await work(item);
-		cp.x = item;
-		cp.y = undefined;
-		cp.c = undefined;
-	}
-}
-
 async function selectColumn(ctx: PhaseContext, db: SearchDb, sql: string, binds: unknown[]): Promise<string[]> {
 	ctx.budget.spend();
 	const { results } = await db.prepare(sql).bind(...binds).all<{ id: string }>();
@@ -748,7 +925,7 @@ export async function eraseUserData(
 	budget: OperationBudget,
 	hooks: ErasureHooks = {},
 	options: RunOptions = {},
-): Promise<ErasureSummary> {
+): Promise<ErasurePass> {
 	const summary: ErasureSummary = { userId, complete: true, deleted: {}, anonymized: {}, deletedVideoIds: [], affectedPosts: [] };
 	const community = asBucket(env.community_posts);
 	const channels = asBucket(env.channels);
@@ -757,6 +934,10 @@ export async function eraseUserData(
 	const reports = asBucket(env.reports);
 	const userSuffix = `/${userId}.json`;
 	const db = env.SEARCH_DB as SearchDb | undefined;
+	const own = ownershipOf(env, userId, (channelId) => {
+		summary.errors = [...(summary.errors ?? []), channelUnreadableError(channelId)];
+		options.onChannelUnreadable?.(channelId);
+	});
 
 	let indexes: Promise<EraseIndexes> | undefined;
 	const indexed = async (ctx: PhaseContext, pick: (ix: EraseIndexes) => boolean): Promise<boolean> => {
@@ -803,21 +984,18 @@ export async function eraseUserData(
 
 	// --- Per-record work, the same whichever way the record was found ---
 
-	/** An owned channel is remembered (deleted later) and its @handle freed; another channel loses the user's subscriptions. */
+	/** A record on someone else's channel that still names the user as its owner goes to the channel's owner, as a move does. */
+	const followChannel = (fresh: Json, standing: Standing, channelId: unknown): boolean => {
+		if (standing.kind !== 'follow' || fresh.userId !== userId || fresh.channelId !== channelId) return false;
+		fresh.userId = standing.ownerId;
+		return true;
+	};
+
+	/** An owned channel is remembered (deleted later); another channel loses the user's subscriptions. */
 	const eraseInChannel = async (ctx: PhaseContext, key: string, channel: Json) => {
 		if (channel.userId === userId) {
-			const channelId = channel.id ?? key;
-			if (!ctx.checkpoint.o.includes(channelId)) ctx.checkpoint.o.push(channelId);
-			if (!ctx.checkpoint.k.includes(key)) ctx.checkpoint.k.push(key);
-			// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
-			// only if the entry is this channel's (a stale field must not free another channel's handle)
-			if (typeof channel.handle === 'string' && channel.handle) {
-				const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
-				const entry = await readJson<Json>(asBucket(env.channel_tabs), handleKey, ctx.budget);
-				if (entry?.channelId === channelId) await deleteKeys(asBucket(env.channel_tabs), [handleKey], ctx.budget);
-			}
-			// Its old handles (handle history) stop redirecting to it and stop being held
-			await eraseChannelHandleHistory(asBucket(env.channel_tabs), channelId, ctx.budget);
+			// One that came to the user after the run began is not part of it; a full batch leaves the rest to another round
+			if (own.isOwned(ctx, channel) && !own.remember(ctx, channel.id ?? key, key)) ctx.checkpoint.more = true;
 			return;
 		}
 		const isMember = (list: unknown) => Array.isArray(list) && list.some((m: Json) => m?.userId === userId);
@@ -840,10 +1018,17 @@ export async function eraseUserData(
 		if (membership) bump(summary.deleted, 'channelMemberships');
 	};
 
+	const eraseInChannelKey = async (ctx: PhaseContext, key: string) => {
+		const channel = await own.readChannel(ctx, key);
+		if (channel === 'unreadable') return own.reportIfMine(ctx, key);
+		if (channel !== 'absent') await eraseInChannel(ctx, key, channel);
+	};
+
 	/** An owned video is deleted (subtitles, media, record); another loses the user's reactions and comments. */
 	const eraseInVideo = async (ctx: PhaseContext, key: string, video: Json) => {
 		const videoId = video.id ?? key;
-		if (video.userId === userId || ctx.checkpoint.o.includes(video.channelId)) {
+		const standing = await own.standing(ctx, video);
+		if (standing.kind === 'mine') {
 			if (env.subtitles) {
 				const subtitles = asBucket(env.subtitles);
 				bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
@@ -863,6 +1048,7 @@ export async function eraseUserData(
 		const namedAs = (record: Json) => (['uploadedBy', 'createdBy'] as const).filter((field) => record[field] === userId);
 		const needsChange = (['likes', 'dislikes'] as const).some((kind) => stripUserReactions(video[kind], userId).removed > 0)
 			|| namedAs(video).length > 0
+			|| standing.kind === 'follow'
 			|| anonymizeVideoComments(structuredClone(video.comments), userId, newErasureSummary());
 		if (!needsChange) return;
 		let attempt = newErasureSummary();
@@ -882,6 +1068,10 @@ export async function eraseUserData(
 				bump(attempt.anonymized, 'memberUploads');
 				changed = true;
 			}
+			if (followChannel(fresh, standing, video.channelId)) {
+				bump(attempt.anonymized, 'channelRecords');
+				changed = true;
+			}
 			if (anonymizeVideoComments(fresh.comments, userId, attempt)) changed = true;
 			return changed;
 		}, ctx.budget);
@@ -892,7 +1082,7 @@ export async function eraseUserData(
 	const eraseCommunityPostKey = async (ctx: PhaseContext, key: string) => {
 		const [, channelId, file] = key.split('/');
 		if (!file) return;
-		const owned = ctx.checkpoint.o.includes(channelId);
+		const owned = ownedIds(ctx.checkpoint).includes(channelId) && (await own.ownsChannel(ctx, channelId));
 		if (file === 'index.json') {
 			if (owned) await deleteKeys(community, [key], ctx.budget);
 			return;
@@ -901,18 +1091,21 @@ export async function eraseUserData(
 		if (!owned) {
 			const post = await readJson<Json>(community, key, ctx.budget);
 			if (!post) return;
-			if (post.userId !== userId) {
-				// Written as a member of someone else's channel: the post stays with
-				// the channel, the author is anonymised (docs/specs/CHANNEL-ROLES.md §12)
-				if (post.authorId !== userId) return;
+			const standing: Standing = post.userId === userId ? await own.standing(ctx, post, channelId) : NOT_MINE;
+			if (standing.kind !== 'mine') {
+				// On someone else's channel: the post stays with the channel and goes to its owner; the
+				// author is anonymised (docs/specs/CHANNEL-ROLES.md §12)
+				if (standing.kind !== 'follow' && post.authorId !== userId) return;
 				let anonymized = false;
+				let followed = false;
 				await updateJson<Json>(community, key, (fresh) => {
 					anonymized = fresh.authorId === userId;
-					if (!anonymized) return false;
-					fresh.authorId = DELETED_USER_ID;
-					return true;
+					if (anonymized) fresh.authorId = DELETED_USER_ID;
+					followed = followChannel(fresh, standing, post.channelId);
+					return anonymized || followed;
 				}, ctx.budget);
 				if (anonymized) bump(summary.anonymized, 'memberPosts');
+				if (followed) bump(summary.anonymized, 'channelRecords');
 				return;
 			}
 			postId = post.id ?? postId;
@@ -981,18 +1174,24 @@ export async function eraseUserData(
 
 	const erasePlaylistKey = async (ctx: PhaseContext, key: string, mine: string[]) => {
 		const playlist = await readJson<Json>(playlists, key, ctx.budget);
-		if (playlist && playlist.userId === userId) mine.push(key);
-		else if (playlist && playlist.createdBy === userId) {
-			// Created as a member of someone else's channel: kept, creator anonymised
-			let anonymized = false;
-			await updateJson<Json>(playlists, key, (fresh) => {
-				anonymized = fresh.createdBy === userId;
-				if (!anonymized) return false;
-				fresh.createdBy = DELETED_USER_ID;
-				return true;
-			}, ctx.budget);
-			if (anonymized) bump(summary.anonymized, 'memberPlaylists');
+		if (!playlist) return;
+		const standing: Standing = playlist.userId === userId ? await own.standing(ctx, playlist) : NOT_MINE;
+		if (standing.kind === 'mine') {
+			mine.push(key);
+			return;
 		}
+		// On someone else's channel: kept, it goes to the channel's owner; one created as a member loses its creator
+		if (standing.kind !== 'follow' && playlist.createdBy !== userId) return;
+		let anonymized = false;
+		let followed = false;
+		await updateJson<Json>(playlists, key, (fresh) => {
+			anonymized = fresh.createdBy === userId;
+			if (anonymized) fresh.createdBy = DELETED_USER_ID;
+			followed = followChannel(fresh, standing, playlist.channelId);
+			return anonymized || followed;
+		}, ctx.budget);
+		if (anonymized) bump(summary.anonymized, 'memberPlaylists');
+		if (followed) bump(summary.anonymized, 'channelRecords');
 	};
 
 	/** The touched posts (comments, likes, votes, comment likes) from the footprints. */
@@ -1021,28 +1220,23 @@ export async function eraseUserData(
 				const owned = await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'channel' AND owner_id = ?`, [userId]);
 				ctx.budget.spend();
 				const subscribed = await footprintTargets(db!, userId, 'channel');
-				await eachItem(ctx, [...owned, ...subscribed], async (key) => {
-					const channel = await readJson<Json>(channels, key, ctx.budget);
-					if (channel) await eraseInChannel(ctx, key, channel);
-				});
+				await eachItem(ctx, [...owned, ...subscribed], (key) => eraseInChannelKey(ctx, key));
 			},
 			(ctx) =>
 				scanPages(channels, undefined, ctx, async (objects) => {
-					for (const { key } of objects) {
-						const channel = await readJson<Json>(channels, key, ctx.budget);
-						if (channel) await eraseInChannel(ctx, key, channel);
-					}
+					for (const { key } of objects) await eraseInChannelKey(ctx, key);
 				}),
 		),
 
 		// Sections and tabs of owned channels
 		async (ctx) => {
 			const sections = asBucket(env.channel_sections);
-			for (const channelId of ctx.checkpoint.o) {
+			await eachItem(ctx, ownedIds(ctx.checkpoint), async (channelId) => {
+				if (!(await own.ownsChannel(ctx, channelId))) return;
 				bump(summary.deleted, 'channelSections', await deleteKeys(sections, await allKeys(sections, `${channelId}/`, ctx.budget), ctx.budget));
 				await deleteKeys(sections, [sectionOrderKey(channelId)], ctx.budget);
 				await deleteKeys(asBucket(env.channel_tabs), [`channel-tabs/${channelId}`], ctx.budget);
-			}
+			});
 		},
 
 		// Videos: delete owned (with subtitles and media), strip reactions and anonymise comments elsewhere
@@ -1051,8 +1245,9 @@ export async function eraseUserData(
 			async (ctx) => {
 				// Owned by the user or on an owned channel, soft-deleted ones included
 				const ids = await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'video' AND owner_id = ?`, [userId]);
-				for (let i = 0; i < ctx.checkpoint.o.length; i += IN_CHUNK) {
-					const chunk = ctx.checkpoint.o.slice(i, i + IN_CHUNK);
+				const batch = ownedIds(ctx.checkpoint);
+				for (let i = 0; i < batch.length; i += IN_CHUNK) {
+					const chunk = batch.slice(i, i + IN_CHUNK);
 					ids.push(...(await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'video' AND channel_id IN (${chunk.map(() => '?').join(', ')})`, chunk)));
 				}
 				ctx.budget.spend();
@@ -1088,7 +1283,7 @@ export async function eraseUserData(
 			async (ctx) => {
 				ctx.budget.spend();
 				const authored = await footprintTargets(db!, userId, 'post-author');
-				const items = [...ctx.checkpoint.o.map((channelId) => `c:${channelId}`), ...authored.map((key) => `a:${key}`)];
+				const items = [...ownedIds(ctx.checkpoint).map((channelId) => `c:${channelId}`), ...authored.map((key) => `a:${key}`)];
 				await eachItem(ctx, items, async (item) => {
 					if (item.startsWith('a:')) return eraseCommunityPostKey(ctx, item.slice(2));
 					await scanPages(community, `posts/${item.slice(2)}/`, ctx, async (objects) => {
@@ -1141,17 +1336,6 @@ export async function eraseUserData(
 			deleteUserRecords('comment-likes/', 'communityCommentLikes'),
 		),
 
-		// Owned channels themselves (after their videos and posts), each after its hook
-		async (ctx) => {
-			for (const key of ctx.checkpoint.k) {
-				const channel = await readJson<Json>(channels, key, ctx.budget);
-				// Gone already: a resumed pass deleted it (and ran its hook) before
-				if (!channel) continue;
-				if (hooks.onChannelDeleted) await hooks.onChannelDeleted(channel.id ?? key, channel);
-				bump(summary.deleted, 'channels', await deleteKeys(channels, [key], ctx.budget));
-			}
-		},
-
 		// Playlists
 		either(
 			(ix) => ix.playlists,
@@ -1170,6 +1354,45 @@ export async function eraseUserData(
 					bump(summary.deleted, 'playlists', await deleteKeys(playlists, mine, ctx.budget));
 				}),
 		),
+
+		// Owned channels themselves (after their videos, posts and playlists). Everything kept by channel id goes
+		// before the record, so nothing later needs to know a channel whose record is gone
+		async (ctx) => {
+			await eachItem(ctx, ctx.checkpoint.o.map(channelKeyOf), async (key) => {
+				const channel = await own.readChannel(ctx, key);
+				// Gone already: a resumed pass deleted it (and ran its hook) before
+				if (channel === 'absent') return;
+				if (channel === 'unreadable') return own.report(key);
+				// Moved meanwhile: the new owner's, only the user's own traces leave it
+				if (!own.isOwned(ctx, channel)) return eraseInChannel(ctx, key, channel);
+				const channelId = channel.id ?? key;
+				const tabs = asBucket(env.channel_tabs);
+				if (db) {
+					// Studio's comment index and channel blocks (#771)
+					ctx.budget.spend();
+					await eraseCommentsOfChannel(db, channelId);
+				}
+				// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
+				// only if the entry is this channel's (a stale field must not free another channel's handle)
+				if (typeof channel.handle === 'string' && channel.handle) {
+					const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
+					const entry = await readJson<Json>(tabs, handleKey, ctx.budget);
+					if (entry?.channelId === channelId) await deleteKeys(tabs, [handleKey], ctx.budget);
+				}
+				// Its old handles (handle history) stop redirecting to it and stop being held
+				await eraseChannelHandleHistory(tabs, channelId, ctx.budget);
+				// The check and the delete after the hook must fit, or a resumed pass would run the hook again
+				ctx.budget.reserve(2);
+				if (hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
+				if (!own.isOwned(ctx, await own.readChannel(ctx, key))) return;
+				bump(summary.deleted, 'channels', await deleteKeys(channels, [key], ctx.budget));
+			});
+			// More channels than one batch holds: the deleted ones are gone, so the next round finds the rest
+			if (!ctx.checkpoint.more) return;
+			ctx.checkpoint.more = undefined;
+			ctx.checkpoint.o = [];
+			ctx.checkpoint.p = ERASE_CHANNELS_PHASE - 1;
+		},
 
 		// Reports filed: keep for moderation history, remove the reporter's identity
 		either(
@@ -1218,10 +1441,10 @@ export async function eraseUserData(
 			if (db) {
 				ctx.budget.spend(3);
 				await forgetFootprints(db, userId);
-				// Studio's comment index and channel blocks (#771): the user's comments and blocks of them, and
-				// everything of their channels; a block they placed keeps the row without naming them
+				// Studio's comment index and channel blocks (#771): the user's comments and blocks of them (their
+				// channels' rows went with the channels); a block they placed keeps the row without naming them
 				ctx.budget.spend(4);
-				await eraseChannelComments(db, userId, ctx.checkpoint.o);
+				await eraseChannelComments(db, userId);
 				// The search binding is the D1 database; the minutes need its batch and all()
 				await eraseCaptionMinutes(db as unknown as D1Database, userId);
 				// Tier requests (name, about) and tier changes
@@ -1277,10 +1500,11 @@ export async function eraseUserData(
 		},
 	];
 
-	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, ERASE_TOKEN_VERSION);
+	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, env, { purpose: 'erase', userId, version: ERASE_STATE_VERSION });
 	summary.complete = result.complete;
 	if (result.resumeToken) summary.resumeToken = result.resumeToken;
-	return summary;
+	if (result.restarted) summary.restarted = true;
+	return result.unavailable ? { ...summary, unavailable: result.unavailable } : summary;
 }
 
 export type { BucketLike };

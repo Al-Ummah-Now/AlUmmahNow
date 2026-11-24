@@ -29512,6 +29512,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Another pass is needed and cannot be made right now: retry later (code: resume_unavailable)"
           }
         }
       }
@@ -29558,6 +29561,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Another pass is needed and cannot be made right now: retry later (code: resume_unavailable)"
           }
         }
       }

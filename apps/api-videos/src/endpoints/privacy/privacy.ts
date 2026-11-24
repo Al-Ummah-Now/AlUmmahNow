@@ -27,6 +27,9 @@ import Queue, { MessageType } from '../../lib/queue';
 import { BunnyStreamClient } from '../../lib/bunny/stream';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget, asBucket, readJson, updateJson } from '../../lib/privacy/scan';
 import { collectUserData, eraseUserData, type PrivacyBuckets } from '../../lib/privacy/user-data';
+import { RESUME_TOKEN_MAX, ResumeUnavailableError } from '../../lib/privacy/resume-state';
+import { flagResumeUnavailable, flagUnreadableChannel } from '../../lib/privacy/notices';
+import { apiError } from '../../lib/api-error';
 
 export const CONSENT_HISTORY_LIMIT = 50;
 
@@ -45,6 +48,20 @@ function buckets(c: AppContext): PrivacyBuckets {
 	return c.env as unknown as PrivacyBuckets;
 }
 
+const executionContext = (c: AppContext) => {
+	try {
+		return c.executionCtx;
+	} catch {
+		return undefined;
+	}
+};
+
+/** The run needs another pass that cannot be made right now: an error, never a part that looks finished. */
+function cannotContinue(c: AppContext, purpose: 'export' | 'erase', error: ResumeUnavailableError): Response {
+	flagResumeUnavailable(c.env, executionContext(c), purpose, error);
+	return apiError(c, 503, error.code, { error: 'This cannot be finished right now. Please try again later.' }, { 'Retry-After': '300', 'Cache-Control': 'no-store' });
+}
+
 function budgetFor(c: AppContext): OperationBudget {
 	const configured = Number((c.env as unknown as { PRIVACY_OP_BUDGET?: string }).PRIVACY_OP_BUDGET);
 	return new OperationBudget(Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_OPERATION_BUDGET);
@@ -58,11 +75,12 @@ export class PrivacyExport extends AuthenticatedRoute {
 			description:
 				'Returns profile, channels, owned video metadata, comments, reactions, subscriptions, watch history, community posts/comments/likes/votes, playlists, upload templates, reports filed and the consent record. `complete: false` means the scan budget ran out: call again with `?resume=<resumeToken>` and concatenate the array sections.',
 			request: {
-				query: z.object({ resume: z.string().max(8192).optional() }),
+				query: z.object({ resume: z.string().max(RESUME_TOKEN_MAX).optional() }),
 			},
 			responses: {
 				'200': { description: 'Machine-readable export (JSON attachment)' },
 				'401': { description: 'Authentication required' },
+				'503': { description: 'Another pass is needed and cannot be made right now: retry later (code: resume_unavailable)' },
 			},
 		},
 		'required',
@@ -72,7 +90,16 @@ export class PrivacyExport extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const budget = budgetFor(c);
 		const resumeToken = c.req.query('resume') || undefined;
-		const data = await collectUserData(buckets(c), userId, budget, { resumeToken });
+		let data: Awaited<ReturnType<typeof collectUserData>>;
+		try {
+			data = await collectUserData(buckets(c), userId, budget, {
+				resumeToken,
+				onChannelUnreadable: (channelId) => flagUnreadableChannel(c.env, executionContext(c), 'export', channelId),
+			});
+		} catch (error) {
+			if (error instanceof ResumeUnavailableError) return cannotContinue(c, 'export', error);
+			throw error;
+		}
 		logger.debug('[Privacy] Data export generated', { userId, complete: data.complete, operations: budget.spent });
 		return c.json(data, 200, {
 			'Content-Disposition': `attachment; filename="al-ummah-now-data-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -91,7 +118,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 			request: {
 				body: {
 					content: {
-						'application/json': { schema: z.object({ confirm: z.literal('DELETE'), resumeToken: z.string().max(8192).optional() }) },
+						'application/json': { schema: z.object({ confirm: z.literal('DELETE'), resumeToken: z.string().max(RESUME_TOKEN_MAX).optional() }) },
 					},
 				},
 			},
@@ -99,6 +126,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 				'200': { description: 'Erasure summary' },
 				'400': { description: 'Missing confirmation (code: confirmation_required)' },
 				'401': { description: 'Authentication required' },
+				'503': { description: 'Another pass is needed and cannot be made right now: retry later (code: resume_unavailable)' },
 			},
 		},
 		'required',
@@ -143,7 +171,17 @@ export class PrivacyErase extends AuthenticatedRoute {
 			await removeCollectionsFor(env as never, id, channel as never);
 			await eraseChannelSocial(env, id, userId);
 		};
-		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted, onChannelDeleted }, { resumeToken });
+		let pass: Awaited<ReturnType<typeof eraseUserData>>;
+		try {
+			pass = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted, onChannelDeleted }, {
+				resumeToken,
+				onChannelUnreadable: (channelId) => flagUnreadableChannel(c.env, executionContext(c), 'erase', channelId),
+			});
+		} catch (error) {
+			if (error instanceof ResumeUnavailableError) return cannotContinue(c, 'erase', error);
+			throw error;
+		}
+		const { unavailable, ...summary } = pass;
 		// Upload markers and TUS sessions that name the user (#1059)
 		await eraseUploadTraces(env as never, userId, summary.deletedVideoIds);
 
@@ -171,6 +209,8 @@ export class PrivacyErase extends AuthenticatedRoute {
 			anonymized: summary.anonymized,
 			operations: budget.spent,
 		});
+		// After the follow-ups of what this pass deleted
+		if (unavailable) return cannotContinue(c, 'erase', unavailable);
 		return c.json({ success: true, ...summary });
 	}
 }

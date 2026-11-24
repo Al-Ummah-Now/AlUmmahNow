@@ -1,7 +1,7 @@
 /**
  * Story 1.3 AC 2: the web client follows resume tokens for export and erasure.
  */
-import { PrivacyService, mergeExport } from '../privacy.service';
+import { MAX_EXPORT_PASSES, PrivacyService, mergeExport } from '../privacy.service';
 
 jest.mock('@/lib/runtime-config', () => ({ getApiUrl: () => 'https://api.test' }));
 jest.mock('@/lib/auth/client-token', () => ({ getClientAuthHeaders: async () => ({ Authorization: 'Bearer t' }) }));
@@ -38,6 +38,35 @@ describe('PrivacyService', () => {
     });
     expect(JSON.parse(text).videos).toEqual([1, 2]);
     expect(JSON.parse(text).resumeToken).toBeUndefined();
+  });
+
+  it('exportData keeps only the parts of the run that finished when the server begins again', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ userId: 'u', videos: [1], complete: false, resumeToken: 'abc' }))
+      .mockResolvedValueOnce(jsonResponse({ userId: 'u', videos: [1], complete: false, resumeToken: 'def', restarted: true }))
+      .mockResolvedValueOnce(jsonResponse({ userId: 'u', videos: [2], complete: true }));
+    const blob = await PrivacyService.exportData();
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(blob);
+    });
+    expect(JSON.parse(text)).toEqual({ userId: 'u', videos: [1, 2], complete: true });
+  });
+
+  it('exportData never returns a part as if it were everything', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ userId: 'u', videos: [1], complete: false }));
+    await expect(PrivacyService.exportData()).rejects.toThrow('export_incomplete');
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async () => jsonResponse({ userId: 'u', videos: [1], complete: false, resumeToken: 'abc' }));
+    await expect(PrivacyService.exportData()).rejects.toThrow('export_incomplete');
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_EXPORT_PASSES);
+  });
+
+  it('eraseData stops when there is nothing to continue from', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ complete: false, deleted: {}, anonymized: {} }));
+    await expect(PrivacyService.eraseData()).rejects.toThrow('erase_incomplete');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('eraseData sends confirmation and repeats until complete', async () => {

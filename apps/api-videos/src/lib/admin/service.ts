@@ -46,6 +46,7 @@ import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObj
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
 import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
+import { flagResumeUnavailable, flagUnreadableChannel } from '../privacy/notices';
 import { OperationBudget } from '../privacy/scan';
 import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
 import { BunnyStreamClient } from '../bunny/stream';
@@ -2030,6 +2031,9 @@ export async function restoreUser(env: AdminServiceEnv, userId: string, actorId:
 	return { job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
 }
 
+/** How often a job's erase may start over (an expired or replaced state) before the job fails. */
+const MAX_ERASE_RESTARTS = 5;
+
 /** Job user.delete-data: one budgeted erase step; an unfinished erase queues the next step with its resume token. */
 async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	// Started only by the cleanup: a user restored meanwhile is not erased
@@ -2042,8 +2046,11 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 		deletedVideos: previous + summary.deletedVideoIds.length,
 		...(errors.length ? { errors } : {}),
 	};
-	if (!summary.complete) return { done: false, params: { resumeToken: summary.resumeToken }, result };
-	return { done: true, result };
+	if (summary.complete) return { done: true, result };
+	// A run that keeps starting over would queue itself forever: stop, the job fails and shows Retry
+	const restarts = (Number(job.params.restarts) || 0) + (summary.restarted ? 1 : 0);
+	if (restarts > MAX_ERASE_RESTARTS) throw new Error(`The erasure started over ${restarts} times without finishing`);
+	return { done: false, params: { resumeToken: summary.resumeToken, ...(restarts ? { restarts } : {}) }, result };
 }
 
 /** One step of a run account's cheap erasure (lib/privacy/run-user-erase.ts, #887). */
@@ -2126,7 +2133,7 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 				await eraseChannelSocial(env, id);
 			},
 		},
-		{ resumeToken },
+		{ resumeToken, onChannelUnreadable: (channelId) => flagUnreadableChannel(env, undefined, 'erase', channelId) },
 	);
 	if (env.NOTIFICATIONS_DB) {
 		for (const videoId of summary.deletedVideoIds) {
@@ -2144,6 +2151,11 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 		await send(env, MessageType.UserDataErased, { userId });
 	}
 	for (const videoId of summary.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId, reason: 'admin-erasure' });
+	// No state for the next step: the attempt fails (retried with backoff, then the job shows Retry) instead of queueing itself from the start
+	if (summary.unavailable) {
+		flagResumeUnavailable(env, undefined, 'erase', summary.unavailable);
+		throw summary.unavailable;
+	}
 	return summary;
 }
 
