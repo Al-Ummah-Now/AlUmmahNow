@@ -2,7 +2,8 @@ import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
 import { getI18n } from '@/i18n/server';
 import { helpArea, helpAreas, helpAreaSlugs } from '@/lib/help/content';
-import { HelpSearch, type HelpSearchItem } from '@/components/help/HelpSearch';
+import { HelpSearch } from '@/components/help/HelpSearch';
+import type { HelpSearchItem } from '@/lib/help/search';
 import { HelpEntryCard, HelpFooterNote } from '@/components/help/HelpGuide';
 
 /** One settings area of the admin guide: a frosted card per setting, at its anchor (wiki AUN-ADMIN-HELP). */

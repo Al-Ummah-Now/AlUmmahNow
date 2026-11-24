@@ -71,7 +71,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
     fitToViewport(pop);
     if (focusOnOpen.current) {
       focusOnOpen.current = false;
-      pop?.focus();
+      pop?.focus({ preventScroll: true });
     }
   }, [mode]);
 

@@ -166,7 +166,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/newsletter', label: 'nav.newsletter', icon: 'inbox', group: 'site', requires: (a) => a.contact },
   { href: '/deleted', label: 'nav.deleted', icon: 'trash', group: 'site' },
   // Admin help guide (wiki AUN-ADMIN-HELP): every setting explained, en + ar; every admin role reads it
-  { href: '/help', label: 'nav.adminHelp', icon: 'help', group: 'site', reviewers: true },
+  { href: '/help', label: 'nav.adminHelp', icon: 'help', group: 'site' },
 ];
 
 export function visibleItems(access: NavAccess): NavItem[] {

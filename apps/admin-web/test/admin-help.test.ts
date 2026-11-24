@@ -8,10 +8,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
+// tsx compiles the components' JSX in classic mode (tsconfig jsx: preserve): they read the global React
+(globalThis as unknown as { React: unknown }).React = React;
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { HelpTips } from '../src/components/help/HelpTips';
 import { HelpTip } from '../src/components/help/HelpTip';
-import { fold, matchHelp } from '../src/components/help/HelpSearch';
+import { fold, matchHelp } from '../src/lib/help/search';
 import { helpArea, helpAreas, tipsFor } from '../src/lib/help/content';
 import { NAV_ITEMS, visibleItems } from '../src/components/shell/nav-model';
 import { hrefFor } from '../src/components/search/autocomplete-model';
@@ -77,9 +79,9 @@ describe('help content in the admin', () => {
     assert.equal(hrefFor({ kind: 'help', id: '/help/platform-settings#downloads-per-day' }), '/help/platform-settings#downloads-per-day');
   });
 
-  it('the guide is in the nav for every admin role and for reviewers', () => {
+  it('the guide is in the nav for every admin role (not in the review-only shell)', () => {
     assert.ok(NAV_ITEMS.some((i) => i.href === '/help'));
     assert.ok(visibleItems({ contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false }).some((i) => i.href === '/help'));
-    assert.ok(visibleItems({ contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false, reviewOnly: true }).some((i) => i.href === '/help'));
+    assert.ok(!visibleItems({ contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false, reviewOnly: true }).some((i) => i.href === '/help'));
   });
 });

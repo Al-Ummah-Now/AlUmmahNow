@@ -1,7 +1,8 @@
 import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
 import { helpAreas } from '@/lib/help/content';
-import { HelpSearch, matchHelp, type HelpSearchItem } from '@/components/help/HelpSearch';
+import { HelpSearch } from '@/components/help/HelpSearch';
+import { matchHelp, type HelpSearchItem } from '@/lib/help/search';
 import { HelpFooterNote } from '@/components/help/HelpGuide';
 
 /**
