@@ -60542,7 +60542,8 @@
               "eventCalendar",
               "newsletter",
               "listenMode",
-              "offlineDownloads"
+              "offlineDownloads",
+              "appUpdates"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
