@@ -253,7 +253,14 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 		await checkMovable(env, channel, userId);
 		const options = JSON.parse(offer.options_json || '{}') as { keepContactEmail?: boolean };
 		// The owner is the actor: the new owner gets "You are now the owner", the owner hears "accepted" below
-		const { job } = await transferChannel(env, offer.channel_id, userId, offer.from_user_id, { keepPreviousOwnerAsAdmin: false, keepContactEmail: options.keepContactEmail === true, expectedOwnerId: offer.from_user_id });
+		const { job } = await transferChannel(env, offer.channel_id, userId, offer.from_user_id, {
+			keepPreviousOwnerAsAdmin: false,
+			keepContactEmail: options.keepContactEmail === true,
+			expectedOwnerId: offer.from_user_id,
+			offerId: id,
+			// An erasure of either person may have closed it since the claim
+			confirm: async () => (await readOffer(env, id))?.status === 'accepting',
+		});
 		jobId = job.id;
 	} catch (error) {
 		const refusal = error instanceof AdminError ? new MoveError(error.status === 422 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code) : error;
@@ -263,7 +270,12 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 		throw refusal;
 	}
 	// The move is queued: a failed write here must not answer as if it weren't (settleStaleAccept closes it later)
-	await settle('moved', jobId).catch((e) => logger.error('[ChannelMoves] Could not close an accepted offer', { offerId: id, jobId, error: String(e) }));
+	const settled = await settle('moved', jobId).catch((e) => {
+		logger.error('[ChannelMoves] Could not close an accepted offer', { offerId: id, jobId, error: String(e) });
+		return null;
+	});
+	// An erasure closed it after the job was made: the job stops before the channel changes hands, unless it already has
+	if (settled && Number(settled.meta?.changes ?? 0) !== 1 && (await readOffer(env, id))?.status !== 'moved') throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const receiver = await profileOf(env, userId);
 	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, channel.id, `move-offer:${id}:accepted`);
 	logger.info('[ChannelMoves] Offer accepted; move queued', { channelId: channel.id, offerId: id, jobId });

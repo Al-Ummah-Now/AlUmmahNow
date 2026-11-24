@@ -41,7 +41,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, type BucketLike } from './scan';
 import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-data';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
-import { eraseMoveOffers } from '../channelMoveData';
+import { forgetMoveOffers, stopMoveOffers } from '../channelMoveData';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
 import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin/legacy-restore';
@@ -122,6 +122,8 @@ export async function eraseRunUserData(
 	const bump = (key: string, by: number) => {
 		if (by > 0) result.deleted[key] = (result.deleted[key] ?? 0) + by;
 	};
+	// Its moves stop before its channels are listed (lib/channelMoveData.ts)
+	await stopMoveOffers({ SEARCH_DB: db, channels: env.channels }, userId);
 	const { channels, videos } = await runUserOwnedIds(db, userId);
 	const community = asBucket(env.community_posts);
 
@@ -237,7 +239,7 @@ export async function eraseRunUserData(
 			await anonymizeTeamActivity(db, userId, DELETED_USER_ID);
 			// Channel move offers (search migration 0121), as the full erasure does
 			budget.spend();
-			await eraseMoveOffers(db, userId, DELETED_USER_ID);
+			await forgetMoveOffers(db, userId, DELETED_USER_ID);
 			// Their live sessions' tier owner (search migration 0060), as the full erasure does
 			budget.spend();
 			await eraseLiveSessionOwner(db, userId);

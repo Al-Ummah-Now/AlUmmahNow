@@ -67,7 +67,7 @@ import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin
 import { eraseChannelComments, eraseCommentsOfChannel } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
-import { eraseMoveOffers, exportMoveOffers } from '../channelMoveData';
+import { exportMoveOffers, forgetMoveOffers, stopMoveOffers } from '../channelMoveData';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -1212,19 +1212,30 @@ export async function eraseUserData(
 		return footprintTargets(db!, userId, 'post');
 	};
 
-	// Channel move offers (search migration 0121): open ones close, the id leaves the rest. An offer names two
-	// accounts, not a channel's owner, so whose channel it is now doesn't matter. Before the channels, so nobody
-	// accepts one while the run erases them, and again before the profile, for one made meanwhile. Phases of their
-	// own: the last one can't resume part way, so what is added there raises what one pass must fit.
-	const moveOffers: Phase = async (ctx) => {
+	// Channel move offers (search migration 0121): open ones close, a move that hasn't changed hands stops, and the
+	// id leaves the rest (lib/channelMoveData.ts). Before the channels, so none changes hands while the run erases
+	// them: what a move made the user's until then is theirs, so the run's beginning counts from here. And again
+	// before the profile, for an offer made or accepted meanwhile: a channel that came that way starts the run over.
+	// Phases of their own: the last one can't resume part way, so what is added there raises what one pass must fit.
+	const moveOffers = (first: boolean): Phase => async (ctx) => {
 		if (!db) return;
-		ctx.budget.spend();
-		const closed = await eraseMoveOffers(db as unknown as D1Database, userId, DELETED_USER_ID);
+		const offers = { SEARCH_DB: db as unknown as D1Database, channels: env.channels };
+		const { closed, received } = await stopMoveOffers(offers, userId, (n) => ctx.budget.spend(n));
 		if (closed > 0) bump(summary.deleted, 'channelMoveOffers', closed);
+		const cp = ctx.checkpoint;
+		if (!first && received) {
+			// Over from the top; the first phase forgets the offer then, so a pass that dies here finds it again
+			Object.assign(cp, { p: -1, o: [], more: undefined });
+			return;
+		}
+		ctx.budget.spend();
+		await forgetMoveOffers(offers.SEARCH_DB, userId, DELETED_USER_ID);
+		// The next moment: a flip in this one was an offer's, found above
+		if (first) cp.t = Date.now() + 1;
 	};
 
 	const phases: Phase[] = [
-		moveOffers,
+		moveOffers(true),
 		deletePrefixPages(asBucket(env.watch_history), `${userId}:`, 'watchHistory'),
 		// Studio brand kit and shared assets (institution mode)
 		async (ctx) => {
@@ -1455,7 +1466,7 @@ export async function eraseUserData(
 			}
 		},
 
-		moveOffers,
+		moveOffers(false),
 		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile last
 		async (ctx) => {
 			if (env.NOTIFICATIONS_DB) {
