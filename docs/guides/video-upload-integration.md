@@ -548,7 +548,7 @@ A: Upload speed depends on your internet connection. TUS protocol optimizes tran
 A: Currently, only one video at a time. Batch upload is planned for future release.
 
 **Q: What video formats are supported?**
-A: MP4, MOV, AVI, and WebM. Maximum 2GB file size.
+A: MP4, M4V, MOV, WebM, MKV and AVI. The web form takes a file by its type or, when the browser gives none, by its extension.
 
 **Q: How do I increase my upload limit?**
 A: Upgrade to Pro or Enterprise tier for higher limits.

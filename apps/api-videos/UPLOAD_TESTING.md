@@ -8,7 +8,7 @@ This guide describes how to test the new video upload pipeline that integrates w
    - Library ID configured in `BUNNY_STREAM_LIBRARY_ID` secret
    - Access key configured in `bunny-stream-key` secret
 2. Valid authentication token (JWT)
-3. Test video file (MP4, MOV, AVI, or WebM format, max 2GB)
+3. Test video file (MP4, M4V, MOV, WebM, MKV or AVI)
 
 ## Backend API Endpoints
 
@@ -172,7 +172,7 @@ curl http://127.0.0.1:8686/api/videos/{videoId}/upload-status \
 2. **Select Video File:**
    - Drag and drop video file OR click to browse
    - File should be validated for:
-     - Format: MP4, MOV, AVI, or WebM
+     - Format: MP4, M4V, MOV, WebM, MKV or AVI
      - Size: Max 2GB
      - Duration: Max 2 hours
 

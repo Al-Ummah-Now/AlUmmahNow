@@ -1,16 +1,18 @@
+import { VIDEO_FORMATS, videoFormatsText } from '@/lib/upload/video-formats';
+
 // Video upload configuration constants
 export const VIDEO_UPLOAD_CONFIG = {
   // Maximum file size: No limit (Bunny.net handles large files via TUS)
   MAX_FILE_SIZE: Infinity,
 
-  // Allowed video file types
-  ALLOWED_TYPES: ['video/mp4', 'video/mov', 'video/avi', 'video/webm'],
+  // The type sent to the server for each accepted format (lib/upload/video-formats.ts decides what a file is)
+  ALLOWED_TYPES: VIDEO_FORMATS.map((f) => f.mimeType),
 
   // Maximum video duration: No limit
   MAX_DURATION: Infinity,
 
   // File type display names for error messages
-  ALLOWED_TYPES_DISPLAY: 'MP4, MOV, AVI, or WebM',
+  ALLOWED_TYPES_DISPLAY: videoFormatsText('en'),
 
   // Human readable size limit
   MAX_FILE_SIZE_DISPLAY: 'No limit',
@@ -28,7 +30,7 @@ export const VIDEO_UPLOAD_CONFIG = {
     // Interval between polls in milliseconds
     INTERVAL_MS: 5000,
   },
-} as const;
+};
 
 // Error messages
 export const VIDEO_UPLOAD_ERRORS = {

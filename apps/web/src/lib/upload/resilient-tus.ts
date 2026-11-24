@@ -24,6 +24,7 @@
  */
 import * as tus from 'tus-js-client';
 import { logger } from '@/lib/logger-client';
+import { videoMimeTypeOf } from './video-formats';
 
 /** Chunk size: see apps/web/src/lib/upload/README.md "Chunk size" for the QA measurements. */
 export const DEFAULT_TUS_CHUNK_SIZE = 50 * 1024 * 1024;
@@ -396,7 +397,7 @@ export class ResilientUpload {
       ),
       metadata: {
         filename: file.name,
-        filetype: file.type,
+        filetype: videoMimeTypeOf(file),
         ...(this.opts.metadata || {}),
         tusSessionId: this.sessionId,
         videoId,

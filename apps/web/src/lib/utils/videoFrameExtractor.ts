@@ -3,6 +3,8 @@
  * Extracts frames from video files for thumbnail preview
  */
 
+import { isAcceptedVideoFile } from '@/lib/upload/video-formats';
+
 export interface FrameExtractionOptions {
   positions: number[]; // Percentages (0-100)
   width?: number;
@@ -231,5 +233,5 @@ export async function probeVideoSize(videoFile: File): Promise<{ width: number; 
  * @returns boolean - True if file is a valid video
  */
 export function isVideoFile(file: File): boolean {
-  return file.type.startsWith('video/');
+  return file.type.startsWith('video/') || isAcceptedVideoFile(file);
 }

@@ -106,6 +106,20 @@ describe('useBatchUpload', () => {
     expect(hook.result.current.files.map((f) => f.file.name)).toEqual(['Lesson 1.mp4', 'Lesson 2.mp4', 'Lesson 10.mp4']);
   });
 
+  it('sends the real video type of an iPhone MOV and of files the browser gave no type (#1938)', async () => {
+    const { hook } = setup();
+    const picked = [
+      new File(['x'], 'IMG_0001.MOV', { type: 'video/quicktime', lastModified: 1 }),
+      new File(['x'], 'lesson.mkv', { type: '', lastModified: 2 }),
+      new File(['x'], 'old.avi', { type: 'video/avi', lastModified: 3 }),
+    ];
+    await act(async () => {
+      await hook.result.current.addFiles(picked);
+    });
+    const sent = Object.fromEntries(initiate.mock.calls[0][0].map((v: { title: string; mimeType: string }) => [v.title, v.mimeType]));
+    expect(sent).toEqual({ IMG_0001: 'video/quicktime', lesson: 'video/x-matroska', old: 'video/x-msvideo' });
+  });
+
   it('adds and uploads more files after a batch finished, again and again', async () => {
     const { hook, onError } = setup();
     for (let round = 0; round < 3; round++) {

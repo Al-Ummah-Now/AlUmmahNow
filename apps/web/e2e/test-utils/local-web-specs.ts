@@ -64,6 +64,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '42-upload-templates.spec.ts',
   '43-video-edit-schedule.spec.ts',
   '44-video-chapters-subtitles.spec.ts',
+  '45-video-formats.spec.ts',
   // Sub-batch 5: the axe sweep of every page (a11y project)
   'a11y/axe-all-pages.spec.ts',
   // Sub-batch 6: account, profile, settings, channel settings, community, playlist tools, media boxes

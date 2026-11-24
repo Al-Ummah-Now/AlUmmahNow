@@ -7,6 +7,7 @@ import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
 import { grantedUploadUrl, requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resilient-tus';
 import { findRememberedUpload, forgetUpload, rememberUpload } from '@/lib/upload/resume-store';
+import { videoMimeTypeOf } from '@/lib/upload/video-formats';
 import { tryFileFingerprint } from '@/lib/upload/fingerprint';
 import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
@@ -290,7 +291,7 @@ export function useBatchUpload({
         const initiateResult = await initiateBatchUpload(
           freshFiles.map((file, index) => ({
             fileSize: file.size,
-            mimeType: file.type,
+            mimeType: videoMimeTypeOf(file),
             isPublic: sharedMetadata.isPublic ?? true,
             description: sharedMetadata.description,
             tags: sharedMetadata.tags?.join(','),
