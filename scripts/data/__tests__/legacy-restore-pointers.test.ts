@@ -8,6 +8,7 @@ import {
 	cfFetch,
 	createR2BackfillStore,
 	encodeR2KeyPath,
+	formatCliReport,
 	parseCliArgs,
 	parseLegacyRestoreKey,
 	type BackfillStore,
@@ -117,6 +118,7 @@ describe('ENVIRONMENTS and parseCliArgs', () => {
 			apply: false,
 			confirm1902Deployed: false,
 			cursor: undefined,
+			cursorFile: undefined,
 			maxPages: 10,
 			perPage: 1000,
 		});
@@ -125,18 +127,55 @@ describe('ENVIRONMENTS and parseCliArgs', () => {
 			apply: true,
 			confirm1902Deployed: true,
 			cursor: 'abc',
+			cursorFile: undefined,
 			maxPages: 5,
 			perPage: 200,
+		});
+		assert.deepEqual(parseCliArgs(['--env', 'qa', '--cursor-file', '/tmp/c.cursor']), {
+			env: 'qa',
+			apply: false,
+			confirm1902Deployed: false,
+			cursor: undefined,
+			cursorFile: '/tmp/c.cursor',
+			maxPages: 10,
+			perPage: 1000,
 		});
 
 		assert.throws(() => parseCliArgs([]), /Missing required --env/);
 		assert.throws(() => parseCliArgs(['--env', 'dev']), /Unknown --env/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--env', 'stage']), /only one --env/);
+		assert.throws(() => parseCliArgs(['--env', 'qa', '--cursor', 'a', '--cursor-file', '/tmp/a']), /not both/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--apply']), /--confirm-1902-deployed/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--max-pages', '0']), /--max-pages/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--max-pages', String(HARD_MAX_PAGES + 1)]), /--max-pages/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--per-page', '1001']), /--per-page/);
 		assert.throws(() => parseCliArgs(['--env', 'qa', '--unknown']), /Unknown argument/);
+	});
+
+	it('formatCliReport omits raw nextCursor so stdout never prints a user ID encoded in an R2 cursor', () => {
+		const out = formatCliReport(
+			{ env: 'qa', backupsBucket: 'admin-backups-qa', profilesBucket: 'profiles-qa', cursorFile: '/tmp/legacy-restore-backfill-qa.cursor' },
+			{
+				dryRun: true,
+				pagesProcessed: 1,
+				scanned: 2,
+				existingPointers: 0,
+				alreadyIndexed: 0,
+				pointersToCreate: 2,
+				pointersCreated: 0,
+				orphanedToDelete: 0,
+				orphanedDeleted: 0,
+				raceRecheckedAlive: 0,
+				skippedMalformed: 0,
+				distinctUsers: 2,
+				complete: false,
+				nextCursor: `legacy-restore/job-1/${USR_ACTIVE}/v1.json`,
+			},
+		);
+		assert.equal('nextCursor' in out, false);
+		assert.equal(out.hasMore, true);
+		assert.equal(out.cursorFile, '/tmp/legacy-restore-backfill-qa.cursor');
+		assert.equal(JSON.stringify(out).includes(USR_ACTIVE), false);
 	});
 });
 

@@ -220,8 +220,22 @@ export interface ParsedCliArgs {
 	apply: boolean;
 	confirm1902Deployed: boolean;
 	cursor?: string;
+	cursorFile?: string;
 	maxPages: number;
 	perPage: number;
+}
+
+/** Public-safe summary printed to stdout: omits the raw R2 list cursor (which may encode a user ID). */
+export function formatCliReport(
+	meta: { env: TargetEnv; backupsBucket: string; profilesBucket: string; cursorFile: string | null },
+	report: BackfillReport,
+): Record<string, unknown> {
+	const { nextCursor: _omitted, ...counts } = report;
+	return {
+		...meta,
+		...counts,
+		hasMore: !report.complete,
+	};
 }
 
 /** Parses and validates CLI flags: requires one environment, dry-run by default, bounded pages, deploy confirmation on --apply. */
@@ -230,6 +244,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 	let apply = false;
 	let confirm1902Deployed = false;
 	let cursor: string | undefined;
+	let cursorFile: string | undefined;
 	let maxPages = DEFAULT_MAX_PAGES;
 	let perPage = DEFAULT_PER_PAGE;
 
@@ -252,6 +267,8 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 			confirm1902Deployed = true;
 		} else if (arg === '--cursor') {
 			cursor = valueAfter('--cursor', i++);
+		} else if (arg === '--cursor-file') {
+			cursorFile = valueAfter('--cursor-file', i++);
 		} else if (arg === '--max-pages') {
 			maxPages = Number(valueAfter('--max-pages', i++));
 		} else if (arg === '--per-page') {
@@ -262,11 +279,12 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 	}
 
 	if (!env) throw new Error('Missing required --env qa|stage|production');
+	if (cursor && cursorFile) throw new Error('Pass either --cursor or --cursor-file, not both');
 	if (apply && !confirm1902Deployed) {
 		throw new Error('--apply requires --confirm-1902-deployed (confirm #1902 is deployed to this environment first)');
 	}
 	validateBounds(maxPages, perPage);
-	return { env, apply, confirm1902Deployed, cursor, maxPages, perPage };
+	return { env, apply, confirm1902Deployed, cursor, cursorFile, maxPages, perPage };
 }
 
 /**
