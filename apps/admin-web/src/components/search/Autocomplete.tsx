@@ -649,14 +649,14 @@ function PickedCard({
             {item && <InvitedBadge suggestion={item} />}
           </span>
           {item?.secondary && (
-            <span className="text-xs text-fg-muted [overflow-wrap:anywhere]" dir="auto">
-              {item.secondary}
+            <span className="text-xs text-fg-muted [overflow-wrap:anywhere]">
+              <bdi>{item.secondary}</bdi>
             </span>
           )}
           {showIds && (
-            <bdi dir="ltr" className="font-mono text-xs text-fg-muted [overflow-wrap:anywhere]">
-              {id}
-            </bdi>
+            <span className="font-mono text-xs text-fg-muted [overflow-wrap:anywhere]">
+              <bdi dir="ltr">{id}</bdi>
+            </span>
           )}
           {item?.meta && <span className="text-xs text-fg-subtle">{item.meta}</span>}
         </span>
