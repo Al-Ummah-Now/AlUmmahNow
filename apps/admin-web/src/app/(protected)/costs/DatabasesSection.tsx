@@ -12,6 +12,7 @@ import { sectionNote, sectionTitle } from './sections';
 
 const th = 'px-3 py-2 font-medium';
 const td = 'px-3 py-2 align-top';
+const num = 'whitespace-nowrap text-end text-fg tabular-nums';
 
 /** Fill colour of a share-of-limit bar: warning from 70%, danger from 90%. */
 export function shareTone(share: number | null): 'ok' | 'warn' | 'danger' {
@@ -32,7 +33,8 @@ export function ShareBar({ share, label }: { share: number | null; label: string
 const envName = (t: Translator, env: string) => (['production', 'stage', 'qa'].includes(env) ? t(`costs.databases.envs.${env as 'production' | 'stage' | 'qa'}`) : env);
 
 function daysText(t: Translator, f: OpsFormats, d: CostDatabase): string {
-  if (d.daysTo70 === null) return t('costs.databases.daysNone');
+  // No forecast: not growing, or too little history for one (a dash)
+  if (d.daysTo70 === null) return d.growthPerDay !== null && d.growthPerDay <= 0 ? t('costs.databases.daysNone') : '—';
   if (d.daysTo70 === 0) return t('costs.databases.daysNow');
   return f.count(Math.round(d.daysTo70));
 }
@@ -105,15 +107,15 @@ export function DatabasesSection({ data, t, f, settings }: { data: CostDatabases
                       {d.alerts.length > 0 && <span className="ms-2 text-xs font-medium text-warning-fg">{t('costs.databases.alertOpen')}</span>}
                     </th>
                     <td className={`${td} text-fg`}>{envName(t, d.env)}</td>
-                    <td className={`${td} text-end text-fg tabular-nums`}>{d.bytes === null ? '—' : f.bytes(d.bytes)}</td>
-                    <td className={`${td} w-40 text-fg tabular-nums`}>
+                    <td className={`${td} ${num}`}>{d.bytes === null ? '—' : f.bytes(d.bytes)}</td>
+                    <td className={`${td} w-40 whitespace-nowrap text-fg tabular-nums`}>
                       {d.share === null ? '—' : f.percent(d.share)}
                       <ShareBar share={d.share} label={d.share === null ? '—' : f.percent(d.share)} />
                     </td>
-                    <td className={`${td} text-end text-fg tabular-nums`}>{d.growthPerDay === null ? '—' : f.bytes(d.growthPerDay)}</td>
-                    <td className={`${td} text-end text-fg tabular-nums`}>{daysText(t, f, d)}</td>
-                    <td className={`${td} text-end text-fg tabular-nums`}>{d.rowsWrittenPerDay === null ? '—' : f.count(d.rowsWrittenPerDay)}</td>
-                    <td className={`${td} text-end text-fg tabular-nums`}>{d.peakBusy === null ? '—' : f.percent(d.peakBusy)}</td>
+                    <td className={`${td} ${num}`}>{d.growthPerDay === null || d.growthPerDay === 0 ? '—' : f.bytes(d.growthPerDay)}</td>
+                    <td className={`${td} ${num}`}>{daysText(t, f, d)}</td>
+                    <td className={`${td} ${num}`}>{d.rowsWrittenPerDay === null ? '—' : f.count(d.rowsWrittenPerDay)}</td>
+                    <td className={`${td} ${num}`}>{d.peakBusy === null ? '—' : f.percent(d.peakBusy)}</td>
                   </tr>
                 ))}
               </tbody>
