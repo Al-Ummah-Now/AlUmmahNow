@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS channel_move_offers (
   from_user_id TEXT NOT NULL,
   to_user_id TEXT NOT NULL,
   options_json TEXT NOT NULL DEFAULT '{}',
-  -- offered | moved | declined | cancelled | expired | stopped | refused
+  -- offered | accepting (claimed by its receiver while the move starts) | moved | declined | cancelled | expired | stopped | refused
   status TEXT NOT NULL,
   job_id TEXT,
   created_at TEXT NOT NULL,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS channel_move_offers (
   responded_at TEXT,
   updated_at TEXT NOT NULL
 );
--- One open offer per channel
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_move_offers_open ON channel_move_offers (channel_id) WHERE status = 'offered';
+-- One open offer per channel (one being accepted counts as open)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_move_offers_open ON channel_move_offers (channel_id) WHERE status IN ('offered', 'accepting');
 -- Offers to me, offers I made
 CREATE INDEX IF NOT EXISTS idx_channel_move_offers_to ON channel_move_offers (to_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_channel_move_offers_from ON channel_move_offers (from_user_id, status);

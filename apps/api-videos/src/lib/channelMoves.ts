@@ -22,10 +22,12 @@ import { AdminError, channelHasSupport, channelIsLive, hasChannelRoom, openTrans
 export const MOVE_OFFER_DAYS = 7;
 /** The owner must have signed in this recently to make an offer. */
 export const MOVE_REAUTH_SECONDS = 10 * 60;
+/** An accept still claimed after this long never finished. */
+const STALE_ACCEPT_MS = 10 * 60 * 1000;
 /** A channel can be moved by its owner at most once in this many days. */
 export const MOVE_COOLDOWN_DAYS = 30;
 
-export type MoveOfferStatus = 'offered' | 'moved' | 'declined' | 'cancelled' | 'expired' | 'stopped' | 'refused';
+export type MoveOfferStatus = 'offered' | 'accepting' | 'moved' | 'declined' | 'cancelled' | 'expired' | 'stopped' | 'refused';
 
 export interface MoveOfferRow {
 	id: string;
@@ -102,6 +104,8 @@ async function notify(env: Env, recipient: string, key: string, params: Record<s
 
 /** Everything that must hold for the channel to go from its owner to `toUserId` (offer and accept both check it). */
 async function checkMovable(env: Env, channel: Row, toUserId: string): Promise<void> {
+	// Spec §5: a suspended channel stays with its owner until the suspension is lifted
+	if (channel.isSuspended) throw new MoveError(409, 'channel_suspended', 'A suspended channel can’t be moved');
 	if (channelRoleOf(channel as never, toUserId) !== 'admin') throw new MoveError(409, 'receiver_not_channel_admin', 'The channel can only go to one of its admins');
 	const handle = typeof channel.handle === 'string' ? channel.handle.toLowerCase() : '';
 	if (handle && OFFICIAL_HANDLES.has(handle)) throw new MoveError(409, 'official_handle', 'A channel with an official handle is moved by the team');
@@ -147,8 +151,13 @@ export async function createMoveOffer(
 		responded_at: null,
 		updated_at: iso(now),
 	};
-	// An open offer that has expired no longer blocks a new one
+	// An open offer that has expired no longer blocks a new one, nor does an accept that never
+	// finished (its worker died between the claim and the move; the move job's lock still guards)
 	await db(env).prepare(`UPDATE channel_move_offers SET status = 'expired', updated_at = ? WHERE channel_id = ? AND status = 'offered' AND expires_at <= ?`).bind(iso(now), channel.id, iso(now)).run();
+	await db(env)
+		.prepare(`UPDATE channel_move_offers SET status = 'refused', updated_at = ? WHERE channel_id = ? AND status = 'accepting' AND updated_at <= ?`)
+		.bind(iso(now), channel.id, iso(now - STALE_ACCEPT_MS))
+		.run();
 	const inserted = await db(env)
 		.prepare(
 			`INSERT OR IGNORE INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, options_json, status, job_id, created_at, expires_at, responded_at, updated_at)
@@ -186,27 +195,50 @@ async function openOfferFor(env: Env, id: string, now: number): Promise<MoveOffe
 	return offer;
 }
 
-/** The admin accepts: the move runs at once (CC-D3) through the admin move job; the old owner keeps no access (CC-D4). */
+/**
+ * The admin accepts: the move runs at once (CC-D3) through the admin move job; the old owner keeps
+ * no access (CC-D4). The offer is claimed first (offered → accepting, only while open and unexpired,
+ * only by its receiver), so a cancel, decline or stop at the same moment either wins before the
+ * claim (the accept is refused) or finds the offer no longer open (the move goes ahead). A refusal
+ * after the claim puts the offer back as it was, or closes it when it can never succeed.
+ */
 export async function acceptMoveOffer(env: Env, id: string, userId: string, now = Date.now()): Promise<{ offer: MoveOfferRow; jobId: string }> {
-	const offer = await openOfferFor(env, id, now);
-	if (offer.to_user_id !== userId) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
-	const channel = await loadChannel(env, offer.channel_id);
-	if (channel.userId !== offer.from_user_id) {
-		await closeOffer(env, id, 'refused', now);
-		throw new MoveError(409, 'owner_changed', 'The channel’s owner changed since the offer');
+	const claimed = await db(env)
+		.prepare(`UPDATE channel_move_offers SET status = 'accepting', updated_at = ? WHERE id = ? AND to_user_id = ? AND status = 'offered' AND expires_at > ?`)
+		.bind(iso(now), id, userId, iso(now))
+		.run();
+	if (Number(claimed.meta?.changes ?? 0) !== 1) {
+		// Expired: closed now, so it stops showing; anything else was answered, withdrawn or stopped first
+		await db(env).prepare(`UPDATE channel_move_offers SET status = 'expired', updated_at = ? WHERE id = ? AND status = 'offered' AND expires_at <= ?`).bind(iso(now), id, iso(now)).run();
+		throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	}
-	await checkMovable(env, channel, userId);
-	const options = JSON.parse(offer.options_json || '{}') as { keepContactEmail?: boolean };
+	const offer = (await readOffer(env, id))!;
+	const settle = (status: MoveOfferStatus, jobId: string | null = null) =>
+		db(env)
+			.prepare(`UPDATE channel_move_offers SET status = ?, job_id = COALESCE(?, job_id), responded_at = CASE WHEN ? = 'offered' THEN NULL ELSE ? END, updated_at = ? WHERE id = ? AND status = 'accepting'`)
+			.bind(status, jobId, status, iso(now), iso(now), id)
+			.run();
+	let channel: Row;
 	let jobId: string;
 	try {
+		channel = await loadChannel(env, offer.channel_id);
+		if (channel.userId !== offer.from_user_id) {
+			await settle('refused');
+			throw new MoveError(409, 'owner_changed', 'The channel’s owner changed since the offer');
+		}
+		await checkMovable(env, channel, userId);
+		const options = JSON.parse(offer.options_json || '{}') as { keepContactEmail?: boolean };
 		// The owner is the actor: the new owner gets "You are now the owner", the owner hears "accepted" below
 		const { job } = await transferChannel(env, offer.channel_id, userId, offer.from_user_id, { keepPreviousOwnerAsAdmin: false, keepContactEmail: options.keepContactEmail === true });
 		jobId = job.id;
 	} catch (error) {
-		if (error instanceof AdminError) throw new MoveError(error.status === 422 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code);
-		throw error;
+		const refusal = error instanceof AdminError ? new MoveError(error.status === 422 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code) : error;
+		// No longer the channel's admin, or the channel is gone: the offer can never be accepted
+		const final = refusal instanceof MoveError && ['receiver_not_channel_admin', 'channel_not_found', 'owner_changed'].includes(refusal.code);
+		await settle(final ? 'refused' : 'offered').catch((e) => logger.error('[ChannelMoves] Could not settle a refused accept', { offerId: id, error: String(e) }));
+		throw refusal;
 	}
-	await closeOffer(env, id, 'moved', now, jobId);
+	await settle('moved', jobId);
 	const receiver = await profileOf(env, userId);
 	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, channel.id, `move-offer:${id}:accepted`);
 	logger.info('[ChannelMoves] Offer accepted; move queued', { channelId: channel.id, offerId: id, jobId });
@@ -216,7 +248,7 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 export async function declineMoveOffer(env: Env, id: string, userId: string, now = Date.now()): Promise<void> {
 	const offer = await openOfferFor(env, id, now);
 	if (offer.to_user_id !== userId) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
-	if (!(await closeOffer(env, id, 'declined', now))) return;
+	if (!(await closeOffer(env, id, 'declined', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	const receiver = await profileOf(env, userId);
 	await notify(env, offer.from_user_id, 'channelMoveDeclined', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, offer.channel_id, `move-offer:${id}:declined`);
@@ -225,17 +257,19 @@ export async function declineMoveOffer(env: Env, id: string, userId: string, now
 /** The owner withdraws the offer. */
 export async function cancelMoveOffer(env: Env, id: string, userId: string, now = Date.now()): Promise<void> {
 	const offer = await readOffer(env, id);
-	if (!offer || offer.from_user_id !== userId || offer.status !== 'offered') throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
-	if (!(await closeOffer(env, id, 'cancelled', now))) return;
+	if (!offer || offer.from_user_id !== userId) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
+	// Expired (closed now) or no longer open: nothing to withdraw, and nobody is told
+	await openOfferFor(env, id, now);
+	if (!(await closeOffer(env, id, 'cancelled', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	await notify(env, offer.to_user_id, 'channelMoveCancelled', channelParams('channel', channel as never), offer.channel_id, `move-offer:${id}:cancelled`);
 }
 
 /** An admin stops an open offer (CC-D1: "an admin can stop a move"); both sides are told. */
 export async function stopMoveOffer(env: Env, id: string, now = Date.now()): Promise<MoveOfferRow> {
-	const offer = await readOffer(env, id);
-	if (!offer || offer.status !== 'offered') throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
-	await closeOffer(env, id, 'stopped', now);
+	const offer = await openOfferFor(env, id, now);
+	// Lost to an accept, decline or cancel at the same moment: nothing stopped, nobody told
+	if (!(await closeOffer(env, id, 'stopped', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	for (const who of [offer.from_user_id, offer.to_user_id]) {
 		await notify(env, who, 'channelMoveStopped', channelParams('channel', channel as never), offer.channel_id, `move-offer:${id}:stopped:${who}`);
