@@ -38,6 +38,8 @@ export interface WorkflowActionInfo {
   label: WorkflowLocalized;
   scoped: boolean;
   floor: WorkflowFloor;
+  /** false: registered for later; its rule can't be changed yet */
+  connected?: boolean;
   rules: WorkflowRuleInForce[];
 }
 

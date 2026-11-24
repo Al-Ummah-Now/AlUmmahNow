@@ -94,7 +94,11 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
                       <Link href={`/approvals/rules?history=${encodeURIComponent(key)}#history`} className={`${linkClass} self-center text-sm`} data-testid="approval-rule-history">
                         {t('workflows.rules.history')}
                       </Link>
-                      <RuleEditor type={action.type} scope={rule.scope} actionName={name} rule={rule.config} floor={rule.floor} propose={proposeWorkflowRule} names={names} />
+                      {action.connected === false ? (
+                        <span className="self-center text-xs text-fg-subtle" data-testid="approval-rule-not-connected">{t('workflows.rules.notConnected')}</span>
+                      ) : (
+                        <RuleEditor type={action.type} scope={rule.scope} actionName={name} rule={rule.config} floor={rule.floor} propose={proposeWorkflowRule} names={names} />
+                      )}
                     </div>
                   </li>
                 );
