@@ -21,6 +21,9 @@ const buttonClass =
   'cost-primary inline-flex min-h-11 items-center justify-center rounded px-5 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
 const checkClass = 'size-5 shrink-0 accent-[var(--accent)]';
 
+/** Size first (70% then 90%), then the forecast, busy and the account total. */
+const RULE_ORDER: CapacityRule['metric'][] = ['storage_pct', 'storage_days_to_70', 'busy_pct', 'account_storage_pct'];
+
 export function DatabaseSettings({ data }: { data: CostDatabases }) {
   const { t, locale } = useLanguage();
   const ids = useId();
@@ -42,7 +45,7 @@ export function DatabaseSettings({ data }: { data: CostDatabases }) {
 
   return (
     <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2" data-testid="costs-databases-settings">
-      <form onSubmit={saveLimits} noValidate className="cost-tile space-y-3 p-4" data-testid="costs-d1-limits">
+      <form onSubmit={saveLimits} noValidate className="cost-tile space-y-3 self-start p-4" data-testid="costs-d1-limits">
         <p className="text-sm font-semibold text-fg">{t('costs.databases.limits.title')}</p>
         <p className={helpClass}>{t('costs.databases.limits.note')}</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -62,7 +65,7 @@ export function DatabaseSettings({ data }: { data: CostDatabases }) {
       <div className="cost-tile space-y-3 p-4" data-testid="costs-capacity-rules">
         <p className="text-sm font-semibold text-fg">{t('costs.databases.rules.title')}</p>
         <ul className="space-y-3">
-          {data.rules.map((r) => <RuleRow key={r.id} rule={r} />)}
+          {[...data.rules].sort((a, b) => RULE_ORDER.indexOf(a.metric) - RULE_ORDER.indexOf(b.metric) || a.value - b.value).map((r) => <RuleRow key={r.id} rule={r} />)}
         </ul>
       </div>
     </div>
