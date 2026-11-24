@@ -75,8 +75,8 @@ export const DELETED_CHANNEL_ID = 'deleted-channel';
 
 export const EXPORT_FORMAT_VERSION = 1;
 
-/** Format of the export's progress: raise it when its phase list changes. */
-const EXPORT_STATE_VERSION = 1;
+/** Format of the export's progress: raise it when its phase list changes (2: move offers). */
+const EXPORT_STATE_VERSION = 2;
 /** The export's channels phase in its phase list, and where a further round of channels begins. */
 const EXPORT_CHANNELS_PHASE = 4;
 
@@ -869,10 +869,10 @@ function anonymizeVideoComments(comments: unknown, userId: string, summary: Eras
 	return changed;
 }
 
-/** Format of the erase's progress: raise it when its phase list changes (2: #1073, 3: wiki E17, 4: kept by the server). */
-const ERASE_STATE_VERSION = 4;
+/** Format of the erase's progress: raise it when its phase list changes (2: #1073, 3: wiki E17, 4: kept by the server, 5: move offers). */
+const ERASE_STATE_VERSION = 5;
 /** The erase's channels phase in its phase list, and where a further round of channels begins. */
-const ERASE_CHANNELS_PHASE = 3;
+const ERASE_CHANNELS_PHASE = 4;
 
 /** Bound parameters per IN (...) list (D1 allows 100). */
 const IN_CHUNK = 90;
@@ -1212,7 +1212,19 @@ export async function eraseUserData(
 		return footprintTargets(db!, userId, 'post');
 	};
 
+	// Channel move offers (search migration 0121): open ones close, the id leaves the rest. An offer names two
+	// accounts, not a channel's owner, so whose channel it is now doesn't matter. Before the channels, so nobody
+	// accepts one while the run erases them, and again before the profile, for one made meanwhile. Phases of their
+	// own: the last one can't resume part way, so what is added there raises what one pass must fit.
+	const moveOffers: Phase = async (ctx) => {
+		if (!db) return;
+		ctx.budget.spend();
+		const closed = await eraseMoveOffers(db as unknown as D1Database, userId, DELETED_USER_ID);
+		if (closed > 0) bump(summary.deleted, 'channelMoveOffers', closed);
+	};
+
 	const phases: Phase[] = [
+		moveOffers,
 		deletePrefixPages(asBucket(env.watch_history), `${userId}:`, 'watchHistory'),
 		// Studio brand kit and shared assets (institution mode)
 		async (ctx) => {
@@ -1443,6 +1455,7 @@ export async function eraseUserData(
 			}
 		},
 
+		moveOffers,
 		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile last
 		async (ctx) => {
 			if (env.NOTIFICATIONS_DB) {
@@ -1475,10 +1488,6 @@ export async function eraseUserData(
 				ctx.budget.spend();
 				const notes = await (db as unknown as D1Database).prepare('DELETE FROM video_notes WHERE user_id = ?').bind(userId).run();
 				bump(summary.deleted, 'videoNotes', Number(notes.meta?.changes ?? 0));
-				// Channel move offers (search migration 0121): open ones close, the id leaves the rest
-				ctx.budget.spend();
-				const offers = await eraseMoveOffers(db as unknown as D1Database, userId, DELETED_USER_ID);
-				if (offers > 0) bump(summary.deleted, 'channelMoveOffers', offers);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
