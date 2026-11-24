@@ -508,9 +508,9 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 }
 
 /**
- * Queues a Takeout job for every YouTube source that still has uploaded files waiting to post
+ * Queues a Takeout job for every enabled YouTube source that still has uploaded files waiting to post
  * (for example, files skipped while uploads were off). Uses idx_import_sources_network and
- * idx_import_takeout_files_state (no table scans).
+ * idx_import_takeout_files_state (no table scans or temp B-trees).
  */
 export async function queueWaitingTakeout(env: SourceSyncEnv, limit = 100): Promise<number> {
 	const { results } = await db(env)
@@ -518,7 +518,9 @@ export async function queueWaitingTakeout(env: SourceSyncEnv, limit = 100): Prom
 			`SELECT s.*
 			 FROM import_sources s
 			 WHERE s.network = 'youtube'
+			   AND s.enabled = 1
 			   AND EXISTS (SELECT 1 FROM import_takeout_files f WHERE f.source_id = s.id AND f.state = 'uploaded')
+			 ORDER BY s.address
 			 LIMIT ?`,
 		)
 		.bind(limit)
@@ -528,7 +530,10 @@ export async function queueWaitingTakeout(env: SourceSyncEnv, limit = 100): Prom
 		try {
 			if (source.takeout_job_id) {
 				const existing = await getJob(env, source.takeout_job_id);
-				if (existing && ['queued', 'running', 'retrying'].includes(existing.status)) continue;
+				// Skip active jobs as well as failed/cancelled ones: a failed job is already on the Errors page
+				// waiting for Retry, and a cancelled job only resumes when an admin retries or lists/uploads again.
+				// (A job skipped while uploads were off clears takeout_job_id before exiting, so it resumes here.)
+				if (existing && existing.status !== 'succeeded') continue;
 			}
 			await startTakeoutJob(env, source, source.created_by);
 			queued++;

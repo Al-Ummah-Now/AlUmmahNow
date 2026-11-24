@@ -439,10 +439,11 @@ describe('syncing a source', () => {
 		const all = await plan('SELECT * FROM import_sources ORDER BY created_at DESC LIMIT 200');
 		assert.match(all, /USING INDEX idx_import_sources_created/);
 		const waitingTakeout = await plan(
-			"SELECT s.* FROM import_sources s WHERE s.network = 'youtube' AND EXISTS (SELECT 1 FROM import_takeout_files f WHERE f.source_id = s.id AND f.state = 'uploaded') LIMIT 100",
+			"SELECT s.* FROM import_sources s WHERE s.network = 'youtube' AND s.enabled = 1 AND EXISTS (SELECT 1 FROM import_takeout_files f WHERE f.source_id = s.id AND f.state = 'uploaded') ORDER BY s.address LIMIT 100",
 		);
 		assert.match(waitingTakeout, /USING INDEX idx_import_sources_network/);
 		assert.match(waitingTakeout, /USING COVERING INDEX idx_import_takeout_files_state/);
+		assert.doesNotMatch(waitingTakeout, /TEMP B-TREE/);
 	});
 });
 
@@ -922,6 +923,7 @@ describe('YouTube Takeout files', () => {
 		await waitItem('BBBBBBBBBBB', 'Talk B');
 		await waitItem('CCCCCCCCCCC', 'Talk C');
 		await waitItem('DDDDDDDDDDD', 'Talk D');
+		await waitItem('EEEEEEEEEEE', 'Talk E');
 
 		// Match A and B, open uploads, complete their R2 videos, and leave both in 'uploaded'
 		await call(`/s/${source.id}/takeout/files`, {
@@ -942,13 +944,53 @@ describe('YouTube Takeout files', () => {
 			await env.SEARCH_DB.prepare("UPDATE import_takeout_files SET state = 'uploaded' WHERE id = ?").bind(fileId).run();
 		}
 
-		// 1. Uploads off before posting: Talk C ('new') still matches, posting A & B skips quietly, and a 'new' file
-		//    (Talk D) listed right as the uploads-off exit releases takeout_job_id is NOT stranded: the job re-claims
-		//    takeout_job_id and returns again() so Talk D is matched on the next step.
+		// 1a. Uploads off with a 'new' file (Talk E) arriving before takeout_job_id is released:
+		//     the first hasNew() branch returns again() immediately without releasing takeout_job_id.
 		const listed = await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files: [{ name: 'Talk C.mp4', size: 3000, videoId: 'CCCCCCCCCCC', title: 'Talk C' }] }) });
 		const jobId = listed.body.result.jobId as string;
-		let insertedD = false;
 		const origPrepare = env.SEARCH_DB.prepare.bind(env.SEARCH_DB);
+		let insertedE = false;
+		let releasedDuringFirstHasNew = false;
+		env.SEARCH_DB.prepare = ((sql: string) => {
+			const stmt = origPrepare(sql);
+			if (sql.startsWith('UPDATE import_sources SET takeout_job_id = NULL')) {
+				releasedDuringFirstHasNew = true;
+			}
+			if (!insertedE && sql.includes("state = 'uploaded'")) {
+				const origBind = stmt.bind.bind(stmt);
+				stmt.bind = (...args: unknown[]) => {
+					const bound = origBind(...args);
+					const origAll = bound.all.bind(bound);
+					bound.all = async () => {
+						const res = await origAll();
+						if (!insertedE) {
+							insertedE = true;
+							await origPrepare(
+								`INSERT INTO import_takeout_files (id, source_id, name, size, youtube_id, title, state, created_by, created_at, updated_at)
+								 VALUES ('tkf_talk_e', ?, 'Talk E.mp4', 4000, 'EEEEEEEEEEE', 'Talk E', 'new', ?, 1, 1)`,
+							)
+								.bind(source.id, ADMIN)
+								.run();
+						}
+						return res;
+					};
+					return bound;
+				};
+			}
+			return stmt;
+		}) as typeof env.SEARCH_DB.prepare;
+
+		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
+		const stepFirstHasNew = await runTakeoutJob(off as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		env.SEARCH_DB.prepare = origPrepare;
+		assert.equal(stepFirstHasNew.done, false, 'first hasNew() continues without releasing takeout_job_id');
+		assert.equal(releasedDuringFirstHasNew, false, 'takeout_job_id was not released before returning again()');
+		assert.equal((await readSource(env, source.id))!.takeout_job_id, jobId);
+
+		// 1b. Next step matches Talk E, then sees uploads off; a 'new' file (Talk D) listed right as the
+		//     uploads-off exit releases takeout_job_id is NOT stranded: the job re-claims takeout_job_id
+		//     and returns again() so Talk D is matched on the following step.
+		let insertedD = false;
 		env.SEARCH_DB.prepare = ((sql: string) => {
 			const stmt = origPrepare(sql);
 			if (!insertedD && sql.startsWith('UPDATE import_sources SET takeout_job_id = NULL')) {
@@ -975,8 +1017,7 @@ describe('YouTube Takeout files', () => {
 			return stmt;
 		}) as typeof env.SEARCH_DB.prepare;
 
-		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
-		const stepWithRace = await runTakeoutJob(off as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		const stepWithRace = await runTakeoutJob(off as never, { ...job((stepFirstHasNew as { params: Record<string, unknown> }).params), id: jobId, kind: 'import.takeout-match' });
 		env.SEARCH_DB.prepare = origPrepare;
 		assert.equal(stepWithRace.done, false, 're-claimed takeout_job_id to match newly listed Talk D');
 		assert.equal((await readSource(env, source.id))!.takeout_job_id, jobId);
@@ -985,12 +1026,12 @@ describe('YouTube Takeout files', () => {
 		const outOff = await runTakeoutJob(off as never, { ...job((stepWithRace as { params: Record<string, unknown> }).params), id: jobId, kind: 'import.takeout-match' });
 		assert.deepEqual(
 			[outOff.done, (outOff as { result: { skipped?: string; matched?: number; attached?: number } }).result.skipped, (outOff as { result: { matched?: number } }).result.matched, (outOff as { result: { attached?: number } }).result.attached],
-			[true, 'uploads_off', 2, 0],
+			[true, 'uploads_off', 3, 0],
 		);
 		assert.equal(posts().length, 0);
 		assert.equal((await readSource(env, source.id))!.takeout_job_id, null, 'takeout_job_id released');
 		const afterOff = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.state]));
-		assert.deepEqual(afterOff, { 'Talk A.mp4': 'uploaded', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched' });
+		assert.deepEqual(afterOff, { 'Talk A.mp4': 'uploaded', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched', 'Talk E.mp4': 'matched' });
 		// While uploads remain off, the hourly sweep queues nothing
 		assert.equal(await queueDueSources(off as never), 0);
 
@@ -1012,7 +1053,7 @@ describe('YouTube Takeout files', () => {
 		assert.equal(posts().length, 1);
 		assert.equal((await readSource(env, source.id))!.takeout_job_id, null);
 		const afterMid = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.state]));
-		assert.deepEqual(afterMid, { 'Talk A.mp4': 'attached', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched' });
+		assert.deepEqual(afterMid, { 'Talk A.mp4': 'attached', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched', 'Talk E.mp4': 'matched' });
 
 		// 3. Automatic resume: when uploads come back on, queueDueSources queues a new Takeout job for Talk B
 		//    and draining the queue posts Talk B without double-posting Talk A.
@@ -1021,7 +1062,61 @@ describe('YouTube Takeout files', () => {
 		await drainJobs(env as never);
 		assert.equal(posts().length, 2, 'Talk B posted on resume');
 		const afterResume = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.state]));
-		assert.deepEqual(afterResume, { 'Talk A.mp4': 'attached', 'Talk B.mp4': 'attached', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched' });
+		assert.deepEqual(afterResume, { 'Talk A.mp4': 'attached', 'Talk B.mp4': 'attached', 'Talk C.mp4': 'matched', 'Talk D.mp4': 'matched', 'Talk E.mp4': 'matched' });
+	});
+
+	it('queueWaitingTakeout skips disabled sources and sources whose last Takeout job failed or was cancelled', async () => {
+		const { env, posts } = harness();
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const call = async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const seedUploaded = async (address: string, itemId: string, completeUpload: boolean) => {
+			const source = await insertSource(env, { channelId: 'ch1', network: 'youtube', address, label: 'YT', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+			await env.SEARCH_DB.prepare(`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at) VALUES (?, ?, NULL, 'awaiting_file', ?, ?, ?, 'takeout_file', 1, 1)`)
+				.bind(source.id, itemId, JSON.stringify({ itemId, url: `https://www.youtube.com/watch?v=${itemId}`, postedAt: Date.parse('2026-11-01T10:00:00Z'), title: `Talk ${itemId}`, text: 'desc', images: [], link: null, video: null, awaiting: 'takeout_file' }), `https://www.youtube.com/watch?v=${itemId}`, Date.parse('2026-11-01T10:00:00Z'))
+				.run();
+			await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files: [{ name: `${itemId}.mp4`, size: 2000, videoId: itemId, title: `Talk ${itemId}` }] }) });
+			await drainJobs(env as never);
+			const fileId = (await call(`/s/${source.id}/takeout`)).body.result.files[0].id as string;
+			const opened = await call(`/s/${source.id}/takeout/files/${fileId}/upload`, { method: 'POST' });
+			if (completeUpload) {
+				const vid = opened.body.result.upload.videoId as string;
+				for (const [key, raw] of env.videos.store) if (key.includes(vid)) env.videos.store.set(key, JSON.stringify({ ...JSON.parse(raw), uploadStatus: 'processing' }));
+			}
+			return { source, fileId };
+		};
+
+		// 1. Disabled source with an uploaded file: skipped while disabled, resumed once re-enabled
+		const disabled = await seedUploaded('UC1111111111111111111111', 'AAAAAAAAAAA', true);
+		await env.SEARCH_DB.prepare("UPDATE import_takeout_files SET state = 'uploaded' WHERE id = ?").bind(disabled.fileId).run();
+		await env.SEARCH_DB.prepare('UPDATE import_sources SET enabled = 0 WHERE id = ?').bind(disabled.source.id).run();
+		assert.equal(await queueDueSources(env as never), 0, 'disabled source is not queued');
+		assert.equal(posts().length, 0);
+
+		// 2. Source whose last Takeout job failed (e.g., upload_incomplete): stays on Errors page for Retry, not re-queued hourly
+		const failing = await seedUploaded('UC2222222222222222222222', 'BBBBBBBBBBB', false);
+		const saidFailed = await call(`/s/${failing.source.id}/takeout/files/${failing.fileId}/uploaded`, { method: 'POST' });
+		assert.equal(saidFailed.status, 202);
+		await drainJobs(env as never);
+		assert.equal((await getJobWithLog(env as never, saidFailed.body.result.jobId))!.status, 'failed');
+		assert.equal(await queueDueSources(env as never), 0, 'failed Takeout job is not re-queued every hour');
+
+		// 3. Source whose last Takeout job was cancelled: not silently restarted by the hourly sweep
+		const cancelled = await seedUploaded('UC3333333333333333333333', 'CCCCCCCCCCC', true);
+		const saidCancel = await call(`/s/${cancelled.source.id}/takeout/files/${cancelled.fileId}/uploaded`, { method: 'POST' });
+		assert.equal(saidCancel.status, 202);
+		await call(`/s/${cancelled.source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId: saidCancel.body.result.jobId, byName: 'Amina Staff' }) });
+		assert.equal((await getJobWithLog(env as never, saidCancel.body.result.jobId))!.status, 'cancelled');
+		assert.equal(await queueDueSources(env as never), 0, 'cancelled Takeout job is not re-queued');
+
+		// Re-enabling the disabled source lets the sweep resume only that source
+		await env.SEARCH_DB.prepare('UPDATE import_sources SET enabled = 1 WHERE id = ?').bind(disabled.source.id).run();
+		assert.equal(await queueDueSources(env as never), 1, 're-enabled waiting source is queued');
+		await drainJobs(env as never);
+		assert.equal(posts().length, 1);
 	});
 });
 
