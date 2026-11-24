@@ -18,7 +18,7 @@ import { hrefFor } from '../src/components/search/autocomplete-model';
 
 function render(locale: 'en' | 'ar', id: string): string {
   const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
-  const tree = React.createElement(Provider, { locale, theme: 'dark' }, React.createElement(HelpTips, { tips: tipsFor(locale, 'platform-settings') }, React.createElement(HelpTip, { id })));
+  const tree = React.createElement(Provider, { locale, theme: 'dark' }, React.createElement(HelpTips as unknown as React.FC<{ tips: unknown; children?: React.ReactNode }>, { tips: tipsFor(locale, 'platform-settings') }, React.createElement(HelpTip, { id })));
   return renderToStaticMarkup(tree as never);
 }
 

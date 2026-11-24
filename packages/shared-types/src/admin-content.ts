@@ -842,6 +842,8 @@ export const ADMIN_SUGGEST_KINDS = ['channel', 'user', 'video', 'playlist', 'pos
  * AUN-ADMIN-HELP); the suggest API never serves them and rejects them.
  */
 export const ADMIN_LOCAL_SUGGEST_KINDS = ['help'] as const;
+/** The kinds admin-api's suggest endpoint serves. */
+export type AdminServerSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number];
 export type AdminSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number] | (typeof ADMIN_LOCAL_SUGGEST_KINDS)[number];
 
 export interface AdminSuggestion {

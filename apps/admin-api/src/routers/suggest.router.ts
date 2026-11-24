@@ -26,7 +26,7 @@ import {
   type AdminPage,
   type AdminPlaylistRow,
   type AdminPostRow,
-  type AdminSuggestKind,
+  type AdminServerSuggestKind as AdminSuggestKind,
   type AdminSuggestion,
   type AdminUserRow,
   type AdminVideoRow,
