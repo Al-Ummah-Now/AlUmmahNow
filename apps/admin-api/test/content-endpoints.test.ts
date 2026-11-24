@@ -234,18 +234,19 @@ describe('content endpoints: permissions', () => {
   it('stopping an owner\'s channel offer is super admin only, needs a reason, is audited and passes refusals on (CC-6)', async () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos({
-      'POST /move-offers/gone/stop': () => ({ status: 404, body: { success: false, code: 'offer_not_found', error: 'This offer is no longer open' } }),
+      'POST /channels/ch_1/move-offers/gone/stop': () => ({ status: 404, body: { success: false, code: 'offer_not_found', error: 'This offer is no longer open' } }),
     });
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
-    assert.equal((await call('/api/content/move-offers/off_1/stop', { method: 'POST', roles: 'admin', json: { reason: 'Owner reported a scam' } })).status, 403);
-    const noReason = await call('/api/content/move-offers/off_1/stop', { method: 'POST', roles: 'super_admin', json: {} });
+    assert.equal((await call('/api/content/channels/ch_1/move-offers/off_1/stop', { method: 'POST', roles: 'admin', json: { reason: 'Owner reported a scam' } })).status, 403);
+    const noReason = await call('/api/content/channels/ch_1/move-offers/off_1/stop', { method: 'POST', roles: 'super_admin', json: {} });
     assert.equal(((await noReason.json()) as { code: string }).code, 'transfer_reason_required');
     assert.equal(calls.length, 0);
-    const stopped = await call('/api/content/move-offers/off_1/stop', { method: 'POST', roles: 'super_admin', json: { reason: 'Owner reported a scam' } });
+    const stopped = await call('/api/content/channels/ch_1/move-offers/off_1/stop', { method: 'POST', roles: 'super_admin', json: { reason: 'Owner reported a scam' } });
     assert.equal(stopped.status, 200);
-    assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), ['POST /move-offers/off_1/stop']);
+    assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), ['POST /channels/ch_1/move-offers/off_1/stop']);
     assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['move-offer-stop']);
-    const gone = await call('/api/content/move-offers/gone/stop', { method: 'POST', roles: 'super_admin', json: { reason: 'Owner reported a scam' } });
+    assert.match(log[0].key, /channel.*ch_1$/, 'the row is the channel’s history, not the offer’s');
+    const gone = await call('/api/content/channels/ch_1/move-offers/gone/stop', { method: 'POST', roles: 'super_admin', json: { reason: 'Owner reported a scam' } });
     assert.equal(gone.status, 404);
     assert.equal(((await gone.json()) as { code: string }).code, 'offer_not_found');
     assert.equal(log.length, 1, 'a refused stop leaves no audit row');

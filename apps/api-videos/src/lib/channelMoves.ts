@@ -291,8 +291,9 @@ export async function cancelMoveOffer(env: Env, id: string, userId: string, now 
 }
 
 /** An admin stops an open offer (CC-D1: "an admin can stop a move"); both sides are told. */
-export async function stopMoveOffer(env: Env, id: string, now = Date.now()): Promise<MoveOfferRow> {
+export async function stopMoveOffer(env: Env, channelId: string, id: string, now = Date.now()): Promise<MoveOfferRow> {
 	const offer = await openOfferFor(env, id, now);
+	if (offer.channel_id !== channelId) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	// Lost to an accept, decline or cancel at the same moment: nothing stopped, nobody told
 	if (!(await closeOffer(env, id, 'stopped', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);

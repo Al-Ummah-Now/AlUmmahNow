@@ -1327,8 +1327,11 @@ describe('channel actions', () => {
 		assert.ok(keys().includes('channelMoveDeclined'));
 		await cancelMoveOffer(env as never, (await make()).id, OWNER);
 		assert.ok(keys().includes('channelMoveCancelled'));
-		const stopped = await stopMoveOffer(env as never, (await make()).id);
+		const stopped = await stopMoveOffer(env as never, 'ch1', (await make()).id);
 		assert.equal(stopped.status, 'stopped');
+		const others = await make();
+		await assert.rejects(stopMoveOffer(env as never, 'ch2', others.id), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found', 'another channel’s offer');
+		await cancelMoveOffer(env as never, others.id, OWNER);
 		assert.equal(keys().filter((k: string) => k === 'channelMoveStopped').length, 2, 'both sides are told');
 		// An expired offer can't be accepted
 		const old = await make();
@@ -1350,7 +1353,7 @@ describe('channel actions', () => {
 		const notices = () => raw.queue.messages.map((m: any) => m.payload?.notificationKey).filter((k: string) => k && k !== 'channelMoveOffered');
 		// The accept's claim landed; the move has not started yet
 		db.db.prepare(`UPDATE channel_move_offers SET status = 'accepting' WHERE id = ?`).run(offer.id);
-		for (const lose of [() => cancelMoveOffer(env as never, offer.id, OWNER), () => declineMoveOffer(env as never, offer.id, OTHER), () => stopMoveOffer(env as never, offer.id)]) {
+		for (const lose of [() => cancelMoveOffer(env as never, offer.id, OWNER), () => declineMoveOffer(env as never, offer.id, OTHER), () => stopMoveOffer(env as never, 'ch1', offer.id)]) {
 			await assert.rejects(lose(), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found');
 		}
 		assert.deepEqual(notices(), [], 'nobody is told about a cancel that lost');
@@ -1377,7 +1380,7 @@ describe('channel actions', () => {
 		const old = await make();
 		db.db.prepare(`UPDATE channel_move_offers SET expires_at = '2020-01-01T00:00:00.000Z' WHERE id = ?`).run(old.id);
 		await refused(cancelMoveOffer(env as never, old.id, OWNER), 'offer_not_found');
-		await refused(stopMoveOffer(env as never, old.id), 'offer_not_found');
+		await refused(stopMoveOffer(env as never, 'ch1', old.id), 'offer_not_found');
 		assert.equal(status(old.id), 'expired');
 		assert.deepEqual(notices(), []);
 
