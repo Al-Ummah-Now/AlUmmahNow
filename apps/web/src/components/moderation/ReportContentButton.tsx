@@ -141,7 +141,9 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
 
   const contentTypeLabel = contentType === 'livestream'
     ? (t.live?.liveStreams || t.moderation.contentTypeEnum.video)
-    : t.moderation.contentTypeEnum[contentType];
+    : contentType === 'live_chat'
+      ? t.liveWatch.chatMessage
+      : t.moderation.contentTypeEnum[contentType];
 
   return (
     <>
