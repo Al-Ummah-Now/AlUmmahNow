@@ -68,7 +68,7 @@ export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id:
         </h2>
         {subtitle && <p className="street-plate mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
       </div>
-      {action && <div className="street-plate relative z-10 shrink-0">{action}</div>}
+      {action && <div className="street-plate shrink-0 [&>a]:relative [&>a]:z-10 [&>button]:relative [&>button]:z-10">{action}</div>}
     </div>
   );
 }

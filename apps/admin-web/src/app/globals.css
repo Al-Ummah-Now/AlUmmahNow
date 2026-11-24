@@ -335,21 +335,41 @@ body:lang(ar) {
 /* The lantern street: this app's content spans the page width (no margins), so the street's
    lanterns lie behind text and the street stays at the theme's faint opacity (every text colour
    keeps 4.5:1 over it). */
-html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
-
-/* Text that sits on the page itself (a page's title, its intro and the back link above it) rests
-   on a plate of page colour, so no lantern or string ever runs through its glyphs (owner
-   2026-11-22: the street never crosses text). Text inside cards already has a solid surface. */
-html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)),
-html.fanous-street .street-plate {
-  width: fit-content;
-  max-width: 100%;
-  background: var(--color-bg);
-  border-radius: 14px;
+html.fanous-street {
+  --fanous-street-opacity: var(--fanous-street-faint);
   /* One blurred shadow: solid for about 28px around the text (spread 52 minus half the 48px blur),
      so no lantern near it shows dimmed or touches it, then one smooth fade to about 76px, so a
      lantern further out fades away; no hard step anywhere (two layers left a visible edge) */
-  box-shadow: 0 0 48px 52px var(--color-bg);
+  --fanous-street-plate-shadow: 0 0 48px 52px var(--color-bg);
+}
+
+/* Text that sits on the page itself (a page's title, its intro and the back link above it) rests
+   on a plate of page colour, so no lantern or string ever runs through its glyphs (owner
+   2026-11-22: the street never crosses text). Painted on ::before at z-index: -1 (matching the
+   shared .street-plate in fanous-street.css), so the shadow sits above the street and strictly
+   below every heading, subtitle, pill and card — never fading adjacent text or card borders.
+   Text inside cards/heroes/panels and styled pills/chips already has a solid surface and is excluded. */
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *):not(.cost-pill, [class*='bg-'], [class*='border']) {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *):not(.cost-pill, [class*='bg-'], [class*='border'])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--color-bg);
+  border-radius: 14px;
+  box-shadow: var(--fanous-street-plate-shadow);
+}
+
+@media print {
+  html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span))::before {
+    display: none;
+  }
 }
 
 /* Costs page (COST-1): the theme's materials (materials.css) on its panels, so the page has the

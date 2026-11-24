@@ -227,6 +227,33 @@ test.describe('costs (super admin)', () => {
     await expect(page.getByTestId('costs-budget')).toBeVisible();
     await expectNoAxeViolations(page, '/costs');
   });
+
+  test('COSTS-09 Fawanees street plate never covers the header subtitle or pill inside cost-hero', async ({ page }) => {
+    await skipUnlessReady();
+    await page.goto('/costs');
+    await expect(page.getByTestId('costs-header')).toBeVisible();
+    // Force Fawanees + dark + fanous-street to verify the header card excludes street plates even
+    // when the active site theme is not Fawanees on this target.
+    await page.evaluate(() => {
+      const html = document.documentElement;
+      html.dataset.theme = 'fawanees';
+      html.classList.add('dark', 'fanous-street');
+    });
+    const issues = await page.evaluate(() => {
+      const header = document.querySelector('[data-testid="costs-header"]');
+      if (!header) return ['costs-header missing'];
+      const problems: string[] = [];
+      for (const el of header.querySelectorAll('h1, p, span')) {
+        const cs = getComputedStyle(el);
+        const before = getComputedStyle(el, '::before');
+        const tag = `${el.tagName.toLowerCase()}[${el.getAttribute('data-testid') || el.className.toString().slice(0, 30)}]`;
+        if (cs.boxShadow !== 'none') problems.push(`${tag} has box-shadow: ${cs.boxShadow}`);
+        if (before.content !== 'none' && before.boxShadow !== 'none') problems.push(`${tag}::before paints street-plate shadow inside .cost-hero`);
+      }
+      return problems;
+    });
+    expect(issues, issues.join('; ')).toEqual([]);
+  });
 });
 
 test.describe('costs (admin without ops:manage)', () => {

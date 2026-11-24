@@ -81,7 +81,7 @@ function HomeRailRow({ rail, heading, index }: { rail: HomeRail; heading: string
           <Icon />
         </span>
         <h2 id={headingId} className="hr-title street-plate">
-          {heading}
+          <span className="hr-title-text">{heading}</span>
         </h2>
         <span className="hr-rule" aria-hidden="true" />
         <Link href={homeRailHref(rail, lang)} className="hr-all" aria-label={t.rails.seeAllLabel.replace('{rail}', heading)} data-testid="home-rail-all">

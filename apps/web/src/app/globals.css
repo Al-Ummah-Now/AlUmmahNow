@@ -516,7 +516,8 @@ html.fanous-street .demo-layer::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -1;
+  /* -2 so ::after (last child in tree order) still paints behind .street-plate::before at -1 */
+  z-index: -2;
   pointer-events: none;
 }
 html.fanous-street .demo-layer::before {

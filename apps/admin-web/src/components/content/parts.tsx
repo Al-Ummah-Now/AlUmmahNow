@@ -267,15 +267,18 @@ export function MetaLine({ parts, locale, className = '', testId }: { parts: Rea
   // held against the value before it (the gutter's start edge); English keeps a centred «•»
   const arabic = locale === 'ar';
   return (
-    // Links inside a line of text are underlined, so they never rely on colour alone (WCAG 1.4.1)
-    <span className={`${className} overflow-hidden [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
-      <span className="flex flex-wrap -ms-[1em]">
-        {shown.map((part, i) => (
-          <span key={i} className="relative min-w-0 ps-[1em]">
-            <span aria-hidden="true" data-meta-sep={arabic ? 'ar' : 'en'} className={`absolute start-0 w-[1em] ${arabic ? 'text-start' : 'text-center'}`}>{metaMark(arabic ? 'ar' : 'en')}</span>
-            <bdi>{part}</bdi>
-          </span>
-        ))}
+    // Links inside a line of text are underlined, so they never rely on colour alone (WCAG 1.4.1).
+    // Clipping sits on an inner wrapper so a street-plate ::before on MetaLine is not cut off.
+    <span className={`${className} [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
+      <span className="block overflow-hidden">
+        <span className="flex flex-wrap -ms-[1em]">
+          {shown.map((part, i) => (
+            <span key={i} className="relative min-w-0 ps-[1em]">
+              <span aria-hidden="true" data-meta-sep={arabic ? 'ar' : 'en'} className={`absolute start-0 w-[1em] ${arabic ? 'text-start' : 'text-center'}`}>{metaMark(arabic ? 'ar' : 'en')}</span>
+              <bdi>{part}</bdi>
+            </span>
+          ))}
+        </span>
       </span>
     </span>
   );

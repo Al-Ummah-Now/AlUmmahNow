@@ -82,18 +82,9 @@ html[data-theme='fawanees'].dark {
 }
 
 /* Text that sits on the page itself (a page's title and subtitle, section headings and their links,
-   empty-state lines, the Explore chips) gets a plate of the page colour, so no lantern or string ever
-   touches its words (owner, 2026-11-22, as the history page headings, #1723). It hugs the text and only
-   exists under the street. The clearance doesn't depend on where the street's lanterns land: the first
-   shadow is an unblurred ring, fully opaque for 12px around the box; the second fades from there out to
-   about 32px, so a lantern at the edge dims away instead of being cut flat (AUDIT-2, #1631). */
-html.fanous-street .street-plate {
-  width: fit-content;
-  max-width: 100%;
-  background: var(--fanous-color-background);
-  border-radius: var(--r-lg, 14px);
-  box-shadow: 0 0 0 12px var(--fanous-color-background), 0 0 20px 22px var(--fanous-color-background);
-}
+   empty-state lines, the Explore chips) gets its .street-plate from the shared street stylesheet
+   (packages/fanous-tokens/street/fanous-street.css), which paints the page-colour plate on ::before
+   at z-index: -1 so it blocks the street without ever painting over adjacent text, icons or cards. */
 
 /* Studio's video editor (components/videoEdit): the form panel and the cards inside it (published caption
    tracks, caption drafts) sit on solid surfaces blended over the page, so the street never shows through
