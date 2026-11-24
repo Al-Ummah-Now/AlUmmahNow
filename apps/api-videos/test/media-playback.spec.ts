@@ -61,12 +61,14 @@ function setup(video: Record<string, unknown> = {}) {
 	};
 	const app = new Hono();
 	app.onError(errorHandler);
+	// Behind middleware, as in the app (a lone handler's answer skips c.res)
+	app.use('*', (_c, next) => next());
 	const router = fromHono(app);
 	router.get('/api/videos/:id', VideoFetch);
 	router.get('/api/videos/:id/playback', VideoPlayback);
 	const get = async (path: string) => {
 		const res = await app.request(path, { method: 'GET', headers: { 'CF-Connecting-IP': '203.0.113.7' } }, env as never);
-		return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+		return { status: res.status, cache: res.headers.get('cache-control'), body: (await res.json()) as Record<string, unknown> };
 	};
 	return { env: env as never, raw: env, db, get };
 }
@@ -227,7 +229,9 @@ describe('GET /api/videos/:id/playback?exclude=…', () => {
 		const { env, get, db } = setup();
 		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
 		lines.length = 0;
-		const { status, body } = await get(`/api/videos/${ID}/playback?exclude=r2&reason=manifest_4xx`);
+		const { status, body, cache } = await get(`/api/videos/${ID}/playback?exclude=r2&reason=manifest_4xx`);
+		assert.equal(cache, 'private, no-store');
+		assert.equal((await get(`/api/videos/${ID}`)).cache, 'private, no-store');
 		assert.equal(status, 200);
 		assert.deepEqual(body, { id: ID, playUrl: BUNNY_PLAY, thumbnailUrl: BUNNY_THUMB, delivery: { source: 'bunny' }, sources: [{ provider: 'bunny', src: BUNNY_PLAY, type: HLS }] });
 		const line = lines.find((l) => l.msg === '[Media] Playback fell back');

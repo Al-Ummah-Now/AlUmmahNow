@@ -1,10 +1,13 @@
 /** The self-hosted live edge serves a session's media only while its stream's state allows it (lib/live/access.ts). */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACCESS_STALE_MS, ACCESS_TTL_MS, MANAGER_URL_SECONDS, REVIEW_URL_SECONDS, forgetLiveAccess, liveSessionAccess, mayFetch, openReviewIds, sessionState, signManagerUrl as signLiveUrl } from '../src/lib/live/access';
+import { ACCESS_STALE_MS, ACCESS_TTL_MS, MANAGER_URL_SECONDS, REVIEW_URL_SECONDS, forgetLiveAccess, liveSessionAccess, mayFetch, mustPurge, openReviewIds, sessionState, signManagerUrl as signLiveUrl } from '../src/lib/live/access';
 import { handleLiveEdge } from '../src/lib/live/edge';
 import { selfHostedKey } from '../src/lib/live/providers';
 import { LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamStart, LiveStreamStateGet } from '../src/endpoints/live/liveSession';
+import { assignTier, saveTier } from '../src/lib/creatorTiers';
+import { LiveStreamCreate } from '../src/endpoints/live/liveStreamCreate';
+import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { liveReviewSubject } from '../src/lib/review/live';
 import { moderateLive } from '../src/lib/admin/liveModeration';
@@ -12,6 +15,7 @@ import { deleteStream, streamKey } from '../src/lib/live/streams';
 import { signReviewVodUrl } from '../src/lib/live/vod-sign';
 import { insertSession, updateSession } from '../src/lib/live/store';
 import { withSearchSync } from '../src/lib/search/sync';
+import { repairObject } from '../src/lib/search/repairs';
 import { JobsQueue, MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { createSqliteD1 } from './sqlite-d1';
@@ -24,16 +28,21 @@ const realFetch = globalThis.fetch;
 const realNow = Date.now;
 let now = 0;
 let purges: string[][];
+let refusePurge = false;
 let cached: Map<string, Response>;
 
 beforeEach(() => {
 	forgetLiveAccess();
 	purges = [];
+	refusePurge = false;
 	cached = new Map();
 	now = Date.parse('2026-11-24T12:00:00Z');
 	Date.now = () => now;
 	globalThis.fetch = (async (url: string, init?: RequestInit) => {
-		if (String(url).includes('/purge_cache')) purges.push(JSON.parse(String(init?.body)).prefixes);
+		if (String(url).includes('/purge_cache')) {
+			purges.push(JSON.parse(String(init?.body)).prefixes);
+			if (refusePurge) return new Response('{}', { status: 500 });
+		}
 		return Response.json({ success: true });
 	}) as never;
 	(globalThis as any).caches = {
@@ -256,37 +265,58 @@ describe('signed URLs', () => {
 
 	it('every answer that carries one is the caller\'s alone: ingest, start, end and the list too', async () => {
 		const t = await setup({ isPrivate: true });
-		await updateSession(t.db as never, A, { status: 'live' });
+		await updateSession(t.db as never, A, { status: 'live', ended_at: null });
 		await t.write({ isPrivate: true, status: 'live' });
+		await t.raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [] }));
+		await saveTier(t.db as never, 'creator', { live: true }, 'test');
+		await assignTier(t.db as never, 'owner', 'creator', 'test');
 		const app = buildApp((r) => {
 			r.get('/api/live-streams', LiveStreamsList);
+			r.post('/api/live-streams', LiveStreamCreate);
 			r.get('/api/live-streams/:id/ingest', LiveStreamIngestGet);
 			r.post('/api/live-streams/:id/start', LiveStreamStart);
 			r.post('/api/live-streams/:id/end', LiveStreamEnd);
+			r.patch('/api/live-streams/:id', LiveStreamUpdate);
+			r.get('/api/live-streams/:id/state', LiveStreamStateGet);
 			r.get('/api/live-streams/:id', LiveStreamGet);
 		}, { userId: 'owner' });
-		const ask = async (path: string, method = 'GET') => {
-			const res = await app.request(`/api/live-streams${path}`, { method }, t.env as never);
+		const ask = async (path: string, method = 'GET', body?: unknown) => {
+			const res = await app.request(`/api/live-streams${path}`, { method, ...(body ? { body: JSON.stringify(body), headers: { 'content-type': 'application/json', channelId: 'ch1' } } : {}) }, t.env as never);
 			return { status: res.status, cache: res.headers.get('cache-control'), result: ((await res.json()) as Json).result };
 		};
 		const plays = async (url: string) => { assert.match(url, /\/hls\/[^/]+\/m\.\d{10}\.[0-9a-f]{40}\//); assert.equal((await t.get(url)).status, 200); };
 		const one = await ask('/s1');
-		assert.equal(one.cache, 'no-store');
+		assert.equal(one.cache, 'private, no-store');
 		await plays(one.result.stream.playbackUrl);
 		await plays(one.result.stream.vodUrl);
 		const list = await ask('');
 		assert.equal(list.status, 200, JSON.stringify(list.result));
-		assert.equal(list.cache, 'no-store');
+		assert.equal(list.cache, 'private, no-store');
 		await plays(list.result.data[0].playbackUrl);
 		await plays(list.result.data[0].vodUrl);
+		const state = await ask('/s1/state');
+		assert.equal(state.cache, 'private, no-store');
+		await plays(state.result.vodUrl);
+		const started = await ask('/s1/start', 'POST');
+		assert.equal(started.status, 200, JSON.stringify(started.result));
+		assert.equal(started.cache, 'private, no-store');
+		await plays(started.result.state.playbackUrl);
+		const updated = await ask('/s1', 'PATCH', { title: 'Renamed' });
+		assert.equal(updated.status, 200, JSON.stringify(updated.result));
+		assert.equal(updated.cache, 'private, no-store');
+		await plays(updated.result.stream.vodUrl);
 		const end = await ask('/s1/end', 'POST');
 		assert.equal(end.status, 200, JSON.stringify(end.result));
-		assert.equal(end.cache, 'no-store');
+		assert.equal(end.cache, 'private, no-store');
 		await plays(end.result.state.vodUrl);
 		const ingest = await ask('/s1/ingest');
 		assert.equal(ingest.status, 200, JSON.stringify(ingest.result));
-		assert.equal(ingest.cache, 'no-store');
+		assert.equal(ingest.cache, 'private, no-store');
 		await plays(ingest.result.state.vodUrl);
+		const created = await ask('', 'POST', { title: 'New', isPrivate: true });
+		assert.equal(created.status, 200, JSON.stringify(created));
+		assert.equal(created.cache, 'private, no-store');
+		assert.match(created.result.stream.playbackUrl, /\/hls\/[^/]+\/m\.\d{10}\.[0-9a-f]{40}\//);
 		// Nothing is signed for a stream that is open to everyone
 		const open = await setup();
 		const list2 = await app.request('/api/live-streams', {}, open.env as never);
@@ -342,10 +372,41 @@ describe('the review of a recording', () => {
 		const t = await setup({ ...review('in_review'), isHidden: true });
 		const subject = await liveReviewSubject(t.env as never, 's1');
 		assert.equal((await t.get(subject!.playUrl!)).status, 200);
+		// An approved review beside an open shadow check: the open one
+		await t.write({ ...review('approved', 'old'), reviewShadow: { reviewId: 'r2', queuedAt: 'x' }, isHidden: true });
+		assert.equal((await t.get((await liveReviewSubject(t.env as never, 's1'))!.playUrl!)).status, 200);
 	});
 });
 
 describe('the CDN purge', () => {
+	it('a write overtaken by one that closed the stream still purges; nothing else does', () => {
+		assert.equal(mustPurge('public', 'none', 'none'), true);
+		assert.equal(mustPurge('none', 'public', 'none'), true, 'an older public write, dropped as stale');
+		assert.equal(mustPurge('managers', 'none', 'none'), true);
+		for (const same of ['public', 'managers', 'none'] as const) assert.equal(mustPurge(same, same, same), false);
+		assert.equal(mustPurge('none', 'public', 'public'), false);
+		assert.equal(mustPurge(null, 'managers', 'managers'), false, 'a new private stream');
+		assert.equal(mustPurge('public', 'none', null), true, 'deleted');
+	});
+
+	it('refused, or the index write failed: the repair job purges it', async () => {
+		const t = await setup();
+		refusePurge = true;
+		await t.write({ isHidden: true });
+		const row = () => t.db.prepare("SELECT entity, id FROM index_repairs WHERE entity = 'stream'").bind().first() as Promise<any>;
+		assert.equal((await row())?.id, 's1');
+		const repair = () => repairObject(t.raw as never, { entity: 'stream', id: 's1', key: streamKey('s1') });
+		await assert.rejects(repair(), /purge failed/);
+		refusePurge = false;
+		purges = [];
+		await repair();
+		assert.deepEqual(purges.at(-1)!.sort(), [`${HOST}/hls/${A}/`, `${HOST}/hls/${B}/`]);
+		purges = [];
+		await t.write({});
+		await repair();
+		assert.equal(purges.length, 0, 'an open stream');
+	});
+
 	it('runs when fewer people may watch, once, in a bounded number of calls', async () => {
 		const t = await setup();
 		assert.equal(purges.length, 0);

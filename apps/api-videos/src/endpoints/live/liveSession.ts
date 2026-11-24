@@ -23,6 +23,7 @@ import { deleteStream, readStream, streamEnd, streamIngest, streamIsRemoved, str
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
+import { privateAnswer } from '../../lib/private-answer';
 import { liveSessionAccess, signManagerUrl } from '../../lib/live/access';
 import { canManageLiveStream } from '../../lib/channelAccess';
 import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
@@ -150,17 +151,11 @@ const signVod = (c: AppContext, url: string | null) => signLiveVodUrl(c.env as n
 /** The session a self-hosted live URL belongs to (`https://<host>/hls/<session>/…`). */
 const sessionOfUrl = (url: string) => /\/hls\/([^/]+)\//.exec(url)?.[1] ?? '';
 
-/**
- * For an answer that is a plain object: chanfana builds that Response itself, without what c.header() prepared; what
- * is on c.res is carried over to it.
- */
-const noStore = (c: AppContext) => c.res.headers.set('cache-control', 'no-store');
-
 /** What is not open to everyone plays for the stream's managers with a signed URL (lib/live/access.ts). */
 export async function forManager(c: AppContext, stream: object, manages: boolean, url: string | null | undefined): Promise<string | null> {
 	if (!url || !manages || liveSessionAccess(stream, sessionOfUrl(url)) !== 'managers') return url ?? null;
 	// A signed URL is the caller's alone
-	noStore(c);
+	privateAnswer(c);
 	return signManagerUrl(env(c), url);
 }
 
@@ -216,7 +211,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const remindersOn = appDb ? (await featureGate(c.env as never, 'liveReminders').catch(() => ({ on: false as const }))).on : false;
 		const open = remindersOn ? await remindable(c.env as never, stream.id).catch(() => null) : null;
 		const reminder = { enabled: !!open, count: open?.count ?? 0, set: open ? await hasReminder(env(c).NOTIFICATIONS_DB, stream.id, this.getUserId(c)).catch(() => false) : false };
-		noStore(c);
+		privateAnswer(c);
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
@@ -248,7 +243,7 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		}
 		try {
 			const out = await streamIngest(env(c), stream, tier);
-			noStore(c);
+			privateAnswer(c);
 			return { success: true, result: { ingest: out.ingest, state: await managerState(c, out.stream) } };
 		} catch (error) {
 			return providerFailure(c, error, 'Ingest');
@@ -360,7 +355,7 @@ export class LiveStreamViewers extends PublicRoute {
 		const leaving = body.leaving === true;
 		// Only a stream that can be live is counted (bounds the objects anyone can create); a leaving tab always is
 		if (!leaving && (stream.status === 'ended' || stream.status === 'cancelled')) return fail(c, 409, 'not_live', 'The stream is not live');
-		noStore(c);
+		privateAnswer(c);
 		return { success: true, result: { viewers: await beatLiveViewer(c.env as never, stream.id, body.viewerId, leaving, await viewerNet(c.req.header('CF-Connecting-IP'), stream.id)) } };
 	}
 }

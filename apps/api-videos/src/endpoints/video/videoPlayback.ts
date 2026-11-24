@@ -1,3 +1,4 @@
+import { privateAnswer } from '../../lib/private-answer';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { MEDIA_PROVIDER_IDS, PLAYBACK_FALLBACK_REASONS } from "@al-ummah/shared-types";
@@ -104,7 +105,7 @@ export class VideoPlayback extends OptionalAuthRoute {
 		}
 
 		const view = applyPlayback(transformVideoToView(video), choice, video as never);
-		c.header("Cache-Control", "private, no-store");
+		privateAnswer(c);
 		// Nothing left to try: no playUrl (the player shows its error)
 		if (!choice.sources.length) return { id: view.id, delivery: { source: choice.source }, sources: [] };
 		return { id: view.id, playUrl: view.playUrl, thumbnailUrl: view.thumbnailUrl, delivery: { source: choice.source }, sources: view.sources };

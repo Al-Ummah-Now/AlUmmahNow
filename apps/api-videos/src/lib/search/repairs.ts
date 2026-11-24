@@ -41,6 +41,7 @@ import {
 	type SearchDb,
 	type SearchEntityType,
 } from '@al-ummah/shared-types';
+import { purgeStreamSessions, streamAccess } from '../live/access';
 import { createJob, listJobs, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
 
@@ -194,6 +195,8 @@ export async function repairObject(env: RepairJobEnv, repair: { entity: IndexRep
 	// Profiles and live streams have an ownership row only (they are not searchable)
 	const kind = repair.entity === 'profile' || repair.entity === 'stream' ? repair.entity : ownershipKindFor(repair.entity);
 	if (kind) await repairOwnership(db, kind, repair.id, value, version, now);
+	// The write that failed may have closed the stream, or its purge was refused (lib/live/access.ts). Throws: tried again
+	if (kind === 'stream' && streamAccess(value) !== 'public') await purgeStreamSessions(env as never, repair.id);
 	if (repair.entity !== 'profile' && repair.entity !== 'stream') await repairSearch(db, repair.entity, repair.id, value, version, now);
 }
 

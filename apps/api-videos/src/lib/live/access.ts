@@ -171,35 +171,36 @@ export async function sessionState(env: LiveEnv, sessionId: string, now = Date.n
 const PURGE_SESSIONS = 90;
 const RANK: Record<LiveAccess, number> = { none: 0, managers: 1, public: 2 };
 
-/** What the stream's row says of it, before a write (lib/search/sync.ts); null when there is no row or it cannot be read. */
+/** What the stream's row says of it, around a write (lib/search/sync.ts); null: no row. */
 export async function indexedAccess(db: unknown, streamId: string): Promise<LiveAccess | null> {
 	const row = await (db as D1Database)
 		.prepare('SELECT visibility, recording_withheld FROM live_stream_metadata WHERE stream_id = ?')
 		.bind(streamId)
-		.first<{ visibility: string; recording_withheld: number }>()
-		.catch(() => null);
+		.first<{ visibility: string; recording_withheld: number }>();
 	if (!row) return null;
 	if (row.visibility === 'hidden' || row.visibility === 'deleted') return 'none';
 	return row.visibility === 'private' || row.recording_withheld === 1 ? 'managers' : 'public';
 }
 
-/**
- * A stream's record was written or deleted. When fewer people may watch it than before, what the CDN keeps of its
- * sessions goes; a write that leaves that as it was (a title, a count) costs nothing. The edge refuses regardless.
- */
-export async function purgeWhenClosed(env: LiveEnv & { MEDIA_CDN_API_TOKEN?: unknown }, streamId: string, before: LiveAccess | null, stream: object | null): Promise<void> {
+/** The stream's access as a whole, from its record. */
+export const streamAccess = (stream: object | null): LiveAccess => liveSessionAccess(stream, (stream as { sessionId?: string } | null)?.sessionId ?? '');
+
+/** Drops what the CDN keeps of the stream's sessions. Throws when the purge was refused. */
+export async function purgeStreamSessions(env: LiveEnv & { MEDIA_CDN_API_TOKEN?: unknown }, streamId: string): Promise<void> {
 	if (!env.SEARCH_DB || !env.LIVE_PUBLIC_HOST) return;
-	const current = liveSessionAccess(stream, (stream as { sessionId?: string } | null)?.sessionId ?? '');
-	if (RANK[current] >= RANK[before ?? 'public']) return;
-	try {
-		const { results } = await env.SEARCH_DB
-			.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' AND first_segment_at IS NOT NULL ORDER BY created_at DESC LIMIT ?")
-			.bind(streamId, PURGE_SESSIONS)
-			.all<{ id: string }>();
-		if (!results?.length) return;
-		const purged = await purgeCdn(env as never, { prefixes: results.map((s) => `${env.LIVE_PUBLIC_HOST}/hls/${s.id}/`) });
-		if (purged === 'failed') logger.warn('[LiveEdge] Cache purge failed; the edge refuses the sessions all the same', { streamId, sessions: results.length });
-	} catch (error) {
-		logger.warn('[LiveEdge] Could not purge a closed stream', { streamId, error: error instanceof Error ? error.message : String(error) });
-	}
+	const { results } = await env.SEARCH_DB
+		.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' AND first_segment_at IS NOT NULL ORDER BY created_at DESC LIMIT ?")
+		.bind(streamId, PURGE_SESSIONS)
+		.all<{ id: string }>();
+	if (!results?.length) return;
+	if ((await purgeCdn(env as never, { prefixes: results.map((s) => `${env.LIVE_PUBLIC_HOST}/hls/${s.id}/`) })) === 'failed') throw new Error('live cache purge failed');
+}
+
+/**
+ * Whether a write of the record must purge: fewer people may watch now (`after`, the row once it was written) than
+ * before it, or than this write itself said: it was overtaken by one that closed the stream. A write that leaves
+ * that as it was (a title, a count) purges nothing. The edge refuses regardless.
+ */
+export function mustPurge(before: LiveAccess | null, written: LiveAccess, after: LiveAccess | null): boolean {
+	return RANK[after ?? 'none'] < Math.max(RANK[before ?? 'none'], RANK[written]);
 }

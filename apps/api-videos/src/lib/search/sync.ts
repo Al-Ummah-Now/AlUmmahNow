@@ -54,7 +54,7 @@ import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../chan
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 import { kickRepairJob, type RepairJobEnv } from './repairs';
 import { kickLivePurge } from '../live/metadata';
-import { indexedAccess, purgeWhenClosed } from '../live/access';
+import { indexedAccess, mustPurge, purgeStreamSessions, streamAccess } from '../live/access';
 import { deleteEdgeCache } from '../edge-cache';
 import { chatCacheUrl } from '../live/chat';
 import { accessChangedFor, broadcast } from '../websocket-notify';
@@ -254,7 +254,11 @@ async function syncStreamInline(ctx: RepairContext, id: string, key: string, obj
       ctx.waitUntil(broadcast(ctx.jobs as never, liveChatChannel(id), 'live_chat_closed', { streamId: id }));
     }
     // Its media leaves the CDN with it (lib/live/access.ts; the edge itself follows the record)
-    ctx.waitUntil(purgeWhenClosed(ctx.jobs as never, id, before, object && typeof object === 'object' ? object : null));
+    const written = streamAccess(object && typeof object === 'object' ? object : null);
+    if (mustPurge(before, written, await indexedAccess(ctx.db, id))) {
+      // Refused: the repair job's next pass over this stream purges it, with its backoff
+      ctx.waitUntil(purgeStreamSessions(ctx.jobs as never, id).catch(error => repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) }).then(() => undefined)));
+    }
     if (object == null) ctx.waitUntil(kickLivePurge(ctx.jobs).catch(error => logger.warn('[SearchSync] Could not start the live purge job', { error: error instanceof Error ? error.message : String(error) })));
   } catch (error) {
     await repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });
