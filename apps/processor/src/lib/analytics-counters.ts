@@ -26,14 +26,25 @@ export const ANALYTICS_TABLE = 'analytics_daily';
 export const ANALYTICS_DEDUPE_TABLE = 'analytics_dedupe';
 export const OTHER_DIM = 'other';
 
+const DAY_MS = 86_400_000;
+
 /**
- * How long a processed analytics message id stays in analytics_dedupe (7 days).
- * Longer than Cloudflare Queues' default 4-day retention so a redelivery never
- * slips past expiry; expired rows are purged in bounded batches by the daily cron.
+ * How many UTC days a processed analytics message id stays in analytics_dedupe
+ * (8 days: 2x Cloudflare Queues' default 4-day message retention). Rows older
+ * than this are purged on the primary key prefix by the hourly cron.
+ *
+ * Note: dead letters live 30 days (DEAD_LETTER_RETENTION_MS), where duplicate
+ * admin replays are blocked by `dead_letters.replayed_at`; this table covers
+ * queue redeliveries and in-window replays.
  */
-export const ANALYTICS_DEDUPE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-export const ANALYTICS_DEDUPE_PURGE_BATCH = 5000;
-export const ANALYTICS_DEDUPE_PURGE_MAX_ROUNDS = 50;
+export const ANALYTICS_DEDUPE_TTL_DAYS = 8;
+export const ANALYTICS_DEDUPE_TTL_MS = ANALYTICS_DEDUPE_TTL_DAYS * DAY_MS;
+/** Rows deleted per purge statement (gentle on the single D1 writer; 1 row written per deleted row). */
+export const ANALYTICS_DEDUPE_PURGE_BATCH = 1000;
+/** Max rounds per hourly run (200k rows/hour = 4.8M rows/day). */
+export const ANALYTICS_DEDUPE_PURGE_MAX_ROUNDS = 200;
+/** Wall-clock budget per hourly run so a large backlog yields and resumes next hour. */
+export const ANALYTICS_DEDUPE_PURGE_TIME_BOX_MS = 15_000;
 
 /** 'site': whole-site counters (visits, landing pages, sources; entity id = the site, e.g. 'videos') */
 export const ENTITY_TYPES = ['video', 'channel', 'post', 'site'] as const;
@@ -107,9 +118,9 @@ const markerKey = (m: CounterMarker) => [m.entityType, m.entityId, m.day, m.metr
 
 /**
  * Per-message deduplicated bulk upsert: ?1 is a JSON array of
- * [entity_type, entity_id, day, metric, dim, value, message_id]. Rows whose
- * message_id already exists in analytics_dedupe (PK lookup) are skipped; the
- * rest are summed per counter key so a hot batch still writes one row per key.
+ * [entity_type, entity_id, day, metric, dim, value, message_id, bucket0, bucket1, bucket2].
+ * Rows whose (day_bucket, message_id) already exists in analytics_dedupe (PK seek)
+ * are skipped; the rest are summed per counter key so a hot batch still writes one row per key.
  */
 export const BULK_UPSERT_DEDUPED = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
 SELECT entity_type, entity_id, day, metric, dim, SUM(val)
@@ -121,7 +132,11 @@ FROM (
          json_extract(j.value, '$[4]') AS dim,
          json_extract(j.value, '$[5]') AS val
   FROM json_each(?1) AS j
-  WHERE NOT EXISTS (SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE} WHERE message_id = json_extract(j.value, '$[6]'))
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE}
+    WHERE day_bucket IN (json_extract(j.value, '$[7]'), json_extract(j.value, '$[8]'), json_extract(j.value, '$[9]'))
+      AND message_id = json_extract(j.value, '$[6]')
+  )
 )
 GROUP BY entity_type, entity_id, day, metric, dim
 HAVING SUM(val) <> 0
@@ -129,8 +144,8 @@ ${ADD_ON_CONFLICT}`;
 
 /**
  * Per-message deduplicated bounded upsert: ?1..4 key, ?5 dim, ?6 cap,
- * ?7 OTHER_DIM, ?8 JSON array of [message_id, value]. Sums only unseen
- * messages; writes nothing when every message in the batch was already seen.
+ * ?7 OTHER_DIM, ?8 JSON array of [message_id, value, bucket0, bucket1, bucket2].
+ * Sums only unseen messages; writes nothing when every message in the batch was already seen.
  */
 export const BOUNDED_UPSERT_DEDUPED = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
 SELECT ?1, ?2, ?3, ?4,
@@ -141,15 +156,51 @@ SELECT ?1, ?2, ?3, ?4,
 FROM (
   SELECT SUM(json_extract(j.value, '$[1]')) AS total
   FROM json_each(?8) AS j
-  WHERE NOT EXISTS (SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE} WHERE message_id = json_extract(j.value, '$[0]'))
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE}
+    WHERE day_bucket IN (json_extract(j.value, '$[2]'), json_extract(j.value, '$[3]'), json_extract(j.value, '$[4]'))
+      AND message_id = json_extract(j.value, '$[0]')
+  )
 ) AS s
 WHERE s.total IS NOT NULL AND s.total <> 0
 ${ADD_ON_CONFLICT}`;
 
-/** Records every processed message id of the batch last in the same transaction. */
-export const DEDUPE_INSERT = `INSERT OR IGNORE INTO ${ANALYTICS_DEDUPE_TABLE} (message_id, expires_at)
-SELECT j.value, ?2
+/** Records every processed (day_bucket, message_id) of the batch last in the same transaction (1 row/msg, no secondary index). */
+export const DEDUPE_INSERT = `INSERT OR IGNORE INTO ${ANALYTICS_DEDUPE_TABLE} (day_bucket, message_id)
+SELECT json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]')
 FROM json_each(?1) AS j`;
+
+function utcDayOf(ms: number): string {
+	return new Date(ms).toISOString().slice(0, 10);
+}
+
+function prevUtcDay(day: string): string {
+	return utcDayOf(Date.parse(`${day}T00:00:00Z`) - DAY_MS);
+}
+
+/**
+ * Resolves the write day_bucket and the PK lookup buckets for one message.
+ * Normal messages use their timestamp's UTC day (invariant across midnight on
+ * redelivery); stale/future/invalid timestamps clamp to today, and lookup checks
+ * the neighbouring day bucket so a midnight-straddling redelivery still hits.
+ */
+export function resolveMessageBuckets(
+	timestamp: number | string | undefined,
+	now = Date.now(),
+	ttlDays = ANALYTICS_DEDUPE_TTL_DAYS,
+): { writeBucket: string; lookupBuckets: readonly [string, string, string] } {
+	const today = utcDayOf(now);
+	const minDay = utcDayOf(now - Math.max(1, ttlDays - 1) * DAY_MS);
+	let rawDay: string | null = null;
+	if (timestamp !== undefined) {
+		const parsed = new Date(timestamp);
+		if (Number.isFinite(parsed.getTime())) rawDay = parsed.toISOString().slice(0, 10);
+	}
+	const writeBucket = rawDay && rawDay >= minDay && rawDay <= today ? rawDay : today;
+	const prev = prevUtcDay(writeBucket);
+	const third = rawDay && rawDay !== writeBucket && rawDay !== prev ? rawDay : writeBucket;
+	return { writeBucket, lookupBuckets: [writeBucket, prev, third] };
+}
 
 /** Why CounterBatch.add refused an increment (a caller bug: logged, never silent). */
 export type InvalidIncrementReason = 'unknown_entity_type' | 'invalid_key' | 'invalid_value';
@@ -170,7 +221,7 @@ function rowKey(inc: CounterIncrement): string {
 
 export interface CounterFlushOptions {
 	now?: number;
-	ttlMs?: number;
+	ttlDays?: number;
 	/** Additional statements committed in the same D1 batch transaction (e.g. discovery_viewers). */
 	extraStatements?: D1PreparedStatement[];
 }
@@ -178,7 +229,7 @@ export interface CounterFlushOptions {
 export class CounterBatch {
 	private rows = new Map<string, CounterIncrement>();
 	private dedupedRows = new Map<string, { inc: CounterIncrement; byMessage: Map<string, number> }>();
-	private messageIds = new Set<string>();
+	private messageTimestamps = new Map<string, number | string | undefined>();
 
 	/**
 	 * `onInvalid` hears every refused increment. A hand-written type list here once dropped every
@@ -210,13 +261,13 @@ export class CounterBatch {
 	 * per-message deduplication in `analytics_dedupe`. A second call with the
 	 * same `messageId` in the same batch is a no-op (returns false).
 	 */
-	addForMessage(messageId: string, increments: CounterIncrement[]): boolean {
+	addForMessage(messageId: string, increments: CounterIncrement[], messageTimestamp?: number | string): boolean {
 		if (!messageId) {
 			let any = false;
 			for (const inc of increments) if (this.add(inc)) any = true;
 			return any;
 		}
-		if (this.messageIds.has(messageId)) return false;
+		if (this.messageTimestamps.has(messageId)) return false;
 		// Merge increments within this message first so one message contributes at most one tuple per key
 		const merged = new Map<string, CounterIncrement>();
 		for (const inc of increments) {
@@ -237,12 +288,12 @@ export class CounterBatch {
 			entry.byMessage.set(messageId, inc.value);
 			added = true;
 		}
-		if (added) this.messageIds.add(messageId);
+		if (added) this.messageTimestamps.set(messageId, messageTimestamp);
 		return added;
 	}
 
 	hasMessage(messageId: string): boolean {
-		return this.messageIds.has(messageId);
+		return this.messageTimestamps.has(messageId);
 	}
 
 	private refuse(inc: CounterIncrement, reason: InvalidIncrementReason): false {
@@ -257,7 +308,7 @@ export class CounterBatch {
 	clear(): void {
 		this.rows.clear();
 		this.dedupedRows.clear();
-		this.messageIds.clear();
+		this.messageTimestamps.clear();
 	}
 
 	/**
@@ -283,15 +334,28 @@ export class CounterBatch {
 
 		// 2. Per-message deduplicated increments
 		if (this.dedupedRows.size > 0) {
-			const plainTuples: Array<[EntityType, string, string, string, string, number, string]> = [];
-			const boundedEntries: Array<{ inc: CounterIncrement; pairs: Array<[string, number]> }> = [];
+			const now = opts.now ?? Date.now();
+			const ttlDays = opts.ttlDays ?? ANALYTICS_DEDUPE_TTL_DAYS;
+			const bucketsByMessage = new Map<string, { writeBucket: string; lookupBuckets: readonly [string, string, string] }>();
+			for (const [messageId, ts] of this.messageTimestamps) {
+				bucketsByMessage.set(messageId, resolveMessageBuckets(ts, now, ttlDays));
+			}
+
+			const plainTuples: Array<[EntityType, string, string, string, string, number, string, string, string, string]> = [];
+			const boundedEntries: Array<{ inc: CounterIncrement; entries: Array<[string, number, string, string, string]> }> = [];
 
 			for (const { inc, byMessage } of this.dedupedRows.values()) {
 				if (inc.maxDims && inc.dim !== OTHER_DIM) {
-					boundedEntries.push({ inc, pairs: [...byMessage.entries()] });
+					const entries: Array<[string, number, string, string, string]> = [];
+					for (const [messageId, value] of byMessage) {
+						const [b0, b1, b2] = bucketsByMessage.get(messageId)!.lookupBuckets;
+						entries.push([messageId, value, b0, b1, b2]);
+					}
+					boundedEntries.push({ inc, entries });
 				} else {
 					for (const [messageId, value] of byMessage) {
-						plainTuples.push([inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim ?? '', value, messageId]);
+						const [b0, b1, b2] = bucketsByMessage.get(messageId)!.lookupBuckets;
+						plainTuples.push([inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim ?? '', value, messageId, b0, b1, b2]);
 					}
 				}
 			}
@@ -300,21 +364,20 @@ export class CounterBatch {
 				out.push(db.prepare(BULK_UPSERT_DEDUPED).bind(JSON.stringify(plainTuples.slice(i, i + ROWS_PER_STATEMENT))));
 			}
 
-			for (const { inc, pairs } of boundedEntries) {
-				for (let i = 0; i < pairs.length; i += ROWS_PER_STATEMENT) {
+			for (const { inc, entries } of boundedEntries) {
+				for (let i = 0; i < entries.length; i += ROWS_PER_STATEMENT) {
 					out.push(
 						db
 							.prepare(BOUNDED_UPSERT_DEDUPED)
-							.bind(inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim, inc.maxDims, OTHER_DIM, JSON.stringify(pairs.slice(i, i + ROWS_PER_STATEMENT))),
+							.bind(inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim, inc.maxDims, OTHER_DIM, JSON.stringify(entries.slice(i, i + ROWS_PER_STATEMENT))),
 					);
 				}
 			}
 
-			// Dedupe markers must be inserted AFTER all counter upserts in the same batch
-			const expiresAt = (opts.now ?? Date.now()) + (opts.ttlMs ?? ANALYTICS_DEDUPE_TTL_MS);
-			const ids = [...this.messageIds];
-			for (let i = 0; i < ids.length; i += ROWS_PER_STATEMENT) {
-				out.push(db.prepare(DEDUPE_INSERT).bind(JSON.stringify(ids.slice(i, i + ROWS_PER_STATEMENT)), expiresAt));
+			// Dedupe markers must be inserted AFTER all counter upserts in the same batch (1 row/message, no secondary index)
+			const markers: Array<[string, string]> = [...bucketsByMessage.entries()].map(([id, b]) => [b.writeBucket, id]);
+			for (let i = 0; i < markers.length; i += ROWS_PER_STATEMENT) {
+				out.push(db.prepare(DEDUPE_INSERT).bind(JSON.stringify(markers.slice(i, i + ROWS_PER_STATEMENT))));
 			}
 		}
 
@@ -364,20 +427,71 @@ export class CounterBatch {
 	}
 }
 
+export interface AnalyticsDedupePurgeResult {
+	deleted: number;
+	rounds: number;
+	/** True when no expired rows remain; false when maxRounds or timeBoxMs stopped the run. */
+	caughtUp: boolean;
+	timedOut: boolean;
+	cutoffDay: string;
+}
+
+export interface AnalyticsDedupePurgeOptions {
+	batchSize?: number;
+	maxRounds?: number;
+	timeBoxMs?: number;
+	ttlDays?: number;
+	clock?: () => number;
+}
+
 /**
- * Deletes expired analytics_dedupe rows in bounded batches using
- * idx_analytics_dedupe_expires (covering index, never a full table scan).
+ * Deletes expired analytics_dedupe rows in bounded PK-prefix chunks (1,000 rows per
+ * statement, 1 row written per deleted row, no secondary index, no full table scan).
+ * Runs hourly and stops at maxRounds or timeBoxMs, resuming on the next hour if a
+ * backlog remains.
  */
-export async function purgeExpiredAnalyticsDedupe(db: D1Database, now = Date.now()): Promise<number> {
+export async function purgeExpiredAnalyticsDedupe(
+	db: D1Database,
+	now = Date.now(),
+	opts: AnalyticsDedupePurgeOptions = {},
+): Promise<AnalyticsDedupePurgeResult> {
+	const batchSize = opts.batchSize ?? ANALYTICS_DEDUPE_PURGE_BATCH;
+	const maxRounds = opts.maxRounds ?? ANALYTICS_DEDUPE_PURGE_MAX_ROUNDS;
+	const timeBoxMs = opts.timeBoxMs ?? ANALYTICS_DEDUPE_PURGE_TIME_BOX_MS;
+	const ttlDays = opts.ttlDays ?? ANALYTICS_DEDUPE_TTL_DAYS;
+	const clock = opts.clock ?? Date.now;
+	const cutoffDay = utcDayOf(now - ttlDays * DAY_MS);
+	const startedAt = clock();
+
+	const sql = `DELETE FROM ${ANALYTICS_DEDUPE_TABLE}
+WHERE (day_bucket, message_id) IN (
+  SELECT day_bucket, message_id FROM ${ANALYTICS_DEDUPE_TABLE}
+  WHERE day_bucket < ?1
+  ORDER BY day_bucket, message_id
+  LIMIT ?2
+)`;
+
 	let deleted = 0;
-	const sql = `DELETE FROM ${ANALYTICS_DEDUPE_TABLE} WHERE message_id IN (SELECT message_id FROM ${ANALYTICS_DEDUPE_TABLE} WHERE expires_at < ?1 ORDER BY expires_at LIMIT ?2)`;
-	for (let round = 0; round < ANALYTICS_DEDUPE_PURGE_MAX_ROUNDS; round++) {
-		const result = await db.prepare(sql).bind(now, ANALYTICS_DEDUPE_PURGE_BATCH).run();
+	let rounds = 0;
+	let caughtUp = false;
+	let timedOut = false;
+
+	for (let round = 0; round < maxRounds; round++) {
+		if (round > 0 && clock() - startedAt >= timeBoxMs) {
+			timedOut = true;
+			break;
+		}
+		const result = await db.prepare(sql).bind(cutoffDay, batchSize).run();
 		const n = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0);
 		deleted += n;
-		if (n < ANALYTICS_DEDUPE_PURGE_BATCH) break;
+		rounds++;
+		if (n < batchSize) {
+			caughtUp = true;
+			break;
+		}
 	}
-	return deleted;
+
+	return { deleted, rounds, caughtUp, timedOut, cutoffDay };
 }
 
 /** One-shot helper: add these increments atomically per row. */

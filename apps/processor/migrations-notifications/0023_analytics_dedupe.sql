@@ -5,12 +5,12 @@
 -- while a failed flush rolls back both the counters and the dedupe markers
 -- so the retry counts the message exactly once.
 --
--- Rows expire after the queue's retention window (7 days; Cloudflare Queues
--- retains messages for 4 days by default) and are purged in bounded batches
--- on idx_analytics_dedupe_expires by the daily retention cron.
+-- Keyed by (day_bucket, message_id) WITHOUT ROWID with no secondary index:
+-- 1 row written on insert and 1 row written on purge delete (2 total per
+-- message instead of 4 with an expires_at index). The hourly retention cron
+-- deletes expired day buckets in bounded 1,000-row chunks on the primary key.
 CREATE TABLE IF NOT EXISTS analytics_dedupe (
-  message_id TEXT PRIMARY KEY,
-  expires_at INTEGER NOT NULL
+  day_bucket TEXT NOT NULL,           -- YYYY-MM-DD (UTC)
+  message_id TEXT NOT NULL,
+  PRIMARY KEY (day_bucket, message_id)
 ) WITHOUT ROWID;
-
-CREATE INDEX IF NOT EXISTS idx_analytics_dedupe_expires ON analytics_dedupe (expires_at);
