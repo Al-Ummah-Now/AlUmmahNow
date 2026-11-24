@@ -124,3 +124,41 @@ describe('/api/app-config', () => {
     assert.equal(sameDocument(null, undefined), true);
   });
 });
+
+describe('app versions and releases (wiki AUN-APP-UPDATES §4.2, #1434)', () => {
+  it('only super admins change the versions document; admins still read it', async () => {
+    const admin = setup(['admin']);
+    assert.equal((await admin.req('/api/app-config/versions', send('PUT', { value: { 'viewer/ios': { minimumVersion: '0.0.0' } } }))).status, 403);
+    assert.equal((await admin.req('/api/app-config/versions')).status, 200);
+    assert.deepEqual(await admin.audit(), [], 'nothing audited for a refused change');
+    const owner = setup(['super_admin']);
+    assert.equal((await owner.req('/api/app-config/versions', send('PUT', { value: { 'viewer/ios': { minimumVersion: '0.0.0' } } }))).status, 200);
+  });
+
+  it('admins read and refresh the release index through the internal key', async () => {
+    const { req, calls } = setup(['admin']);
+    assert.equal((await req('/api/app-config/releases')).status, 200);
+    assert.equal((await req('/api/app-config/releases/refresh', send('POST', {}))).status, 200);
+    assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), ['GET /internal/app-config/releases', 'POST /internal/app-config/releases/refresh']);
+  });
+
+  it('marking a store upload available is super-admin only, validated and audited', async () => {
+    const admin = setup(['admin']);
+    assert.equal((await admin.req('/api/app-config/releases/available', send('PUT', { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' }))).status, 403);
+    const owner = setup(['super_admin']);
+    assert.equal((await owner.req('/api/app-config/releases/available', send('PUT', { app: 'admin', platform: 'ios', source: 'play', version: '1.4.0' }))).status, 400);
+    const ok = await owner.req('/api/app-config/releases/available', send('PUT', { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' }));
+    assert.equal(ok.status, 200);
+    assert.equal(owner.calls.at(-1)?.path, '/internal/app-config/releases/available');
+    const rows = await owner.audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, 'app-config:availability');
+    assert.deepEqual(JSON.parse(rows[0].new_value), { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' });
+  });
+
+  it('a refused mark drops its audit row', async () => {
+    const owner = setup(['super_admin'], { down: true });
+    await owner.req('/api/app-config/releases/available', send('PUT', { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' }));
+    assert.deepEqual(await owner.audit(), []);
+  });
+});
