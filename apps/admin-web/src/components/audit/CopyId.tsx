@@ -28,7 +28,7 @@ export function CopyId({ id, testId = 'unknown-user-id' }: { id: string; testId?
       >
         {t('auditLog.userIdToggle')}
       </button>
-      <span id={panelId} hidden={!open} className={open ? 'ms-1 inline-flex flex-wrap items-baseline gap-1' : undefined}>
+      <span id={panelId} hidden={!open} className={open ? 'ms-1 flex flex-wrap items-baseline gap-1' : undefined}>
         <code className="font-mono text-fg-subtle select-all break-all" dir="ltr" data-testid={`${testId}-value`}>
           {id}
         </code>
