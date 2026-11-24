@@ -15,6 +15,8 @@ interface AuthPayload {
   email?: string;
   iat: number; // Issued at
   exp: number; // Expiration
+  authTime?: number; // Epoch seconds of last explicit interactive sign-in (auth_time)
+  sid?: string; // Session id
   aud?: string; // Audience
   iss?: string; // Issuer
   roles?: string[]; // RBAC role names from the auth server (e.g. "Super Admin")
@@ -120,6 +122,8 @@ async function validateJWTWithSignature(token: string, env?: any, route?: string
         email: openAuthPayload.email || '',
         exp: claims.exp ?? 0,
         iat: claims.iat ?? 0,
+        ...(claims.auth_time !== undefined ? { authTime: claims.auth_time } : {}),
+        ...(claims.sid !== undefined ? { sid: claims.sid } : {}),
         aud: authConfig.JWT.AUDIENCE,  // ✅ Now using dynamic config
         iss: authConfig.JWT.ISSUER,    // ✅ Now using dynamic config
         roles: Array.isArray(openAuthPayload.roles) ? openAuthPayload.roles.map(String) : [],

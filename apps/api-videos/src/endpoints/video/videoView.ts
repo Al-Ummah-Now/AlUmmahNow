@@ -146,11 +146,25 @@ export class VideoView extends OptionalAuthRoute {
 				broadcastInBackground(c, `video:${id}`, 'view_count_updated', { videoId: id, viewCount });
 			}
 		} catch (error) {
-			logger.error('[views] view not counted', { videoId: id, error: String(error) });
+			logger.error('[views] view not counted', {
+				...(c.get('kidsMode') ? {} : { videoId: id }),
+				error: String(error),
+			});
 			return c.json({ success: false, error: "View not counted, try again" }, 503);
 		}
 
-		// Send detailed analytics event
+		// Send detailed analytics event (suppressed completely in Kids Mode: zero user/viewer attribution)
+		const kidsMode = Boolean(c.get('kidsMode'));
+		if (kidsMode) {
+			return {
+				success: true,
+				result: {
+					viewCount,
+					message: "View counted without viewer attribution",
+				},
+			};
+		}
+
 		// May this view count toward Trending / Popular (wiki E07 "Discovery ranking")? Never the owner,
 		// staff, test accounts, crawlers or autoplay; the processor counts a viewer once per video per day.
 		const origin = viewOrigin(c.req.raw, viewData.source === "embed");

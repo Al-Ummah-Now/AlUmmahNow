@@ -63,13 +63,23 @@ export async function loggingMiddleware(c: Context, next: Next) {
 	} finally {
 		const status = thrown ? 500 : c.res.status;
 		const auth = c.get('auth') as { userId?: string } | undefined;
+		const kidsMode = Boolean(c.get('kidsMode') || c.get('kidsRequest'));
+		const rawPath = new URL(c.req.url).pathname;
+		const redactedRoute = c.get('kidsRouteTemplate') as string | undefined;
+		const route = kidsMode
+			? redactedRoute ??
+				rawPath
+					.replace(/(\/api(?:\/v1)?\/videos\/)[^/]+/g, '$1:id')
+					.replace(/(\/api(?:\/v1)?\/watch-state\/)[^/]+/g, '$1:videoId')
+					.replace(/(\/api(?:\/v1)?\/watch-history\/)[^/]+/g, '$1:videoId')
+			: rawPath;
 		const summary = {
 			method: c.req.method,
-			route: new URL(c.req.url).pathname,
+			route,
 			status,
 			durationMs: Date.now() - startTime,
 			ray: c.req.header('cf-ray') || undefined,
-			userId: auth?.userId,
+			userId: kidsMode ? undefined : auth?.userId,
 		};
 		const slowMs = slowThresholdMs(summary.method, summary.route);
 		if (status >= 500 || thrown) {

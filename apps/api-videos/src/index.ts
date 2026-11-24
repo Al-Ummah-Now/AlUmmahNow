@@ -130,6 +130,7 @@ import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 import { errorEnvelope } from './middleware/error-envelope';
 import { applyFeatureGates } from './middleware/require-feature';
+import { kidsModeMiddleware } from './middleware/kids-mode';
 import { apiError } from './lib/api-error';
 
 // ==========================================
@@ -156,7 +157,7 @@ app.use('*', cors({
 	// origin callback receives (origin, context) - context has env access
 	origin: (origin, c) => allowOrigin(origin, c as never),
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat', 'X-App-Locale', 'If-None-Match'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'X-Kids-Session', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat', 'X-App-Locale', 'If-None-Match'],
 	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date', 'Content-Language', 'X-Error-Ref', 'ETag'],
 	maxAge: 600,
 	credentials: false,
@@ -218,7 +219,7 @@ app.options('/api/*', (c) => {
 		c.header('Access-Control-Allow-Origin', allowedOrigin);
 	}
 	c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, channelId, userId, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat');
+	c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Kids-Session, channelId, userId, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat');
 	c.header('Access-Control-Expose-Headers', 'Location, Tus-Resumable, Tus-Version, Tus-Max-Size, Tus-Extension, Upload-Offset, Upload-Length, Upload-Metadata');
 	c.header('Access-Control-Max-Age', '600');
 	c.header('Allow', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
@@ -245,6 +246,8 @@ app.use('/api/*', videosPendingDeletionMiddleware);
 // This middleware verifies that the channelId belongs to the authenticated user
 // It must run after auth middleware so the user context is available
 app.use('/api/*', channelIdMiddleware);
+// Kids Mode enforcement (wiki E20 §4.2–§4.3): downgrade/block non-allowlisted routes & suppress child telemetry
+app.use('/api/*', kidsModeMiddleware);
 
 // Sign Bunny Stream URLs in responses for CDN token authentication
 // (no-op unless BUNNY_SIGN_URLS is "true"; see middleware/bunny-signing.ts)

@@ -140,6 +140,8 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   pin_invalid: { action: 'none', en: 'That PIN isn’t right.', ar: 'رمز القفل غير صحيح.' },
   pin_locked: { action: 'retry', en: 'Too many wrong PIN attempts. Please wait a little while and try again.', ar: 'محاولات خاطئة كثيرة لرمز القفل. يُرجى الانتظار قليلًا ثم المحاولة مرة أخرى.' },
   pin_required: { action: 'none', en: 'Enter your parental PIN to continue.', ar: 'أدخل رمز الرقابة الأبوية للمتابعة.' },
+  pin_not_set: { action: 'none', en: 'Set a parental PIN first.', ar: 'اضبط رمز الرقابة الأبوية أولًا.' },
+  step_up_required: { action: 'sign_in', en: 'Please sign in again to change your parental PIN.', ar: 'يُرجى تسجيل الدخول مرة أخرى لتغيير رمز الرقابة الأبوية.' },
   kids_catalog_not_found: { action: 'none', en: 'This item isn’t in the Kids catalog.', ar: 'هذا العنصر غير موجود في دليل الأطفال.' },
   kids_catalog_deleted: { action: 'none', en: 'This catalog item is deleted.', ar: 'عنصر الدليل هذا محذوف.' },
   kids_video_hidden: { action: 'none', en: 'Only visible videos or playlists can be approved for Kids.', ar: 'يمكن اعتماد المرئيات أو قوائم التشغيل المرئية فقط للأطفال.' },

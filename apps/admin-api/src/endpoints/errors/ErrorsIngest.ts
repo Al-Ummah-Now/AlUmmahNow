@@ -31,6 +31,14 @@ const BROWSER_APPS: readonly ErrorApp[] = ['web', 'admin-web'];
 /** A browser event may fold at most this many repeats into one report */
 const BROWSER_MAX_COUNT = 50;
 
+/** Scrubs child-viewed video/path slugs down to route templates (wiki E20 §4.3, S1). */
+export function scrubKidsErrorPath(raw: string): string {
+  return raw
+    .replace(/(\/kids\/watch\/)[^/?#]+/g, '$1:id')
+    .replace(/(\/kids\/paths\/)[^/?#]+/g, '$1:slug')
+    .replace(/(\/videos\/)[^/?#]+/g, '$1:id');
+}
+
 /**
  * A browser batch is untrusted: the page can send anything. Only what the
  * proxy (the app's /api/errors route, which holds the key) vouches for is
@@ -38,22 +46,42 @@ const BROWSER_MAX_COUNT = 50;
  * session (X-Client-User-Id), never the page's own claims. Counts are capped,
  * and "test" (no alert mail, pruned after a day) is honoured only outside
  * production, so a forged test event can never hide a real production error.
+ *
+ * When `kidsMode` is active (X-Kids-Mode: 1 or `/kids/` event), user attribution
+ * is omitted completely and `/kids/` URLs/routes are redacted to templates.
  */
 export function constrainBrowserEvents(
   events: ErrorEventInput[],
-  vouched: { app?: string | undefined; userId?: string | undefined; environment: string },
+  vouched: { app?: string | undefined; userId?: string | undefined; environment: string; kidsMode?: boolean },
 ): ErrorEventInput[] {
   const app = BROWSER_APPS.includes(vouched.app as ErrorApp) ? (vouched.app as ErrorApp) : undefined;
-  const userId = vouched.userId && USER_ID.test(vouched.userId) ? vouched.userId : undefined;
+  const userId = !vouched.kidsMode && vouched.userId && USER_ID.test(vouched.userId) ? vouched.userId : undefined;
   const out: ErrorEventInput[] = [];
   for (const e of events) {
     const eventApp = app ?? (BROWSER_APPS.includes(e.app) ? e.app : null);
     if (!eventApp) continue; // a page cannot report as a Worker
-    const { userId: _claimed, count, test, environment: _env, ...rest } = e;
+    const isKidsEvent = Boolean(
+      vouched.kidsMode ||
+        (e.context && typeof e.context === 'object' && (e.context as { kidsMode?: unknown }).kidsMode === true) ||
+        (typeof e.route === 'string' && e.route.includes('/kids/')),
+    );
+    const { userId: _claimed, count, test, environment: _env, route, ...rest } = e;
+    const cleanedRoute = typeof route === 'string' && isKidsEvent ? scrubKidsErrorPath(route) : route;
+    const context =
+      rest.context && typeof rest.context === 'object' && isKidsEvent
+        ? Object.fromEntries(
+            Object.entries(rest.context as Record<string, unknown>).map(([k, v]) => [
+              k,
+              typeof v === 'string' && v.includes('/kids/') ? scrubKidsErrorPath(v) : v,
+            ]),
+          )
+        : rest.context;
     out.push({
       ...rest,
+      ...(cleanedRoute !== undefined ? { route: cleanedRoute } : {}),
+      ...(context !== undefined ? { context } : {}),
       app: eventApp,
-      ...(userId ? { userId } : {}),
+      ...(userId && !isKidsEvent ? { userId } : {}),
       ...(typeof count === 'number' ? { count: Math.max(1, Math.min(BROWSER_MAX_COUNT, Math.floor(count))) } : {}),
       ...(test && vouched.environment !== 'production' ? { test: true } : {}),
     });
@@ -220,22 +248,35 @@ export async function errorsIngest(c: Context<{ Bindings: AdminBindings }>): Pro
     : rawResolved.map((r) => (r as { key?: unknown })?.key).filter((k): k is string => typeof k === 'string' && ACTION_KEY.test(k));
   if (events.length === 0 && resolved.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
 
+  const kidsHeader = c.req.header('X-Kids-Mode') === '1';
+  const clientPageHeader = c.req.header('X-Client-Page') ?? '';
+  const kidsMode = kidsHeader || clientPageHeader.includes('/kids/');
+
   if (fromBrowser) {
     events = constrainBrowserEvents(events, {
       app: c.req.header('X-Report-App'),
-      userId: c.req.header('X-Client-User-Id'),
+      userId: kidsMode ? undefined : c.req.header('X-Client-User-Id'),
       environment: env.ENVIRONMENT || 'development',
+      kidsMode,
     });
     // The page's own claims are dropped: the origin is what the proxy saw of the browser
-    const origin = browserOrigin((name) => c.req.header(name));
+    const origin = browserOrigin((name) => {
+      const val = c.req.header(name);
+      return kidsMode && name === 'X-Client-Page' && val ? scrubKidsErrorPath(val) : val;
+    });
     if (origin) events = events.map((e) => ({ ...e, context: { ...(e.context ?? {}), origin } }));
     if (events.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
+  } else if (kidsMode) {
+    events = events.map(({ userId: _u, ...rest }) => ({
+      ...rest,
+      ...(typeof rest.route === 'string' ? { route: scrubKidsErrorPath(rest.route) } : {}),
+    }));
   }
-  const userAgent = c.req.header('X-Client-User-Agent') || undefined;
+  const userAgent = kidsMode ? undefined : c.req.header('X-Client-User-Agent') || undefined;
   // Rate limit per IP (a changing user agent must not reset it); anonymous visitors are counted by a
   // keyed hash of IP + browser. Neither the IP nor the user agent is stored.
   const rateKey = ip ? (await hashIp(ip, key)).slice(0, 24) : undefined;
-  const clientKey = ip ? (await hashIp(`${ip}|${userAgent ?? ''}`, key)).slice(0, 24) : undefined;
+  const clientKey = !kidsMode && ip ? (await hashIp(`${ip}|${userAgent ?? ''}`, key)).slice(0, 24) : undefined;
 
   let rateLimited = 0;
   try {

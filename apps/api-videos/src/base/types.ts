@@ -114,6 +114,21 @@ export interface AppBindings {
   GOOGLE_OAUTH_CLIENT_SECRET?: { get(): Promise<string> } | string;
   YOUTUBE_IMPORT_DEFAULT_ENABLED?: string;
   YOUTUBE_IMPORT_DEFAULT_CLIENT_ID?: string;
+  /** Optional dedicated HMAC secret for Kids Mode session tokens; falls back to derived INTERNAL_API_KEY */
+  KIDS_SESSION_SECRET?: { get(): Promise<string> } | string;
+  /** Optional Resend key for urgent parent PIN hard-lockout alerts */
+  RESEND_API_KEY?: { get(): Promise<string> } | string;
+  /** Optional configured From header for transactional emails */
+  EMAIL_FROM?: string;
+  CONTACT_FROM?: string;
+}
+
+export interface KidsModeContext {
+  active: true;
+  userId: string;
+  deviceId: string | null;
+  ageBand: import('@al-ummah/shared-types').KidsActiveAgeBand;
+  enteredAt: number;
 }
 
 /**
@@ -132,5 +147,8 @@ export type AppContext = Context<{
     channelOwnerId?: string;
     creatorTier?: unknown;
     uploadAllowance?: { allowed: number; requested: number; retryAfter: number };
+    kidsMode?: KidsModeContext;
+    kidsRequest?: boolean;
+    kidsRouteTemplate?: string;
   };
 }>;

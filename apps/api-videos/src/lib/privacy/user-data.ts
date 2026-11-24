@@ -51,6 +51,7 @@ import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseLiveSessionOwner } from '../live/store';
 import { eraseImageOwners } from '../csam/imageOwners';
+import { eraseKidsUserData, exportParentalControls } from '../kids/parental-controls';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
@@ -244,6 +245,8 @@ export interface UserDataExport {
 	notes: string[];
 	profile: Json | null;
 	privacyConsent: Json | null;
+	/** Parent-owned Ummah Kids controls metadata (PIN hash/salt never included). */
+	parentalControls: Json | null;
 	channels: Json[];
 	channelSections: Json[];
 	channelTabs: Json[];
@@ -313,6 +316,7 @@ function emptyExport(userId: string): UserDataExport {
 		notes: [...EXPORT_NOTES],
 		profile: null,
 		privacyConsent: null,
+		parentalControls: null,
 	} as UserDataExport;
 	for (const field of EXPORT_LIST_FIELDS) out[field] = [];
 	return out;
@@ -500,6 +504,18 @@ export async function collectUserData(
 				ctx.budget.spend();
 				const [seenAt, settings, email] = await Promise.all([getSeenAt(ndb, userId), getSettings(ndb, userId), getEmailSettings(ndb, userId)]);
 				out.notificationState.push({ menuSeenAt: seenAt === null ? null : new Date(seenAt).toISOString(), categories: settings, email });
+			}),
+		// Parent-owned Ummah Kids parental controls (PIN hashes omitted)
+		(ctx) =>
+			atomically(async () => {
+				const sdb = env.SEARCH_DB as D1Database | undefined;
+				if (!sdb) return;
+				ctx.budget.spend();
+				try {
+					out.parentalControls = (await exportParentalControls(sdb, userId)) as unknown as Json | null;
+				} catch (err) {
+					if (!String(err).includes('no such table')) throw err;
+				}
 			}),
 	];
 
@@ -1159,6 +1175,9 @@ export async function eraseUserData(
 				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
 				// Their live sessions' tier owner (search migration 0060)
 				await eraseLiveSessionOwner(db as unknown as D1Database, userId);
+				// Ummah Kids parental controls row + tombstoned review/audit actor references (wiki E20 §8)
+				const kidsRemoved = await eraseKidsUserData(db as unknown as D1Database, userId, DELETED_USER_ID);
+				if (kidsRemoved > 0) bump(summary.deleted, 'parentalControls', kidsRemoved);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

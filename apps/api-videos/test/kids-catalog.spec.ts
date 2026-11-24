@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { KIDS_DECISION_IDS, forgetFeatureSwitches, kidsCanTurnOnHook, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { kidsRouter, handleStudioKidsReviewRequest } from '../src/routers/kids.router';
+import { kidsModeMiddleware } from '../src/middleware/kids-mode';
+import { signKidsSessionToken } from '../src/lib/kids/parental-controls';
 import { applyFeatureGates } from '../src/middleware/require-feature';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import { MemoryBucket } from './helpers';
@@ -418,5 +420,79 @@ describe('api-videos /api/kids', () => {
       (globalThis as { caches?: unknown }).caches = prevCaches;
       t.playlists.get = origPlGet;
     }
+  });
+
+  it('serves curated playlists within session ageBand while enforcing Kids session ageBand and hiding channels until KIDS-D16 (S-F)', async () => {
+    const t = await setup(true, 'usr_parent');
+    await t.db
+      .prepare("INSERT INTO search_playlists (id, channel_id, visible, payload) VALUES ('pl_older', 'ch_1', 1, ?)")
+      .bind(JSON.stringify({ id: 'pl_older', title: 'Older Youth Series', videos: ['vid_older'] }))
+      .run();
+    await t.db
+      .prepare("INSERT INTO search_videos (id, channel_id, visible, payload) VALUES ('vid_older', 'ch_1', 1, ?)")
+      .bind(JSON.stringify({ id: 'vid_older', channelId: 'ch_1', title: 'Older Youth Talk' }))
+      .run();
+    await t.db
+      .prepare(
+        `INSERT INTO kids_catalog_items (id, target_type, target_id, age_band, status, topics_json, position, approved_by, approved_at, updated_at) VALUES
+         ('kc_pl_older', 'playlist', 'pl_older', '7-12', 'approved', '["character"]', 5, 'usr_mod', '2026-11-23T00:00:00Z', '2026-11-23T00:00:00Z'),
+         ('kc_older', 'video', 'vid_older', '7-12', 'approved', '["character"]', 6, 'usr_mod', '2026-11-23T00:00:00Z', '2026-11-23T00:00:00Z')`,
+      )
+      .run();
+
+    const env = { SEARCH_DB: t.db, INTERNAL_API_KEY: 'test-internal-api-key-not-for-prod' };
+    const app = new Hono();
+    app.use('*', errorEnvelope);
+    app.use('/api/*', kidsModeMiddleware);
+    app.route('/api/kids', kidsRouter as never);
+
+    const signed = await signKidsSessionToken(env as never, {
+      userId: 'usr_parent',
+      deviceId: 'dev_1',
+      ageBand: '3-6',
+    });
+
+    // Even when query tries to request 7-12 and channel targetType,
+    // Kids Mode session enforces 3-6, returns 3-6 video+playlist only, and omits channels.
+    const catRes = await app.request(
+      '/api/kids/catalog?ageBand=7-12',
+      { headers: { 'X-Kids-Session': signed.token } },
+      env as never,
+    );
+    assert.equal(catRes.status, 200);
+    const catItems = ((await catRes.json()) as any).items as Array<{ targetType: string; targetId: string }>;
+    assert.deepEqual(catItems.map((i) => i.targetId), ['vid_1', 'pl_1']);
+
+    const chFilterRes = await app.request(
+      '/api/kids/catalog?targetType=channel',
+      { headers: { 'X-Kids-Session': signed.token } },
+      env as never,
+    );
+    assert.equal(chFilterRes.status, 200);
+    assert.deepEqual(((await chFilterRes.json()) as any).items, []);
+
+    const plRes = await app.request(
+      '/api/kids/playlists?ageBand=7-12',
+      { headers: { 'X-Kids-Session': signed.token } },
+      env as never,
+    );
+    assert.equal(plRes.status, 200);
+    const pls = ((await plRes.json()) as any).items as Array<{ playlistId: string }>;
+    assert.deepEqual(pls.map((p) => p.playlistId), ['pl_1']);
+
+    const blockedPl = await app.request(
+      '/api/kids/playlists/pl_older',
+      { headers: { 'X-Kids-Session': signed.token } },
+      env as never,
+    );
+    assert.equal(blockedPl.status, 403);
+
+    const allowedPl = await app.request(
+      '/api/kids/playlists/pl_1',
+      { headers: { 'X-Kids-Session': signed.token } },
+      env as never,
+    );
+    assert.equal(allowedPl.status, 200);
+    assert.deepEqual(((await allowedPl.json()) as any).items.map((i: any) => i.videoId), ['vid_1']);
   });
 });

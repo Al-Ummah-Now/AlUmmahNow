@@ -103,6 +103,11 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'GET', '/api/kids/playlists', 'ummahKids'),
   r('api-videos', 'GET', '/api/kids/playlists/:id', 'ummahKids'),
   r('api-videos', 'POST', '/api/studio/channels/:channelId/kids-review', 'ummahKids'),
+  r('api-videos', 'GET', '/api/me/parental-controls', 'ummahKids'),
+  r('api-videos', 'PUT', '/api/me/parental-controls', 'ummahKids'),
+  r('api-videos', 'PUT', '/api/me/parental-controls/pin', 'ummahKids'),
+  r('api-videos', 'POST', '/api/me/kids-mode/enter', 'ummahKids'),
+  r('api-videos', 'POST', '/api/me/kids-mode/exit', 'ummahKids'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -132,6 +137,8 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'admin-api', prefix: '/api/kids', key: 'ummahKids' },
   { app: 'api-videos', prefix: '/api/kids', key: 'ummahKids' },
   { app: 'api-videos', prefix: '/api/studio/channels/:channelId/kids-review', key: 'ummahKids' },
+  { app: 'api-videos', prefix: '/api/me/parental-controls', key: 'ummahKids' },
+  { app: 'api-videos', prefix: '/api/me/kids-mode', key: 'ummahKids' },
 ]);
 
 const FINISH = 'finishes work already started';

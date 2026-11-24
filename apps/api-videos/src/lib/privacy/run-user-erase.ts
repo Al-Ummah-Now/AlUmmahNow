@@ -35,6 +35,7 @@ import { footprintTargets, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseLiveSessionOwner } from '../live/store';
+import { eraseKidsUserData } from '../kids/parental-controls';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -232,6 +233,8 @@ export async function eraseRunUserData(
 			// Their live sessions' tier owner (search migration 0060), as the full erasure does
 			budget.spend();
 			await eraseLiveSessionOwner(db, userId);
+			budget.spend();
+			await eraseKidsUserData(db as unknown as D1Database, userId, DELETED_USER_ID);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);

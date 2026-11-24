@@ -25,6 +25,7 @@ import {
   type SearchDb,
 } from '@al-ummah/shared-types';
 import type { AppBindings } from '../base';
+import type { KidsModeContext } from '../base/types';
 import { apiError } from '../lib/api-error';
 import { roleOnChannel } from '../lib/channelAccess';
 import {
@@ -39,7 +40,7 @@ import R2Repository from '../lib/r2Repo';
 
 export { invalidateKidsBrowseSnapshot };
 
-type Env = { Bindings: AppBindings; Variables: { userId?: string } };
+type Env = { Bindings: AppBindings; Variables: { userId?: string; kidsMode?: KidsModeContext } };
 type C = Context<Env>;
 
 const D1_IN_CHUNK = 80;
@@ -425,7 +426,9 @@ function safeWaitUntil(c: C, promise: Promise<unknown>): void {
 }
 
 async function withEdgeCache(c: C, cacheKeyUrl: string, produce: () => Promise<Response>): Promise<Response> {
-  const hasKidsSessionHeader = Boolean(c.req.header('x-kids-session') || c.req.header('cookie')?.includes('aun_kids_session='));
+  const hasKidsSessionHeader = Boolean(
+    c.get('kidsMode')?.active || c.req.header('x-kids-session') || c.req.header('cookie')?.includes('aun_kids_session='),
+  );
   const cacheStorage = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
   if (hasKidsSessionHeader || !cacheStorage) {
     return produce();
@@ -807,9 +810,12 @@ kidsRouter.get('/catalog', async (c: C) => {
   const db = c.env.SEARCH_DB as unknown as SearchDb | undefined;
   if (!db) return apiError(c, 503, 'search_unavailable');
 
+  const kidsMode = c.get('kidsMode');
   const ageBandRaw = c.req.query('ageBand');
   if (ageBandRaw && !isKidsActiveAgeBand(ageBandRaw)) return apiError(c, 400, 'invalid_request');
-  const ageBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const queryAgeBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const ageBand = kidsMode?.active ? kidsMode.ageBand : queryAgeBand;
+
   const topicRaw = c.req.query('topic');
   if (topicRaw && !isKidsTopic(topicRaw)) return apiError(c, 400, 'invalid_request');
   const topic = topicRaw && isKidsTopic(topicRaw) ? topicRaw : null;
@@ -962,9 +968,11 @@ kidsRouter.get('/playlists', async (c: C) => {
   const db = c.env.SEARCH_DB as unknown as SearchDb | undefined;
   if (!db) return apiError(c, 503, 'search_unavailable');
 
+  const kidsMode = c.get('kidsMode');
   const ageBandRaw = c.req.query('ageBand');
   if (ageBandRaw && !isKidsActiveAgeBand(ageBandRaw)) return apiError(c, 400, 'invalid_request');
-  const ageBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const queryAgeBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const ageBand = kidsMode?.active ? kidsMode.ageBand : queryAgeBand;
   const topicParam = c.req.query('topic');
   if (topicParam && !isKidsTopic(topicParam)) return apiError(c, 400, 'invalid_request');
   const topic = topicParam && isKidsTopic(topicParam) ? topicParam : null;
@@ -1082,9 +1090,11 @@ kidsRouter.get('/playlists/:id', async (c: C) => {
   const db = c.env.SEARCH_DB as unknown as SearchDb | undefined;
   if (!db) return apiError(c, 503, 'search_unavailable');
 
+  const kidsMode = c.get('kidsMode');
   const ageBandRaw = c.req.query('ageBand');
   if (ageBandRaw && !isKidsActiveAgeBand(ageBandRaw)) return apiError(c, 400, 'invalid_request');
-  const ageBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const queryAgeBand = ageBandRaw && isKidsActiveAgeBand(ageBandRaw) ? ageBandRaw : null;
+  const ageBand = kidsMode?.active ? kidsMode.ageBand : queryAgeBand;
   const bands = matchingKidsAgeBands(ageBand);
 
   const playlistId = c.req.param('id').trim();
@@ -1099,12 +1109,20 @@ kidsRouter.get('/playlists/:id', async (c: C) => {
         .prepare(
           `SELECT id, target_type, target_id, age_band, status, topics_json, position, approved_at
            FROM kids_catalog_items
-           WHERE target_type = 'playlist' AND target_id = ? AND status = 'approved' AND age_band IN (${bands.map(() => '?').join(', ')})`,
+           WHERE target_type = 'playlist' AND target_id = ? AND status = 'approved'`,
         )
-        .bind(playlistId, ...bands)
+        .bind(playlistId)
         .first<CatalogRow>(),
     ]);
     if (!catalogRow) {
+      c.header('Cache-Control', 'public, max-age=30');
+      return apiError(c, 404, 'not_found');
+    }
+    if (kidsMode?.active) {
+      if (catalogRow.age_band !== 'all' && catalogRow.age_band !== kidsMode.ageBand) {
+        return apiError(c, 403, 'kids_mode_restricted');
+      }
+    } else if (ageBand && catalogRow.age_band !== 'all' && catalogRow.age_band !== ageBand) {
       c.header('Cache-Control', 'public, max-age=30');
       return apiError(c, 404, 'not_found');
     }

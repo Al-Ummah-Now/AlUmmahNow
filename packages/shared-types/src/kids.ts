@@ -103,3 +103,82 @@ export interface KidsReviewRequest {
   decidedAt: string | null;
   createdAt: string;
 }
+
+/** Parental PIN format: 4–6 ASCII digits (wiki E20 §5.3). */
+export const KIDS_PIN_REGEX = /^\d{4,6}$/;
+/** Bedtime HH:MM format (24-hour clock). */
+export const KIDS_TIME_HHMM_REGEX = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+/** Maximum sign-in age (`auth_time`, seconds) allowed for setting or changing the parental PIN (KIDS-D8). */
+export const KIDS_STEP_UP_MAX_AGE_SECONDS = 300;
+/** HTTP header & HttpOnly cookie carrying the signed Kids Mode session token. */
+export const KIDS_SESSION_HEADER = 'x-kids-session';
+export const KIDS_SESSION_COOKIE = 'aun_kids_session';
+
+export const KIDS_ROUTE_MODES = [
+  'block_403',
+  'suppress_attribution',
+  'allowlisted_only',
+  'allow_public',
+  'admin_internal',
+] as const;
+export type KidsRouteMode = (typeof KIDS_ROUTE_MODES)[number];
+
+/** Public-facing parental controls state (PIN hash/salt are NEVER exposed). */
+export interface ParentalControlsView {
+  hasPin: boolean;
+  pinUpdatedAt: string | null;
+  pinLockedUntil: string | null;
+  pinHardLocked: boolean;
+  activeAgeBand: KidsActiveAgeBand;
+  dailyLimitMinutes: number | null;
+  bedtimeStart: string | null;
+  bedtimeEnd: string | null;
+  bedtimeTimezone: string | null;
+  prayerPauseEnabled: boolean;
+  updatedAt: string | null;
+}
+
+export function isValidKidsPin(value: unknown): value is string {
+  return typeof value === 'string' && KIDS_PIN_REGEX.test(value);
+}
+
+export function isValidKidsTime(value: unknown): value is string {
+  return typeof value === 'string' && KIDS_TIME_HHMM_REGEX.test(value);
+}
+
+export interface PinLockoutNext {
+  failedAttempts: number;
+  lockedUntilIso: string | null;
+  retryAfterSeconds: number;
+  hardLocked: boolean;
+}
+
+/**
+ * Escalating parental PIN lockout schedule (wiki E20 §5.2, KIDS-D8):
+ * - Attempts 1–4: no lockout
+ * - 5th wrong attempt: 5 minutes (300s)
+ * - 6th wrong attempt: 15 minutes (900s)
+ * - 7th wrong attempt: 1 hour (3600s)
+ * - 8th+ wrong attempt: hard stop until fresh SSO step-up PIN reset + parent security alert
+ */
+export function nextPinLockout(currentFailures: number, nowMs = Date.now()): PinLockoutNext {
+  const next = Math.max(0, Math.floor(currentFailures)) + 1;
+  if (next >= 8) {
+    return {
+      failedAttempts: next,
+      lockedUntilIso: null,
+      retryAfterSeconds: 0,
+      hardLocked: true,
+    };
+  }
+  let lockSeconds = 0;
+  if (next === 7) lockSeconds = 3600;
+  else if (next === 6) lockSeconds = 900;
+  else if (next === 5) lockSeconds = 300;
+  return {
+    failedAttempts: next,
+    lockedUntilIso: lockSeconds > 0 ? new Date(nowMs + lockSeconds * 1000).toISOString() : null,
+    retryAfterSeconds: lockSeconds,
+    hardLocked: false,
+  };
+}
