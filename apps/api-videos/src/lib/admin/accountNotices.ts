@@ -5,7 +5,8 @@
  *   notification pipeline (queue → processor stores it, pushes it in real time
  *   and to devices). Category account is always on, so it always arrives.
  * - accountEmailContact: what admin-api needs to email the user about their
- *   account: address, name, "Email me about my account" and the language.
+ *   account: address (the sign-in account's, from Auth), name, "Email me about
+ *   my account" and the language.
  */
 import {
 	DEFAULT_NOTIFICATION_EMAIL_LOCALE,
@@ -18,6 +19,7 @@ import { z } from 'zod';
 import R2Repository from '../r2Repo';
 import { accountNoticePayload, enqueueNotification, getEmailSettings, type NotificationsEnv } from '../notifications';
 import { logger } from '../logger';
+import { authEmail } from './authUsers';
 import { AdminError } from './service';
 import { toUserRow, type AdminEnv } from './directory';
 
@@ -45,14 +47,19 @@ export async function accountNotice(env: Env, userId: string, notice: AccountNot
 	return { queued };
 }
 
-/** The user's email address, name and email preferences. */
+/**
+ * The user's email address, name and email preferences. The address is the sign-in account's: null
+ * (no mail) when Auth has no such account, 503 (the mail job retries) when Auth cannot be read; the
+ * profile's copy is never used.
+ */
 export async function accountEmailContact(env: Env, userId: string): Promise<AccountEmailContact> {
 	const profile = await readProfile(env, userId);
 	const row = toUserRow(userId, profile, false);
+	const email = await authEmail(env, userId);
 	const prefs = env.NOTIFICATIONS_DB ? await getEmailSettings(env.NOTIFICATIONS_DB, userId) : null;
 	return {
 		userId,
-		email: row.email,
+		email,
 		displayName: row.displayName,
 		accountEmail: prefs?.account ?? true,
 		locale: prefs?.locale ?? DEFAULT_NOTIFICATION_EMAIL_LOCALE,

@@ -15,6 +15,7 @@ import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import { claimDefaultHandle, claimHandle, validateHandleFormat } from '../channelHandles';
 import { createEntityDefaults } from '../transformations';
+import { authEmail, authUserByEmail } from './authUsers';
 import { AdminError, type AdminServiceEnv } from './service';
 
 type Row = Record<string, unknown>;
@@ -22,30 +23,21 @@ type Row = Record<string, unknown>;
 export const USER_ID_RE = /^usr_[0-9a-f]{32}$/;
 const normEmail = (email: string) => email.trim().toLowerCase();
 
-interface AuthUsersRead {
-	prepare(sql: string): { bind(...values: unknown[]): { all<T>(): Promise<{ results?: T[] }> } };
-}
-
 export interface AccountLookup {
 	/** The Auth account with this email (any live status, `invited` included). */
 	authUser: { id: string; email: string; name: string | null; status: string } | null;
-	/** The videos profile with this email (when it differs from authUser's, the admin decides). */
+	/** A videos profile of another user id that carries this email: a warning for the admin, never who the email belongs to. */
 	profile: { id: string; displayName: string | null } | null;
 }
 
-/** Who already has this email: the Auth account (read-only AUTH_DB) and the videos profile. */
+/**
+ * Who already has this email: the Auth account decides (503 when Auth cannot be read, so "no account"
+ * is never a guess). A videos profile that carries it without being that account is only a warning.
+ */
 export async function lookupAccount(env: AdminServiceEnv, email: string): Promise<AccountLookup> {
 	const wanted = normEmail(email);
 	if (!wanted) throw new AdminError(400, 'invalid_request', 'email is required');
-	const authDb = env.AUTH_DB as unknown as AuthUsersRead | undefined;
-	let authUser: AccountLookup['authUser'] = null;
-	if (authDb) {
-		const { results } = await authDb
-			.prepare('SELECT id, email, name, status FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1')
-			.bind(wanted)
-			.all<{ id: string; email: string; name: string | null; status: string }>();
-		authUser = results?.[0] ?? null;
-	}
+	const authUser = await authUserByEmail(env, wanted);
 	let profile: AccountLookup['profile'] = null;
 	if (env.SEARCH_DB) {
 		const row = await env.SEARCH_DB.prepare(
@@ -53,7 +45,7 @@ export async function lookupAccount(env: AdminServiceEnv, email: string): Promis
 		)
 			.bind(wanted)
 			.first<{ id: string; admin_title: string | null }>();
-		if (row) profile = { id: row.id, displayName: row.admin_title };
+		if (row && row.id !== authUser?.id) profile = { id: row.id, displayName: row.admin_title };
 	}
 	return { authUser, profile };
 }
@@ -111,6 +103,7 @@ export async function createChannelFor(
 	const name = String(input.name ?? '').trim();
 	if (!name || name.length > 100) throw new AdminError(400, 'invalid_request', 'name is required (at most 100 characters)');
 	const profile = await new R2Repository<Row>(env.profiles).getObject(userId);
+	const email = profile ? await authEmail(env, userId) : null;
 	if (!profile) throw new AdminError(404, 'user_not_found', 'The user has no videos profile');
 	if (input.handle) {
 		const problem = validateHandleFormat(input.handle);
@@ -132,7 +125,7 @@ export async function createChannelFor(
 	const channel: Row = {
 		...createEntityDefaults(),
 		userId,
-		email: profile.email,
+		...(email ? { email } : {}),
 		name,
 		...(input.description?.trim() ? { description: input.description.trim() } : {}),
 		isMain: owned.every((ch) => !ch || ch.isDeleted),

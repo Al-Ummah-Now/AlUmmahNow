@@ -40,6 +40,7 @@ import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion } from '../src/lib/a
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
+import { AuthDb } from './auth-db';
 import { createSqliteD1 } from './sqlite-d1';
 
 const OWNER = 'usr_owner';
@@ -103,12 +104,15 @@ function channel(id: string, overrides: Record<string, unknown> = {}) {
 }
 
 /** A wrapped env (writes update the indexes) with complete ownership passes. */
-async function setup(seed: { profiles?: Record<string, unknown>; channels?: Record<string, unknown>; videos?: Record<string, unknown>; playlists?: Record<string, unknown> } = {}) {
+async function setup(seed: { profiles?: Record<string, unknown>; channels?: Record<string, unknown>; videos?: Record<string, unknown>; playlists?: Record<string, unknown>; auth?: Record<string, string> } = {}) {
 	const db = new SqliteD1();
+	const profiles = seed.profiles ?? { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) };
 	const pending: Promise<unknown>[] = [];
 	const raw = {
 		SEARCH_DB: db,
-		profiles: new MemoryBucket(seed.profiles ?? { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) }),
+		profiles: new MemoryBucket(profiles),
+		// The accounts: each profile's own email unless the test gives others
+		AUTH_DB: new AuthDb(seed.auth ?? Object.fromEntries(Object.entries(profiles).flatMap(([id, p]) => ((p as { email?: string }).email ? [[id, (p as { email: string }).email]] : [])))),
 		channels: new MemoryBucket(seed.channels ?? { ch1: channel('ch1') }),
 		videos: new MemoryBucket(
 			seed.videos ?? {
@@ -936,6 +940,78 @@ describe('channel actions', () => {
 		const banned = await call('POST', '/users/usr_bilal/ban', {});
 		assert.equal(banned.status, 200);
 		assert.equal((await search('bilal@example.com'))[0].isBanned, true, 'banned users are listed as such');
+	});
+
+	it('user search shows and ranks by the account email; a profile whose copy differs is never that email\'s user', async () => {
+		const { call, raw } = await setup({
+			profiles: {
+				usr_amina: profile('usr_amina', { email: 'old-amina@example.com', displayName: 'Amina Yusuf' }),
+				usr_copy: profile('usr_copy', { email: 'amina@example.com', displayName: 'Someone' }),
+				usr_noacct: profile('usr_noacct', { email: 'noacct@example.com', displayName: 'No Account' }),
+			},
+			channels: {},
+			videos: {},
+			auth: { usr_amina: 'amina@example.com', usr_copy: 'copy@example.com' },
+		});
+		const search = async (q: string) => (await call('GET', `/users/search?q=${encodeURIComponent(q)}`)).body.result.items as any[];
+		const byEmail = await search('Amina@Example.com');
+		assert.deepEqual(byEmail.map((u) => [u.id, u.email]), [['usr_amina', 'amina@example.com'], ['usr_copy', 'copy@example.com']]);
+		assert.deepEqual((await search('usr_noacct')).map((u) => u.email), [null], 'no account: no email');
+		assert.ok(raw.AUTH_DB.queries.length > 0);
+		assert.deepEqual(raw.AUTH_DB.plans().filter((p) => p.startsWith('SCAN')), []);
+		assert.ok(raw.AUTH_DB.plans().some((p) => p.includes('idx_users_email_lower')), 'the email lookup uses its index');
+		// Auth unreadable: the search still works, without emails
+		raw.AUTH_DB.fail = true;
+		assert.deepEqual((await search('Amina Yusuf')).map((u) => [u.id, u.email]), [['usr_amina', null]]);
+	});
+
+	it('user detail carries the account email and where it is from; a differing profile copy is only shown', async () => {
+		const { call, raw } = await setup({
+			profiles: { usr_same: profile('usr_same', { email: 'same@example.com' }), usr_differs: profile('usr_differs', { email: 'copy@example.com' }), usr_noacct: profile('usr_noacct', { email: 'copy2@example.com' }) },
+			channels: {},
+			videos: {},
+			auth: { usr_same: 'Same@Example.com', usr_differs: 'account@example.com' },
+		});
+		const detail = async (id: string) => {
+			const { email, emailSource, profileEmail } = (await call('GET', `/users/${id}`)).body.result;
+			return { email, emailSource, profileEmail };
+		};
+		assert.deepEqual(await detail('usr_same'), { email: 'same@example.com', emailSource: 'auth', profileEmail: undefined });
+		assert.deepEqual(await detail('usr_differs'), { email: 'account@example.com', emailSource: 'auth', profileEmail: 'copy@example.com' });
+		assert.deepEqual(await detail('usr_noacct'), { email: null, emailSource: 'none', profileEmail: 'copy2@example.com' });
+		raw.AUTH_DB.fail = true;
+		assert.deepEqual(await detail('usr_same'), { email: null, emailSource: 'unavailable', profileEmail: 'same@example.com' });
+	});
+
+	it("a move uses the new owner's account email: the channel's email and the invitations it closes", async () => {
+		const { call, raw, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { email: 'third@example.com' }) },
+			auth: { [OTHER]: 'other@example.com' },
+		});
+		const when = new Date(Date.now() + 864e5).toISOString();
+		const invite = db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES (?, 'ch1', 'editor', ?, 1, ?, 'pending', '2026-01-01', ?)`);
+		invite.run('account', 'other@example.com', OWNER, when);
+		invite.run('copy', 'third@example.com', OWNER, when);
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		const job = (await call('GET', `/jobs/${res.body.result.job.id}`)).body.result;
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).email, 'other@example.com');
+		const status = (id: string) => (db.db.prepare('SELECT status FROM channel_invites WHERE id = ?').get(id) as { status: string }).status;
+		assert.equal(status('account'), 'cancelled');
+		assert.equal(status('copy'), 'pending', "someone else's invitation stays open");
+	});
+
+	it('a move waits (retries) while Auth cannot be read, and a new owner with no account yet gets no channel email', async () => {
+		const down = await setup();
+		down.raw.AUTH_DB.fail = true;
+		const refused = await down.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal((await down.call('GET', `/jobs/${refused.body.result.job.id}`)).body.result.status, 'failed');
+		assert.equal(JSON.parse(down.raw.channels.store.get('ch1')!).userId, OWNER, 'nothing moved');
+
+		const none = await setup({ auth: {} });
+		const res = await none.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal((await none.call('GET', `/jobs/${res.body.result.job.id}`)).body.result.status, 'succeeded');
+		assert.equal('email' in JSON.parse(none.raw.channels.store.get('ch1')!), false);
 	});
 
 	it('delete soft-deletes the channel (hidden, restorable); the purge erases its videos and frees the handle', async () => {

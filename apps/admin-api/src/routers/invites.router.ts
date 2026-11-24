@@ -107,10 +107,11 @@ async function requireInvite(c: C): Promise<InviteRow> {
 
 interface AccountLookup {
   authUser: { id: string; email: string; name: string | null; status: string } | null;
+  /** A profile of another user id that carries the email: shown as a warning, never blocks the invite. */
   profile: { id: string; displayName: string | null } | null;
 }
 
-/** Who already has this email: an account (offer "assign to existing user" instead) or an open invite. */
+/** Who already has this email: an account (offer "assign to existing user" instead) or an open invite. Auth decides; a profile is only a warning. */
 async function lookup(c: C, email: string) {
   const [accounts, invite] = await Promise.all([
     videos<AccountLookup>(c, '/accounts', { query: { email } }),
@@ -216,7 +217,6 @@ app.post('/', async (c) => {
   const existing = await lookup(c, email);
   if (existing.authUser) throw new HttpError(409, 'user_exists', 'This email already has an account', { user: existing.authUser });
   if (existing.invite) throw new HttpError(409, 'already_invited', 'This email already has an open invite', { invite: existing.invite });
-  if (existing.profile) throw new HttpError(409, 'user_exists', 'A videos user already has this email', { user: { id: existing.profile.id, email, name: existing.profile.displayName, status: 'active' } });
 
   const row = {
     id: newInviteId(),
@@ -245,6 +245,9 @@ app.post('/', async (c) => {
   await record(c, 'created', ref, { email, tierId, locale, authRoles, ...(chosen.en || chosen.ar ? { videos: chosen } : {}) });
 
   const warnings: Array<{ step: string; code: string; message: string }> = [];
+  if (existing.profile) {
+    warnings.push({ step: 'email', code: 'profile_has_email', message: `The videos profile of another user (${existing.profile.id}) carries this email. It is not that account's email in Auth.` });
+  }
   {
     try {
       await videos(c, `/users/${row.userId}/creator-tier`, { method: 'PUT', json: { tierId, source: 'admin', quiet: true } });

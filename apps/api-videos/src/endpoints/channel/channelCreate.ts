@@ -4,6 +4,7 @@ import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError }
 import { ChannelInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView, createEntityDefaults } from "../../lib/transformations";
+import { tokenEmail } from "../../lib/account-email";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -109,7 +110,8 @@ export class ChannelCreate extends AuthenticatedRoute {
 		const channelInput = request.body;
 		const userId = this.getUserId(c);
 
-		// Get user's email from profile
+		// The user must have a profile; the channel's email is the signed-in account's
+		const accountEmail = tokenEmail(this.getAuth(c));
 		const profileBucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const profileRepository = new R2Repository<ProfileType>(profileBucket);
@@ -138,7 +140,8 @@ export class ChannelCreate extends AuthenticatedRoute {
 		const businessChannel = {
 			...entityDefaults,
 			userId: userId,
-			email: userProfile.email,
+			// A token without an email: none (JSON leaves it out)
+			email: accountEmail ?? (undefined as unknown as string),
 			name: channelInput.name,
 			nameLocalized: channelInput.nameLocalized,
 			description: channelInput.description,

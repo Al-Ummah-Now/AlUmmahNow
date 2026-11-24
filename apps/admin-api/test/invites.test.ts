@@ -241,6 +241,15 @@ describe('POST /api/invites', () => {
     assert.equal(lookup.body.result.authUser.id, 'usr_member');
   });
 
+  it('a profile that carries the email without being its account is a warning, not a refusal', async () => {
+    const t = setup();
+    t.state.profiles.set('usr_copy', { id: 'usr_copy', email: 'new.creator@example.com', displayName: 'Copy' });
+    const res = await t.call('POST', '/api/invites', invite({ email: 'new.creator@example.com' }));
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body.result.warnings.map((w: any) => [w.step, w.code]), [['email', 'profile_has_email']]);
+    assert.notEqual(res.body.result.invite.userId, 'usr_copy');
+  });
+
   it('never two invites for one email', async () => {
     const t = setup();
     await t.call('POST', '/api/invites', invite());

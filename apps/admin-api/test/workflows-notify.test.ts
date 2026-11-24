@@ -110,7 +110,7 @@ describe('delivery', () => {
     };
   }
 
-  const contacts: Record<string, { email: string; locale: 'en' | 'ar'; displayName: string }> = {
+  const contacts: Record<string, { email: string | null; locale: 'en' | 'ar'; displayName: string }> = {
     sa1: { email: 'sa1@example.org', locale: 'en', displayName: 'Sara' },
     sa2: { email: 'sa2@example.org', locale: 'ar', displayName: 'سالم' },
   };
@@ -177,6 +177,22 @@ describe('delivery', () => {
     assert.equal(sent[0].to, 'sa2@example.org');
     assert.equal(sent[0].subject, 'موافقة مطلوبة: إيقاف الرفع');
     assert.ok(sent[0].key?.startsWith(`workflow-${id}-proposed-sa1-sa2`));
+  });
+
+  it('a recipient without an account email gets none; an unreadable account retries the job', async () => {
+    const { env, id } = await setup(true);
+    const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: id, event: 'proposed', actor: 'sa1', recipients: ['sa2'] };
+    const before = contacts.sa2.email;
+    contacts.sa2.email = null;
+    try {
+      assert.equal(await processWorkflowNotifyJob(env as never, msg(job)), 'done');
+      assert.equal(sent.length, 0);
+    } finally {
+      contacts.sa2.email = before;
+    }
+    const down = { ...env, VIDEOS: { fetch: async () => Response.json({ success: false, code: 'auth_unavailable' }, { status: 503 }) } };
+    assert.equal(await processWorkflowNotifyJob(down as never, msg(job)), 'retry');
+    assert.equal(sent.length, 0);
   });
 
   it('no email when the rule turns email off', async () => {

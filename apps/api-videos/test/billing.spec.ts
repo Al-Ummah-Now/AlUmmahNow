@@ -450,7 +450,7 @@ describe('validation', () => {
 });
 
 describe('checkout contact', () => {
-	it('starts the provider checkout with the profile name (display name, else first + last) and email; the sign-in only fills gaps', async () => {
+	it('starts the provider checkout with the profile name (display name, else first + last) ; the email is always the one signed in with', async () => {
 		const { checkoutContact } = await import('../src/endpoints/billing/billing');
 		const { MemoryBucket } = await import('./helpers');
 		const bucket = new MemoryBucket();
@@ -458,10 +458,11 @@ describe('checkout contact', () => {
 			if (profile) void bucket.put('usr_c', JSON.stringify(profile));
 			return { env: { profiles: bucket }, get: (k: string) => (k === 'auth' ? auth : undefined) } as never;
 		};
-		assert.deepEqual(await checkoutContact(ctx({ displayName: 'Sh. Amina', firstName: 'Amina', email: 'amina@example.org' }, { email: 'login@example.org', payload: { name: 'Login Name' } }), 'usr_c'), { email: 'amina@example.org', name: 'Sh. Amina' });
+		assert.deepEqual(await checkoutContact(ctx({ displayName: 'Sh. Amina', firstName: 'Amina', email: 'amina@example.org' }, { email: 'login@example.org', payload: { name: 'Login Name' } }), 'usr_c'), { email: 'login@example.org', name: 'Sh. Amina' });
 		assert.deepEqual(await checkoutContact(ctx({ firstName: 'Amina', lastName: 'Hassan' }, { email: 'login@example.org' }), 'usr_c'), { email: 'login@example.org', name: 'Amina Hassan' });
 		await bucket.delete('usr_c');
 		assert.deepEqual(await checkoutContact(ctx(null, { payload: { email: 'p@example.org', name: 'Login Name' } }), 'usr_c'), { email: 'p@example.org', name: 'Login Name' });
+		assert.deepEqual(await checkoutContact(ctx({ displayName: 'Amina', email: 'copy@example.org' }, {}), 'usr_c'), { email: null, name: 'Amina' });
 	});
 });
 

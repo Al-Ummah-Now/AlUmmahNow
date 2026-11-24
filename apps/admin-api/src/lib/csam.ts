@@ -265,7 +265,9 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
     uploadedAt: video?.createdAt ?? null,
     uploader: {
       userId: r?.uploaderId ?? null,
-      email: user?.email ?? null,
+      // The sign-in account's, read by user id (api-videos userDetail); never the profile's copy
+      email: user?.emailSource === 'auth' ? user.email : null,
+      emailSource: user ? (user.emailSource ?? 'unavailable') : r?.uploaderId ? 'unavailable' : null,
       displayName: user?.displayName ?? null,
       handle: user?.userName ?? null,
       channelId: r?.channelId ?? null,

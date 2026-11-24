@@ -22,7 +22,7 @@ const AVATAR_URL = 'https://images.alummahnow.net/synthetic-placeholder_avatar.j
 interface Call { method: string; path: string; body: any; actor: string | null }
 
 /** api-videos: /internal/csam/* and the admin reads the report facts use. */
-function fakeVideos() {
+function fakeVideos(uploader: Record<string, unknown> = { email: 'uploader@example.test', emailSource: 'auth' }) {
   const calls: Call[] = [];
   let jobStatus = 'running';
   const fetcher = {
@@ -46,7 +46,7 @@ function fakeVideos() {
       if (/^\/internal\/csam\/cases\/[^/]+\/manifest$/.test(p)) return reply({ v: 1, caseId: 'x', matchedUrl: VIDEO_URL, resolution: {}, files: [{ name: '01-matched.jpg', source: 'MEDIA/pub/x', contentType: 'image/jpeg', bytes: 12, chunkSha256: ['a'], chunkBytes: 8, keyVersion: 1, copiedAt: 't' }], missing: [], createdAt: 't', completedAt: 't' });
       if (/^\/internal\/csam\/cases\/[^/]+\/files\//.test(p)) return new Response('SYNTHETIC', { headers: { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="x"', 'content-length': '9' } });
       if (/^\/internal\/csam\/cases\/[^/]+\/evidence$/.test(p)) return reply({ deleted: 3 });
-      if (p === '/internal/admin/users/usr_uploader') return reply({ id: 'usr_uploader', email: 'uploader@example.test', displayName: 'Synthetic Uploader', userName: 'synthetic' });
+      if (p === '/internal/admin/users/usr_uploader') return reply({ id: 'usr_uploader', ...uploader, displayName: 'Synthetic Uploader', userName: 'synthetic' });
       if (p === '/internal/admin/channels/chan-synth-01') return reply({ id: 'chan-synth-01', name: 'Synthetic channel' });
       if (p === '/internal/admin/videos/vid-synth-01') return reply({ id: 'vid-synth-01', createdAt: '2026-11-01T00:00:00.000Z' });
       if (/^\/internal\/admin\/users\/[^/]+\/ban$/.test(p)) return reply({ ban: {} });
@@ -58,9 +58,9 @@ function fakeVideos() {
   return { fetcher, calls, setJob: (s: string) => { jobStatus = s; } };
 }
 
-function setup() {
+function setup(uploader?: Record<string, unknown>) {
   const db = sqliteD1();
-  const videos = fakeVideos();
+  const videos = fakeVideos(uploader);
   const queued: unknown[] = [];
   const errors: any[] = [];
   const env = {
@@ -167,6 +167,20 @@ describe('intake', () => {
 });
 
 describe('the case', () => {
+  it("the report facts keep only the sign-in account's email, and say where it is from", async () => {
+    const facts = async (uploader: Record<string, unknown>) => {
+      const t = setup(uploader);
+      const [c] = (await t.json('/api/csam/intake', { method: 'POST', json: { text: VIDEO_URL } })).body.result.cases;
+      const { email, emailSource } = (await t.json(`/api/csam/${c.id}`)).body.result.facts.uploader;
+      return { email, emailSource };
+    };
+    assert.deepEqual(await facts({ email: 'account@example.test', emailSource: 'auth', profileEmail: 'copy@example.test' }), { email: 'account@example.test', emailSource: 'auth' });
+    assert.deepEqual(await facts({ email: null, emailSource: 'none', profileEmail: 'copy@example.test' }), { email: null, emailSource: 'none' });
+    assert.deepEqual(await facts({ email: null, emailSource: 'unavailable' }), { email: null, emailSource: 'unavailable' });
+    // An answer that does not say where its email is from is not trusted
+    assert.deepEqual(await facts({ email: 'copy@example.test' }), { email: null, emailSource: 'unavailable' });
+  });
+
   it('shows the job, the evidence list and the report facts captured before the takedown; every view is logged', async () => {
     const t = setup();
     const [c] = (await t.json('/api/csam/intake', { method: 'POST', json: { text: VIDEO_URL } })).body.result.cases;
@@ -176,6 +190,7 @@ describe('the case', () => {
     assert.equal(detail.job.phase, 'ban');
     assert.deepEqual(detail.evidence.files.map((f: any) => f.name), ['01-matched.jpg']);
     assert.equal(detail.facts.uploader.email, 'uploader@example.test');
+    assert.equal(detail.facts.uploader.emailSource, 'auth');
     assert.equal(detail.facts.uploader.channelName, 'Synthetic channel');
     assert.equal(detail.facts.uploadedAt, '2026-11-01T00:00:00.000Z');
     assert.equal(detail.facts.ipAddress, undefined);
