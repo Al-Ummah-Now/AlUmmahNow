@@ -133,7 +133,20 @@ describe('authMiddleware audience check', () => {
 	it('enforce mode: another client\'s token is a 401', async () => {
 		assert.equal((await call(await sign(QA.cms), { AUD_MODE: 'enforce' })).status, 401);
 		assert.equal((await call(await sign(PROD.web), { AUD_MODE: 'enforce' })).status, 401, 'a production token on QA');
-		assert.equal(mismatches().length, 2);
+		assert.equal((await call(await sign(QA.authProfile), { AUD_MODE: 'enforce' })).status, 401, 'authProfile stays blocked on general routes');
+		assert.equal(mismatches().length, 3);
+	});
+
+	it('enforce mode: authProfile is allowed only on DELETE /api/privacy/data (AlUmmahNowAuth#532)', async () => {
+		const app = new Hono();
+		app.use('/api/privacy/data', authMiddleware);
+		app.delete('/api/privacy/data', (c) => c.json({ ok: true }));
+		const env = { Issuer: QA_ISSUER, ClientId: QA.web, ENVIRONMENT: 'qa', AUD_MODE: 'enforce' };
+		const res = await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}` } }, env);
+		assert.equal(res.status, 200);
+		const prodRes = await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(PROD.authProfile)}` } }, env);
+		assert.equal(prodRes.status, 401, 'production authProfile token still rejected on QA');
+		assert.equal(mismatches().length, 1);
 	});
 
 	it('off: no check, no log', async () => {
