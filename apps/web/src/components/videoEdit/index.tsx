@@ -14,6 +14,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VideoObject } from '@/interfaces';
 import { fillTemplate, type VideoCommentSettings as CommentSettings, type VideoCategory } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
+import { getChannelForOwner } from '@/lib/api/channels';
 import { getChapters, updateChapters, type Chapter } from '@/lib/api/chapters';
 import { CategorySelector } from '@/components/videoUpload/CategorySelector';
 import { getInitialEditMetadata, normalizeTag, haveTagsChanged } from './edit-metadata';
@@ -36,6 +37,8 @@ interface VideoEditProps {
   video: VideoObject;
   userId: string;
   channelId: string;
+  /** Optional channel-level `defaultAllowDownloads` when known by parent (used when `video.allowDownloads` is omitted) */
+  channelDefaultAllowDownloads?: boolean;
   onSave?: (updatedVideo: VideoObject) => void;
   onCancel?: () => void;
   className?: string;
@@ -68,6 +71,7 @@ export default function VideoEdit({
   video,
   // userId is passed by parent but not used (authentication via JWT)
   channelId,
+  channelDefaultAllowDownloads,
   onSave,
   onCancel,
   className = '',
@@ -87,6 +91,13 @@ export default function VideoEdit({
 
   // Tags and category come from the stored video so editing never drops them
   const initialMetadata = getInitialEditMetadata(video);
+  const [loadedChannelDefaultDownloads, setLoadedChannelDefaultDownloads] = useState<boolean | undefined>(channelDefaultAllowDownloads);
+  const [allowDownloadsDirty, setAllowDownloadsDirty] = useState(false);
+
+  const effectiveInitialAllowDownloads =
+    typeof video.allowDownloads === 'boolean'
+      ? video.allowDownloads
+      : (loadedChannelDefaultDownloads ?? channelDefaultAllowDownloads ?? true);
 
   const [formData, setFormData] = useState<EditFormData>({
     titleEn: video.titleLocalized?.en || video.title || '',
@@ -100,7 +111,7 @@ export default function VideoEdit({
     isUnlisted: video.isPublic === false && video.isUnlisted === true,
     thumbnailUrl: video.thumbnailUrl,
     commentSettings: initialCommentSettings(video as { commentSettings?: unknown }),
-    allowDownloads: video.allowDownloads !== false,
+    allowDownloads: effectiveInitialAllowDownloads,
     format: formatChoiceOf(video),
   });
 
@@ -136,6 +147,37 @@ export default function VideoEdit({
   const channelFeatures = useFeatures(video.channelId || channelId || null).features;
   const aiCategoryOn = channelFeatures.aiCategorySuggest;
   const offlineDownloadsOn = channelFeatures.offlineDownloads;
+  const effectiveChannelId = video.channelId || channelId;
+
+  // When a video has no explicit `allowDownloads` override, fetch the channel's `defaultAllowDownloads`
+  // so Studio displays the true effective state and never silently pins `true` on unrelated edits.
+  useEffect(() => {
+    setAllowDownloadsDirty(false);
+  }, [video.id]);
+
+  useEffect(() => {
+    if (channelDefaultAllowDownloads !== undefined) {
+      setLoadedChannelDefaultDownloads(channelDefaultAllowDownloads);
+      return;
+    }
+    if (!offlineDownloadsOn || typeof video.allowDownloads === 'boolean' || !effectiveChannelId) return;
+    let cancelled = false;
+    getChannelForOwner(effectiveChannelId)
+      .then((ch) => {
+        if (!cancelled && ch) {
+          setLoadedChannelDefaultDownloads((ch as { defaultAllowDownloads?: boolean }).defaultAllowDownloads !== false);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [offlineDownloadsOn, video.allowDownloads, effectiveChannelId, channelDefaultAllowDownloads]);
+
+  useEffect(() => {
+    if (allowDownloadsDirty) return;
+    setFormData((prev) => (prev.allowDownloads === effectiveInitialAllowDownloads ? prev : { ...prev, allowDownloads: effectiveInitialAllowDownloads }));
+  }, [allowDownloadsDirty, effectiveInitialAllowDownloads]);
   useEffect(() => {
     if (!aiCategoryOn) return;
     let cancelled = false;
@@ -170,6 +212,9 @@ export default function VideoEdit({
   // Keeping an AI-set category is a change worth saving (it becomes the owner's)
   const confirmsAiCategory = video.categorySource === 'ai' && categoryState.touched && !!categoryState.category;
 
+  const allowDownloadsChanged =
+    offlineDownloadsOn && allowDownloadsDirty && formData.allowDownloads !== effectiveInitialAllowDownloads;
+
   // Track changes
   useEffect(() => {
     const original = getInitialEditMetadata(video);
@@ -182,14 +227,14 @@ export default function VideoEdit({
       formData.isPublic !== (video.isPublic !== false) ||
       formData.isUnlisted !== (video.isPublic === false && video.isUnlisted === true) ||
       formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
-      formData.allowDownloads !== (video.allowDownloads !== false) ||
+      allowDownloadsChanged ||
       formData.category !== original.category ||
       formData.format !== formatChoiceOf(video) ||
       confirmsAiCategory ||
       haveTagsChanged(original.tags, formData.tags);
 
     setHasUnsavedChanges(hasChanges);
-  }, [formData, video, confirmsAiCategory]);
+  }, [formData, video, confirmsAiCategory, allowDownloadsChanged]);
 
   const handleInputChange = (field: keyof EditFormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -261,7 +306,7 @@ export default function VideoEdit({
         // null clears a previously set category
         category: formData.category || null,
         commentSettings: formData.commentSettings,
-        ...(offlineDownloadsOn ? { allowDownloads: formData.allowDownloads } : {}),
+        ...(allowDownloadsChanged ? { allowDownloads: formData.allowDownloads } : {}),
         // Uploader's Short / video choice; 'auto' clears it
         format: formData.format,
       };
@@ -270,6 +315,7 @@ export default function VideoEdit({
 
       if (result?.success && result.result?.video) {
         setSuccess(t.video.updateSuccess ?? null);
+        setAllowDownloadsDirty(false);
         setHasUnsavedChanges(false);
         onSave?.(result.result.video);
       } else if (result?.code === 'terms_required') {
@@ -520,18 +566,21 @@ export default function VideoEdit({
         {/* Per-video offline downloads toggle (E14-S5; hidden when offlineDownloads switch is off) */}
         {offlineDownloadsOn && (
           <fieldset data-testid="video-edit-downloads">
-            <legend className="block text-sm font-medium mb-1 dark:text-white">{t.video.allowDownloadsLabel}</legend>
-            <label className="flex items-start gap-3 p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+            <legend className="block text-sm font-medium mb-1 text-foreground">{t.video.allowDownloadsLabel}</legend>
+            <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted">
               <input
                 type="checkbox"
                 checked={formData.allowDownloads}
-                onChange={(e) => handleInputChange('allowDownloads', e.target.checked)}
+                onChange={(e) => {
+                  setAllowDownloadsDirty(true);
+                  handleInputChange('allowDownloads', e.target.checked);
+                }}
                 className="w-4 h-4 mt-0.5"
                 data-testid="video-edit-allow-downloads"
               />
               <div>
-                <div className="text-sm font-medium dark:text-white">{t.video.allowDownloadsToggle}</div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{t.video.allowDownloadsHelp}</p>
+                <div className="text-sm font-medium text-foreground">{t.video.allowDownloadsToggle}</div>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.video.allowDownloadsHelp}</p>
               </div>
             </label>
           </fieldset>
