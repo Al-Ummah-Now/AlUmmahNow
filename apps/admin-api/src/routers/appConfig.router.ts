@@ -8,6 +8,12 @@
  *                         started from: when the stored one has changed since, 409 (no overwrite)
  *   GET  /:key/history    the latest changes (audit log, newest first), each with who made it by name
  *   POST /evaluate        { context, documents? } dry run: what an app build would get
+ *   GET  /releases        the app release index (wiki AUN-APP-UPDATES §4.2)
+ *   POST /releases/refresh  run the release index now (429 while one runs)
+ *   PUT  /releases/available  { app, platform, source: testflight|amazon, version|null } (super admins; audited)
+ *
+ * The `versions` document (minimum versions, notes overrides, forced-screen message) and the
+ * Available marks need app_versions:manage (super admins, issue #1434); admins see them read-only.
  *
  * The documents live in api-videos' APP_CONFIG KV (/internal/app-config/*, INTERNAL_API_KEY, which
  * stays on the servers). Every change is audited (site_settings_log, key app-config:<key>, old and
@@ -72,6 +78,42 @@ app.post('/evaluate', async (c) => {
   return c.json({ success: true, result });
 });
 
+// --- App releases (wiki AUN-APP-UPDATES §4.2) -------------------------------------------------
+app.get('/releases', async (c) => {
+  const result = await callVideosInternal<unknown>(c.env, `${INTERNAL}/releases`);
+  return c.json({ success: true, result });
+});
+
+app.post('/releases/refresh', async (c) => {
+  const result = await callVideosInternal<unknown>(c.env, `${INTERNAL}/releases/refresh`, { method: 'POST', json: {} });
+  logger.info('[AppConfig] Release index refreshed', { actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+app.put('/releases/available', async (c) => {
+  if (!hasPermission(c.get('auth')?.roles, 'app_versions:manage')) {
+    return c.json({ success: false, code: 'forbidden', error: 'Only super admins mark store uploads available' }, 403);
+  }
+  const body = (await c.req.json().catch(() => null)) as { app?: unknown; platform?: unknown; source?: unknown; version?: unknown } | null;
+  if (!body || typeof body.app !== 'string' || typeof body.platform !== 'string' || (body.source !== 'testflight' && body.source !== 'amazon') || !(body.version === null || typeof body.version === 'string')) {
+    return c.json({ success: false, code: 'bad_request', error: 'app, platform, source (testflight or amazon) and version (or null) are required' }, 400);
+  }
+  const db = c.env.REPORTS_DB;
+  const id = crypto.randomUUID();
+  await db
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, 'app-config:availability', null, JSON.stringify({ app: body.app, platform: body.platform, source: body.source, version: body.version }), actorOf(c), new Date().toISOString(), auditOriginJson())
+    .run();
+  try {
+    const result = await callVideosInternal<unknown>(c.env, `${INTERNAL}/releases/available`, { method: 'PUT', json: { app: body.app, platform: body.platform, source: body.source, version: body.version } });
+    logger.info('[AppConfig] Store upload marked', { actorId: actorOf(c), app: body.app, platform: body.platform, source: body.source, version: body.version });
+    return c.json({ success: true, result });
+  } catch (error) {
+    await db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(id).run().catch(() => undefined);
+    throw error;
+  }
+});
+
 app.get('/:key/history', async (c) => {
   const key = c.req.param('key');
   if (!isKey(key)) return c.json({ success: false, code: 'not_found', error: 'Unknown document' }, 404);
@@ -100,6 +142,10 @@ app.get('/:key', async (c) => {
 app.put('/:key', async (c) => {
   const key = c.req.param('key');
   if (!isKey(key)) return c.json({ success: false, code: 'not_found', error: 'Unknown document' }, 404);
+  // Minimum versions can lock users out: super admins only (issue #1434, wiki AUN-APP-UPDATES §4.2)
+  if (key === 'versions' && !hasPermission(c.get('auth')?.roles, 'app_versions:manage')) {
+    return c.json({ success: false, code: 'forbidden', error: 'Only super admins change app versions' }, 403);
+  }
   const body = (await c.req.json().catch(() => null)) as { value?: unknown; expected?: unknown } | null;
   if (!body || body.value === undefined) return c.json({ success: false, code: 'bad_request', error: 'value is required' }, 400);
 
