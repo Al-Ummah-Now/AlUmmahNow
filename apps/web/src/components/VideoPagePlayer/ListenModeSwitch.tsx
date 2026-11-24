@@ -11,7 +11,6 @@ export interface ListenModeSwitchProps {
   title: string;
   channelName: string;
   thumbnailUrl?: string;
-  fallbackPlayUrl?: string;
   duration?: number;
   /** Returns the current video player timestamp and playback speed when switching to Listen mode. */
   getVideoPlaybackState: () => { currentTime: number; playbackRate: number };
@@ -25,14 +24,13 @@ export interface ListenModeSwitchProps {
 
 /**
  * Watch-page Listen mode toggle & audio-first surface (E14-S6).
- * Renders NOTHING when the `listenMode` feature switch is OFF.
+ * Renders NOTHING when the `listenMode` feature switch is OFF or the viewer is signed out.
  */
 export function ListenModeSwitch({
   videoId,
   title,
   channelName,
   thumbnailUrl,
-  fallbackPlayUrl,
   duration,
   getVideoPlaybackState,
   pauseVideo,
@@ -43,8 +41,9 @@ export function ListenModeSwitch({
   const { t, isRTL } = useLanguage();
   const listen = useListenAudio();
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Hidden when off: render nothing at all when listenMode feature switch is off
+  // Hidden when off: render nothing at all when listenMode feature switch is off or signed out
   if (!listen.enabled) return null;
 
   const labels = {
@@ -53,10 +52,13 @@ export function ListenModeSwitch({
     audioOnly: t.listen?.audioOnly ?? 'Audio only',
     addToQueue: t.listen?.addToQueue ?? 'Add to queue',
     loadingAudio: t.listen?.loadingAudio ?? 'Preparing audio…',
+    audioUnavailable:
+      t.listen?.audioUnavailable ?? 'Audio-only playback is not available for this video right now.',
   };
 
   const enterListenMode = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       let currentTime = 0;
       let playbackRate = 1;
@@ -67,22 +69,25 @@ export function ListenModeSwitch({
       } catch {
         // Video tech may not be initialized yet (or failed to load); still allow Listen mode.
       }
+      const resolved = await fetchVideoAudio(videoId);
+      if (!resolved?.url) {
+        // E14-D5: never fall back to playing the video stream URL as audio.
+        setErrorMessage(labels.audioUnavailable);
+        return;
+      }
       try {
         pauseVideo();
       } catch {
         // Ignore tech-not-ready pause errors from video.js.
       }
-      const resolved = await fetchVideoAudio(videoId);
-      const audioUrl = resolved?.url ?? fallbackPlayUrl;
-      if (!audioUrl) return;
       listen.startListening(
         {
           videoId,
           title,
           channelName,
           thumbnailUrl,
-          audioUrl,
-          contentType: resolved?.contentType,
+          audioUrl: resolved.url,
+          contentType: resolved.contentType,
           duration,
         },
         { startTime: currentTime, playbackRate, autoPlay: true },
@@ -101,17 +106,14 @@ export function ListenModeSwitch({
     resumeVideoAt(resumeTime, rate);
   };
 
-  const enqueueVideo = async () => {
-    const resolved = await fetchVideoAudio(videoId);
-    const audioUrl = resolved?.url ?? fallbackPlayUrl;
-    if (!audioUrl) return;
+  // Store metadata only — fresh audio URL is resolved via fetchVideoAudio when playback starts.
+  const enqueueVideo = () => {
+    setErrorMessage(null);
     listen.addToQueue({
       videoId,
       title,
       channelName,
       thumbnailUrl,
-      audioUrl,
-      contentType: resolved?.contentType,
       duration,
     });
   };
@@ -150,26 +152,37 @@ export function ListenModeSwitch({
           </button>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          <button
-            type="button"
-            disabled={loading}
-            data-testid="watch-listen-toggle"
-            onClick={() => void enterListenMode()}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-60"
-          >
-            <Headphones className="w-4 h-4" />
-            {loading ? labels.loadingAudio : labels.listenMode}
-          </button>
-          <button
-            type="button"
-            data-testid="watch-listen-queue"
-            onClick={() => void enqueueVideo()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <ListPlus className="w-4 h-4" />
-            {labels.addToQueue}
-          </button>
+        <div className="flex flex-col gap-1.5 mt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              data-testid="watch-listen-toggle"
+              onClick={() => void enterListenMode()}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-60"
+            >
+              <Headphones className="w-4 h-4" />
+              {loading ? labels.loadingAudio : labels.listenMode}
+            </button>
+            <button
+              type="button"
+              data-testid="watch-listen-queue"
+              onClick={enqueueVideo}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <ListPlus className="w-4 h-4" />
+              {labels.addToQueue}
+            </button>
+          </div>
+          {errorMessage && (
+            <p
+              role="alert"
+              data-testid="watch-listen-error"
+              className="text-xs text-red-700 dark:text-red-300"
+            >
+              {errorMessage}
+            </p>
+          )}
         </div>
       )}
     </div>

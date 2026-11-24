@@ -2,14 +2,22 @@
 
 import { createContext, useContext } from 'react';
 
-export interface ListenTrack {
+/**
+ * Metadata stored for a queued Listen-mode item.
+ * Intentionally excludes any resolved/signed audio URL so queued items never go stale;
+ * the fresh URL is resolved via `GET /api/v1/videos/:id/audio` right when the item starts playing.
+ */
+export interface ListenQueueItem {
   videoId: string;
   title: string;
   channelName: string;
   thumbnailUrl?: string;
+  duration?: number;
+}
+
+export interface ListenTrack extends ListenQueueItem {
   audioUrl: string;
   contentType?: string;
-  duration?: number;
 }
 
 export type SleepTimerSetting = 'off' | 'end' | 15 | 30 | 45 | 60;
@@ -24,9 +32,11 @@ export interface ListenAudioContextValue {
   currentTime: number;
   duration: number;
   playbackRate: number;
-  queue: ListenTrack[];
+  queue: ListenQueueItem[];
   sleepTimer: SleepTimerSetting;
   sleepRemainingSec: number | null;
+  error: string | null;
+  clearError: () => void;
   startListening: (track: ListenTrack, opts?: { startTime?: number; playbackRate?: number; autoPlay?: boolean }) => void;
   togglePlay: () => void;
   pause: () => void;
@@ -34,9 +44,10 @@ export interface ListenAudioContextValue {
   skipBy: (deltaSeconds: number) => void;
   setPlaybackRate: (rate: number) => void;
   setSleepTimer: (setting: SleepTimerSetting) => void;
-  addToQueue: (track: ListenTrack) => void;
+  addToQueue: (item: ListenQueueItem) => void;
   removeFromQueue: (videoId: string) => void;
   clearQueue: () => void;
+  playQueuedItem: (videoId: string) => Promise<void>;
   playNext: () => void;
   stopListening: () => void;
 }
@@ -56,6 +67,8 @@ export function useListenAudio(): ListenAudioContextValue {
       queue: [],
       sleepTimer: 'off',
       sleepRemainingSec: null,
+      error: null,
+      clearError: () => undefined,
       startListening: () => undefined,
       togglePlay: () => undefined,
       pause: () => undefined,
@@ -66,6 +79,7 @@ export function useListenAudio(): ListenAudioContextValue {
       addToQueue: () => undefined,
       removeFromQueue: () => undefined,
       clearQueue: () => undefined,
+      playQueuedItem: async () => undefined,
       playNext: () => undefined,
       stopListening: () => undefined,
     };

@@ -82,7 +82,6 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
           title={removeUnwantedChars(title)}
           channelName={removeUnwantedChars(channelName)}
           thumbnailUrl={posterUrl}
-          fallbackPlayUrl={videoSources[0]?.src}
           duration={options.duration}
           getVideoPlaybackState={() => {
             const p = playerRef.current as (Player & { playbackRate?: (r?: number) => number }) | null;
