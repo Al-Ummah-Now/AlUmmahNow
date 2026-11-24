@@ -43,6 +43,7 @@ import { registerFeatureExecutor } from '../lib/workflows/feature-actions';
 import { workflowCtx } from './workflows.router';
 import { stepUpAnswer } from '../middleware/passkeys';
 import type { AdminBindings, AuthContext } from '../base/types';
+import type { D1Database } from '../lib/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv & { FEATURES_FORCE_OFF?: string }; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -64,6 +65,8 @@ export interface FeatureItem {
   updatedAt: string | null;
   updatedBy: { id: string; name: string | null } | null;
   canToggle: boolean;
+  /** A change waiting for approval (wiki AUN-WORKFLOWS WF-9): the row shows it and the switch waits */
+  pending: { requestId: string; enabled: boolean } | null;
 }
 
 const EMPTY_STATE: FeatureStateReport = { legacy: {}, ready: {} };
@@ -78,6 +81,30 @@ const forbidden = (c: C, permission: Permission | 'super_admin') => {
 /** May this caller change this switch? */
 export function canToggle(callerRoles: readonly string[] | undefined, def: FeatureDefinition): boolean {
   return hasPermission(callerRoles, 'features:manage') && (def.toggle !== 'superAdmin' || isSuperAdmin(callerRoles ?? []));
+}
+
+/**
+ * Switch changes waiting for approval, by feature: one read of the open-request lock index
+ * (idx_workflow_requests_open). A failure only hides the pending marks.
+ */
+async function pendingSwitchChanges(db: D1Database | undefined): Promise<Map<FeatureKey, { requestId: string; enabled: boolean }>> {
+  const out = new Map<FeatureKey, { requestId: string; enabled: boolean }>();
+  if (!db) return out;
+  const keys = FEATURE_REGISTRY.map((d) => `features.set:feature:${d.key}`);
+  try {
+    const { results } = await db
+      .prepare(`SELECT id, target_id, payload FROM workflow_requests WHERE open_key IN (${keys.map(() => '?').join(', ')})`)
+      .bind(...keys)
+      .all<{ id: string; target_id: string; payload: string }>();
+    for (const r of results ?? []) {
+      if (!isFeatureKey(r.target_id)) continue;
+      const enabled = (JSON.parse(r.payload) as { enabled?: unknown }).enabled;
+      out.set(r.target_id, { requestId: r.id, enabled: enabled === true });
+    }
+  } catch (error) {
+    logger.warn('[Features] Pending changes unavailable', { error: error instanceof Error ? error.message : String(error) });
+  }
+  return out;
 }
 
 /** api-videos' report; an outage leaves old settings unknown (defaults) and readiness unknown. */
@@ -101,6 +128,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
     const actorIds = [...switches.rows.values()].map((r) => r.updatedBy);
     const names = await resolveNames(c.env.SEARCH_DB as never, { profiles: actorIds });
     const ready: FeatureStateReport['ready'] = { ...state.ready, newsletter: newsletterReady };
+    const pending = await pendingSwitchChanges(c.env.SEARCH_DB as never);
     const items: FeatureItem[] = FEATURE_REGISTRY.map((def) => {
       const row = switches.rows.get(def.key);
       const isReady = ready[def.key] ?? true;
@@ -117,6 +145,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
         updatedAt: row?.updatedAt ?? null,
         updatedBy: row ? { id: row.updatedBy, name: names.profiles.get(row.updatedBy) ?? null } : null,
         canToggle: canToggle(roles(c), def),
+        pending: pending.get(def.key) ?? null,
       };
     });
     return c.json(
@@ -169,6 +198,12 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
       // Switching a money-floored feature off only takes money ability away: immediate (WF-D1)
       const onlyTakesAway = workflowFloorFor('features.set', key).money && input.enabled === false;
       if (!onlyTakesAway && (await ruleNeedsApproval(ctx, 'features.set', key))) {
+        // A stale version is refused now, as a direct write would be, never as a request that can
+        // only fail when it is approved
+        const seen = rows.get(key)?.version ?? 0;
+        if (seen !== input.expectedVersion) {
+          return apiError(c, 409, 'feature_changed', { error: 'feature_changed', current: { enabled: currentStored, version: seen } });
+        }
         try {
           const actor = await ctx.directory.actor(actorOf(c), roles(c) ?? []);
           const def = FEATURE_REGISTRY.find((d) => d.key === key)!;
