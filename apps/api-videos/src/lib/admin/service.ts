@@ -531,6 +531,9 @@ export interface TransferOptions {
 	reason?: string;
 	/** Move only from this owner (an accepted offer): refused with owner_changed when someone else owns it by then */
 	expectedOwnerId?: string;
+	/** The accepted offer this move carries out; asked under the lock whether it still stands */
+	offerId?: string;
+	confirm?: () => Promise<boolean>;
 }
 
 export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
@@ -562,12 +565,13 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 		if (!fresh || fresh.isDeleted) throw new AdminError(404, 'channel_not_found');
 		if (options.expectedOwnerId && fresh.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
 		if (fresh.userId === newOwnerId) throw new AdminError(409, 'already_owner');
+		if (options.confirm && !(await options.confirm())) throw new AdminError(404, 'offer_not_found');
 		job = await createJob(env, {
 			kind: 'channel.transfer',
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
-			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}) },
+			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}), ...(options.offerId ? { offerId: options.offerId } : {}) },
 		});
 	} catch (error) {
 		await releaseTransferLock(env, id, '');
@@ -1170,7 +1174,10 @@ async function endLeftSessions(env: AdminServiceEnv, channelId: string, to: stri
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
-	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean };
+	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin, offerId } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean; offerId?: string };
+	let stopped = false;
+	// The mark of an offer stopped before a later one's took its place
+	const cancelled = offerId ? (await env.SEARCH_DB!.prepare('SELECT status FROM channel_move_offers WHERE id = ?').bind(offerId).first<{ status: string }>())?.status === 'cancelled' : false;
 	const keepAsAdmin = keepPreviousOwnerAsAdmin === true && !!previousOwnerId && previousOwnerId !== newOwnerId;
 	let keptAsAdmin = false;
 	// The sign-in account's email (null: no account yet, e.g. an invite on its way). Auth unreadable: the job retries
@@ -1186,8 +1193,16 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (await channelHasSupport(env, id)) throw new Error('channel_has_support: support was set up after the move was requested');
 	}
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
+		stopped = false;
 		if (fresh.isDeleted) return false;
 		if (fresh.userId === newOwnerId) return false;
+		// One of its people is being erased: the move stops here (lib/channelMoveData.ts). The mark stays until
+		// another move, so this job run again (a retry, a second delivery) stops again
+		if (offerId && (cancelled || fresh.moveStopped === offerId)) {
+			stopped = true;
+			return false;
+		}
+		delete fresh.moveStopped;
 		fresh.userId = newOwnerId;
 		fresh.isMain = makeMain;
 		// The previous owner's addresses: an older record's copy of the account email, and the public contact
@@ -1205,6 +1220,10 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.dateModified = now();
 		return true;
 	});
+	if (stopped) {
+		await releaseTransferLock(env, id, job.id);
+		return { done: true, result: { skipped: 'stopped' } };
+	}
 	if (!saved || saved.isDeleted) {
 		await releaseTransferLock(env, id, job.id);
 		return { done: true, result: { skipped: saved ? 'channel_deleted' : 'channel_not_found' } };

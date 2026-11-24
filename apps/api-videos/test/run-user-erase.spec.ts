@@ -119,6 +119,23 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal((db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'i-open'`).get() as { status: string }).status, 'cancelled');
 	});
 
+	it('stops its channel moves that are under way and takes its id out of the offers (CC-6 review)', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		const ins = db.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES (?, ?, ?, ?, 'accepting', '2026-11-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`);
+		ins.run('o-in', 'chX', 'other', 'run1');
+		ins.run('o-out', 'ch1', 'run1', 'other');
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+		assert.equal(result.complete, true);
+		const kept = JSON.parse(env.channels.store.get('chX')!);
+		assert.deepEqual([kept.userId, kept.moveStopped], ['other', 'o-in'], 'the channel stays with its owner, and the move finds the mark');
+		const rows = db.db.prepare('SELECT * FROM channel_move_offers ORDER BY id').all() as Array<{ status: string }>;
+		assert.deepEqual(rows.map((r) => r.status), ['cancelled', 'cancelled']);
+		assert.equal(JSON.stringify(rows).includes('run1'), false);
+	});
+
 	it('clears it as the tier owner of its live sessions, not someone else\'s', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();
