@@ -24,6 +24,7 @@ import { scanInBackground } from '../../lib/moderation-scan';
 import R2Repository from '../../lib/r2Repo';
 import { broadcastInBackground } from '../../lib/websocket-notify';
 import { allowLiveChatAddress } from '../../middleware/bot-protection';
+import { PollAfterMs } from './pollAfter';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -89,7 +90,7 @@ export class LiveChatList extends OptionalAuthRoute {
 			}),
 		},
 		responses: {
-			'200': Ok(z.object({ messages: z.array(Message), pinned: Message.nullable(), resync: z.boolean(), hasMore: z.boolean(), truncated: z.boolean().optional() }), 'Messages'),
+			'200': Ok(z.object({ messages: z.array(Message), pinned: Message.nullable(), resync: z.boolean(), hasMore: z.boolean(), truncated: z.boolean().optional(), pollAfterMs: PollAfterMs }), 'Messages'),
 			'404': Err('No such stream, or its chat is off'),
 		},
 	};

@@ -37,6 +37,7 @@ import { reminderCounts, shownEventType, switchOn } from '../../lib/live/events'
 import { hasReminder, remindable } from '../../lib/live/reminders';
 import { cancelPremiere, endPremiere, isPremiere, startPremiere } from '../../lib/live/premieres';
 import { chatState } from './liveChat';
+import { PollAfterMs } from './pollAfter';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -170,7 +171,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		summary: 'Live state of a stream',
 		description: 'Polled by Studio (every 5 s) and the watch page. `qoe` tells the player whether to send QoE beacons.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.string(), z.any()), 'The state'), '404': Err('Not found') },
+		responses: { '200': Ok(z.object({ pollAfterMs: PollAfterMs }).passthrough(), 'The state'), '404': Err('Not found') },
 	};
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();

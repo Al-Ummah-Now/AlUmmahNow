@@ -22427,6 +22427,11 @@
                         },
                         "truncated": {
                           "type": "boolean"
+                        },
+                        "pollAfterMs": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "description": "Optional. Milliseconds until this should be read again. Clients keep it between 5000 and 600000, and use their own interval when it is absent. `Retry-After` (seconds) on a 429 or 503 is followed in the same way."
                         }
                       },
                       "required": [
@@ -24092,6 +24097,13 @@
                     },
                     "result": {
                       "type": "object",
+                      "properties": {
+                        "pollAfterMs": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "description": "Optional. Milliseconds until this should be read again. Clients keep it between 5000 and 600000, and use their own interval when it is absent. `Retry-After` (seconds) on a 429 or 503 is followed in the same way."
+                        }
+                      },
                       "additionalProperties": {}
                     }
                   },
