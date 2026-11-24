@@ -252,7 +252,7 @@ describe('content endpoints: permissions', () => {
   it('handle rows keep the previous handle, and the channel a handle was taken from gets its own row (CC-4)', async () => {
     const { db, log } = fakeDb();
     const { fetcher } = fakeVideos({
-      'POST /channels/ch_1/handle/take': () => ({ body: { success: true, result: { handle: 'lamahat', previousHandle: 'ch1-old', tookFrom: 'ch_2', holderHandle: 'early-bird-1' } } }),
+      'POST /channels/ch_1/handle/take': () => ({ body: { success: true, result: { handle: 'lamahat', previousHandle: 'ch1-old', tookFrom: 'ch_2', holderHandle: 'early-bird-1', holderPreviousHandle: 'LamaHat' } } }),
       'POST /channels/ch_1/handle/release': () => ({ body: { success: true, result: { handle: 'ch1-default', previousHandle: 'lamahat' } } }),
     });
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
@@ -263,7 +263,7 @@ describe('content endpoints: permissions', () => {
     assert.deepEqual(take.old, { handle: 'ch1-old' });
     const away = rows.find((r) => r.action === 'handle-taken-away')!;
     assert.match(away.key, /ch_2/);
-    assert.deepEqual(away.old, { handle: 'lamahat' });
+    assert.deepEqual(away.old, { handle: 'LamaHat' }, 'the casing the holder used');
     assert.deepEqual(away.details, { handle: 'early-bird-1', takenFor: 'ch_1', reason: 'Official name back' });
     assert.deepEqual(rows.find((r) => r.action === 'handle-release')!.old, { handle: 'lamahat' });
   });
