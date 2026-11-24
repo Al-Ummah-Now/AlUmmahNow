@@ -60,7 +60,7 @@ export const COMMUNITY_GUIDELINES_EN: CommunityGuidelinesTranslations = {
         'Sexual or indecent content, and any content that sexualises or endangers children.',
         'Graphic violence shown to shock, or content that encourages self-harm.',
         'Spam, scams, fake giveaways, misleading links and fraudulent fundraising.',
-        'Impersonating a person, a scholar, a channel or an organisation.',
+        'Impersonating a person, a scholar, a channel or an organization.',
         'Sharing someone’s private information without consent.',
         'Content you do not have the rights to share.',
       ],
