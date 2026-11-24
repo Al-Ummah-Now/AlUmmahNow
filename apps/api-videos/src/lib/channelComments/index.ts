@@ -491,22 +491,23 @@ const ERASED_BLOCKER = 'deleted-user';
 
 /**
  * Erasure (lib/privacy/user-data.ts): the person's rows in Studio's comment
- * index, the blocks of them, and every row of the channels they owned. A
- * block they placed on a channel they did not own stays (it is the channel's),
- * without their id.
+ * index and the blocks of them. A block they placed on a channel they did not
+ * own stays (it is the channel's), without their id. Their own channels' rows:
+ * eraseCommentsOfChannel.
  */
-export async function eraseChannelComments(db: SearchDb, userId: string, ownedChannelIds: readonly string[]): Promise<void> {
-	const statements = [
+export async function eraseChannelComments(db: SearchDb, userId: string): Promise<void> {
+	await db.batch([
 		db.prepare('DELETE FROM channel_comments WHERE author_user_id = ?').bind(userId),
 		db.prepare('DELETE FROM channel_blocks WHERE user_id = ?').bind(userId),
 		db.prepare('UPDATE channel_blocks SET blocked_by = ? WHERE blocked_by = ?').bind(ERASED_BLOCKER, userId),
-	];
-	for (const channelId of ownedChannelIds) {
-		statements.push(
-			db.prepare('DELETE FROM channel_comments WHERE channel_id = ?').bind(channelId),
-			db.prepare('DELETE FROM channel_blocks WHERE channel_id = ?').bind(channelId),
-			db.prepare('DELETE FROM channel_comments_index_state WHERE channel_id = ?').bind(channelId),
-		);
-	}
-	for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
+	]);
+}
+
+/** Every row a channel holds in Studio's comment index and blocks: deleted with the channel. */
+export async function eraseCommentsOfChannel(db: SearchDb, channelId: string): Promise<void> {
+	await db.batch([
+		db.prepare('DELETE FROM channel_comments WHERE channel_id = ?').bind(channelId),
+		db.prepare('DELETE FROM channel_blocks WHERE channel_id = ?').bind(channelId),
+		db.prepare('DELETE FROM channel_comments_index_state WHERE channel_id = ?').bind(channelId),
+	]);
 }

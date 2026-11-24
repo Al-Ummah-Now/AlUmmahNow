@@ -216,6 +216,7 @@ describe('account export and erasure', () => {
 	it('include live chat and reminders, resumed when the budget runs out; an owned stream goes with its chat', async () => {
 		const { db, ndb, raw, env, settle } = setup();
 		for (const b of ['watch_history', 'upload-defaults', 'channel_sections', 'channel_tabs', 'reports', 'profiles', 'subtitles', 'global_settings']) (env as any)[b] = new MemoryBucket();
+		(env as any).INTERNAL_API_KEY = 'k'.repeat(40);
 		await put(env, record('mine', { userId: 'me', channelId: null }));
 		await put(env, record('theirs'));
 		for (let i = 0; i < 1100; i++) chat(db, `m${String(i).padStart(4, '0')}`, 'theirs', 'me', i);

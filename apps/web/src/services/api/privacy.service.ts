@@ -50,7 +50,8 @@ export const PrivacyService = {
   async exportData(): Promise<Blob> {
     let merged: Record<string, unknown> | null = null;
     let resumeToken: string | undefined;
-    for (let pass = 0; pass < MAX_EXPORT_PASSES; pass++) {
+    let complete = false;
+    for (let pass = 0; pass < MAX_EXPORT_PASSES && !complete; pass++) {
       const query = resumeToken ? `?resume=${encodeURIComponent(resumeToken)}` : '';
       const response = await fetch(`${getApiUrl()}/api/privacy/export${query}`, {
         headers: await getClientAuthHeaders(),
@@ -61,11 +62,21 @@ export const PrivacyService = {
         throw new Error(`export_failed_${response.status}`);
       }
       const part = (await response.json()) as Record<string, unknown>;
-      merged = mergeExport(merged, part);
+      // The server began again (e.g. the pause was too long): this part replaces the earlier ones
+      merged = mergeExport(part.restarted === true ? null : merged, part);
       resumeToken = typeof part.resumeToken === 'string' ? part.resumeToken : undefined;
-      if (part.complete === true || !resumeToken) break;
+      complete = part.complete === true;
+      if (!complete && !resumeToken) break;
     }
-    if (merged) delete merged.resumeToken;
+    // A part must never be downloaded as if it were everything
+    if (!complete) {
+      logger.warn('[PrivacyService] Export did not finish');
+      throw new Error('export_incomplete');
+    }
+    if (merged) {
+      delete merged.resumeToken;
+      delete merged.restarted;
+    }
     return new Blob([JSON.stringify(merged, null, 2)], { type: 'application/json' });
   },
 
@@ -88,6 +99,8 @@ export const PrivacyService = {
       mergeCounts(total.anonymized, result.anonymized);
       total.complete = result.complete === true;
       resumeToken = result.resumeToken;
+      // Nothing to continue from: another pass would only begin again
+      if (!total.complete && !resumeToken) throw new Error('erase_incomplete');
     }
     logger.debug('[PrivacyService] Erasure finished', { complete: total.complete });
     return total;

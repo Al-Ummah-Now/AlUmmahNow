@@ -38,6 +38,11 @@ export class OperationBudget {
 		this.used += count;
 	}
 
+	/** Stop here, spending nothing, unless `count` more operations fit. */
+	reserve(count: number): void {
+		if (this.used + count > this.limit) throw new BudgetExhausted();
+	}
+
 	get spent(): number {
 		return this.used;
 	}

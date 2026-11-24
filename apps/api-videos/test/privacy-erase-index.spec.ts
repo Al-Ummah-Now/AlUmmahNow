@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { runOwnershipPass } from '../src/lib/search/ownership';
-import { DELETED_USER_ID, encodeResumeToken, eraseUserData, type ErasureSummary } from '../src/lib/privacy/user-data';
+import { DELETED_USER_ID, eraseUserData, type ErasureSummary } from '../src/lib/privacy/user-data';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import {
 	FOOTPRINT_BUCKETS,
@@ -164,7 +164,7 @@ async function eraseAll(env: Record<string, unknown>, budget: () => OperationBud
 	let passes = 0;
 	do {
 		const part = await eraseUserData(
-			env as never,
+			{ ...env, INTERNAL_API_KEY: 'k'.repeat(40) } as never,
 			ME,
 			budget(),
 			{
@@ -211,8 +211,8 @@ describe('account erasure through the indexes (#1073)', () => {
 
 		// The fixture's every kind of item was reached
 		assert.deepEqual(comparable(byIndex.summary).videos, ['ls-mine', 'v-member', 'v-mine', 'v-trash']);
-		assert.equal(b.community_posts.read('posts/ch-other/p-guest.json'), null, 'post written on another channel');
-		assert.equal(b.community_posts.read(`likes/p-guest/${OTHER}.json`), null, '... with its subtree');
+		assert.equal(b.community_posts.read('posts/ch-other/p-guest.json').userId, OTHER, 'a post on another channel stays with the channel and goes to its owner');
+		assert.ok(b.community_posts.read(`likes/p-guest/${OTHER}.json`), '... with its subtree');
 		assert.equal(b.community_posts.read('comments/p-other/top-level/pc-mine.json').userId, DELETED_USER_ID);
 		assert.ok(b.community_posts.read(`comment-likes/p-other/pc-o/${OTHER}.json`), 'other people\'s comment likes stay');
 		assert.deepEqual(b.channels.read('ch-other').subscriptions.map((s: { id: string }) => s.id), ['s2']);
@@ -223,7 +223,7 @@ describe('account erasure through the indexes (#1073)', () => {
 		assert.ok(b.reports.read(`claims/v-mine/${OTHER}`));
 		assert.equal(b.channel_tabs.read('channel-handles/mine'), null);
 		assert.equal(b.community_posts.read('post-locations/p-mine'), null, 'an erased post\'s location record goes with it');
-		assert.equal(b.community_posts.read('post-locations/p-guest'), null);
+		assert.ok(b.community_posts.read('post-locations/p-guest'));
 		assertNoTrace(b, db);
 	});
 
@@ -234,7 +234,7 @@ describe('account erasure through the indexes (#1073)', () => {
 		scans.length = 0;
 		const scanned = buckets();
 		const byScan = await eraseAll(scanned, () => new OperationBudget(10_000));
-		const resumed = await eraseAll(env, () => new OperationBudget(14), 2);
+		const resumed = await eraseAll(env, () => new OperationBudget(16), 2);
 		assert.equal(resumed.summary.complete, true);
 		assert.ok(resumed.passes > 5, `needed several passes (${resumed.passes})`);
 		assert.deepEqual(scans, []);
@@ -304,7 +304,7 @@ describe('account erasure through the indexes (#1073)', () => {
 	it('starts over on a resume token from before the index-driven phases', async () => {
 		const b = buckets();
 		const { env } = await indexed(b);
-		const old = encodeResumeToken({ p: 9, o: [], k: [] });
+		const old = Buffer.from(JSON.stringify({ p: 9, o: [], k: [] })).toString('base64url');
 		const summary = await eraseUserData(env as never, ME, new OperationBudget(10_000), {}, { resumeToken: old });
 		assert.equal(summary.complete, true);
 		assert.equal(b.watch_history.read(`${ME}:v-other`), null, 'the first phases ran again');
