@@ -20,6 +20,7 @@ import { batchJob, scrubOrigin, reportServerError, resolveNeedsAction, withError
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { importLegacyRollups } from './lib/analytics-rollup';
+import { purgeExpiredAnalyticsDedupe } from './lib/analytics-counters';
 import { resumeStalledImports } from './lib/post-counters';
 import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
 import type { CategorizeEnv } from './categorize/job';
@@ -55,6 +56,15 @@ interface MessageBatch<T> {
 
 /** Matches max_retries of the moderation consumer in the wrangler configs. */
 export const MODERATION_MAX_RETRIES = 3;
+/** Matches max_retries of the videos consumer in the wrangler configs (then routes to al-ummah-now-dlq). */
+export const VIDEOS_MAX_RETRIES = 3;
+/** Backoff delays (seconds) when retrying a failed analytics counter flush before Cloudflare moves the message to the DLQ. */
+export const ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS = [10, 30, 60] as const;
+
+export function analyticsFlushRetryDelaySeconds(attempts: number): number | undefined {
+  if (attempts > VIDEOS_MAX_RETRIES) return undefined;
+  return ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS[Math.max(0, Math.min(attempts - 1, ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS.length - 1))];
+}
 
 /** Moderation queue (Epic 28): one AI scan per message; see src/moderation/consumer.ts. */
 export async function processModerationBatch(
@@ -344,6 +354,13 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
   } catch (error) {
     logger.error('[Retention] Review alert retention failed', error);
   }
+  // Analytics counter dedupe markers (#1921): bounded indexed delete on idx_analytics_dedupe_expires
+  try {
+    const purged = await purgeExpiredAnalyticsDedupe(env.NOTIFICATIONS_DB, now);
+    if (purged > 0) logger.info('[Retention] Expired analytics dedupe markers deleted', { purged });
+  } catch (error) {
+    logger.error('[Retention] Analytics dedupe retention failed', error);
+  }
   // Inbox read retention and per-user caps (wiki AUN-D1-SCALING D1-2): recently notified users only
   try {
     const trim = await trimNotificationInboxes(env.NOTIFICATIONS_DB, now);
@@ -471,6 +488,7 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   const startedAt = Date.now();
   const retried: string[] = [];
   const deadLettered: string[] = [];
+  const pendingFlush: QueueMessage<AlUmmahMessage>[] = [];
 
   await Promise.allSettled(
     batch.messages.map(async (message: QueueMessage<AlUmmahMessage>) => {
@@ -505,6 +523,9 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
             }
             message.ack();
           }
+        } else if (processor.isPendingCounterFlush(message.body.id)) {
+          // Defer ack until flushCounters commits so a D1 failure retries instead of losing counts (#1921)
+          pendingFlush.push(message);
         } else {
           message.ack();
         }
@@ -523,8 +544,25 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
     })
   );
 
-  // One D1 transaction for the whole batch's analytics increments
-  await processor.flushCounters(env);
+  // One atomic D1 transaction for the whole batch's analytics increments, dedupe markers and viewers.
+  // Only acknowledge counter-bearing messages once the transaction commits; on failure, retry them
+  // so Cloudflare Queues redelivers (up to max_retries, then routes to al-ummah-now-dlq).
+  try {
+    await processor.flushCounters(env);
+    for (const message of pendingFlush) message.ack();
+  } catch (error) {
+    logger.error('[Queue] Analytics counter flush failed; retrying affected messages', {
+      queue: batch.queue,
+      messages: pendingFlush.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    for (const message of pendingFlush) {
+      retried.push(message.body.id);
+      const delaySeconds = analyticsFlushRetryDelaySeconds(message.attempts ?? 1);
+      if (delaySeconds) message.retry({ delaySeconds });
+      else message.retry();
+    }
+  }
 
   // One summary line per batch (info at stage and below; warn when messages were retried or it was slow)
   logger.job({
