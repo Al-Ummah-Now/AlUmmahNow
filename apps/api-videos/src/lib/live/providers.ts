@@ -341,3 +341,26 @@ export const bunnyAdapter: LiveProviderAdapter = {
 const bunnyHls = (env: LiveEnv, guid: string) => `https://${env.bunny_hostname ?? 'video.bunnycdn.com'}/${guid}/playlist.m3u8`;
 
 export const LIVE_ADAPTERS: Record<LiveProviderId, LiveProviderAdapter> = { bunny: bunnyAdapter, selfhosted: selfHostedAdapter };
+
+/** A Bunny live stream's recording (the library video with the stream's guid). */
+export interface BunnyRecording {
+	/** Bunny still has the stream or its recording */
+	exists: boolean;
+	/** Encoded: its files can be read */
+	finished: boolean;
+}
+
+export async function readBunnyRecording(env: LiveEnv, guid: string): Promise<BunnyRecording> {
+	const { key, lib } = await bunnyCreds(env);
+	const res = await fetch(`${BUNNY_API}/library/${lib}/videos/${encodeURIComponent(guid)}`, { headers: { AccessKey: key, accept: 'application/json' } });
+	if (res.status === 404) return { exists: false, finished: false };
+	if (!res.ok) throw new LiveProviderError('bunny', `http_${res.status}`, `Bunny recording lookup: ${res.status}`);
+	return { exists: true, finished: ((await res.json()) as { status?: number }).status === 4 };
+}
+
+/** Deletes the recording at Bunny; one already gone counts. */
+export async function deleteBunnyRecording(env: LiveEnv, guid: string): Promise<void> {
+	const { key, lib } = await bunnyCreds(env);
+	const res = await fetch(`${BUNNY_API}/library/${lib}/videos/${encodeURIComponent(guid)}`, { method: 'DELETE', headers: { AccessKey: key, accept: 'application/json' } });
+	if (!res.ok && res.status !== 404) throw new LiveProviderError('bunny', `http_${res.status}`, `Bunny recording delete: ${res.status}`);
+}

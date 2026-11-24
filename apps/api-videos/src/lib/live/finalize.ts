@@ -78,7 +78,7 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 		.bind(results?.length ?? 0, (results ?? []).reduce((n, r) => n + (r.bytes || 0), 0), session.id)
 		.run();
 	if (!opts.recordVod || !byRendition.size) {
-		if (!opts.recordVod) await deletePrefix(bucket, base);
+		if (!opts.recordVod && !(await keptForTakedown(env, session.stream_id))) await deletePrefix(bucket, base);
 		await d1.prepare('UPDATE live_sessions SET r2_writes = r2_writes + ? WHERE id = ?').bind(writes, session.id).run();
 		return;
 	}
@@ -102,6 +102,13 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 	const ready = await readSession(d1, session.id);
 	if (ready?.vod_url) await vodReady(env, ready);
 	logger.info('[Live] Self-hosted VOD ready', { sessionId: session.id, renditions: byRendition.size, segments: results?.length ?? 0, ms: readyAt - now });
+}
+
+/** A takedown keeps what was streamed before it removes it (lib/csam/contain.ts): ending the stream must not remove it first. */
+async function keptForTakedown(env: LiveEnv, streamId: string): Promise<boolean> {
+	const object = await (env as { videos?: R2Bucket }).videos?.get(`livestream:${streamId}`);
+	const stream = object ? ((await object.json().catch(() => null)) as { csamTakedown?: unknown } | null) : null;
+	return !!stream?.csamTakedown;
 }
 
 function syntheticMaster(renditions: string[]): string {

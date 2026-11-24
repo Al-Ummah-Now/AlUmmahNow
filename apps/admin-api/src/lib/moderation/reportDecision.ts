@@ -61,10 +61,15 @@ export function assertMayDecide(roles: readonly unknown[] | undefined, action: M
   }
 }
 
-/** The item as api-videos has it now, for the types whose decision needs it. Null when it could not be read. */
+/** Who made the item, as its reports keep it (the copy stays when the item goes, never when the person was erased). */
+export async function knownOwner(env: DecisionEnv, type: string, id: string): Promise<string | null> {
+  const row = await env.REPORTS_DB.prepare('SELECT owner_id FROM reports WHERE entity_type = ? AND entity_id = ? AND owner_id IS NOT NULL AND owner_id <> ? LIMIT 1').bind(type, id, DELETED_USER_ID).first<{ owner_id: string }>();
+  return row?.owner_id ?? null;
+}
+
+/** The item as api-videos has it now. Null when it could not be read. */
 export async function decidableItem(env: DecisionEnv, type: string, id: string): Promise<AdminLookupItem | null> {
-  if (type !== 'comment' && type !== 'post') return null;
-  const lookup = await lookupMany(env, [{ type, id }], []);
+  const lookup = await lookupMany(env, [{ type: type as ReportableEntityType, id }], []);
   return lookup?.items.get(itemKey(type, id)) ?? null;
 }
 
@@ -86,7 +91,8 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
   const { entity_type: entityType, entity_id: entityId } = reports[0];
   const db = env.REPORTS_DB;
   const item = await decidableItem(env, entityType, entityId);
-  const option = reportOutcomeOptions({ type: entityType as ReportableEntityType, item, may: (p) => hasContentPermission(input.roles, p) }).find((o) => o.action === action);
+  const ownerId = (item?.found ? item.ownerId : await knownOwner(env, entityType, entityId)) ?? null;
+  const option = reportOutcomeOptions({ type: entityType as ReportableEntityType, item, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, may: (p) => hasContentPermission(input.roles, p) }).find((o) => o.action === action);
   if (!option) throw refusal('not_for_type');
   if (option.reason) throw refusal(option.reason);
   if (!item && action !== 'dismissed' && (entityType === 'comment' || entityType === 'post')) {
@@ -115,7 +121,7 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
   let effect: ReportDecisionEffect = { performed: false, action, notes: 'No action taken' };
   if (action !== 'dismissed') {
     try {
-      effect = await perform(env, { entityType, entityId, action, notes, actorId, reportIds: claimed, item, roles: input.roles });
+      effect = await perform(env, { entityType, entityId, action, notes, actorId, reportIds: claimed, item, ownerId, roles: input.roles });
     } catch (error) {
       logger.error('[Moderation] Decision could not be applied; reopening the reports', {
         entityType,
@@ -186,6 +192,7 @@ async function perform(
     actorId: string;
     reportIds: string[];
     item: AdminLookupItem | null;
+    ownerId: string | null;
     roles: readonly unknown[] | undefined;
   },
 ): Promise<ReportDecisionEffect> {
@@ -193,9 +200,8 @@ async function perform(
   let bannedUserId: string | null | undefined;
 
   if (p.action === 'banned') {
-    const lookup = await lookupMany(env, [{ type: p.entityType as never, id: p.entityId }], []);
-    if (!lookup) throw new Error('The item\'s owner could not be looked up');
-    const ownerId = lookup.items.get(`${p.entityType}:${p.entityId}`)?.ownerId ?? null;
+    if (!p.item) throw new Error('The item\'s owner could not be looked up');
+    const { ownerId } = p;
     // An owner whose account was erased is nobody to ban
     if (ownerId && ownerId !== DELETED_USER_ID) {
       await banVideosUser(env, {
@@ -264,8 +270,8 @@ async function changeItem(
   if (p.entityType === 'post') {
     const channelId = p.item?.channelId;
     if (!channelId) return { found: false, changed: false };
-    // A post is hidden by the admin delete: a ban alone leaves one written on someone else's channel
-    if (!hasContentPermission(p.roles, 'content:delete')) throw refusal('permission');
+    // A post is hidden by the admin delete (content:delete, checked with the outcome): a ban alone leaves one
+    // written on someone else's channel
     if (p.item?.isDeleted) return { found: true, changed: false };
     return adminDelete(env, p, 'post', `/posts/${encodeURIComponent(channelId)}/${encodeURIComponent(p.entityId)}`, { channelId });
   }

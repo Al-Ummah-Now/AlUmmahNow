@@ -4,7 +4,8 @@ import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { hasContentPermission, reportOutcomeOptions, REPORT_OUTCOMES, type ReportableEntityType } from '@al-ummah/shared-types';
 import { ResponseError, ReportSchema, type Report } from "../../lib/types";
-import { decidableItem, type DecisionEnv } from '../../lib/moderation/reportDecision';
+import { decidableItem, knownOwner, type DecisionEnv } from '../../lib/moderation/reportDecision';
+import { DELETED_USER_ID } from '../../lib/moderation/reportMeta';
 import { logger } from "../../lib/logger";
 
 export class ReportGet extends AdminRoute {
@@ -76,13 +77,17 @@ export class ReportGet extends AdminRoute {
         moderatorId: this.getUserId(c)
       });
 
+      const item = await decidableItem(c.env as DecisionEnv, report.entity_type, report.entity_id);
+      const ownerId = item?.found ? item.ownerId : await knownOwner(c.env as DecisionEnv, report.entity_type, report.entity_id);
+
       return {
         success: true,
         result: {
           report,
           outcomes: reportOutcomeOptions({
             type: report.entity_type as ReportableEntityType,
-            item: await decidableItem(c.env as DecisionEnv, report.entity_type, report.entity_id),
+            item,
+            ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID,
             may: (permission) => hasContentPermission(this.getRoles(c), permission),
           }),
         },

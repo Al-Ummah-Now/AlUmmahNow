@@ -506,12 +506,14 @@ export async function readItem(env: MetaEnv, type: ReportableEntityType, id: str
   const anyRow = open[0] ?? closed[0];
   const lookup = await lookupMany(env, [{ type, id }], [...people, anyRow?.owner_id ?? '']) ?? groupLookup;
   const copy: ItemCopy = anyRow ?? { entity_type: type, entity_id: id, entity_title: null, entity_parent_id: null, channel_id: null, channel_name: null, owner_id: null, owner_name: null };
+  const live = lookup?.items.get(itemKey(type, id)) ?? null;
+  const ownerId = live?.found ? live.ownerId : [...open, ...closed].map((r) => r.owner_id).find((o) => o && o !== DELETED_USER_ID);
   return {
     group: groups[0] ?? null,
     item: itemSummary(copy, lookup),
     open: open.map((r) => excerpt(r, lookup)),
     history: closed.map((r) => historyRow(r, lookup)),
-    outcomes: reportOutcomeOptions({ type, item: lookup?.items.get(itemKey(type, id)) ?? null, may: (p) => hasContentPermission(roles, p) }),
+    outcomes: reportOutcomeOptions({ type, item: live, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, may: (p) => hasContentPermission(roles, p) }),
   };
 }
 

@@ -109,7 +109,10 @@ async function siteResolution(env: ResolveEnv, target: Extract<CsamUrlTarget, { 
 	if (!entry || !target.item || !target.id) return { ok: false, reason: 'not_found', target };
 	const found = target.item === 'video' ? await videoResolution(env, target.id, 'video', target) : await postResolution(env, target.id, entry.channelId, target);
 	// A site shows its own channel only: another channel's item was not on that page
-	return found.ok && found.resolution.channelId !== entry.channelId ? { ok: false, reason: 'not_found', target } : found;
+	if (found.ok && found.resolution.channelId !== entry.channelId) return { ok: false, reason: 'not_found', target };
+	// A comment on it: the comment, never the item
+	if (found.ok && target.commentId) return commentResolution(env, { kind: 'comment', on: target.item, parentId: target.id, commentId: target.commentId });
+	return found;
 }
 
 export async function resolveCsamUrl(env: ResolveEnv, input: string): Promise<ResolveOutcome> {

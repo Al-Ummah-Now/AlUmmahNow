@@ -8,12 +8,12 @@ import { RUN_ID, VIDEOS_API_URL } from './env';
 
 const token = () => readTokens().superadmin;
 
-async function videosApi(path: string, init: RequestInit = {}): Promise<{ status: number; result: Record<string, any> | undefined }> {
+async function videosApi(path: string, init: RequestInit = {}): Promise<{ status: number; result: { channel?: { id?: string }; videoId?: string } | undefined }> {
   const res = await fetch(`${VIDEOS_API_URL}${path}`, {
     ...init,
     headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json', ...(init.headers as Record<string, string>) },
   });
-  const body = (await res.json().catch(() => ({}))) as { result?: Record<string, any> };
+  const body = (await res.json().catch(() => ({}))) as { result?: { channel?: { id?: string }; videoId?: string } };
   return { status: res.status, result: body.result };
 }
 

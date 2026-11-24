@@ -23,6 +23,7 @@ import { getSecret } from '../env-helpers';
 import { findStoredComment, type StoredComment } from '../comments';
 import { locatePostComment } from '../channelComments/moderation';
 import { streamKey } from '../live/streams';
+import { readParts, recordingFiles, recordingParts, storedRecordings, type RecordingEnv } from './recordings';
 import { sourceCandidates, type MediaEnv } from '../media/r2-delivery';
 import { imagePathOf } from './imageOwners';
 import { CHUNK_BYTES, SEALED_CHUNK_BYTES, evidenceKeys, openChunk, openJson, sealChunk, sealJson, sha256Hex, type EvidenceKeys } from './crypto';
@@ -47,7 +48,11 @@ export type EvidenceSource =
 	| { type: 'r2'; bucket: 'MEDIA' | 'MEDIA_PRIVATE' | 'MEDIA_ORIGINALS'; key: string }
 	| { type: 'original'; videoId: string; uploadId: string; size: number }
 	| { type: 'image'; path: string }
-	| { type: 'bunny'; videoId: string };
+	| { type: 'bunny'; videoId: string }
+	/** A self-hosted live session's rendition, as one file (recordings.ts) */
+	| { type: 'live'; sessionId: string; rendition: string }
+	/** A Bunny live recording */
+	| { type: 'bunny_live'; guid: string };
 
 export interface PlannedFile {
 	name: string;
@@ -169,6 +174,7 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		await snapshot('record-live-stream.json', `videos/${streamKey(r.streamId)}`, await json(env.videos, streamKey(r.streamId)));
 		const sessions = await env.SEARCH_DB?.prepare('SELECT * FROM live_sessions WHERE stream_id = ? ORDER BY created_at LIMIT 100').bind(r.streamId).all();
 		if (sessions?.results?.length) await snapshot('record-live-sessions.json', `live_sessions/${r.streamId}`, sessions.results);
+		files.push(...recordingFiles(await storedRecordings(env as RecordingEnv, r.streamId)));
 	}
 	if (r.channelId) await snapshot('record-channel.json', `channels/${r.channelId}`, await json(env.channels, r.channelId));
 	if (r.uploaderId) await snapshot('record-uploader-profile.json', `profiles/${r.uploaderId}`, await json(env.profiles, r.uploaderId));
@@ -247,9 +253,17 @@ async function openSource(env: EvidenceEnv, source: EvidenceSource, state: CopyS
 		if (!key || !env.ZONE) return null;
 		return rangedHttp(`https://storage.bunnycdn.com/${env.ZONE}${source.path.split('/').map(encodeURIComponent).join('/')}`, { AccessKey: key });
 	}
+	if (source.type === 'live') {
+		const parts = await recordingParts(env as RecordingEnv, source.sessionId, source.rendition);
+		if (!parts.length) return null;
+		return {
+			size: parts.reduce((n, p) => n + p.size, 0),
+			read: (offset, length) => readParts((env as RecordingEnv).LIVE_MEDIA!, parts, offset, length),
+		};
+	}
 	// Bunny Stream: the first candidate that answers (the original when Bunny serves it, else the best MP4)
-	const record = await json<Record<string, any>>(env.videos, source.videoId);
-	const candidates = await sourceCandidates(env as unknown as MediaEnv, source.videoId, record as never);
+	const record = source.type === 'bunny' ? await json<Record<string, any>>(env.videos, source.videoId) : null;
+	const candidates = await sourceCandidates(env as unknown as MediaEnv, source.type === 'bunny' ? source.videoId : source.guid, record as never);
 	const ordered = state.bunnyFile ? candidates.filter((u) => u.includes(`/${state.bunnyFile}`)) : candidates;
 	for (const url of ordered) {
 		const ranged = await rangedHttp(url, {});
@@ -267,7 +281,7 @@ export type CopyStep =
 	| { status: 'copying'; state: CopyState }
 	| { status: 'file_done'; file: CsamEvidenceFile | null; missing?: { name: string; source: string; reason: string } };
 
-const label = (s: EvidenceSource) => (s.type === 'r2' ? `${s.bucket}/${s.key}` : s.type === 'original' ? `MEDIA_ORIGINALS/${originalPrefix(s.videoId)}${s.uploadId}/` : s.type === 'image' ? `images${s.path}` : `bunny/${s.videoId}`);
+const label = (s: EvidenceSource) => (s.type === 'r2' ? `${s.bucket}/${s.key}` : s.type === 'original' ? `MEDIA_ORIGINALS/${originalPrefix(s.videoId)}${s.uploadId}/` : s.type === 'image' ? `images${s.path}` : s.type === 'live' ? `LIVE_MEDIA/live/${s.sessionId}/${s.rendition}/` : s.type === 'bunny_live' ? `bunny/${s.guid}` : `bunny/${s.videoId}`);
 
 /** Copies up to STEP_CHUNKS chunks of one planned file. Call again with the returned state until file_done. */
 export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, planned: PlannedFile, state: CopyState): Promise<CopyStep> {

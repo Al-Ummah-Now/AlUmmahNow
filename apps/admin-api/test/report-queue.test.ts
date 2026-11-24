@@ -14,7 +14,7 @@ import suggestRouter from '../src/routers/suggest.router';
 import moderationRouter from '../src/routers/moderation.router';
 import { buildHistorySql, buildQueueSql, endOf, likeTerm, parseHistoryQuery, parseQueueQuery, QueueQueryError, sharedWhere } from '../src/lib/moderation/reportQueue';
 import { syncReportMeta } from '../src/lib/moderation/reportMeta';
-import { eraseTombstoneKey } from '@al-ummah/shared-types';
+import { eraseTombstoneKey, reportOutcomeOptions } from '@al-ummah/shared-types';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { sqliteD1 } from './d1-sqlite';
@@ -25,6 +25,7 @@ interface VideosCall { method: string; path: string; body: any; actor: string | 
 const ITEMS: Record<string, any> = {
   'video:v_1': { found: true, title: 'Bad video', parentId: null, channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
   'live_chat:m_1': { found: true, title: 'rude message', parentId: 's_1', channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
+  'livestream:s_1': { found: true, title: 'Halqa', parentId: null, channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
   'comment:pc_1': { found: true, title: 'rude reply', parentId: 'p_1', parentType: 'post', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
   'post:p_1': { found: true, title: 'bad post', parentId: null, channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
   'comment:c_1': { found: true, title: 'rude words', parentId: 'v_9', parentType: 'video', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
@@ -397,6 +398,32 @@ describe('reports queue: decisions', () => {
       }
     });
 
+    it('banning over a post needs content:delete too, checked before anyone is banned', () => {
+      const may = (p: string) => p === 'users:manage';
+      const banned = (type: 'post' | 'comment' | 'video', found = true) => reportOutcomeOptions({ type, item: { found }, ownerKnown: true, may }).find((o) => o.action === 'banned')!;
+      assert.deepEqual(banned('post'), { action: 'banned', available: false, reason: 'permission' });
+      assert.equal(banned('comment').available, true);
+      assert.equal(banned('video').available, true);
+      assert.equal(banned('post', false).available, true, 'a post that is gone leaves nothing to delete');
+    });
+
+    it('the person who made something that is gone can still be banned, when its reports say who', async () => {
+      for (const [type, id] of [['comment', 'gone_c'], ['post', 'gone_p'], ['video', 'gone_v'], ['live_chat', 'gone_m']]) {
+        const t = setup(report(type, id), { live: { found: false, changed: false } });
+        await t.db.prepare("UPDATE reports SET owner_id = 'usr_commenter'").run();
+        assert.equal((await act(t, type, id, 'removed')).status, 409);
+        const res = await act(t, type, id, 'banned');
+        assert.equal(res.status, 200, JSON.stringify(res.body));
+        assert.equal(res.body.result.contentAction.bannedUserId, 'usr_commenter');
+        assert.deepEqual(await closed(t), { status: 'resolved', action: 'banned' });
+        // Not someone whose account was erased
+        const e = setup(report(type, id), { live: { found: false, changed: false } });
+        await e.db.prepare("UPDATE reports SET owner_id = 'deleted-user'").run();
+        assert.equal((await act(e, type, id, 'banned')).body.code, 'item_gone');
+        assert.equal(e.calls.filter((c) => c.path.endsWith('/ban')).length, 0);
+      }
+    });
+
     it('a failed change reopens the report and leaves no audit row', async () => {
       for (const [type, id, action, opts] of [['comment', 'c_1', 'removed', { hold: { status: 500 } }], ['comment', 'c_1', 'deleted', { deleteStatus: 500 }], ['post', 'p_1', 'deleted', { deleteStatus: 500 }]] as const) {
         const t = setup(report(type, id), opts);
@@ -439,6 +466,9 @@ describe('reports queue: decisions', () => {
       assert.deepEqual(await options('comment', 'c_1', 'moderator'), { warning: 'not_for_type', removed: 'ok', banned: 'permission', deleted: 'permission', dismissed: 'ok' });
       assert.deepEqual(await options('comment', 'pc_1'), { warning: 'not_for_type', removed: 'ok', banned: 'ok', deleted: 'not_for_post_comment', dismissed: 'ok' });
       assert.deepEqual(await options('post', 'p_1'), { warning: 'not_for_type', removed: 'not_for_type', banned: 'ok', deleted: 'ok', dismissed: 'ok' });
+      for (const type of ['video', 'channel', 'playlist', 'livestream']) assert.deepEqual(await options(type, 'nope'), { warning: 'item_gone', removed: 'item_gone', banned: 'item_gone', deleted: 'item_gone', dismissed: 'ok' }, type);
+      assert.deepEqual(await options('live_chat', 'nope'), { warning: 'not_for_type', removed: 'item_gone', banned: 'item_gone', deleted: 'item_gone', dismissed: 'ok' });
+      assert.deepEqual(await options('post', 'p_1', 'moderator'), { warning: 'not_for_type', removed: 'not_for_type', banned: 'permission', deleted: 'permission', dismissed: 'ok' });
       assert.deepEqual(await options('comment', 'nope'), { warning: 'not_for_type', removed: 'item_gone', banned: 'item_gone', deleted: 'item_gone', dismissed: 'ok' });
     });
   });

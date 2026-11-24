@@ -198,8 +198,8 @@ function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
         <div className="mt-3" data-testid="csam-evidence-missing">
           <p className="text-sm font-medium text-fg">{t('csamPage.evidence.missing')}</p>
           <ul className="list-disc ms-5 text-sm text-fg-muted">
-            {c.evidence.missing.map((m) => (
-              <li key={m.name}><bdi dir="ltr">{m.name}: {m.reason}</bdi></li>
+            {c.evidence.missing.map((m, i) => (
+              <li key={`${m.name}:${i}`}><bdi dir="ltr">{m.name}: {m.reason}</bdi></li>
             ))}
           </ul>
         </div>

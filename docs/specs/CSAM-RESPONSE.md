@@ -34,7 +34,7 @@ Only **super admins** (`isSuperAdmin`, shared `roles.ts`) can see the CSAM pages
 
 ## 2. Intake
 
-**Paste.** The super admin pastes the email, a list of paths or URLs, or one URL at `/moderation/csam`. `extractCsamUrls` (shared-types `csam.ts`) pulls out up to 200 of our URLs.
+**Paste.** The super admin pastes the email, a list of paths or URLs, or one URL at `/moderation/csam`. `scanCsamUrls` (shared-types `csam.ts`) pulls out up to 200 of our URLs: only a token that starts with one of our hosts counts, never a host named inside another URL. What opened no case is listed back with the reason (not one of our sites, a console page, a port, not a URL).
 
 **Webhook.** `POST /webhooks/cloudflare/notifications` on admin-api, which is public. The request must carry `cf-webhook-auth` with the webhook secret, and anything else gets a 401.
 - A super admin generates the secret on the CSAM settings page (step-up, audited). It is shown once.
@@ -67,11 +67,11 @@ Each URL becomes one **case**. A URL that already has an open case is attached t
 
 **Hosts.** Site pages count on `videos.`, `www.` and the apex, in every environment (`qa.`, `stage.`), on `.net`, `.com` and `.org`. The check is anchored, so look-alike names (`alummahnow.net.example.com`, `evil-alummahnow.net`) and other ports are refused. Any other name in our zones is ours too (`cms.`, `auth.`, …), except the admin and status consoles. A page of someone else's domain is refused unless the site host index holds that domain.
 
-**A comment URL never acts on what it is on.** When the comment it names is gone, or it names comments without saying which (`#comments`), the case stays unmapped.
+**A comment URL never acts on what it is on.** One function (`csamUrlPart`) decides it for every host and shape, short links, scholar sites and files included, before anything else. When the comment it names is gone, or it names comments without saying which (`#comments`), the case stays unmapped.
 
-**Ours, but no single item** (a channel, playlist, profile, search, a file we do not know): the case opens as unmapped.
+**Ours, but no single item** (a channel, playlist, profile, search, a file we do not know, a page that names two items, a malformed path): the case opens as unmapped.
 
-Optimizer URLs (`/_next/image?url=…`, `/cdn-cgi/image/<opts>/…`) are unwrapped first. An encoded slash or dot segment makes a URL unmappable.
+Optimizer URLs (`/_next/image?url=…`, `/cdn-cgi/image/<opts>/…`) are unwrapped first. Only our own hosts are unwrapped. An encoded slash or dot segment makes a URL unmappable.
 
 **The image index.** `image_owners` lives in SEARCH_DB (migration 0037). Avatar and cover paths carry only a random id, so every upload records who uploaded the image: profile and channel avatars and covers, post images, GIFs and link-preview copies.
 - The `images.index-owners` job fills the index from the images already stored.
@@ -102,7 +102,7 @@ Every touched record keeps a `csamTakedown` mark (case id, time, the removed URL
 | `purge` | Deletes the video record, its side records, the original, the Bunny Stream video and its notifications. A post is deleted for good. |
 | `ban` | Bans the uploader on videos (`videos_bans` and the holds job) and writes the final manifest. |
 
-The order guarantees that nothing is destroyed before it is kept. The public copies go first, so the window during which a stray public URL still answers stays short. **Live recordings.** The takedown does not copy or delete a live stream's recording (`live/<session>/` in the live bucket, or Bunny). When one is still stored, the job ends as **failed** after the stream is hidden, its records are kept and its uploader is banned: the manifest lists the recording as missing, and the case stays `containment_failed`. A person keeps a copy, removes the recording, and retries from the case page.
+The order guarantees that nothing is destroyed before it is kept. The public copies go first, so the window during which a stray public URL still answers stays short. **Live recordings** (`lib/csam/recordings.ts`). A self-hosted recording is copied as one playable file (the best rendition's init segment and its segments, in order) with the public files, then every object of the session is deleted and its CDN prefix purged. A Bunny recording is copied from Bunny's best file, then deleted at Bunny. The stream's record is marked before it is ended, so ending it removes nothing first. A recording that cannot be copied is never deleted: the step fails, is retried with backoff, and the case says what to do (wait for Bunny to finish processing, or download it, keep it with the case, delete it there), then Retry. Once it is gone from its source, the retry finishes and the manifest lists it as missing.
 
 A takedown never goes through `admin_deletions`, so no admin can restore it. Nothing lifts the `csam` hold.
 

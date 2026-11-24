@@ -49,6 +49,7 @@ import { swapPinnedPointer } from '../community-comments';
 import { bumpPostComments, postChannelId } from '../community-posts';
 import { moderateLive } from '../admin/liveModeration';
 import { streamKey } from '../live/streams';
+import { deleteBunny, deleteSessionMedia, forgetRecording, recordingInstruction, storedRecordings, type RecordingEnv, type StoredRecording } from './recordings';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -241,34 +242,48 @@ async function hideComment(env: ContainEnv, caseId: string, r: CsamResolution): 
 	return !!saved;
 }
 
-/** Ends the stream and hides it for good (the hold no restore lifts). */
+/** Ends the stream and hides it for good (the hold no restore lifts). Marked first: ending it must not remove what was streamed. */
 async function hideStream(env: ContainEnv, caseId: string, streamId: string): Promise<boolean> {
-	// The reason is read by the stream's owner and by moderators, so it never says why
-	const done = await moderateLive(env as never, { entityType: 'livestream', entityId: streamId, action: 'removed', notes: `Trust and safety action (ref ${caseId})`, actorId: CSAM_ACTOR });
-	if (!done.found) return false;
 	const saved = await repo(env.videos).updateObject(streamKey(streamId), (stream) => {
 		const changed = applySuspensionHold(stream as SuspendableRecord, CSAM_HOLD);
 		if (stream.csamTakedown) return changed;
 		stream.csamTakedown = mark(caseId);
 		return true;
 	});
-	return !!saved;
+	if (!saved) return false;
+	// The reason is read by the stream's owner and by moderators, so it never says why
+	await moderateLive(env as never, { entityType: 'livestream', entityId: streamId, action: 'removed', notes: `Trust and safety action (ref ${caseId})`, actorId: CSAM_ACTOR });
+	return true;
 }
 
-/** Recordings of a stream that are still stored. A takedown neither copies nor deletes them. */
-async function storedRecordings(env: ContainEnv, streamId: string): Promise<string[]> {
-	const { results } = await env.SEARCH_DB!.prepare('SELECT id, provider, provider_ref, vod_url FROM live_sessions WHERE stream_id = ? ORDER BY created_at LIMIT 100').bind(streamId).all<{ id: string; provider: string; provider_ref: string | null; vod_url: string | null }>();
-	const out: string[] = [];
-	for (const s of results ?? []) {
-		if (s.provider === 'bunny') {
-			if (s.vod_url) out.push(`bunny/${s.provider_ref ?? s.id}`);
-			continue;
-		}
-		const media = (env as { LIVE_MEDIA?: R2Bucket }).LIVE_MEDIA;
-		const listed = media ? await media.list({ prefix: `live/${s.id}/`, limit: 1 }) : null;
-		if (!media || listed!.objects.length) out.push(`LIVE_MEDIA/live/${s.id}/`);
+/** The names of the evidence files that were kept. */
+const keptNames = (p: ContainParams) => new Set((p.copied ?? []).map((f) => f.name));
+
+/** Whether a recording's copy is in the store (or there was nothing to copy: no segments). */
+function recordingKept(p: ContainParams, r: StoredRecording): boolean {
+	const kept = keptNames(p);
+	const planned = (p.files ?? []).filter((f) => (f.source.type === 'live' && f.source.sessionId === r.sessionId) || (f.source.type === 'bunny_live' && f.source.guid === r.guid));
+	return planned.length > 0 && planned.every((f) => kept.has(f.name));
+}
+
+/** Removes the recordings whose copies are in the store, one provider at a time (self-hosted ones with the public files). */
+async function purgeRecordings(env: ContainEnv, p: ContainParams, provider: StoredRecording['provider']): Promise<number> {
+	let removed = 0;
+	for (const r of await storedRecordings(env as RecordingEnv, p.resolution.streamId!)) {
+		// A session with no segment holds playlists only: nothing was streamed
+		const nothing = r.provider === 'selfhosted' && !r.rendition;
+		if (r.provider !== provider || (!nothing && !recordingKept(p, r))) continue;
+		if (provider === 'selfhosted') await deleteSessionMedia(env as RecordingEnv, r.sessionId);
+		else await deleteBunny(env as RecordingEnv, r.guid!);
+		await forgetRecording(env as RecordingEnv, r.sessionId);
+		removed++;
 	}
-	return out;
+	const host = (env as { LIVE_PUBLIC_HOST?: string }).LIVE_PUBLIC_HOST;
+	if (provider === 'selfhosted' && host) {
+		const { results } = await env.SEARCH_DB!.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' LIMIT 200").bind(p.resolution.streamId!).all<{ id: string }>();
+		if (results?.length && (await purgeCdn(env as never, { prefixes: results.map((s) => `${host}/hls/${s.id}/`) })) === 'failed') throw new Error('Cloudflare cache purge failed');
+	}
+	return removed;
 }
 
 async function removeFromPostIndex(env: ContainEnv, channelId: string, postId: string): Promise<void> {
@@ -343,8 +358,19 @@ async function imagePathsOf(env: ContainEnv, r: CsamResolution): Promise<string[
 
 const fileStages = (files: PlannedFile[]) =>
 	files
-		.map((f) => ({ ...f, stage: (f.source.type === 'original' || f.source.type === 'bunny' ? 'source' : 'public') as 'public' | 'source' }))
+		.map((f) => ({ ...f, stage: (f.source.type === 'original' || f.source.type === 'bunny' || f.source.type === 'bunny_live' ? 'source' : 'public') as 'public' | 'source' }))
 		.sort((a, b) => (a.stage === b.stage ? 0 : a.stage === 'public' ? -1 : 1));
+
+/**
+ * A recording that could not be copied counts as missing only when it is not stored any more (a person kept and
+ * removed it). While it is, the step fails and is tried again, and nothing after it runs.
+ */
+async function recordingMustBeGone(env: ContainEnv, p: ContainParams, file: PlannedFile): Promise<void> {
+	const { source } = file;
+	if (source.type !== 'live' && source.type !== 'bunny_live') return;
+	const stored = (await storedRecordings(env as RecordingEnv, p.resolution.streamId!)).find((r) => (source.type === 'live' ? r.sessionId === source.sessionId : r.guid === source.guid));
+	if (stored) throw new Error(`Nobody can reach the stream. ${recordingInstruction(stored, false)}`);
+}
 
 async function copyPhase(env: ContainEnv, p: ContainParams, stage: 'public' | 'source', next: ContainPhase): Promise<ContainParams> {
 	const keys = await evidenceKeys(env);
@@ -354,6 +380,7 @@ async function copyPhase(env: ContainEnv, p: ContainParams, stage: 'public' | 's
 	if (index >= files.length || files[index]!.stage !== stage) return { ...p, phase: next, file: index, copy: undefined };
 	const step = await copyStep(env, keys, p.caseId, files[index]!, p.copy ?? { file: index, parts: [], chunk: 0, chunkSha256: [], bytes: 0 });
 	if (step.status === 'copying') return { ...p, file: index, copy: step.state };
+	if (step.missing) await recordingMustBeGone(env, p, files[index]!);
 	const copied = [...(p.copied ?? []), ...(step.file ? [step.file] : [])];
 	const missing = [...(p.missing ?? []), ...(step.missing ? [step.missing] : [])];
 	// The manifest follows every finished file, so a later failure still leaves a readable case
@@ -369,6 +396,7 @@ async function purgePublic(env: ContainEnv, p: ContainParams): Promise<ContainPa
 	let deleted = 0;
 	for (const path of paths) if ((await deleteStoredImage(env, path)) === 'deleted') deleted++;
 	purge.images = deleted;
+	if (r.kind === 'live_stream') purge.recordings = await purgeRecordings(env, p, 'selfhosted');
 	const urls = paths.map(imageUrlOf);
 	const cdn = await purgeCdn(env as never, { files: urls });
 	if (cdn === 'failed') throw new Error('Cloudflare cache purge failed');
@@ -395,6 +423,7 @@ async function purgeItem(env: ContainEnv, p: ContainParams): Promise<ContainPara
 		await env.community_posts.delete(postKey(r.channelId, r.postId));
 		purge.post = 'deleted';
 	}
+	if (r.kind === 'live_stream') purge.bunnyRecordings = await purgeRecordings(env, p, 'bunny');
 	if (r.kind === 'comment') purge.comment = (await eraseCommentText(env, p.caseId, r)) ? 'deleted' : 'gone';
 	return { ...p, phase: 'ban', purge };
 }
@@ -435,8 +464,12 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		}
 	}
 	const keys = await evidenceKeys(env);
-	const recordings = p.resolution.kind === 'live_stream' ? await storedRecordings(env, p.resolution.streamId!) : [];
-	const missing = [...(p.missing ?? []), ...recordings.map((source) => ({ name: 'live-recording', source, reason: 'kept at its source: the takedown does not copy live recordings' }))];
+	if (p.resolution.kind === 'live_stream') for (const provider of ['selfhosted', 'bunny'] as const) await purgeRecordings(env, p, provider);
+	const left = p.resolution.kind === 'live_stream' ? await storedRecordings(env as RecordingEnv, p.resolution.streamId!) : [];
+	const missing = [
+		...(p.missing ?? []).filter((m) => !m.name.startsWith('06-live-recording') || !left.length),
+		...left.filter((r) => !recordingKept(p, r)).map((r, i) => ({ name: `live-recording-${i + 1}`, source: r.guid ? `bunny/${r.guid}` : `LIVE_MEDIA/live/${r.sessionId}/`, reason: recordingInstruction(r, false) })),
+	];
 	await writeManifest(env, keys, {
 		v: 1,
 		caseId: p.caseId,
@@ -445,10 +478,10 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		files: p.copied ?? [],
 		missing,
 		createdAt: p.createdAt,
-		...(recordings.length ? {} : { completedAt: now() }),
+		...(left.length ? {} : { completedAt: now() }),
 	});
-	// Not contained while a recording can still be fetched: a person copies and removes it, then retries
-	if (recordings.length) throw new Error(`The stream is hidden and its uploader banned, but ${recordings.length} recording(s) are still stored: keep a copy, remove them, then retry`);
+	// Hidden, held and off the CDN already; what is still stored needs another run or a person, and the case says which
+	if (left.length) throw new Error(`Nobody can reach the stream, and ${left.length} recording(s) are still stored. ${left.map((r) => recordingInstruction(r, recordingKept(p, r))).join(' ')}`);
 	return { result: { caseId: p.caseId, files: (p.copied ?? []).length, missing: (p.missing ?? []).length, purge: p.purge ?? {}, ban } };
 }
 

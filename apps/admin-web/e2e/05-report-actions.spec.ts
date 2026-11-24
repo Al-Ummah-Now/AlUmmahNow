@@ -121,10 +121,13 @@ test.describe('moderation actions', () => {
     const report = await makeReport({ label: 'gone', entityType: 'video' });
     await page.goto(`/moderation/reports/${report.id}`);
     const actions = page.getByTestId('report-actions');
-    for (const action of ['removed', 'banned', 'deleted']) {
-      await actions.locator(`button[data-action="${action}"]`).click();
-      await page.getByTestId('confirm-action').click();
-      await expect(page.getByTestId('action-error')).toHaveText('The item is not there any more. Dismiss the report');
+    for (const action of ['warning', 'removed', 'banned', 'deleted']) {
+      const option = actions.locator(`button[data-action="${action}"]`);
+      await expect(option).toBeDisabled();
+      await expect(option).toContainText('The item is not there any more. Dismiss the report');
+      // The server refuses it too, and leaves the report as it was
+      const refused = await adminApi(`/api/moderation/reports/${report.id}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+      expect([403, 409]).toContain(refused.status);
       expect((await getReport(report.id))?.status).toBe('pending');
     }
     await actions.locator('button[data-action="dismissed"]').click();
