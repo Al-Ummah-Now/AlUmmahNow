@@ -243,7 +243,7 @@ export function parseCostAlertSettings(json: string | null | undefined): CostAle
 }
 
 /** Alert kinds an admin can opt into (O24: register-based, nobody gets anything by default). */
-export const COST_ALERT_KINDS = ['budget', 'spike', 'digest'] as const;
+export const COST_ALERT_KINDS = ['budget', 'spike', 'digest', 'capacity'] as const;
 export type CostAlertKind = (typeof COST_ALERT_KINDS)[number];
 
 // ---------------------------------------------------------------------------------------------

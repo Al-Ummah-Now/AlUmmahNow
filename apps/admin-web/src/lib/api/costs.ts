@@ -8,7 +8,7 @@
  */
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
-import type { CostAlertKind, CostAlertSettings, CostCredentialResult, CostProvider, CostSubscription, CostsDashboard } from './costs-types';
+import type { CostAlertKind, CostAlertSettings, CostCredentialResult, CostDatabases, CostProvider, CostSubscription, CostsDashboard } from './costs-types';
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
 const credentialPath = (provider: CostProvider, test = false) => `/api/costs/credentials/${encodeURIComponent(provider)}${test ? '/test' : ''}`;
@@ -41,4 +41,19 @@ export async function saveCostSettings(settings: CostAlertSettings): Promise<Act
 
 export async function saveMyCostAlerts(kinds: CostAlertKind[], locale: 'en' | 'ar'): Promise<ActionResult<CostSubscription>> {
   return toResult(() => fetchAdmin<CostSubscription>('/api/costs/subscriptions/me', json('PUT', { kinds, locale })));
+}
+
+/** D1 capacity (wiki AUN-D1-SCALING D1-1): every database against the limits, the account total and the capacity rules. */
+export async function getCostDatabases(): Promise<CostDatabases> {
+  return fetchAdmin<CostDatabases>('/api/costs/databases');
+}
+
+/** The limits the capacity alerts judge against, in whole GB (ops:manage). */
+export async function saveD1Limits(maxDbGb: number, accountGb: number): Promise<ActionResult<{ maxDbBytes: number; accountBytes: number }>> {
+  return toResult(() => fetchAdmin<{ maxDbBytes: number; accountBytes: number }>('/api/costs/d1-limits', json('PUT', { maxDbGb, accountGb })));
+}
+
+/** One capacity rule's value and switch (admin-api PUT /api/ops/thresholds/:id, ops:manage, audited). */
+export async function saveCapacityRule(id: string, value: number, enabled: boolean): Promise<ActionResult<{ id: string }>> {
+  return toResult(() => fetchAdmin<{ id: string }>(`/api/ops/thresholds/${encodeURIComponent(id)}`, json('PUT', { value, enabled })));
 }

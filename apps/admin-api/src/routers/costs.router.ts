@@ -11,13 +11,16 @@
  *   DELETE /credentials/:provider    remove (ops:manage)
  *   PUT    /settings                 alert settings (ops:manage)
  *   GET    /subscriptions/me         my alert emails
- *   PUT    /subscriptions/me         { kinds: ['budget'|'spike'|'digest'], locale }
+ *   PUT    /subscriptions/me         { kinds: ['budget'|'spike'|'digest'|'capacity'], locale }
+ *   GET    /databases                D1 capacity: every database's size, trend, days to 70%, activity, open alerts; the account total; the capacity rules
+ *   PUT    /d1-limits                { maxDbGb, accountGb } the limits the capacity alerts judge against (ops:manage)
  */
 import { Hono, type Context } from 'hono';
 import { isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { loadCostSettings } from '../lib/opsCost';
 import { logger } from '../lib/logger';
+import { databasesOverview } from '../lib/d1Capacity';
 import type { AdminBindings, AuthContext } from '../base/types';
 import {
   costsDashboard,
@@ -26,6 +29,7 @@ import {
   removeCredential,
   retestCredential,
   saveCredential,
+  saveD1Limits,
   saveSettings,
   setMySubscription,
   type Actor,
@@ -132,6 +136,18 @@ app.delete('/credentials/:provider', async (c) => {
 app.put('/settings', async (c) => {
   if (!canManage(c)) return forbidden(c);
   const out = await saveSettings(c.env as never, await c.req.json().catch(() => null), actorOf(c.get('auth')));
+  if (typeof out === 'string') return bad(c, out);
+  return c.json({ success: true, result: out });
+});
+
+app.get('/databases', async (c) => {
+  const overview = await databasesOverview(c.env.COSTS_DB!);
+  return c.json({ success: true, result: { ...overview, canManage: canManage(c) } });
+});
+
+app.put('/d1-limits', async (c) => {
+  if (!canManage(c)) return forbidden(c);
+  const out = await saveD1Limits(c.env as never, await c.req.json().catch(() => null), actorOf(c.get('auth')));
   if (typeof out === 'string') return bad(c, out);
   return c.json({ success: true, result: out });
 });

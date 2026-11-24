@@ -6,7 +6,7 @@
  */
 import { COST_ALERT_KINDS, COST_ALERT_RANGES, dateTimeFormat, parseDigits, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
 import type { MessageKey, TranslateParams } from '@/i18n/translate';
-import type { CostCollectorState } from '@/lib/api/costs-types';
+import type { CapacityRule, CostCollectorState } from '@/lib/api/costs-types';
 
 /** Data older than this reads as stale (the collector runs hourly). */
 export const STALE_AFTER_MS = 2 * 3_600_000;
@@ -254,3 +254,24 @@ export function weekdayNames(locale: string): string[] {
 export function hourName(hour: number, locale: string): string {
   return dateTimeFormat(locale, { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1, hour)));
 }
+
+// D1 capacity rules (wiki AUN-D1-SCALING D1-1)
+/** Percent metrics are stored as fractions (0.7) and typed as percentages (70). */
+export const isPercentMetric = (m: CapacityRule['metric']) => m !== 'storage_days_to_70';
+/** The range each rule accepts in the form (percent or days). */
+export const RULE_RANGE: Record<CapacityRule['metric'], { min: number; max: number }> = {
+  storage_pct: { min: 1, max: 100 },
+  busy_pct: { min: 1, max: 100 },
+  account_storage_pct: { min: 1, max: 100 },
+  storage_days_to_70: { min: 1, max: 365 },
+};
+
+/** The stored value for the typed one, or null when it is out of range or not a number. */
+export function ruleValueFromInput(metric: CapacityRule['metric'], input: string): number | null {
+  const n = Number(parseDigits(input.trim()));
+  const { min, max } = RULE_RANGE[metric];
+  if (!input.trim() || !Number.isFinite(n) || n < min || n > max) return null;
+  return isPercentMetric(metric) ? Math.round(n * 10) / 1000 : Math.round(n);
+}
+export const ruleInputOf = (r: CapacityRule) => String(isPercentMetric(r.metric) ? Math.round(r.value * 1000) / 10 : r.value);
+

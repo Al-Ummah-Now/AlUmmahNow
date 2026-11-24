@@ -26,6 +26,7 @@ import { writeReviewQueueMinutes } from '@al-ummah/shared-types';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import { errorsPipelineSink, syncCostAlerts } from './lib/opsCost';
 import { costAlertNotifier } from './lib/cost-alert-mail';
+import { queueCapacityEmails } from './lib/d1Capacity';
 import { runWeeklyDigest } from './lib/costs';
 import costsRouter from './routers/costs.router';
 import invitesRouter from './routers/invites.router';
@@ -396,6 +397,12 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
       syncCostAlerts(env as never, errorsPipelineSink(env), new Date(controller.scheduledTime), costAlertNotifier(env as never))
         .then(() => undefined)
         .catch((error) => logger.error('[OpsCost] Spend alert check failed', { error: String(error) })),
+    );
+    // D1 capacity emails (wiki AUN-D1-SCALING D1-1): each open capacity alert once per opted-in admin
+    ctx.waitUntil(
+      queueCapacityEmails(env as never, new Date(controller.scheduledTime))
+        .then((queued) => { if (queued) logger.info('[Costs] Capacity emails queued', { queued }); })
+        .catch((error) => logger.error('[Costs] Capacity emails failed', { error: String(error) })),
     );
     // Weekly cost digest to the admins who opted in (COST-1), on the Costs page's weekday and hour
     ctx.waitUntil(

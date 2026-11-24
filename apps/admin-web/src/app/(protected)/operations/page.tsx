@@ -12,6 +12,9 @@ import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 import { logger } from '@/lib/logger';
 import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
 import { SpendSection } from './SpendSection';
+import { getCostDatabases } from '@/lib/api/costs';
+import type { CostDatabases } from '@/lib/api/costs-types';
+import { DatabaseCapacityGauge } from '@/components/capacity/DatabaseCapacityGauge';
 import { Sep } from '@/components/Sep';
 
 export const dynamic = 'force-dynamic';
@@ -117,7 +120,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   }
   const f = opsFormats(locale);
   const specs = TAB_CHARTS[tab];
-  const [costsResult, overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
+  const [databasesResult, costsResult, overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
+    getCostDatabases(),
     getOpsCosts('all'),
     getOpsOverview(env),
     listOpsResources(env, tab),
@@ -131,6 +135,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   }
   const overview = overviewResult.status === 'fulfilled' ? (overviewResult.value as OpsOverview) : null;
   const costs = costsResult.status === 'fulfilled' ? (costsResult.value as OpsCosts) : null;
+  // The capacity row is optional: its failure (say, before cost-monitor migration 0004) hides it
+  const databases = databasesResult.status === 'fulfilled' ? (databasesResult.value as CostDatabases) : null;
   const resources = resourcesResult.status === 'fulfilled' ? (resourcesResult.value as OpsResource[]) : null;
   const now = new Date();
   const href = (next: Partial<{ env: OpsEnv; tab: OpsKind; range: OpsRange }>) => `?${new URLSearchParams({ env, tab, range, ...next })}`;
@@ -158,6 +164,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
           </ul>
         </nav>
       </div>
+
+      <DatabaseCapacityGauge data={databases} t={t} f={f} testId="ops-capacity" />
 
       {costs ? (
         <SpendSection c={costs} t={t} f={f} locale={locale} />

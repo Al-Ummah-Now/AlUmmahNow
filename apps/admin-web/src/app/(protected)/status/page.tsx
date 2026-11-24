@@ -11,6 +11,10 @@ import { logger } from '@/lib/logger';
 import { DeletedIncidents, IncidentCard, NewIncidentForm } from './StatusAdmin';
 import { publicStatusUrl } from './model';
 import { StatusSubscriptions } from './StatusSubscriptions';
+import { getCostDatabases } from '@/lib/api/costs';
+import type { CostDatabases } from '@/lib/api/costs-types';
+import { DatabaseCapacityGauge } from '@/components/capacity/DatabaseCapacityGauge';
+import { opsFormats } from '../operations/model';
 
 import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
@@ -34,6 +38,11 @@ export default async function StatusAdminPage() {
 
   let overview: StatusOverview | null = null;
   let subs: Subs | null = null;
+  // Database capacity, an internal component of the admin Status page (never the public one); optional
+  const databases: CostDatabases | null = await getCostDatabases().catch((error) => {
+    logger.error('[status] Failed to load database capacity', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  });
   let loadError = '';
   try {
     [overview, subs] = await Promise.all([
@@ -60,6 +69,7 @@ export default async function StatusAdminPage() {
           <a className={linkClass} href={publicStatusUrl()} target="_blank" rel="noopener noreferrer" data-testid="status-public-link">{t('statusPage.openPublic')}</a>
         </p>
       </div>
+      <DatabaseCapacityGauge data={databases} t={t} f={opsFormats(locale)} testId="status-capacity" />
       {loadError && <ErrorAlert testId="status-load-error">{loadError}</ErrorAlert>}
       {overview && (
         <>

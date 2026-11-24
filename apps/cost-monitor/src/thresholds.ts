@@ -11,6 +11,7 @@
  * running queries, the lowest hour of the window) and account_storage_pct (every D1 database on
  * the account ÷ the account limit, kind 'd1_account'). Limits are cost_settings 'd1_limits'.
  */
+import { CAPACITY_METRICS as SHARED_CAPACITY_METRICS, DEFAULT_D1_LIMITS, FORECAST_DAYS, daysTo70, parseD1Limits, type D1Limits } from '@al-ummah/shared-types';
 import type { OpsEnv, ResourceKind } from './manifest';
 
 export const THRESHOLD_METRICS = [
@@ -25,24 +26,14 @@ export const ACCOUNT_RESOURCE_ID = 'd1_account:all';
 /** Env recorded on the account total's alert (ops_alerts.env has no CHECK). */
 export const ACCOUNT_ENV = 'account';
 
-export interface D1Limits {
-  /** Cloudflare D1 maximum database size (Workers Paid, developers.cloudflare.com/d1/platform/limits, 2026-11-20) */
-  maxDbBytes: number;
-  /** Storage per account, raisable on request */
-  accountBytes: number;
-}
-export const DEFAULT_D1_LIMITS: D1Limits = { maxDbBytes: 10e9, accountBytes: 1e12 };
-/** Days of daily sizes the forecast fits, and the fewest it needs. */
-export const FORECAST_DAYS = 14;
-export const FORECAST_MIN_DAYS = 7;
+export type { D1Limits } from '@al-ummah/shared-types';
+export { DEFAULT_D1_LIMITS, FORECAST_DAYS, FORECAST_MIN_DAYS, daysTo70 } from '@al-ummah/shared-types';
 
 /** cost_settings 'd1_limits' (JSON), defaults when unset, unparsable or not positive. */
 export async function loadD1Limits(db: D1Database): Promise<D1Limits> {
   try {
     const row = await db.prepare("SELECT value FROM cost_settings WHERE key = 'd1_limits'").first<{ value: string }>();
-    const v = row ? (JSON.parse(row.value) as Partial<D1Limits>) : {};
-    const pos = (n: unknown, d: number) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : d);
-    return { maxDbBytes: pos(v.maxDbBytes, DEFAULT_D1_LIMITS.maxDbBytes), accountBytes: pos(v.accountBytes, DEFAULT_D1_LIMITS.accountBytes) };
+    return parseD1Limits(row?.value);
   } catch {
     return { ...DEFAULT_D1_LIMITS };
   }
@@ -120,32 +111,6 @@ export function metricValue(rule: ThresholdRule, s: WindowStats, limits: D1Limit
     default:
       return null;
   }
-}
-
-/**
- * Days until `limit × 0.7` from daily sizes (least-squares slope in bytes per day). 0 when the
- * newest size is already there; null with fewer than FORECAST_MIN_DAYS points or no growth.
- */
-export function daysTo70(points: { day: string; bytes: number }[], limitBytes: number): number | null {
-  const pts = points.filter((p) => Number.isFinite(p.bytes)).sort((a, b) => a.day.localeCompare(b.day));
-  if (pts.length < FORECAST_MIN_DAYS) return null;
-  const target = 0.7 * limitBytes;
-  const latest = pts[pts.length - 1].bytes;
-  if (latest >= target) return 0;
-  const t0 = Date.parse(`${pts[0].day}T00:00:00Z`);
-  const xs = pts.map((p) => (Date.parse(`${p.day}T00:00:00Z`) - t0) / 86_400_000);
-  const n = pts.length;
-  const mx = xs.reduce((a, b) => a + b, 0) / n;
-  const my = pts.reduce((a, p) => a + p.bytes, 0) / n;
-  let num = 0;
-  let den = 0;
-  for (let i = 0; i < n; i++) {
-    num += (xs[i] - mx) * (pts[i].bytes - my);
-    den += (xs[i] - mx) ** 2;
-  }
-  const slope = den > 0 ? num / den : 0;
-  if (!(slope > 0)) return null;
-  return Math.round(((target - latest) / slope) * 10) / 10;
 }
 
 /**
@@ -272,7 +237,7 @@ const METRIC_TITLE: Record<ThresholdMetric, string> = {
 };
 
 /** The D1 capacity metrics (their items link to the Costs page's Databases section). */
-export const CAPACITY_METRICS: readonly ThresholdMetric[] = ['storage_pct', 'storage_days_to_70', 'busy_pct', 'account_storage_pct'];
+export const CAPACITY_METRICS: readonly ThresholdMetric[] = SHARED_CAPACITY_METRICS;
 
 /** Admin-facing title of an alert (the Errors page groups items by title). */
 export function alertTitle(rule: ThresholdRule): string {
