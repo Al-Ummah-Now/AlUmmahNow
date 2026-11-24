@@ -14,7 +14,7 @@ function render(node: React.ReactElement, locale: 'en' | 'ar' = 'en') {
   const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
   return renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, node) as never);
 }
-const NUMBERS = { comment: 13, post: 13, liveChat: 16, upload: 13, support: 18, ageRestricted: 18 } as const;
+const NUMBERS = { liveChat: 16, support: 18, ageRestricted: 18 } as const;
 const checks = (ok: boolean) =>
   (['birthDate', 'numbers', 'accountEvents'] as const).map((key) => ({ key, ok, reasonKey: key, reason: { en: `Why ${key}`, ar: `سبب ${key === 'numbers' ? 'الأعمار' : 'آخر'}` } }));
 const view = (over: object = {}) => ({ numbers: null, suggested: NUMBERS, version: 0, updatedAt: null, updatedBy: null, switchOn: false, checks: checks(false), canEdit: true, ...over });
@@ -38,6 +38,8 @@ describe('form', () => {
   it('unsaved: the suggested ages, savable, and it says they are suggestions', () => {
     const html = render(form(view()));
     for (const key of Object.keys(NUMBERS)) assert.match(html, new RegExp(`data-testid="age-rules-${key}"`));
+    // Only the three limits of E20-D3 are settings
+    assert.deepEqual([...html.matchAll(/data-testid="age-rules-(comment|post|upload|liveChat|support|ageRestricted)"/g)].map((m) => m[1]), ['liveChat', 'support', 'ageRestricted']);
     assert.match(html, /16 and over/);
     assert.match(html, /suggestions until you save/);
     assert.match(html, /data-testid="age-rules-save"/);
@@ -66,7 +68,7 @@ describe('form', () => {
     const entry = { id: '1', from: NUMBERS, to: { ...NUMBERS, liveChat: 18 }, actorId: 'usr_a', actorName: 'Yusuf', createdAt: '2026-11-24T10:00:00Z' };
     const html = render(form(view({ numbers: entry.to, version: 2 }), [entry]));
     assert.match(html, /Live chat: 16 and over → 18 and over/);
-    assert.ok(!html.includes('Comment and reply: '));
+    assert.ok(!html.includes('Give or receive money: '));
     assert.match(render(form(view(), null)), /data-testid="age-rules-history-error"/);
     assert.match(render(form(view(), [])), /No changes yet/);
   });
