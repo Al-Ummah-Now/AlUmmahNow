@@ -66,6 +66,22 @@ export async function getChannel(id: string): Promise<ChannelDetailView> {
   return fetchAdmin(`${BASE}/channels/${enc(id)}`);
 }
 
+/** One grant or removal of the scholar label (admin-only audit, wiki Epic 21 E21-D4). */
+export interface ChannelLabelEvent {
+  id: string;
+  verified: boolean;
+  kind: 'scholar' | 'institution' | null;
+  note: string | null;
+  actorId: string;
+  createdAt: string;
+}
+
+/** The scholar label's audit history, newest first (at most 50). */
+export async function getChannelLabelHistory(id: string): Promise<ChannelLabelEvent[]> {
+  const state = await fetchAdmin<{ history?: ChannelLabelEvent[] }>(`/api/channels/${enc(id)}/verification`);
+  return state?.history ?? [];
+}
+
 export async function updateChannel(id: string, edit: { name?: string; handle?: string; description?: string }): Promise<ActionResult<unknown>> {
   return toResult(() => fetchAdmin(`${BASE}/channels/${enc(id)}`, json('PATCH', edit)));
 }
@@ -75,8 +91,9 @@ export async function uploadChannelImage(id: string, kind: 'avatar' | 'cover', f
 }
 
 /** Verification reuses the existing channel verification endpoint (its own audit log). */
-export async function setChannelVerified(id: string, verified: boolean, note?: string): Promise<ActionResult<unknown>> {
-  return toResult(() => fetchAdmin(`/api/channels/${enc(id)}/verification`, json('PUT', { verified, ...(note ? { note } : {}) })));
+/** Grants or removes the scholar label (wiki Epic 21, E21-D4): a reason is required, and a grant names its kind. */
+export async function setChannelVerified(id: string, verified: boolean, reason: string, kind?: 'scholar' | 'institution'): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`/api/channels/${enc(id)}/verification`, json('PUT', { verified, reason, ...(verified && kind ? { kind } : {}) })));
 }
 
 export async function suspendChannel(id: string, reason: string): Promise<ActionResult<JobResult>> {

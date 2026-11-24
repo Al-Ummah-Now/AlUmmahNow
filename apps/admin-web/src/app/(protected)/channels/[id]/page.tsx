@@ -1,6 +1,6 @@
 import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
-import { getChannel, getContentPermissions } from '@/lib/api/content';
+import { getChannel, getChannelLabelHistory, getContentPermissions, type ChannelLabelEvent } from '@/lib/api/content';
 import type { AdminContentPermission, ChannelDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
@@ -24,8 +24,14 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
 
   let channel: ChannelDetailView | null = null;
   let permissions: AdminContentPermission[] = [];
+  let labelHistory: ChannelLabelEvent[] = [];
   try {
     [channel, permissions] = await Promise.all([getChannel(id), getContentPermissions()]);
+    // The label history is extra: a failure leaves it out, never the page
+    labelHistory = await getChannelLabelHistory(id).catch((e: unknown) => {
+      logger.warn('[channels] Label history not loaded', { id, error: e instanceof Error ? e.message : String(e) });
+      return [];
+    });
   } catch (e) {
     if (e instanceof AdminApiError && e.status === 404) notFound();
     logger.error('[channels] Failed to load channel', { id, error: e instanceof Error ? e.message : String(e) });
@@ -146,6 +152,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               handle: ch.handle,
               description: ch.description,
               isVerified: ch.isVerified,
+              verificationKind: ch.verificationKind ?? null,
               isSuspended: ch.isSuspended,
               isDeleted: ch.isDeleted,
               ownerId: ch.ownerId,
@@ -153,6 +160,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               playlists: ch.stats.playlists,
             }}
             permissions={permissions}
+            labelHistory={labelHistory}
           />
         </div>
 

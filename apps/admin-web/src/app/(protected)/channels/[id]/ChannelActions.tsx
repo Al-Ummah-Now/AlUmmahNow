@@ -8,13 +8,16 @@ import {
   unsuspendChannel,
   updateChannel,
   uploadChannelImage,
+  type ChannelLabelEvent,
 } from '@/lib/api/content';
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { formatDate } from '@/i18n/translate';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { ChannelTransfer } from './ChannelTransfer';
+import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLabelDialog';
 
 interface Props {
   channel: {
@@ -23,6 +26,7 @@ interface Props {
     handle: string | null;
     description: string;
     isVerified: boolean;
+    verificationKind: LabelKind | null;
     isSuspended: boolean;
     isDeleted: boolean;
     ownerId: string | null;
@@ -30,14 +34,17 @@ interface Props {
     playlists: number;
   };
   permissions: AdminContentPermission[];
+  /** Scholar label grants and removals, newest first (admins only) */
+  labelHistory?: ChannelLabelEvent[];
 }
 
 /** Edit, images, verification, suspension, transfer and delete for one channel; each shown only to roles that may use it. */
-export function ChannelActions({ channel, permissions }: Props) {
-  const { t } = useLanguage();
+export function ChannelActions({ channel, permissions, labelHistory = [] }: Props) {
+  const { t, locale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
   const [name, setName] = useState(channel.name);
+  const [labelMode, setLabelMode] = useState<LabelMode | null>(null);
   const [handle, setHandle] = useState(channel.handle ?? '');
   const [description, setDescription] = useState(channel.description);
 
@@ -115,15 +122,36 @@ export function ChannelActions({ channel, permissions }: Props) {
       {canManage && (
         <SectionCard title={t('channels.moderationTitle')} id={`${ids}-mod`}>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={smallButtonClass}
-              disabled={!!busy}
-              onClick={() => run('verify', () => setChannelVerified(channel.id, !channel.isVerified), { success: t('content.saved') })}
-              data-testid="channel-verify"
-            >
-              {busy === 'verify' ? t('content.working') : channel.isVerified ? t('channels.unverify') : t('channels.verify')}
-            </button>
+            {channel.isVerified && channel.verificationKind && (
+              <span className="self-center text-sm text-fg-muted" data-testid="channel-label-kind">
+                {t('channels.labelCurrent', { kind: t(channel.verificationKind === 'scholar' ? 'channels.kindScholar' : 'channels.kindInstitution') })}
+              </span>
+            )}
+            {channel.isVerified ? (
+              <>
+                <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => setLabelMode('change')} data-testid="channel-label-change">
+                  {t('channels.labelChange')}
+                </button>
+                <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => setLabelMode('remove')} data-testid="channel-verify">
+                  {busy === 'verify' ? t('content.working') : t('channels.labelRemove')}
+                </button>
+              </>
+            ) : (
+              <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => setLabelMode('grant')} data-testid="channel-verify">
+                {busy === 'verify' ? t('content.working') : t('channels.labelGrant')}
+              </button>
+            )}
+            <ScholarLabelDialog
+              open={labelMode !== null}
+              mode={labelMode ?? 'grant'}
+              currentKind={channel.verificationKind}
+              onCancel={() => setLabelMode(null)}
+              onConfirm={(reason, kind) => {
+                const removing = labelMode === 'remove';
+                setLabelMode(null);
+                void run('verify', () => setChannelVerified(channel.id, !removing, reason, kind), { success: t('content.saved') });
+              }}
+            />
             {channel.isSuspended ? (
               <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run('unsuspend', () => unsuspendChannel(channel.id), { success: t('content.queued') })} data-testid="channel-unsuspend">
                 {busy === 'unsuspend' ? t('content.working') : t('channels.unsuspend')}
@@ -143,6 +171,28 @@ export function ChannelActions({ channel, permissions }: Props) {
               />
             )}
           </div>
+          {labelHistory.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold mb-2">{t('channels.labelHistory')}</h3>
+              <ul className="space-y-2" data-testid="channel-label-history">
+                {labelHistory.map((event) => (
+                  <li key={event.id} className="text-sm border-s-2 border-border ps-3">
+                    <div className="text-fg">
+                      {event.verified
+                        ? t('channels.labelGranted', { kind: t(event.kind === 'institution' ? 'channels.kindInstitution' : 'channels.kindScholar') })
+                        : t('channels.labelRemoved')}
+                    </div>
+                    <div className="text-xs text-fg-subtle">{formatDate(event.createdAt, locale, true)}</div>
+                    {event.note && (
+                      <p className="text-fg-muted" dir="auto">
+                        {event.note}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </SectionCard>
       )}
 

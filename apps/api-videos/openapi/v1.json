@@ -2773,6 +2773,33 @@
                           "isVerified": {
                             "type": "boolean"
                           },
+                          "verification": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "scholar",
+                                  "institution",
+                                  null
+                                ]
+                              },
+                              "verifiedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "verifiedAt"
+                            ],
+                            "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
+                          },
                           "avatarUrl": {
                             "type": "string"
                           },
@@ -3366,6 +3393,33 @@
                     },
                     "isVerified": {
                       "type": "boolean"
+                    },
+                    "verification": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "scholar",
+                            "institution",
+                            null
+                          ]
+                        },
+                        "verifiedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "verifiedAt"
+                      ],
+                      "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                     },
                     "avatarUrl": {
                       "type": "string"
@@ -5810,6 +5864,33 @@
                     },
                     "isVerified": {
                       "type": "boolean"
+                    },
+                    "verification": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "scholar",
+                            "institution",
+                            null
+                          ]
+                        },
+                        "verifiedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "verifiedAt"
+                      ],
+                      "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                     },
                     "avatarUrl": {
                       "type": "string"
@@ -29515,6 +29596,33 @@
                           },
                           "isVerified": {
                             "type": "boolean"
+                          },
+                          "verification": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "scholar",
+                                  "institution",
+                                  null
+                                ]
+                              },
+                              "verifiedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "verifiedAt"
+                            ],
+                            "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                           },
                           "avatarUrl": {
                             "type": "string"
