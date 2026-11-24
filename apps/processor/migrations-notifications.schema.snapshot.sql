@@ -20,6 +20,7 @@
 --   apps/processor/migrations-notifications/0018_discovery_viewers.sql
 --   apps/processor/migrations-notifications/0019_live_reminders.sql
 --   apps/processor/migrations-notifications/0020_notification_quiet_hours.sql
+--   apps/processor/migrations-notifications/0021_notification_inbox_retention.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -38,6 +39,7 @@ CREATE TABLE notification_email_prefs (user_id TEXT PRIMARY KEY, account_email I
 CREATE TABLE notification_quiet_hours (user_id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)), timezone TEXT NOT NULL DEFAULT 'UTC', start_minute INTEGER NOT NULL DEFAULT 1320 CHECK (start_minute >= 0 AND start_minute < 1440), end_minute INTEGER NOT NULL DEFAULT 360 CHECK (end_minute >= 0 AND end_minute < 1440), prayer_quiet_enabled INTEGER NOT NULL DEFAULT 0 CHECK (prayer_quiet_enabled IN (0, 1)), prayer_windows_json TEXT NOT NULL DEFAULT '[]', prayer_windows_updated_at INTEGER, updated_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE notification_seen (user_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE notification_settings (user_id TEXT NOT NULL, category TEXT NOT NULL, enabled INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, category));
+CREATE TABLE notification_trim_state (job TEXT PRIMARY KEY, created_at INTEGER NOT NULL, row_id INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category TEXT NOT NULL, notification_type TEXT NOT NULL, notification_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', action_url TEXT, actor_id TEXT, entity_id TEXT, dedupe_key TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, read_at INTEGER, pushed_at INTEGER, hidden_at INTEGER);
 CREATE TABLE poll_votes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, option_ids TEXT NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cursor TEXT, done INTEGER NOT NULL DEFAULT 0, lease_owner TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, kind)) WITHOUT ROWID;
@@ -59,7 +61,6 @@ CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_ke
 CREATE INDEX idx_notifications_entity ON notifications (entity_id) WHERE entity_id IS NOT NULL;
 CREATE INDEX idx_notifications_unpushed ON notifications(dedupe_key, user_id) WHERE pushed_at IS NULL;
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC, id DESC);
-CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read);
 CREATE INDEX idx_notifications_user_unread_created ON notifications(user_id, is_read, created_at);
 CREATE INDEX idx_poll_votes_user ON poll_votes(user_id);
 CREATE INDEX idx_post_likes_user ON post_likes(user_id);

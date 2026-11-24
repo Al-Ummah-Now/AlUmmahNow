@@ -163,6 +163,11 @@ export const DEFAULT_CHANNEL_BELL: ChannelBellLevel = 'highlights';
 
 /** Stored notifications are deleted after this many days (processor cron). */
 export const NOTIFICATION_RETENTION_DAYS = 90;
+/** Read notifications go after this many days (the hourly trim of recently notified users; wiki AUN-D1-SCALING D1-2). */
+export const NOTIFICATION_READ_RETENTION_DAYS = 30;
+/** Per-user caps kept by the trim: the newest read rows, and the newest unread rows. */
+export const NOTIFICATION_READ_CAP = 500;
+export const NOTIFICATION_UNREAD_CAP = 1000;
 
 export type NotificationParams = Record<string, string | number>;
 
