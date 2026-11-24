@@ -296,6 +296,24 @@ export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
   }
 }
 
+/** Hourly: purge expired analytics_dedupe markers on the PK prefix (bounded per run). */
+export async function runAnalyticsDedupePurge(env: QueueEnvironment, now = Date.now()) {
+  const logger = loggerFor(env);
+  if (!env.NOTIFICATIONS_DB) return null;
+  try {
+    const result = await purgeExpiredAnalyticsDedupe(env.NOTIFICATIONS_DB, now);
+    if (!result.caughtUp) {
+      logger.warn('[Retention] Analytics dedupe purge hit run cap; backlog remains', { ...result });
+    } else if (result.deleted > 0) {
+      logger.info('[Retention] Expired analytics dedupe markers deleted', { ...result });
+    }
+    return result;
+  } catch (error) {
+    logger.error('[Retention] Analytics dedupe retention failed', error);
+    return null;
+  }
+}
+
 /** AI category suggestions: hourly re-send of stale pending rows; daily re-send of budget-skipped rows + draft purge. */
 export async function runCategorizeSweep(env: QueueEnvironment, budget: boolean, now = Date.now()) {
   const logger = loggerFor(env);
@@ -354,13 +372,8 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
   } catch (error) {
     logger.error('[Retention] Review alert retention failed', error);
   }
-  // Analytics counter dedupe markers (#1921): bounded indexed delete on idx_analytics_dedupe_expires
-  try {
-    const purged = await purgeExpiredAnalyticsDedupe(env.NOTIFICATIONS_DB, now);
-    if (purged > 0) logger.info('[Retention] Expired analytics dedupe markers deleted', { purged });
-  } catch (error) {
-    logger.error('[Retention] Analytics dedupe retention failed', error);
-  }
+  // Analytics counter dedupe markers (#1921): bounded PK-prefix delete (also runs hourly)
+  await runAnalyticsDedupePurge(env, now);
   // Inbox read retention and per-user caps (wiki AUN-D1-SCALING D1-2): recently notified users only
   try {
     const trim = await trimNotificationInboxes(env.NOTIFICATIONS_DB, now);
@@ -383,6 +396,7 @@ export default {
     if (controller?.cron === ROLLUP_IMPORT_CRON) {
       ctx.waitUntil(runRollupImport(env));
       ctx.waitUntil(runCategorizeSweep(env, false));
+      ctx.waitUntil(runAnalyticsDedupePurge(env));
       return;
     }
     ctx.waitUntil(runScheduled(env));

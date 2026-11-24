@@ -77,12 +77,12 @@ export class MessageProcessor {
     return this.pendingFlushMessageIds.has(messageId);
   }
 
-  private recordMessageCounters(messageId: string, increments: CounterIncrement[]): boolean {
+  private recordMessageCounters(messageId: string, increments: CounterIncrement[], messageTimestamp?: number | string): boolean {
     if (this.counters.hasMessage(messageId)) {
       this.pendingFlushMessageIds.add(messageId);
       return false;
     }
-    const added = this.counters.addForMessage(messageId, increments);
+    const added = this.counters.addForMessage(messageId, increments, messageTimestamp);
     if (added) this.pendingFlushMessageIds.add(messageId);
     return added;
   }
@@ -314,12 +314,12 @@ export class MessageProcessor {
         // Site visits (D-SEO-9): landing pages and sources as daily site counters
         if ((message.payload as { kind?: string }).kind === 'visit') {
           const payload = message.payload as { events?: unknown[]; receivedAt?: string };
-          this.recordMessageCounters(message.id, visitIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')));
+          this.recordMessageCounters(message.id, visitIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')), message.timestamp);
         }
         // Short link clicks (alummahnow.link): link type and source as daily site counters
         if ((message.payload as { kind?: string }).kind === 'short_link') {
           const payload = message.payload as { events?: unknown[]; receivedAt?: string };
-          this.recordMessageCounters(message.id, shortLinkIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')));
+          this.recordMessageCounters(message.id, shortLinkIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')), message.timestamp);
         }
         this.logger.debug('Client analytics batch stored', {
           kind: (message.payload as { kind?: string }).kind,
@@ -520,7 +520,7 @@ export class MessageProcessor {
     await this.processVideoMessage(message);
 
     const increments = viewIncrements(message.payload, message.timestamp);
-    if (increments && this.recordMessageCounters(message.id, increments)) {
+    if (increments && this.recordMessageCounters(message.id, increments, message.timestamp)) {
       this.logger.debug('View rollup queued', { videoId: payload.videoId });
     }
     const viewer = rankViewerRow(message.payload, message.timestamp);
@@ -537,7 +537,7 @@ export class MessageProcessor {
       this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
       return;
     }
-    this.recordMessageCounters(message.id, increments);
+    this.recordMessageCounters(message.id, increments, message.timestamp);
   }
 
   private processVideoRetentionMessage(message: AlUmmahMessage): void {
@@ -546,7 +546,7 @@ export class MessageProcessor {
       this.logger.warn('Invalid retention message ignored', { videoId: (message.payload as { videoId?: string }).videoId });
       return;
     }
-    this.recordMessageCounters(message.id, increments);
+    this.recordMessageCounters(message.id, increments, message.timestamp);
   }
 
   private async processUploadLifecycleMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {

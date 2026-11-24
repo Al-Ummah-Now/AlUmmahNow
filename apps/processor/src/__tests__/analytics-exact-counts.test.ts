@@ -2,10 +2,11 @@
  * Exactly-once analytics counters (#1921):
  * - A failed D1 flush never acknowledges counter-bearing messages; they are retried
  *   with bounded backoff and routed to the DLQ after max_retries.
- * - Per-message dedupe markers (analytics_dedupe, migration 0023) commit in the same
- *   D1 batch transaction as the analytics_daily upserts, so redeliveries and
- *   duplicates are no-ops and failed flushes roll back cleanly.
- * - No full-table scans on lookup or TTL purge; merged writes keep rows written low.
+ * - Per-message dedupe markers (analytics_dedupe, migration 0023, PK (day_bucket, message_id)
+ *   WITHOUT ROWID and no secondary index: 1 row written on insert + 1 on purge) commit in the
+ *   same D1 batch transaction as analytics_daily upserts, so redeliveries and duplicates are
+ *   no-ops and mid-batch failures roll back cleanly.
+ * - Hourly bounded PK-prefix purge in 1,000-row chunks; zero table scans.
  *
  * Runs the real SQL on node:sqlite.
  */
@@ -14,13 +15,16 @@ import { join } from 'node:path';
 import { createLogger } from '@al-ummah/logger';
 import worker, {
   ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS,
+  ROLLUP_IMPORT_CRON,
   VIDEOS_MAX_RETRIES,
   analyticsFlushRetryDelaySeconds,
+  runAnalyticsDedupePurge,
   runScheduled,
 } from '../index';
 import { MessageProcessor } from '../messageProcessor';
 import {
   ANALYTICS_DEDUPE_PURGE_BATCH,
+  ANALYTICS_DEDUPE_TTL_DAYS,
   ANALYTICS_DEDUPE_TTL_MS,
   BOUNDED_UPSERT_DEDUPED,
   BULK_UPSERT_DEDUPED,
@@ -28,6 +32,7 @@ import {
   DEDUPE_INSERT,
   purgeExpiredAnalyticsDedupe,
   readCounters,
+  resolveMessageBuckets,
 } from '../lib/analytics-counters';
 import { processDeadLetterBatch } from '../dlq/consumer';
 import { replayDeadLetter } from '../dlq/store';
@@ -193,6 +198,73 @@ describe('exact analytics counts (#1921)', () => {
     expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 4 });
   });
 
+  it('a statement failing mid-batch on real SQLite rolls back both analytics_daily and analytics_dedupe', async () => {
+    const db = createSqliteD1();
+    const batch = new CounterBatch();
+    const incs = [
+      { entityType: 'video' as const, entityId: 'v1', day: DAY, metric: 'views', value: 1 },
+      { entityType: 'video' as const, entityId: 'v1', day: DAY, metric: 'source', dim: 'embed', value: 1, maxDims: 10 },
+    ];
+    batch.addForMessage('rb-1', incs, AT);
+
+    // Counter upserts and dedupe insert execute first, then a trailing statement fails inside the same transaction
+    await expect(
+      batch.flush(db, 1, {
+        now: Date.parse(AT),
+        extraStatements: [db.prepare('INSERT INTO no_such_table VALUES (1)')],
+      }),
+    ).rejects.toThrow(/no such table/i);
+
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_daily').get()).toEqual({ n: 0 });
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 0 });
+
+    // Retry without the failing statement commits cleanly and counts once
+    const retry = new CounterBatch();
+    retry.addForMessage('rb-1', incs, AT);
+    await retry.flush(db, 1, { now: Date.parse(AT) });
+    expect(metricValue(db, 'video', 'v1', 'views')).toBe(1);
+    expect(metricValue(db, 'video', 'v1', 'source', 'embed')).toBe(1);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 1 });
+  });
+
+  it('concurrent flushes over the same message ids count each message exactly once', async () => {
+    const db = createSqliteD1();
+    const now = Date.parse(AT);
+    const incs = (videoId: string) => [
+      { entityType: 'video' as const, entityId: videoId, day: DAY, metric: 'views', value: 1 },
+      { entityType: 'video' as const, entityId: videoId, day: DAY, metric: 'watch_time', value: 15 },
+      { entityType: 'video' as const, entityId: videoId, day: DAY, metric: 'source', dim: 'watch', value: 1, maxDims: 10 },
+    ];
+
+    // 10 concurrent CounterBatch flushes racing on the exact same two message ids
+    await Promise.all(
+      Array.from({ length: 10 }, async () => {
+        const b = new CounterBatch();
+        b.addForMessage('race-1', incs('v1'), AT);
+        b.addForMessage('race-2', incs('v1'), AT);
+        await b.flush(db, 3, { now });
+      }),
+    );
+
+    expect(metricValue(db, 'video', 'v1', 'views')).toBe(2);
+    expect(metricValue(db, 'video', 'v1', 'watch_time')).toBe(30);
+    expect(metricValue(db, 'video', 'v1', 'source', 'watch')).toBe(2);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 2 });
+
+    // Concurrent worker.queue batches carrying overlapping message ids
+    const env = makeEnv(db);
+    await Promise.all([
+      worker.queue({ queue: 'al-ummah-now-videos', messages: [qMsg(viewMsg('q-race-1')), qMsg(watchTimeMsg('q-race-2', 20))] } as never, env),
+      worker.queue({ queue: 'al-ummah-now-videos', messages: [qMsg(viewMsg('q-race-1')), qMsg(retentionMsg('q-race-3', [0, 1]))] } as never, env),
+      worker.queue({ queue: 'al-ummah-now-videos', messages: [qMsg(watchTimeMsg('q-race-2', 20)), qMsg(retentionMsg('q-race-3', [0, 1]))] } as never, env),
+    ]);
+
+    expect(metricValue(db, 'video', 'v1', 'views')).toBe(3); // race-1, race-2, q-race-1
+    expect(metricValue(db, 'video', 'v1', 'watch_time')).toBe(55); // 30 + 5 + 20
+    expect(metricValue(db, 'video', 'v1', 'retention_start')).toBe(1);
+    expect(metricValue(db, 'video', 'v1', 'retention', '1')).toBe(1);
+  });
+
   it('a timeout after D1 commit during internal retry still counts exactly once', async () => {
     const db = createSqliteD1();
     const realBatch = db.batch.bind(db);
@@ -218,7 +290,7 @@ describe('exact analytics counts (#1921)', () => {
     expect(metricValue(db, 'video', 'v1', 'retention', '5')).toBe(1);
   });
 
-  it('a duplicate delivery (across batches and within the same batch) counts once', async () => {
+  it('a duplicate delivery (in batch, across batches, and across UTC midnight) counts once', async () => {
     const db = createSqliteD1();
     const env = makeEnv(db);
 
@@ -257,14 +329,26 @@ describe('exact analytics counts (#1921)', () => {
     expect(metricValue(db, 'video', 'v1', 'retention', '4')).toBe(1);
     expect(metricValue(db, 'video', 'v1', 'embed_origin', 'https://embed.example.org')).toBe(1);
     expect(metricValue(db, 'site', 'videos', 'visits')).toBe(1);
+
+    // Stale/clamped timestamp straddling UTC midnight still hits the neighbouring day_bucket
+    const staleTs = '2026-10-01T12:00:00.000Z';
+    const b1 = new CounterBatch();
+    b1.addForMessage('midnight-1', [{ entityType: 'video', entityId: 'v-mid', day: DAY, metric: 'views', value: 1 }], staleTs);
+    await b1.flush(db, 1, { now: Date.parse('2026-11-24T23:59:59.000Z') });
+
+    const b2 = new CounterBatch();
+    b2.addForMessage('midnight-1', [{ entityType: 'video', entityId: 'v-mid', day: DAY, metric: 'views', value: 1 }], staleTs);
+    await b2.flush(db, 1, { now: Date.parse('2026-11-25T00:00:01.000Z') });
+
+    expect(metricValue(db, 'video', 'v-mid', 'views')).toBe(1);
   });
 
-  it('a partial batch failure (per-message failure and mixed-batch flush failure) counts each message exactly once', async () => {
+  it('a partial batch failure (per-message, mixed-batch flush, or refused increment) counts each valid message exactly once', async () => {
     const db = createSqliteD1();
 
     // Case 1: One message in a batch fails before counter recording (R2 archive error),
     // while the other messages succeed and flush. Then the failed message is redelivered
-    // alongside a duplicate of an already-counted message and a brand-new message.
+    // alongside duplicates of already-counted messages and a brand-new message.
     const r2Put = jest.fn(async (key: string) => {
       if (key.endsWith('.p-fail')) throw new Error('R2 transient error');
     });
@@ -332,6 +416,17 @@ describe('exact analytics counts (#1921)', () => {
     await worker.queue({ queue: 'al-ummah-now-videos', messages: mixedRetry } as never, flakyEnv);
     expect(metricValue(db, 'video', 'v1', 'views')).toBe(4);
     expect(metricValue(db, 'video', 'v1', 'watch_time')).toBe(60); // 40 + 5 + 15
+
+    // Case 3 (N3): One bad/invalid increment in a batch of 10 is refused before SQL and never fails the other 9
+    const refused: string[] = [];
+    const batchOfTen = new CounterBatch((_inc, reason) => refused.push(reason));
+    for (let i = 0; i < 9; i++) {
+      batchOfTen.addForMessage(`good-${i}`, [{ entityType: 'video', entityId: 'v-ten', day: DAY, metric: 'views', value: 1 }], AT);
+    }
+    batchOfTen.addForMessage('bad-1', [{ entityType: 'video', entityId: 'v-ten', day: 'not-a-day', metric: 'views', value: Number.NaN }], AT);
+    await batchOfTen.flush(db, 1, { now: Date.parse(AT) });
+    expect(refused).toEqual(['invalid_key']);
+    expect(metricValue(db, 'video', 'v-ten', 'views')).toBe(9);
   });
 
   it('single-message mode returns failure with shouldRetry on D1 flush error', async () => {
@@ -346,17 +441,21 @@ describe('exact analytics counts (#1921)', () => {
     expect(res.error).toContain('D1 down');
   });
 
-  it('retries with bounded backoff, routes to DLQ after max_retries, and a DLQ replay counts once', async () => {
+  it('bounds retries, enforces message_retention_period <= TTL/2, and blocks duplicate DLQ replays even > 8 days apart', async () => {
     // Verify retry schedule matches wrangler max_retries
     expect(analyticsFlushRetryDelaySeconds(1)).toBe(ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS[0]);
     expect(analyticsFlushRetryDelaySeconds(2)).toBe(ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS[1]);
     expect(analyticsFlushRetryDelaySeconds(3)).toBe(ANALYTICS_FLUSH_RETRY_DELAYS_SECONDS[2]);
     expect(analyticsFlushRetryDelaySeconds(VIDEOS_MAX_RETRIES + 1)).toBeUndefined();
 
-    // Verify wrangler configs bound retries and wire the DLQ on al-ummah-now-videos
+    // Verify wrangler configs bound retries, wire the DLQ, and never set message_retention_period > TTL / 2 (N1)
+    const DEFAULT_CF_QUEUE_RETENTION_SECONDS = 4 * 86_400; // Cloudflare Queues default: 4 days
     for (const file of ['wrangler.jsonc', 'wrangler.qa.jsonc']) {
       const text = readFileSync(join(__dirname, '..', '..', file), 'utf8');
       expect(text).toMatch(/"queue":\s*"al-ummah-now-videos[\s\S]*?"max_retries":\s*3[\s\S]*?"dead_letter_queue":\s*"al-ummah-now-dlq/);
+      const retentionMatches = [...text.matchAll(/"message_retention_period":\s*(\d+)/g)];
+      const maxRetention = retentionMatches.length ? Math.max(...retentionMatches.map((m) => Number(m[1]))) : DEFAULT_CF_QUEUE_RETENTION_SECONDS;
+      expect(ANALYTICS_DEDUPE_TTL_DAYS * 86_400).toBeGreaterThanOrEqual(2 * maxRetention);
     }
 
     const db = createSqliteD1();
@@ -375,11 +474,11 @@ describe('exact analytics counts (#1921)', () => {
 
     // DLQ consumer stores it; once D1 is healthy, admin replays it and it counts once (and not twice if redelivered)
     const dlqDelivery = { id: 'dlq-1', body, attempts: 4, ack: jest.fn(), retry: jest.fn() };
-    await processDeadLetterBatch({ queue: 'al-ummah-now-dlq', messages: [dlqDelivery] }, { NOTIFICATIONS_DB: db, ENVIRONMENT: 'test' }, logger, 1000);
+    await processDeadLetterBatch({ queue: 'al-ummah-now-dlq', messages: [dlqDelivery] }, { NOTIFICATIONS_DB: db, ENVIRONMENT: 'test' }, logger, Date.parse(AT));
     expect(dlqDelivery.ack).toHaveBeenCalled();
 
     const replayed: AlUmmahMessage[] = [];
-    const outcome = await replayDeadLetter(db, { send: async (m) => { replayed.push(m); } }, 'dlq-1', 2000);
+    const outcome = await replayDeadLetter(db, { send: async (m) => { replayed.push(m); } }, 'dlq-1', Date.parse(AT) + 1000);
     expect(outcome).toEqual({ status: 'replayed', messageId: 'dlq-v-1' });
     expect(replayed).toHaveLength(1);
 
@@ -387,10 +486,26 @@ describe('exact analytics counts (#1921)', () => {
     await worker.queue({ queue: 'al-ummah-now-videos', messages: [qMsg(replayed[0])] } as never, healthyEnv);
     await worker.queue({ queue: 'al-ummah-now-videos', messages: [qMsg(replayed[0])] } as never, healthyEnv);
     expect(metricValue(db, 'video', 'v1', 'views')).toBe(1);
+
+    // N2: Even > 8 days later after analytics_dedupe purges the marker, dead_letters.replayed_at blocks a second replay
+    const tenDaysLater = Date.parse(AT) + (ANALYTICS_DEDUPE_TTL_DAYS + 2) * 86_400_000;
+    await purgeExpiredAnalyticsDedupe(db, tenDaysLater);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 0 });
+    const secondReplay = await replayDeadLetter(db, { send: async (m) => { replayed.push(m); } }, 'dlq-1', tenDaysLater);
+    expect(secondReplay).toEqual({ status: 'already_replayed' });
+    expect(replayed).toHaveLength(1);
+    expect(metricValue(db, 'video', 'v1', 'views')).toBe(1);
   });
 
-  it('merges hot-batch increments into one counter row per key and uses indexed queries with no scans', async () => {
+  it('has no secondary index on analytics_dedupe, merges hot batches, and runs zero table scans', async () => {
     const db = createSqliteD1();
+
+    // S1: No secondary index on analytics_dedupe -> 1 row written on insert + 1 on purge delete
+    const secondaryIndexes = db.raw
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'analytics_dedupe'")
+      .all() as { name: string }[];
+    expect(secondaryIndexes).toEqual([]);
+
     const batchSpy = jest.spyOn(db, 'batch');
     const env = makeEnv(db);
 
@@ -409,55 +524,94 @@ describe('exact analytics counts (#1921)', () => {
       { entity_type: 'video', entity_id: 'v1', day: DAY, metric: 'views', dim: '', value: 10 },
     ]);
 
-    // EXPLAIN QUERY PLAN: every lookup on analytics_dedupe uses PK or idx_analytics_dedupe_expires (no SCAN)
+    // EXPLAIN QUERY PLAN: every lookup and purge on analytics_dedupe uses the (day_bucket, message_id) PK (no SCAN)
     const plan = (sql: string, ...params: unknown[]) =>
       (db.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]).map((r) => r.detail).join(' | ');
 
-    const bulkPlan = plan(BULK_UPSERT_DEDUPED, JSON.stringify([['video', 'v1', DAY, 'views', '', 1, 'hot-0']]));
-    expect(bulkPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY/);
+    const { lookupBuckets } = resolveMessageBuckets(AT, Date.parse(AT));
+    const bulkPlan = plan(BULK_UPSERT_DEDUPED, JSON.stringify([['video', 'v1', DAY, 'views', '', 1, 'hot-0', ...lookupBuckets]]));
+    expect(bulkPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket=\? AND message_id=\?\)/);
     expect(bulkPlan).not.toMatch(/SCAN analytics_dedupe/);
 
-    const boundedPlan = plan(BOUNDED_UPSERT_DEDUPED, 'video', 'v1', DAY, 'source', 'embed', 10, 'other', JSON.stringify([['hot-0', 1]]));
-    expect(boundedPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY/);
+    const boundedPlan = plan(
+      BOUNDED_UPSERT_DEDUPED,
+      'video',
+      'v1',
+      DAY,
+      'source',
+      'embed',
+      10,
+      'other',
+      JSON.stringify([['hot-0', 1, ...lookupBuckets]]),
+    );
+    expect(boundedPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket=\? AND message_id=\?\)/);
     expect(boundedPlan).not.toMatch(/SCAN analytics_dedupe/);
 
-    const dedupeInsertPlan = plan(DEDUPE_INSERT, JSON.stringify(['hot-0']), 9999);
+    const dedupeInsertPlan = plan(DEDUPE_INSERT, JSON.stringify([[DAY, 'hot-0']]));
     expect(dedupeInsertPlan).not.toMatch(/SCAN analytics_dedupe/);
 
     const purgePlan = plan(
-      'DELETE FROM analytics_dedupe WHERE message_id IN (SELECT message_id FROM analytics_dedupe WHERE expires_at < ?1 ORDER BY expires_at LIMIT ?2)',
-      9999,
+      'DELETE FROM analytics_dedupe WHERE (day_bucket, message_id) IN (SELECT day_bucket, message_id FROM analytics_dedupe WHERE day_bucket < ?1 ORDER BY day_bucket, message_id LIMIT ?2)',
+      '2026-11-16',
       ANALYTICS_DEDUPE_PURGE_BATCH,
     );
-    expect(purgePlan).toMatch(/idx_analytics_dedupe_expires/);
-    expect(purgePlan).not.toMatch(/SCAN analytics_dedupe(?! USING)/);
+    expect(purgePlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket<\?\)/);
+    expect(purgePlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket=\? AND message_id=\?\)/);
+    expect(purgePlan).not.toMatch(/SCAN analytics_dedupe/);
     expect(purgePlan).not.toMatch(/TEMP B-TREE/);
   });
 
-  it('purges expired analytics_dedupe markers in bounded batches on the daily cron', async () => {
+  it('purges expired day buckets hourly in gentle 1,000-row PK chunks, reports backlog when capped, and finishes on the next run', async () => {
+    expect(ANALYTICS_DEDUPE_PURGE_BATCH).toBe(1000);
+
     const db = createSqliteD1();
-    const now = 1_900_000_000_000;
+    const now = Date.parse('2026-11-24T12:00:00.000Z');
+    const expiredDay = '2026-11-15'; // 9 days before 2026-11-24 (> 8-day TTL)
+    const activeDay = '2026-11-23'; // 1 day before 2026-11-24
 
-    // Seed via CounterBatch with explicit timestamps: one expired, one active
-    const b1 = new CounterBatch();
-    b1.addForMessage('old-msg', [{ entityType: 'video', entityId: 'v1', day: DAY, metric: 'views', value: 1 }]);
-    await b1.flush(db, 1, { now: now - ANALYTICS_DEDUPE_TTL_MS - 1000 });
+    // Seed 5 expired rows and 2 active rows
+    const insert = db.raw.prepare('INSERT INTO analytics_dedupe (day_bucket, message_id) VALUES (?, ?)');
+    for (let i = 0; i < 5; i++) insert.run(expiredDay, `old-${i}`);
+    for (let i = 0; i < 2; i++) insert.run(activeDay, `fresh-${i}`);
 
-    const b2 = new CounterBatch();
-    b2.addForMessage('fresh-msg', [{ entityType: 'video', entityId: 'v1', day: DAY, metric: 'views', value: 1 }]);
-    await b2.flush(db, 1, { now: now - 1000 });
+    // Bounded run that hits maxRounds reports caughtUp: false and stops cleanly
+    const partial = await purgeExpiredAnalyticsDedupe(db, now, { batchSize: 2, maxRounds: 2 });
+    expect(partial).toMatchObject({ deleted: 4, rounds: 2, caughtUp: false, timedOut: false, cutoffDay: '2026-11-16' });
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(expiredDay)).toEqual({ n: 1 });
 
-    expect(await purgeExpiredAnalyticsDedupe(db, now)).toBe(1);
-    const remaining = db.raw.prepare('SELECT message_id FROM analytics_dedupe').all() as { message_id: string }[];
-    expect(remaining).toEqual([{ message_id: 'fresh-msg' }]);
+    // Next hourly run finishes the remaining expired row and keeps active rows untouched
+    const finished = await runAnalyticsDedupePurge(makeEnv(db), now);
+    expect(finished).toMatchObject({ deleted: 1, rounds: 1, caughtUp: true, timedOut: false });
+    const remaining = db.raw.prepare('SELECT day_bucket, message_id FROM analytics_dedupe ORDER BY message_id').all();
+    expect(remaining).toEqual([
+      { day_bucket: activeDay, message_id: 'fresh-0' },
+      { day_bucket: activeDay, message_id: 'fresh-1' },
+    ]);
 
-    // Also wired into runScheduled
-    const b3 = new CounterBatch();
-    b3.addForMessage('expired-cron', [{ entityType: 'video', entityId: 'v1', day: DAY, metric: 'views', value: 1 }]);
-    await b3.flush(db, 1, { now: now - ANALYTICS_DEDUPE_TTL_MS - 5000 });
+    // Time-box guard stops before exceeding wall-clock budget
+    for (let i = 0; i < 4; i++) insert.run(expiredDay, `tb-${i}`);
+    let t = 0;
+    const timedOut = await purgeExpiredAnalyticsDedupe(db, now, {
+      batchSize: 2,
+      maxRounds: 10,
+      timeBoxMs: 100,
+      clock: () => {
+        t += 150;
+        return t;
+      },
+    });
+    expect(timedOut).toMatchObject({ deleted: 2, rounds: 1, caughtUp: false, timedOut: true });
 
+    // Wired into BOTH the hourly cron (ROLLUP_IMPORT_CRON) and the daily runScheduled cron
+    const scheduledPromises: Promise<unknown>[] = [];
+    await worker.scheduled({ cron: ROLLUP_IMPORT_CRON }, makeEnv(db), { waitUntil: (p) => scheduledPromises.push(p) });
+    await Promise.all(scheduledPromises);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(expiredDay)).toEqual({ n: 0 });
+
+    insert.run(expiredDay, 'daily-expired');
     await runScheduled(makeEnv(db), now);
-    const afterCron = db.raw.prepare('SELECT message_id FROM analytics_dedupe').all() as { message_id: string }[];
-    expect(afterCron).toEqual([{ message_id: 'fresh-msg' }]);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(expiredDay)).toEqual({ n: 0 });
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(activeDay)).toEqual({ n: 2 });
+    expect(ANALYTICS_DEDUPE_TTL_MS).toBe(ANALYTICS_DEDUPE_TTL_DAYS * 86_400_000);
   });
 });
