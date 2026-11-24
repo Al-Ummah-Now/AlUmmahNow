@@ -10,13 +10,13 @@ import {
 	CommentViewer,
 	DEFAULT_COMMENT_PAGE_SIZE,
 	MAX_COMMENT_PAGE_SIZE,
-	getCommentSettings,
 	paginateComments,
 	parseCommentSort,
 	StoredComment,
 } from "../../lib/comments";
 import { toCommentListItems } from "../../lib/commentAuthors";
 import { reactorId } from "../../lib/reactions";
+import { commentSettingsOf } from "../../lib/contentFlags";
 
 const CommentAuthorSchema = z.object({
 	userId: z.string(),
@@ -110,7 +110,8 @@ export class CommentList extends OptionalAuthRoute {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 
-		const commentSettings = getCommentSettings(video);
+		// Off on a video made for kids, whatever the creator chose (wiki E20 §5.5)
+		const commentSettings = await commentSettingsOf(c.env, video);
 		// Held comments show to the video's owner and to channel admins and moderators
 		const viewer: CommentViewer = { userId, isVideoOwner: await canOnVideo(c.env as never, video, userId, 'comment.moderate') };
 		const page = commentSettings === 'off'

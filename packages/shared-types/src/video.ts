@@ -88,6 +88,11 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   sharesCount?: number;
   /** Per-video comment settings (Story 29.2): on | held (for review) | off */
   commentSettings?: VideoCommentSettings;
+  /** Signed-in 18+ only, and who set it (content-flags.ts) */
+  ageRestricted?: boolean;
+  ageRestrictedBy?: 'creator' | 'staff';
+  /** The video's own choice; absent: what its YouTube import recorded (isMadeForKids) */
+  madeForKids?: boolean;
 
   // Status and visibility (video-visibility.ts: public | unlisted | private)
   isPublic?: boolean;
@@ -200,6 +205,8 @@ export interface VideoUpdateRequest {
   category?: VideoCategory;
   language?: string;
   commentSettings?: VideoCommentSettings;
+  ageRestricted?: boolean;
+  madeForKids?: boolean;
   /** Short or video; 'auto' clears the choice so it is detected again */
   format?: VideoFormat | 'auto';
 }

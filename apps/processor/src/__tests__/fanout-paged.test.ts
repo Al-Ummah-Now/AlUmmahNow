@@ -8,6 +8,7 @@
  * within a small, fixed number of subrequests.
  */
 import { createLogger } from '@al-ummah/logger';
+import { forgetFeatureSwitches } from '@al-ummah/shared-types';
 import { MessageProcessor } from '../messageProcessor';
 import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 import { FANOUT_PAGE } from '../lib/notifications-store';
@@ -142,5 +143,42 @@ describe('paged fan-out', () => {
     await t.deliver(m);
     expect(t.pushDispatched).toEqual(['owner']);
     expect(t.db.raw.prepare('SELECT COUNT(*) AS n FROM notifications').get()?.n).toBe(1);
+  });
+
+  describe('a video made for kids (wiki E20 §5.5)', () => {
+    const kids = (): AlUmmahMessage => { const m = fanout(); return { ...m, payload: { ...(m.payload as object), madeForKids: true } } as AlUmmahMessage; };
+    const switches = (answer: () => unknown[]) => ({
+      prepare: () => { const s: any = { bind: () => s, first: async () => null, all: async () => ({ results: answer() }) }; return s; },
+    });
+    const run = async (answer?: () => unknown[], message = kids()) => {
+      forgetFeatureSwitches();
+      const t = setup(5);
+      if (answer) (t.env as unknown as Record<string, unknown>).SEARCH_DB = switches(answer);
+      const result = await t.deliver(message).then(() => 'ok', () => 'failed');
+      return { t, result, stored: (t.db.raw.prepare('SELECT COUNT(*) AS n FROM notifications').get() as { n: number }).n };
+    };
+    const row = (enabled: number) => [{ key: 'ageRules', enabled, version: 1, updated_by: 'x', updated_at: 'x' }];
+
+    it('age rules on: social hears about it once, no subscriber is notified', async () => {
+      const r = await run(() => row(1));
+      expect([r.result, r.stored, r.t.social.length, r.t.pushDispatched.length, r.t.queued.length]).toEqual(['ok', 0, 1, 0, 0]);
+    });
+
+    it('age rules off: subscribers are notified as before', async () => {
+      const r = await run(() => row(0));
+      expect(r.result).toBe('ok');
+      expect(r.stored).toBeGreaterThan(0);
+    });
+
+    it('switch unreadable: nobody is notified and the message is retried', async () => {
+      const r = await run(() => { throw new Error('D1 down'); });
+      expect([r.result, r.stored, r.t.pushDispatched.length]).toEqual(['failed', 0, 0]);
+    });
+
+    it('any other video never reads the switch', async () => {
+      const r = await run(() => { throw new Error('D1 down'); }, fanout());
+      expect(r.result).toBe('ok');
+      expect(r.stored).toBeGreaterThan(0);
+    });
   });
 });

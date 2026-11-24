@@ -5,7 +5,7 @@ import { resolvePublicProfilePrivacy } from './userHandles';
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { audibleAudioTracks, can, channelRoleOf, creatorReviewView, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
+import { audibleAudioTracks, can, channelRoleOf, creatorReviewView, isMadeForKids, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
@@ -96,6 +96,7 @@ export function transformVideoToView(
         // Stored comments as they are (minus hidden ones and dislikes), as before zod 4 typed them precisely
         comments: publicComments as unknown as z.infer<typeof VideoView>['comments'],
         commentSettings: getCommentSettings(video),
+        ...(isMadeForKids(video) ? { madeForKids: true } : {}),
         ...channelNameFields(channel),
         channelAvatarUrl: channel?.avatarUrl,
         channelCoverUrl: channel?.coverUrl,

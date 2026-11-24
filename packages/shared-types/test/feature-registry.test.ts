@@ -102,13 +102,14 @@ test('defaults keep today’s behaviour (the live app features, caption download
     'listenMode',
     'offlineDownloads',
     'appUpdates',
+    'ageRules',
   ]);
 });
 
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools'],
+    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools', 'ageRules'],
   );
 });
 

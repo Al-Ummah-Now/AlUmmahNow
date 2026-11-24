@@ -15,6 +15,7 @@ import { isVideoPubliclyVisible, type VideoVisibilityFields } from '../video-vis
 import { isPostHeldByReview } from '../video-review';
 import { findVideoCategory } from '../video-categories';
 import { isShort, type VideoFormatInput } from '../video-format';
+import { isAgeRestricted, isMadeForKids, type ContentFlagFields } from '../content-flags';
 import { buildIndexText, detectTextLanguage } from './normalize';
 import { publicMp4Path } from '../media-delivery';
 
@@ -47,6 +48,9 @@ export interface SearchVideoPayload {
   isLive: boolean;
   /** Short or video (video-format.ts). */
   isShort?: boolean;
+  /** Content flags (content-flags.ts), only when set */
+  ageRestricted?: true;
+  madeForKids?: true;
   channelId: string;
   channelName?: string;
   /** The channel's name per language ('en', 'ar'), set on search responses */
@@ -292,6 +296,8 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       tags: tags.slice(0, 10),
       isLive: obj.isLive === true,
       isShort: short,
+      ...(isAgeRestricted(obj as ContentFlagFields) ? { ageRestricted: true as const } : {}),
+      ...(isMadeForKids(obj as ContentFlagFields) ? { madeForKids: true as const } : {}),
       channelId: str(obj.channelId) ?? '',
       channelName: str(obj.channelName) ?? str(obj.channel),
       channelAvatarUrl: str(obj.channelAvatarUrl),

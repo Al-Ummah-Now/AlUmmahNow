@@ -1,6 +1,7 @@
 import { Num, Str, Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { ageRulesOn } from "../../lib/contentFlags";
 import { logger } from "../../lib/logger";
 import {
   DiscoveryVideo,
@@ -13,7 +14,7 @@ import {
   rankTrending,
   toVideoResponse,
 } from "../../lib/discovery";
-import { parseSuggestionTypes, type SearchDb } from "@al-ummah/shared-types";
+import { isMadeForKids, parseSuggestionTypes, type SearchDb } from "@al-ummah/shared-types";
 import { initialSuggestionsFromIndex, suggestFromIndex, type IndexSuggestion } from "../../lib/search/query";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
 import { waitUntilOf } from "../../lib/search/ownership";
@@ -372,13 +373,18 @@ export class RecommendationsGet extends OptionalAuthRoute {
         }
       }
 
-      const pool = await loadCandidatePool(c.env, query.videoId, history.seedIds);
+      // Made for kids (wiki E20 §5.5): unreadable switches count as on
+      const kidsRules = history.watchedIds.length > 0 && await ageRulesOn(c.env).catch(() => true);
+      const pool = await loadCandidatePool(c.env, query.videoId, history.seedIds, kidsRules);
+      // Next to a video made for kids nothing of the viewer's shapes the list
+      const personal = !(kidsRules && isMadeForKids(pool.seeds.find(seed => seed.id === query.videoId)));
+      const watchedIds = personal ? history.watchedIds : [];
       const exclude = new Set<string>(query.videoId ? [query.videoId] : []);
-      if (excludeWatched) history.watchedIds.forEach(id => exclude.add(id));
+      if (excludeWatched) watchedIds.forEach(id => exclude.add(id));
 
       const basedOn: string[] = [];
       if (query.videoId && pool.seeds.some(seed => seed.id === query.videoId)) basedOn.push("video");
-      if (history.watchedIds.length > 0) basedOn.push("history");
+      if (watchedIds.length > 0) basedOn.push("history");
       if (pool.seeds.length === 0) basedOn.push("popular");
 
       const ranked = rankRecommendations(pool.candidates, {

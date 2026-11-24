@@ -108,6 +108,7 @@ export const FEATURE_KEYS = [
   'listenMode',
   'offlineDownloads',
   'appUpdates',
+  'ageRules',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -720,6 +721,23 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     requires: [],
     userFeatureKeys: [],
     setupHref: '/app-config',
+    offline: 'lastKnownElseHidden',
+  },
+  // --- Age rules (wiki E20, O45) ---------------------------------------------
+  {
+    key: 'ageRules',
+    group: 'people',
+    name: { en: 'Age rules', ar: 'قواعد العمر' },
+    help: {
+      en: 'Nobody is asked for a date of birth, and age-restricted and made-for-kids videos behave like any other video. Dates of birth already entered are kept.',
+      ar: 'لا يُطلب من أحد تاريخ ميلاده، وتُعامل المرئيات المقيّدة بالعمر والمخصصة للأطفال كغيرها من المرئيات. تبقى تواريخ الميلاد المُدخلة محفوظة.',
+    },
+    offMessage: { en: 'Age settings aren’t available right now.', ar: 'إعدادات العمر غير متاحة الآن.' },
+    default: false,
+    toggle: 'superAdmin',
+    confirm: 'both',
+    requires: [],
+    userFeatureKeys: [],
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);

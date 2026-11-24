@@ -25,8 +25,15 @@ const creatorSupport: FeaturePrecondition = async (env) => {
   return { ok: false, reason: refused.reason, reasonKey: refused.reasonKey };
 };
 
+/** Age rules (wiki E20 §5.2): refused until E20-B2 brings the real checks (Auth's date of birth, the numbers, account events). */
+const ageRules: FeaturePrecondition = async () => ({
+  ok: false,
+  reason: { en: 'The date of birth page and account events aren’t ready in this environment yet.', ar: 'صفحة تاريخ الميلاد وأحداث الحساب ليست جاهزة في هذه البيئة بعد.' },
+  reasonKey: 'age_rules_not_ready',
+});
+
 /** Checks by switch. */
-export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport };
+export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport, ageRules };
 
 export const PRECONDITION_UNREADABLE: FeatureText = {
   en: 'We couldn’t check whether this can be turned on. Try again in a moment.',

@@ -11,6 +11,7 @@
  * - playUrl on the library's CDN host and bunnyLibraryId, so every later
  *   Bunny call (processing check, delete, signing) uses that library.
  */
+import { contentFlagFields } from '@al-ummah/shared-types';
 import type { z } from 'zod';
 import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import type { Video as BusinessVideo } from '../types';
@@ -42,6 +43,9 @@ export interface UploadRecordInput {
 	/** Primary language of the video, as set on upload */
 	language?: 'en' | 'ar' | 'ur' | 'fr';
 	commentSettings?: 'on' | 'held' | 'off';
+	/** Content flags the uploader chose (lib/contentFlags.ts) */
+	ageRestricted?: boolean;
+	madeForKids?: boolean;
 	/** The file's name as picked (bulk rename's {filename}) */
 	originalFilename?: string;
 	/** A thumbnail stored with the upload (image storage), if any */
@@ -94,6 +98,7 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		...(input.mimeType ? { originalFormat: input.mimeType } : {}),
 		...(input.language ? { language: input.language } : {}),
 		...(input.commentSettings ? { commentSettings: input.commentSettings } : {}),
+		...contentFlagFields(input),
 		...(input.originalFilename ? { originalFilename: input.originalFilename } : {}),
 	} as VideoRecord;
 }

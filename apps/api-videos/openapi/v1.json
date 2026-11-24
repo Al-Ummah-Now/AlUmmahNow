@@ -9382,6 +9382,22 @@
                                 ],
                                 "description": "Comments: on, held for review, off"
                               },
+                              "ageRestricted": {
+                                "type": "boolean",
+                                "description": "Signed-in viewers of 18 or over only"
+                              },
+                              "ageRestrictedBy": {
+                                "type": "string",
+                                "enum": [
+                                  "creator",
+                                  "staff"
+                                ],
+                                "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                              },
+                              "madeForKids": {
+                                "type": "boolean",
+                                "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
+                              },
                               "isPublic": {
                                 "type": "boolean"
                               },
@@ -10476,6 +10492,22 @@
                               "off"
                             ],
                             "description": "Comments: on, held for review, off"
+                          },
+                          "ageRestricted": {
+                            "type": "boolean",
+                            "description": "Signed-in viewers of 18 or over only"
+                          },
+                          "ageRestrictedBy": {
+                            "type": "string",
+                            "enum": [
+                              "creator",
+                              "staff"
+                            ],
+                            "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                          },
+                          "madeForKids": {
+                            "type": "boolean",
+                            "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -12086,6 +12118,22 @@
                             ],
                             "description": "Comments: on, held for review, off"
                           },
+                          "ageRestricted": {
+                            "type": "boolean",
+                            "description": "Signed-in viewers of 18 or over only"
+                          },
+                          "ageRestrictedBy": {
+                            "type": "string",
+                            "enum": [
+                              "creator",
+                              "staff"
+                            ],
+                            "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                          },
+                          "madeForKids": {
+                            "type": "boolean",
+                            "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
+                          },
                           "isPublic": {
                             "type": "boolean"
                           },
@@ -13633,6 +13681,22 @@
                               "off"
                             ],
                             "description": "Comments: on, held for review, off"
+                          },
+                          "ageRestricted": {
+                            "type": "boolean",
+                            "description": "Signed-in viewers of 18 or over only"
+                          },
+                          "ageRestrictedBy": {
+                            "type": "string",
+                            "enum": [
+                              "creator",
+                              "staff"
+                            ],
+                            "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                          },
+                          "madeForKids": {
+                            "type": "boolean",
+                            "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -37745,6 +37809,22 @@
                             ],
                             "description": "Comments: on, held for review, off"
                           },
+                          "ageRestricted": {
+                            "type": "boolean",
+                            "description": "Signed-in viewers of 18 or over only"
+                          },
+                          "ageRestrictedBy": {
+                            "type": "string",
+                            "enum": [
+                              "creator",
+                              "staff"
+                            ],
+                            "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                          },
+                          "madeForKids": {
+                            "type": "boolean",
+                            "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
+                          },
                           "isPublic": {
                             "type": "boolean"
                           },
@@ -38349,6 +38429,22 @@
                                 "off"
                               ],
                               "description": "Comments: on, held for review, off"
+                            },
+                            "ageRestricted": {
+                              "type": "boolean",
+                              "description": "Signed-in viewers of 18 or over only"
+                            },
+                            "ageRestrictedBy": {
+                              "type": "string",
+                              "enum": [
+                                "creator",
+                                "staff"
+                              ],
+                              "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                            },
+                            "madeForKids": {
+                              "type": "boolean",
+                              "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
                             },
                             "isPublic": {
                               "type": "boolean"
@@ -41239,6 +41335,22 @@
                             ],
                             "description": "Comments: on, held for review, off"
                           },
+                          "ageRestricted": {
+                            "type": "boolean",
+                            "description": "Signed-in viewers of 18 or over only"
+                          },
+                          "ageRestrictedBy": {
+                            "type": "string",
+                            "enum": [
+                              "creator",
+                              "staff"
+                            ],
+                            "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                          },
+                          "madeForKids": {
+                            "type": "boolean",
+                            "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
+                          },
                           "isPublic": {
                             "type": "boolean"
                           },
@@ -43626,6 +43738,14 @@
                           ],
                           "description": "Comments: on, held for review, or off"
                         },
+                        "ageRestricted": {
+                          "type": "boolean",
+                          "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                        },
+                        "madeForKids": {
+                          "type": "boolean",
+                          "description": "Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"
+                        },
                         "fileName": {
                           "type": "string",
                           "maxLength": 255,
@@ -44361,6 +44481,14 @@
                       "auto"
                     ],
                     "description": "Upload as a Short or as a video; 'auto' (default) detects it from length and shape"
+                  },
+                  "ageRestricted": {
+                    "type": "boolean",
+                    "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                  },
+                  "madeForKids": {
+                    "type": "boolean",
+                    "description": "Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"
                   },
                   "categorySuggestionKey": {
                     "type": "string",
@@ -45128,6 +45256,22 @@
                       ],
                       "description": "Comments: on, held for review, off"
                     },
+                    "ageRestricted": {
+                      "type": "boolean",
+                      "description": "Signed-in viewers of 18 or over only"
+                    },
+                    "ageRestrictedBy": {
+                      "type": "string",
+                      "enum": [
+                        "creator",
+                        "staff"
+                      ],
+                      "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                    },
+                    "madeForKids": {
+                      "type": "boolean",
+                      "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
+                    },
                     "isPublic": {
                       "type": "boolean"
                     },
@@ -45632,6 +45776,14 @@
                     ],
                     "description": "Comments: on, held for the owner's review, or off"
                   },
+                  "ageRestricted": {
+                    "type": "boolean",
+                    "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                  },
+                  "madeForKids": {
+                    "type": "boolean",
+                    "description": "Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"
+                  },
                   "format": {
                     "type": "string",
                     "enum": [
@@ -45796,6 +45948,22 @@
                                 "off"
                               ],
                               "description": "Comments: on, held for review, off"
+                            },
+                            "ageRestricted": {
+                              "type": "boolean",
+                              "description": "Signed-in viewers of 18 or over only"
+                            },
+                            "ageRestrictedBy": {
+                              "type": "string",
+                              "enum": [
+                                "creator",
+                                "staff"
+                              ],
+                              "description": "Who set ageRestricted; what staff set can't be undone by the creator"
+                            },
+                            "madeForKids": {
+                              "type": "boolean",
+                              "description": "Made for kids: the video's own choice, or what its YouTube import recorded"
                             },
                             "isPublic": {
                               "type": "boolean"
@@ -64645,7 +64813,8 @@
               "newsletter",
               "listenMode",
               "offlineDownloads",
-              "appUpdates"
+              "appUpdates",
+              "ageRules"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
