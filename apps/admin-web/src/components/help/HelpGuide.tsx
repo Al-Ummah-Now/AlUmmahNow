@@ -3,7 +3,7 @@
  * setting with its whole entry, buttons in the card footer at the end edge (owner rule for info
  * pages), and the "not legal advice" note.
  */
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
 import type { LocalizedEntry } from '@/lib/help/content';
 import { RichText } from './RichText';

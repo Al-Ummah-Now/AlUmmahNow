@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
 import { helpAreas } from '@/lib/help/content';
 import { HelpSearch, matchHelp, type HelpSearchItem } from '@/components/help/HelpSearch';
