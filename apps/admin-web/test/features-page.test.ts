@@ -23,7 +23,8 @@ import {
   offCount,
   switchWords,
 } from '../src/lib/features/page-model';
-import { clearDecidedNotices, pendingOf } from '../src/lib/features/page-model';
+import { clearDecidedNotices } from '../src/lib/features/page-model';
+import { readFeatureWrite } from '@al-ummah/shared-types';
 import { NAV_ITEMS, groupedItems, visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { FeaturesView } from '../src/components/features/FeaturesView';
@@ -244,11 +245,11 @@ describe('Features messages', () => {
 });
 
 describe('a switch change sent for approval (AUN-WORKFLOWS WF-9)', () => {
-  it('reads the 202 answer, wrapped or not, and nothing else', () => {
-    assert.equal(pendingOf({ success: true, result: { status: 'pending_approval', request: { id: 'wfr_1' } } }), 'wfr_1');
-    assert.equal(pendingOf({ status: 'pending_approval', request: { id: 'wfr_2' } }), 'wfr_2');
-    assert.equal(pendingOf({ success: true, result: { previous: false, enabled: true, version: 3 } }), null);
-    assert.equal(pendingOf({ status: 'applied', requestId: 'wfr_3' }), null);
+  it('reads admin-api’s 202 as waiting, and a 200 (direct, or applied by the workflow at once) as done', () => {
+    const sent = { enabled: true, expectedVersion: 2 };
+    assert.deepEqual(readFeatureWrite({ success: true, result: { status: 'pending_approval', request: { id: 'wfr_1' } } }, sent), { ok: false, kind: 'pending', requestId: 'wfr_1', enabled: true });
+    assert.deepEqual(readFeatureWrite({ success: true, result: { previous: false, enabled: true, version: 3 } }, sent), { ok: true, data: { previous: false, enabled: true, version: 3 } });
+    assert.deepEqual(readFeatureWrite({ success: true, result: { status: 'applied', request: { id: 'wfr_3' } } }, sent), { ok: true, data: { previous: false, enabled: true, version: 3 } });
   });
 });
 

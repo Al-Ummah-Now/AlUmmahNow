@@ -2368,11 +2368,6 @@ const en = {
     },
     conflictNobody: 'Someone else changed this a moment ago.',
     someAdmin: 'an admin',
-    pending: {
-      sentOn: 'Sent for approval. It switches on once it is approved.',
-      sentOff: 'Sent for approval. It switches off once it is approved.',
-      view: 'View request',
-    },
     preconditionFallback: 'This can’t be switched on yet. Check its setup, then try again.',
     writeFailed: 'The change wasn’t saved. Try again.',
     /** A switch whose approval rule asks for approvers (wiki AUN-WORKFLOWS) */
