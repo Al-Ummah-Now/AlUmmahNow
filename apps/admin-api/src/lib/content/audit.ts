@@ -18,6 +18,8 @@ export type ContentKind =
   | 'post'
   | 'user'
   | 'creator-tier'
+  /** The prayer-time proxy settings (id 'settings') and a purged stored month (id = its cache key); wiki Epic 21 */
+  | 'prayer-settings'
   /** A tier request's decision (id = request id; wiki AUN-TIER-REQUESTS). */
   | 'tier-request'
   /** Live streaming routing settings (id 'routing'). */

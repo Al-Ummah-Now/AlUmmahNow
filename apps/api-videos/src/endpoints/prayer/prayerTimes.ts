@@ -16,7 +16,8 @@ import { PublicRoute, type AppContext } from '../../base';
 import { apiError } from '../../lib/api-error';
 import { findCity } from '../../lib/prayer/cities';
 import { isPrayerMethodId, resolveMethod } from '../../lib/prayer/methods';
-import { allowedMonth, defaultPrayerSettings, hijriMonth, prayerMonth, type PrayerSettings } from '../../lib/prayer/service';
+import { allowedMonth, hijriMonth, prayerMonth, type PrayerSettings } from '../../lib/prayer/service';
+import { readPrayerAdminSettings, toPrayerSettings } from '../../lib/prayer/settings';
 
 /** Browsers and the edge keep an answer a day, and may serve it a week longer while refreshing */
 const CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
@@ -31,10 +32,15 @@ export const PRAYER_CREDITS = {
 	cities: { name: 'GeoNames', url: 'https://www.geonames.org/', license: 'CC BY 4.0' },
 } as const;
 
-/** Tests swap the provider; production builds the AlAdhan adapter with the global fetch */
-let settingsFactory: () => PrayerSettings = () => defaultPrayerSettings();
+/** The admin settings (lib/prayer/settings.ts) as service settings and country overrides; tests swap the provider. */
+let testFactory: (() => PrayerSettings) | null = null;
 export function setPrayerSettingsForTests(factory: (() => PrayerSettings) | null): void {
-	settingsFactory = factory ?? (() => defaultPrayerSettings());
+	testFactory = factory;
+}
+
+async function settingsFor(c: AppContext): Promise<{ settings: PrayerSettings; countryMethods: Record<string, number> }> {
+	const admin = await readPrayerAdminSettings(c.env as never);
+	return { settings: testFactory ? testFactory() : toPrayerSettings(admin), countryMethods: admin.countryMethods };
 }
 
 function edgeCache(): Cache | undefined {
@@ -122,8 +128,8 @@ export class PrayerTimesGet extends PublicRoute {
 		if (!allowedMonth(query.month)) return apiError(c, 400, 'invalid_request', { field: 'month' });
 		const requested = query.method === 'auto' ? 'auto' : Number(query.method);
 		if (requested !== 'auto' && !isPrayerMethodId(requested)) return apiError(c, 400, 'invalid_request', { field: 'method' });
-		const settings = settingsFactory();
-		const method = resolveMethod(requested, city.country);
+		const { settings, countryMethods } = await settingsFor(c);
+		const method = resolveMethod(requested, city.country, countryMethods);
 		const key = cacheUrl(c, '/prayer-times', { p: settings.provider.id, h: settings.hijriSource, city: city.id, month: query.month, method: String(method), asr: query.asr });
 		const hit = await cached(key);
 		if (hit) return hit;
@@ -170,7 +176,7 @@ export class HijriMonthGet extends PublicRoute {
 	async handle(c: AppContext) {
 		const { query } = await this.getValidatedData<typeof this.schema>();
 		if (!allowedMonth(query.month)) return apiError(c, 400, 'invalid_request', { field: 'month' });
-		const settings = settingsFactory();
+		const { settings } = await settingsFor(c);
 		const key = cacheUrl(c, '/hijri', { p: settings.provider.id, h: settings.hijriSource, month: query.month });
 		const hit = await cached(key);
 		if (hit) return hit;

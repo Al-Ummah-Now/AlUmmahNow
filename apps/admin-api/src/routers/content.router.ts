@@ -753,6 +753,30 @@ const TIER_ORDER_AUDIT_ID = 'order';
 app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
 // ?counts=0 passes through: the definitions without the (full-table) counts. With counts, the
 // pending invites per tier too (indexed), so the Tiers page can say why Delete is off.
+/**
+ * Islamic experience: the prayer-time proxy settings (wiki Epic 21 §3, story 21.1c). The
+ * Features page stays the only on/off control. Every change is audited with the previous value.
+ */
+app.get('/islamic/prayer-settings', async (c) => {
+  need(c, 'islamic:manage');
+  return ok(c, await videos(c, '/prayer-settings'));
+});
+
+app.put('/islamic/prayer-settings', async (c) => {
+  need(c, 'islamic:manage');
+  const input = await body(c);
+  const current = await videos<{ settings: Record<string, unknown> }>(c, '/prayer-settings');
+  return ok(c, await audited(c, { kind: 'prayer-settings', id: 'settings', action: 'edit', details: input, previous: current.settings }, () =>
+    videos(c, '/prayer-settings', { method: 'PUT', json: input })));
+});
+
+app.post('/islamic/prayer-cache/purge', async (c) => {
+  need(c, 'islamic:manage');
+  const input = await body(c);
+  return ok(c, await audited(c, { kind: 'prayer-settings', id: 'cache', action: 'purge', details: input }, () =>
+    videos(c, '/prayer-cache/purge', { method: 'POST', json: input })));
+});
+
 app.get('/creator-tiers', async (c) => {
   const list = await videos<Record<string, unknown>>(c, '/creator-tiers', { query: c.req.query() });
   if (c.req.query('counts') === '0') return ok(c, list);
