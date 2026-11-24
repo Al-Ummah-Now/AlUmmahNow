@@ -18,3 +18,9 @@ export function withAccountEmail<T extends { email?: unknown }>(input: T, auth: 
 	const email = tokenEmail(auth);
 	return email ? { ...fields, email } : fields;
 }
+
+/** The `email` of a profile made from the token's email; no key when the token has none. */
+export function accountEmailField(email: string | undefined): { email?: string } {
+	const account = tokenEmail({ email });
+	return account ? { email: account } : {};
+}

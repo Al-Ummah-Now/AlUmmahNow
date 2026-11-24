@@ -158,7 +158,7 @@ export const PlaylistView = z.object({
 // Profile view with computed counts
 export const ProfileView = z.object({
     id: Str(),
-    email: Str().email(),
+    email: Str().email().optional(),
     userName: Str().optional(),
     firstName: Str().optional(),
     firstNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language first names"),

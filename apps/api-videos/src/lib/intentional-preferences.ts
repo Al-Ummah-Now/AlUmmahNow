@@ -9,6 +9,7 @@
  * No streaks, counters of time watched or badges are stored. The profile view is an allowlist, so
  * this never reaches public reads.
  */
+import { accountEmailField } from './account-email';
 import R2Repository from './r2Repo';
 
 export const DAILY_LIMIT_MIN = 5;
@@ -59,7 +60,7 @@ export async function setIntentionalPreferences(
 			profile.dateModified = now;
 			return true;
 		},
-		{ initial: () => ({ id: userId, email: email || 'unknown', dateCreated: now, dateModified: now, channels: [], subscribedTo: [] }) },
+		{ initial: () => ({ id: userId, ...accountEmailField(email), dateCreated: now, dateModified: now, channels: [], subscribedTo: [] }) },
 	);
 	return intentionalPreferencesOf(updated);
 }

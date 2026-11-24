@@ -1,6 +1,7 @@
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
+import { accountEmailField } from "../../lib/account-email";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -122,7 +123,7 @@ export class WatchHistoryAdd extends AuthenticatedRoute {
 		}, {
 			initial: () => ({
 				id: userId,
-				email: auth?.email || "unknown",
+				...accountEmailField(auth?.email),
 				dateCreated: new Date().toISOString(),
 				dateModified: new Date().toISOString(),
 				watchHistory: [],
