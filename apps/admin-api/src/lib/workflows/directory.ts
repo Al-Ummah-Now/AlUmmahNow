@@ -5,7 +5,7 @@
  * - the finance list and tech-staff marks: search D1 (AUN-MEMBERS, lib/support-finance.ts);
  * - the owner: the tech-staff mark (WF-D4), plus any account in PLATFORM_OWNER_USER_IDS.
  *
- * Every lookup is by primary key or an index: idx_support_finance_active (search 0082) and the
+ * Every lookup is by primary key or an index: idx_support_finance_active (search 0085) and the
  * admin_staff role indexes. Results are memoized for one request.
  */
 import { FINANCE_ONLY_SUPPORT_PERMISSIONS, normalizeRoles, type SupportPermission, type WorkflowActor, type WorkflowApproverSet } from '@al-ummah/shared-types';
