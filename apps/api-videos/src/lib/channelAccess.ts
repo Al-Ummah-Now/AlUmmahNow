@@ -255,6 +255,10 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST', 'DELETE'], path: /^\/api\/channels\/[^/]+\/invites(?:\/[^/]+)?\/?$/, capability: 'channel.speak' },
 	// My own invitations: accepting or declining while another channel is active
 	{ methods: ['POST'], path: /^\/api\/channel-invites\/[^/]+\/(?:accept|decline)\/?$/, capability: 'channel.speak' },
+	// Channel move offers, whichever channel is active: the endpoints decide (owner, or the receiver)
+	{ methods: ['POST'], path: /^\/api\/channels\/[^/]+\/move-offers\/?$/, capability: 'channel.speak' },
+	{ methods: ['POST'], path: /^\/api\/move-offers\/[^/]+\/(?:accept|decline)\/?$/, capability: 'channel.speak' },
+	{ methods: ['DELETE'], path: /^\/api\/move-offers\/[^/]+\/?$/, capability: 'channel.speak' },
 	// Comment moderation (Studio Comments, #771): video and post comments, the channel's comment list and blocks
 	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/comments\/[^/]+\/(?:approve|restore|hold|pin|heart)\/?$/, capability: 'comment.moderate' },
 	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/(?:pin|heart)\/?$/, capability: 'comment.moderate' },

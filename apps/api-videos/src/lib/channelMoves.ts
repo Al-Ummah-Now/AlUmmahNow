@@ -9,7 +9,7 @@
  * A channel that accepts payments (creator support set up) is refused here until moves of such
  * channels can wait for an admin's approval on the approval workflow system (AUN-WORKFLOWS).
  */
-import { channelRoleOf } from '@al-ummah/shared-types';
+import { channelRoleOf, localizedDisplayNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { OFFICIAL_HANDLES } from './channelHandles';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
@@ -24,7 +24,7 @@ export const MOVE_OFFER_DAYS = 7;
 /** The owner must have signed in this recently to make an offer. */
 export const MOVE_REAUTH_SECONDS = 10 * 60;
 /** An accept still claimed after this long never finished. */
-const STALE_ACCEPT_MS = 10 * 60 * 1000;
+export const MOVE_STALE_ACCEPT_MS = 10 * 60 * 1000;
 /** A channel can be moved by its owner at most once in this many days. */
 export const MOVE_COOLDOWN_DAYS = 30;
 
@@ -70,8 +70,14 @@ async function profileOf(env: Env, userId: string): Promise<Row | null> {
 }
 
 function nameOf(profile: Row | null, fallback: string): string {
-	const pick = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
-	return pick(profile?.displayName) || [pick(profile?.firstName), pick(profile?.lastName)].filter(Boolean).join(' ') || pick(profile?.userName) || fallback;
+	const userName = typeof profile?.userName === 'string' ? profile.userName.trim() : '';
+	return resolveDisplayName(profile as NameFields | null) || userName || fallback;
+}
+
+/** A person as notice params: `owner`, and `owner_ar`/`owner_en` when their name is localized. */
+function personParams(key: string, profile: Row | null, id: string): Record<string, string> {
+	const localized = localizedDisplayNames(profile as NameFields | null);
+	return { [key]: nameOf(profile, id), ...Object.fromEntries(Object.entries(localized).map(([lang, name]) => [`${key}_${lang}`, name])) };
 }
 
 /**
@@ -95,9 +101,10 @@ export async function moveReceivers(env: Env, channelId: string, ownerId: string
 	return out;
 }
 
-async function notify(env: Env, recipient: string, key: string, params: Record<string, string>, channelId: string, dedupeKey: string): Promise<void> {
+/** A notice about an offer; it opens the offer's page. */
+async function notify(env: Env, recipient: string, key: string, params: Record<string, string>, channelId: string, offerId: string, dedupeKey: string): Promise<void> {
 	try {
-		await enqueueNotification(env as never, { notificationId: crypto.randomUUID(), recipientUserId: recipient, notificationKey: key as never, params, actionUrl: `/channel-moves`, entityId: channelId, dedupeKey, createdAt: Date.now() });
+		await enqueueNotification(env as never, { notificationId: crypto.randomUUID(), recipientUserId: recipient, notificationKey: key as never, params, actionUrl: `/channel-moves/${offerId}`, entityId: channelId, dedupeKey, createdAt: Date.now() });
 	} catch (error) {
 		logger.warn('[ChannelMoves] Notice failed', { channelId, key, error: error instanceof Error ? error.message : String(error) });
 	}
@@ -169,7 +176,7 @@ export async function createMoveOffer(
 		.run();
 	if (Number(inserted.meta?.changes ?? 0) !== 1) throw new MoveError(409, 'offer_open', 'This channel already has an open offer');
 	const owner = await profileOf(env, input.ownerId);
-	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), owner: nameOf(owner, input.ownerId) }, channel.id, `move-offer:${offer.id}`);
+	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), ...personParams('owner', owner, input.ownerId) }, channel.id, offer.id, `move-offer:${offer.id}`);
 	logger.info('[ChannelMoves] Offer made', { channelId: channel.id, offerId: offer.id });
 	return offer;
 }
@@ -181,7 +188,7 @@ export async function createMoveOffer(
 async function settleStaleAccept(env: Env, channelId: string, now: number): Promise<void> {
 	const stale = await db(env)
 		.prepare(`SELECT * FROM channel_move_offers WHERE channel_id = ? AND status = 'accepting' AND updated_at <= ?`)
-		.bind(channelId, iso(now - STALE_ACCEPT_MS))
+		.bind(channelId, iso(now - MOVE_STALE_ACCEPT_MS))
 		.first<MoveOfferRow>();
 	if (!stale) return;
 	const job = await db(env)
@@ -280,7 +287,7 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 	// An erasure closed it after the job was made: the job stops before the channel changes hands, unless it already has
 	if (settled && Number(settled.meta?.changes ?? 0) !== 1 && (await readOffer(env, id))?.status !== 'moved') throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const receiver = await profileOf(env, userId);
-	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, channel.id, `move-offer:${id}:accepted`);
+	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), ...personParams('member', receiver, userId) }, channel.id, id, `move-offer:${id}:accepted`);
 	logger.info('[ChannelMoves] Offer accepted; move queued', { channelId: channel.id, offerId: id, jobId });
 	return { offer: { ...offer, status: 'moved', job_id: jobId }, jobId };
 }
@@ -291,7 +298,7 @@ export async function declineMoveOffer(env: Env, id: string, userId: string, now
 	if (!(await closeOffer(env, id, 'declined', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	const receiver = await profileOf(env, userId);
-	await notify(env, offer.from_user_id, 'channelMoveDeclined', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, offer.channel_id, `move-offer:${id}:declined`);
+	await notify(env, offer.from_user_id, 'channelMoveDeclined', { ...channelParams('channel', channel as never), ...personParams('member', receiver, userId) }, offer.channel_id, id, `move-offer:${id}:declined`);
 }
 
 /** The owner withdraws the offer. */
@@ -302,7 +309,7 @@ export async function cancelMoveOffer(env: Env, id: string, userId: string, now 
 	await openOfferFor(env, id, now);
 	if (!(await closeOffer(env, id, 'cancelled', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
-	await notify(env, offer.to_user_id, 'channelMoveCancelled', channelParams('channel', channel as never), offer.channel_id, `move-offer:${id}:cancelled`);
+	await notify(env, offer.to_user_id, 'channelMoveCancelled', channelParams('channel', channel as never), offer.channel_id, id, `move-offer:${id}:cancelled`);
 }
 
 /** An admin stops an open offer (CC-D1: "an admin can stop a move"); both sides are told. */
@@ -313,7 +320,7 @@ export async function stopMoveOffer(env: Env, channelId: string, id: string, now
 	if (!(await closeOffer(env, id, 'stopped', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	for (const who of [offer.from_user_id, offer.to_user_id]) {
-		await notify(env, who, 'channelMoveStopped', channelParams('channel', channel as never), offer.channel_id, `move-offer:${id}:stopped:${who}`);
+		await notify(env, who, 'channelMoveStopped', channelParams('channel', channel as never), offer.channel_id, id, `move-offer:${id}:stopped:${who}`);
 	}
 	return { ...offer, status: 'stopped' };
 }

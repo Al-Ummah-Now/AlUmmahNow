@@ -8,6 +8,7 @@ import { AppContext, AuthenticatedRoute } from '../../base';
 import { ResponseError } from '../../lib/types';
 import { NO_STORE } from './channelMembers';
 import { apiError } from '../../lib/api-error';
+import { channelMoveState, offerViews, readOfferView } from '../../lib/channelMoveViews';
 import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, type MoveOfferRow } from '../../lib/channelMoves';
 
 const ChannelParams = z.object({ id: z.string().min(1).max(200).describe('Channel id') });
@@ -22,6 +23,20 @@ const errors = {
 	},
 	'503': { description: 'move_check_unavailable', content: { 'application/json': { schema: ResponseError } } },
 };
+
+const Person = z.object({ userId: z.string().nullable(), name: z.string().nullable(), nameLocalized: z.record(z.string(), z.string()).optional(), avatarUrl: z.string().nullable() });
+const OfferView = z.object({
+	id: z.string(),
+	status: z.enum(['offered', 'accepting', 'moved', 'declined', 'cancelled', 'expired', 'stopped', 'refused']),
+	createdAt: z.string(),
+	expiresAt: z.string(),
+	respondedAt: z.string().nullable(),
+	keepContactEmail: z.boolean(),
+	channel: z.object({ id: z.string(), name: z.string().nullable(), nameLocalized: z.record(z.string(), z.string()).optional(), handle: z.string().nullable(), avatarUrl: z.string().nullable() }),
+	from: Person,
+	to: Person,
+	viewerRole: z.enum(['from', 'to', 'owner']),
+});
 
 const view = (o: MoveOfferRow) => ({ id: o.id, channelId: o.channel_id, fromUserId: o.from_user_id, toUserId: o.to_user_id, status: o.status, createdAt: o.created_at, expiresAt: o.expires_at });
 
@@ -102,16 +117,50 @@ export class MyMoveOffers extends AuthenticatedRoute {
 	schema = {
 		tags: ['Channels'],
 		summary: 'My open channel offers',
-		description: '🔒 Offers made to me and by me that are still open.',
-		responses: { '200': { description: 'Open offers', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ received: z.array(Offer), sent: z.array(Offer) }) }) } } } },
+		description: '🔒 Offers made to me and by me that are still open, newest first, 20 of each at most, with the channel and both people by name.',
+		responses: { '200': { description: 'Open offers', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ received: z.array(OfferView), sent: z.array(OfferView) }) }) } } } },
 	};
 	async handle(c: AppContext) {
 		try {
-			const { received, sent } = await myMoveOffers(c.env as never, this.getUserId(c));
-			return c.json({ success: true, data: { received: received.map(view), sent: sent.map(view) } }, 200, NO_STORE);
+			const userId = this.getUserId(c);
+			const { received, sent } = await myMoveOffers(c.env as never, userId);
+			const views = await offerViews(c.env as never, [...received, ...sent], userId);
+			return c.json({ success: true, data: { received: views.slice(0, received.length), sent: views.slice(received.length) } }, 200, NO_STORE);
 		} catch (error) {
 			return refused(c, error);
 		}
+	}
+}
+
+export class MoveOfferFetch extends AuthenticatedRoute {
+	schema = {
+		tags: ['Channels'],
+		summary: 'A channel offer',
+		description: '🔒 The two people of the offer and the channel’s owner; 404 for anyone else. Answered for closed offers too, so a notice’s page can say what happened.',
+		request: { params: OfferParams },
+		responses: { '200': { description: 'The offer', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: OfferView }) } } }, '404': { description: 'offer_not_found', content: { 'application/json': { schema: ResponseError } } } },
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const offer = await readOfferView(c.env as never, params.id, this.getUserId(c));
+		if (!offer) return apiError(c, 404, 'offer_not_found', undefined, NO_STORE);
+		return c.json({ success: true, data: offer }, 200, NO_STORE);
+	}
+}
+
+export class ChannelMoveStateFetch extends AuthenticatedRoute {
+	schema = {
+		tags: ['Channels'],
+		summary: 'The channel’s open offer',
+		description: '🔒 Owner only; 404 for anyone else. The open offer, if any, and from when the owner may move the channel again (`movableAt`; null: now).',
+		request: { params: ChannelParams },
+		responses: { '200': { description: 'The open offer', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ offer: OfferView.nullable(), movableAt: z.string().nullable() }) }) } } }, '404': { description: 'channel_not_found', content: { 'application/json': { schema: ResponseError } } } },
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const state = await channelMoveState(c.env as never, params.id, this.getUserId(c));
+		if (!state) return apiError(c, 404, 'channel_not_found', undefined, NO_STORE);
+		return c.json({ success: true, data: state }, 200, NO_STORE);
 	}
 }
 

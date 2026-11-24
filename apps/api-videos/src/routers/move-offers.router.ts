@@ -4,10 +4,11 @@
  */
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MyMoveOffers } from '../endpoints/channel/channelMoveOffers';
+import { MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MoveOfferFetch, MyMoveOffers } from '../endpoints/channel/channelMoveOffers';
 
 export const moveOffersRouter = fromHono(new Hono());
 moveOffersRouter.get('/', MyMoveOffers);
+moveOffersRouter.get('/:id', MoveOfferFetch);
 moveOffersRouter.post('/:id/accept', MoveOfferAccept);
 moveOffersRouter.post('/:id/decline', MoveOfferDecline);
 moveOffersRouter.delete('/:id', MoveOfferCancel);
