@@ -11,12 +11,13 @@ import { DEFAULT_LIVE_CHAT_SHARE, MODERATION_MAX_TEXT, MODERATION_SURFACES } fro
 import { AiBinding, AiContext, runExtensions, runGuard, translateToEnglish } from './ai';
 import { loadConfig, PROMPT_VERSION } from './config';
 import { decide } from './decide';
+import { holdLevel, holdLiveChatMessage, type LiveChatHoldEnv } from './live-chat';
 import { MODELS } from './pricing';
 import { writeSignal } from './store';
 import { arabicLetterCount, detectLanguage, latinLetterCount, normalizeText } from './text';
 import { estimateScanNeurons, reserveBudget, settleBudget } from './budget';
 
-export interface ModerationConsumerEnv {
+export interface ModerationConsumerEnv extends LiveChatHoldEnv {
   REPORTS_DB: D1Database;
   AI?: AiBinding | undefined;
   AI_MODERATION_ENABLED?: string | undefined;
@@ -148,6 +149,17 @@ export async function handleModerationScan(
     },
     now
   );
+  // The creator's choice for this chat (E17-D4). The signal above stands whatever happens here: a hold that fails
+  // leaves the message where it was, for a person
+  const level = chat && payload.parentId ? holdLevel(scores, config.policies) : null;
+  if (level) {
+    try {
+      const held = await holdLiveChatMessage(env, payload.subjectId, payload.parentId!, level, now);
+      logger.info('[Moderation] Live chat hold', { subjectId: payload.subjectId, streamId: payload.parentId, level, held });
+    } catch (error) {
+      logger.error('[Moderation] Live chat message could not be held', { subjectId: payload.subjectId, streamId: payload.parentId, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
   logger.info('[Moderation] Scan complete', {
     surface: payload.surface,
     subjectId: payload.subjectId,

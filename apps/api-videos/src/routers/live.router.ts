@@ -3,7 +3,7 @@ import { fromHono } from 'chanfana';
 import { LiveStreamCreate } from '../endpoints/live/liveStreamCreate';
 import { LiveStreamsList } from '../endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../endpoints/live/liveStreamUpdate';
-import { LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../endpoints/live/liveChat';
+import { LiveChatHeld, LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../endpoints/live/liveChat';
 import { LiveReminderClear, LiveReminderSet } from '../endpoints/live/liveReminders';
 import { PremiereSwap } from '../endpoints/live/premiere';
 import { LiveStreamDelete, LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamQoe, LiveStreamStart, LiveStreamStateGet, LiveStreamViewers } from '../endpoints/live/liveSession';
@@ -34,6 +34,7 @@ liveRouter.delete('/:id/reminders', LiveReminderClear);
 liveRouter.patch('/:id/premiere', PremiereSwap);
 // Live chat (wiki E17), behind the liveChat switch
 liveRouter.get('/:id/chat', LiveChatList);
+liveRouter.get('/:id/chat/held', LiveChatHeld);
 liveRouter.post('/:id/chat', LiveChatPost);
 liveRouter.post('/:id/chat/:messageId/moderate', LiveChatModerate);
 liveRouter.patch('/:id/chat/settings', LiveChatSettingsUpdate);

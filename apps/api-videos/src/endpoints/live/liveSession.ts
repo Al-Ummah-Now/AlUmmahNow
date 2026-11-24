@@ -70,6 +70,8 @@ export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
 		...(isOwner ? { providerMove: providerMove ?? null } : {}),
 		// Which video a premiere shows is its team's unless it is on or over (wiki E17)
 		...(!isOwner && s.status !== 'live' && s.status !== 'ended' ? { premiereVideoId: undefined } : {}),
+		// What the AI scan holds in the chat is the team's business (E17-D4)
+		...(isOwner ? {} : { aiHold: undefined }),
 		// The channel member who created it, for those who manage the channel's live
 		...(isOwner && createdBy ? { createdBy } : {}),
 	};

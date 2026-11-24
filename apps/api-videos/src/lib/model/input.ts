@@ -1,4 +1,4 @@
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN, LIVE_EVENT_TYPES, isLiveChatSlowMode } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN, LIVE_CHAT_AI_HOLDS, LIVE_EVENT_TYPES, isLiveChatSlowMode } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
@@ -160,6 +160,7 @@ const LiveStreamAppFields = {
     chatReplay: z.boolean().optional(),
     slowModeSeconds: z.number().int().refine(isLiveChatSlowMode, '0, 5, 10, 30 or 60').optional(),
     subscribersOnly: z.boolean().optional(),
+    aiHold: z.enum(LIVE_CHAT_AI_HOLDS).optional(),
     madeForKids: z.boolean().optional(),
     eventType: LiveEventTypeInput,
 };

@@ -74,6 +74,7 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'PATCH', '/api/live-streams/:id/premiere', 'livePremieres'),
   // Live chat (wiki E17): reading, posting, moderating and its settings
   closed(r('api-videos', 'GET', '/api/live-streams/:id/chat', 'liveChat')),
+  closed(r('api-videos', 'GET', '/api/live-streams/:id/chat/held', 'liveChat')),
   closed(r('api-videos', 'POST', '/api/live-streams/:id/chat', 'liveChat')),
   closed(r('api-videos', 'POST', '/api/live-streams/:id/chat/:messageId/moderate', 'liveChat')),
   closed(r('api-videos', 'PATCH', '/api/live-streams/:id/chat/settings', 'liveChat')),

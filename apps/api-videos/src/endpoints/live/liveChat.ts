@@ -7,7 +7,7 @@
  *   PATCH /api/live-streams/:id/chat/settings             chat on/off, replay, slow mode, subscribers only
  */
 import { z } from 'zod';
-import { LIVE_CHAT_ACTIONS, LIVE_CHAT_SLOW_MODES, checkLiveChatText, liveChatChannel, liveChatOpenToAnyone, type LiveChatAction, type LiveChatEvent, type LiveChatSettings } from '@al-ummah/shared-types';
+import { DEFAULT_LIVE_CHAT_AI_HOLD, LIVE_CHAT_ACTIONS, LIVE_CHAT_AI_HOLDS, LIVE_CHAT_SLOW_MODES, checkLiveChatText, isLiveChatAiHold, liveChatChannel, liveChatOpenToAnyone, type LiveChatAction, type LiveChatEvent, type LiveChatSettings } from '@al-ummah/shared-types';
 import { AppContext, AuthenticatedRoute, OptionalAuthRoute } from '../../base';
 import { Str } from '../../lib/chanfana-params';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -17,7 +17,7 @@ import { resolveCommentAuthors } from '../../lib/commentAuthors';
 import { deleteEdgeCache, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
 import { featureOff } from '../../lib/features/off';
 import { hasSuspensionHolds } from '../../lib/admin/frozen';
-import { MAX_PAGE, REPLAY_WINDOW_MS, SNAPSHOT_TTL_SECONDS, chatCacheUrl, chatRole, isSubscriber, latestPage, mayRead, olderPage, ownerTierHasChat, pinMessage, postMessage, postingOpen, readChatStream, readMessage, readSnapshot, removeAllBy, removeMessage, replayPage, restoreMessage, withOwnHeld, type ChatStream, type Snapshot } from '../../lib/live/chat';
+import { MAX_PAGE, REPLAY_WINDOW_MS, SNAPSHOT_TTL_SECONDS, chatCacheUrl, chatRole, heldForReview, isSubscriber, latestPage, mayRead, olderPage, ownerTierHasChat, pinMessage, postMessage, postingOpen, readChatStream, readMessage, readSnapshot, removeAllBy, removeMessage, replayPage, restoreMessage, withOwnHeld, type ChatStream, type Snapshot } from '../../lib/live/chat';
 import { streamKey, type LiveStreamRecord } from '../../lib/live/streams';
 import { logger } from '../../lib/logger';
 import { scanInBackground } from '../../lib/moderation-scan';
@@ -114,6 +114,27 @@ export class LiveChatList extends OptionalAuthRoute {
 		if (!snapshot) return notFound(c);
 		const page = await latestPage(db, snapshot, query.afterId ?? null, query.limit ?? 50);
 		return answer(query.afterId && !page.resync ? page : await withOwnHeld(db, snapshot.stream, userId, page));
+	}
+}
+
+export class LiveChatHeld extends AuthenticatedRoute {
+	schema = addAuthToSchema({
+		tags: ['Live Streams'],
+		summary: 'Live chat messages held for review',
+		description: '🔒 Newest first, at most 100: what the AI scan held (E17-D4). For the stream’s owner, live.manage, live.moderate or comment.moderate. `restore` shows one, `remove` removes it.',
+		request: { params: Params },
+		responses: { '200': Ok(z.object({ messages: z.array(Message) }), 'Held messages'), '403': Err('Not a moderator'), '404': Err('Not found') },
+	});
+
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const db = dbOf(c);
+		if (!db) return unavailable(c);
+		const userId = this.getUserId(c);
+		const stream = await readChatStream(db, params.id);
+		if (!stream) return notFound(c);
+		if (!(await chatRole(c.env as never, stream, userId)).moderates) return (await mayRead(c.env as never, stream, userId)) ? apiError(c, 403, 'forbidden') : notFound(c);
+		return c.json({ success: true, result: { messages: await heldForReview(db, stream.id) } }, 200, { 'Cache-Control': 'private, no-store' });
 	}
 }
 
@@ -234,6 +255,7 @@ export const LiveChatSettingsInput = {
 	chatReplay: z.boolean().optional(),
 	slowModeSeconds: z.union(LIVE_CHAT_SLOW_MODES.map((n) => z.literal(n)) as unknown as [z.ZodLiteral<0>, z.ZodLiteral<5>]).optional().describe('0, 5, 10, 30 or 60'),
 	subscribersOnly: z.boolean().optional(),
+	aiHold: z.enum(LIVE_CHAT_AI_HOLDS).optional().describe('What the AI scan holds for the moderators: nothing, what it flags, or also what comes close'),
 };
 
 export class LiveChatSettingsUpdate extends AuthenticatedRoute {
@@ -242,7 +264,7 @@ export class LiveChatSettingsUpdate extends AuthenticatedRoute {
 		summary: 'Live chat settings',
 		description: '🔒 The stream’s owner, or live.manage or live.moderate on its channel.',
 		request: { params: Params, body: { content: { 'application/json': { schema: z.object(LiveChatSettingsInput) } } } },
-		responses: { '200': Ok(z.object({ settings: z.object({ allowChat: z.boolean(), chatReplay: z.boolean(), slowModeSeconds: z.number(), subscribersOnly: z.boolean() }) }), 'Saved'), '403': Err('Not allowed'), '404': Err('Not found') },
+		responses: { '200': Ok(z.object({ settings: z.object({ allowChat: z.boolean(), chatReplay: z.boolean(), slowModeSeconds: z.number(), subscribersOnly: z.boolean() }), aiHold: z.enum(LIVE_CHAT_AI_HOLDS) }), 'Saved'), '403': Err('Not allowed'), '404': Err('Not found') },
 	});
 
 	async handle(c: AppContext) {
@@ -257,7 +279,7 @@ export class LiveChatSettingsUpdate extends AuthenticatedRoute {
 		const { data, rejected } = await new R2Repository<LiveStreamRecord>(c.env.videos).updateObjectOrReject<true>(streamKey(stream.id), (fresh) => {
 			// The role was judged on this channel; a held stream (suspension) is not changed
 			if ((fresh.channelId ?? null) !== stream.channelId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
-			for (const key of ['allowChat', 'chatReplay', 'slowModeSeconds', 'subscribersOnly'] as const) if (body[key] !== undefined) fresh[key] = body[key];
+			for (const key of ['allowChat', 'chatReplay', 'slowModeSeconds', 'subscribersOnly', 'aiHold'] as const) if (body[key] !== undefined) fresh[key] = body[key];
 			fresh.dateModified = new Date().toISOString();
 			return true;
 		});
@@ -271,7 +293,8 @@ export class LiveChatSettingsUpdate extends AuthenticatedRoute {
 		};
 		// Turning chat off also closes the realtime channel (lib/search/sync.ts, after the record is written)
 		sendChatEvent(c, stream.id, 'live_chat_settings', { settings });
-		return { success: true, result: { settings } };
+		// Not in the event: what is held is the team's business
+		return { success: true, result: { settings, aiHold: isLiveChatAiHold(data.aiHold) ? data.aiHold : DEFAULT_LIVE_CHAT_AI_HOLD } };
 	}
 }
 
