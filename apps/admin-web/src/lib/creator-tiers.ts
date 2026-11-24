@@ -20,7 +20,20 @@ import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
 export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> &
-  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'uploads' | 'channels' | 'importCountsAgainstLimits'>>;
+  Partial<
+    Pick<
+      CreatorTier,
+      | 'captionMinutesMonth'
+      | 'audioTracksPerVideo'
+      | 'live'
+      | 'liveHoursMonth'
+      | 'liveMaxConcurrent'
+      | 'liveMaxStreamMinutes'
+      | 'uploads'
+      | 'channels'
+      | 'importCountsAgainstLimits'
+    >
+  >;
 
 /** The live streaming sentence of a tier's effect (none when the tier predates live). */
 function liveEffect(tier: TierLimits, t: Translator, n: (value: number) => string): string {
@@ -120,7 +133,7 @@ export interface TierFormValues {
   importCountsAgainstLimits: boolean;
 }
 
-export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo' | 'offlineMaxVideos' | 'offlineLicenseDays' | 'notesMax';
+export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo' | 'notesMax';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 /** Field errors for a tier form (empty: valid). Mirrors validateTier in api-videos. No id: api-videos makes it from the name. */

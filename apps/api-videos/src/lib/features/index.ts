@@ -33,7 +33,6 @@ import {
 	tierAllowsChannels,
 	tierAllowsLive,
 	tierAllowsLiveCapability,
-	tierAllowsOfflineDownloads,
 	tierAllowsUploads,
 	type ChannelCapability,
 	type ChannelRole,
@@ -355,8 +354,6 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		viewerCaptionDownload: viewerCaptionDownloadConfigured(settings),
 		quranEditions: quran,
 		quranText,
-		// Listen mode works for signed-out and signed-in viewers once the admin switch is on (wiki E14-D3)
-		listenMode: true,
 		eventCalendar: true,
 		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)
 		intentionalViewing: true,
@@ -437,7 +434,9 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.youtubeImport = youtube;
 	features.aiCategorySuggest = aiCategory;
 	features.bulkSchedule = bulk && roleMay(scope, 'video.schedule');
-	features.offlineDownloads = !pending && tierAllowsOfflineDownloads(tier);
+	// Signed-in viewers get Listen mode and Downloads equally regardless of tier (wiki E14-D2, E14-D3)
+	features.listenMode = !pending;
+	features.offlineDownloads = !pending;
 	// Private notes (E21-D9): every signed-in account; the note limit is the tier's
 	features.studyNotes = !pending;
 	return features;

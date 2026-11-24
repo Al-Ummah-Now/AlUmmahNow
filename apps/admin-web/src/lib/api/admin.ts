@@ -721,6 +721,26 @@ export async function saveNotificationPlatformSettings(
   return mutate('/api/notification-settings', 'PUT', { menuOpen });
 }
 
+// Platform settings: per-user download request rate limit (admin-api /api/download-rate-limit;
+// reading for every admin role, changing needs settings:manage; audited)
+
+export async function getDownloadRateLimitSettings(): Promise<import('@al-ummah/shared-types').DownloadRateLimitSettings> {
+  return fetchAdmin('/api/download-rate-limit');
+}
+
+export async function getDownloadRateLimitHistory(): Promise<{
+  entries: { id: string; oldValue: string | null; newValue: string; actorId: string; createdAt: string }[];
+}> {
+  return fetchAdmin('/api/download-rate-limit/history?limit=10');
+}
+
+export async function saveDownloadRateLimitSettings(input: {
+  perDay: number;
+  burstPerMinute: number;
+}): Promise<ActionResult<import('@al-ummah/shared-types').DownloadRateLimitSettings>> {
+  return mutate('/api/download-rate-limit', 'PUT', input);
+}
+
 // Review alerts for the native Admin app (admin-api /api/review-alerts): the on-call rota and
 // escalation times (every admin role reads, review_alerts:manage changes; audited), the daily
 // timings, and each staff member's push devices with "Sign out this device".

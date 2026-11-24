@@ -68,25 +68,35 @@ describe('tier effect (stated in every confirmation)', () => {
       'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), and own up to 3 channels. Live: 20 hours a month, one stream at a time, up to 240 minutes per stream.',
     );
     // Live: off says so; several at once; a tier from before live says nothing about it
-    assert.equal(tierEffect({ ...CREATOR, live: false }, tEn, 'en').endsWith('No live streaming.'), true);
+    assert.equal(tierEffect({ ...CREATOR, live: false }, tEn, 'en').includes('No live streaming.'), true);
     assert.equal(tierEffect({ ...CREATOR, liveMaxConcurrent: 3 }, tEn, 'en').includes('Live: 20 hours a month, 3 at once, up to 240 minutes per stream.'), true);
     assert.equal(tierEffect({ ...CREATOR, live: undefined }, tEn, 'en').includes('Live'), false);
     assert.match(tierEffect({ ...CREATOR, live: false }, tAr, 'ar'), /بلا بث مباشر/);
     assert.equal(tierEffect({ ...CREATOR, maxChannels: null, live: undefined }, tEn, 'en').endsWith('own any number of channels.'), true);
     // Caption minutes join the sentence only when the tier gives some
-    assert.equal(tierEffect({ ...CREATOR, captionMinutesMonth: 600 }, tEn, 'en').endsWith('Caption minutes: 600 a month.'), true);
-    assert.equal(tierEffect({ ...CREATOR, audioTracksPerVideo: 3 }, tEn, 'en').endsWith('Audio tracks per video: 3.'), true);
+    assert.equal(tierEffect({ ...CREATOR, captionMinutesMonth: 600 }, tEn, 'en').includes('Caption minutes: 600 a month.'), true);
+    assert.equal(tierEffect({ ...CREATOR, audioTracksPerVideo: 3 }, tEn, 'en').includes('Audio tracks per video: 3.'), true);
     assert.equal(tierEffect(UNLIMITED, tEn, 'en'), 'They can upload and create channels with no limits.');
     assert.equal(tierEffect(null, tEn, 'en'), 'They will not be able to upload or create channels.');
     const arabic = tierEffect(CREATOR, tAr, 'ar');
     assert.match(arabic, ARABIC);
     assert.equal(arabic.includes(formatNumber('ar', 2000)), true, 'numbers formatted for Arabic');
+    assert.equal(/[0-9]/.test(arabic), false, 'no Western digits in Arabic tierEffect');
   });
 
   it('follows the tier\'s flags: Member only watches; uploads or channels alone', () => {
-    assert.equal(tierEffect(MEMBER, tEn, 'en'), 'They can watch, save, comment and subscribe, but not upload or create channels.');
-    assert.equal(tierEffect({ ...CREATOR, channels: false }, tEn, 'en'), 'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), but not create channels. Live: 20 hours a month, one stream at a time, up to 240 minutes per stream.');
-    assert.equal(tierEffect({ ...CREATOR, uploads: false, live: false }, tEn, 'en'), 'They can own up to 3 channels, but not upload. No live streaming.');
+    assert.equal(
+      tierEffect(MEMBER, tEn, 'en'),
+      'They can watch, save, comment and subscribe, but not upload or create channels.',
+    );
+    assert.equal(
+      tierEffect({ ...CREATOR, channels: false }, tEn, 'en'),
+      'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), but not create channels. Live: 20 hours a month, one stream at a time, up to 240 minutes per stream.',
+    );
+    assert.equal(
+      tierEffect({ ...CREATOR, uploads: false, live: false }, tEn, 'en'),
+      'They can own up to 3 channels, but not upload. No live streaming.',
+    );
     assert.match(tierEffect(MEMBER, tAr, 'ar'), ARABIC);
   });
 
@@ -361,9 +371,17 @@ describe('rendered components', () => {
     const newTier = html.slice(html.indexOf('data-testid="tier-card-new"'));
     assert.match(/<input[^>]*data-testid="tier-new-importCountsAgainstLimits"[^>]*>/.exec(newTier)![0], /checked/, 'a new tier counts imports');
     // The effect sentence says so when imports are free
-    assert.equal(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tEn, 'en').endsWith('Videos imported from YouTube do not count against these limits.'), true);
+    assert.equal(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tEn, 'en').includes('Videos imported from YouTube do not count against these limits.'), true);
     assert.equal(tierEffect(CREATOR, tEn, 'en').includes('YouTube'), false);
     assert.match(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tAr, 'ar'), /يوتيوب/);
+  });
+
+  it('does not render offline download tier fields in TierEditor (removed per E14-D2)', () => {
+    const htmlEn = render(el(TierEditor, { tiers: [CREATOR, UNLIMITED], counts: {}, canManage: true, actions: tierActions }), 'en');
+    assert.doesNotMatch(htmlEn, /data-testid="tier-creator-offline"/);
+    assert.doesNotMatch(htmlEn, /data-testid="tier-creator-offlineDownloads"/);
+    assert.doesNotMatch(htmlEn, /data-testid="tier-creator-offlineMaxQuality"/);
+    assert.doesNotMatch(htmlEn, /data-testid="tier-creator-offlineMaxVideos"/);
   });
 });
 

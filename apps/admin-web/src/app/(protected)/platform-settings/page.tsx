@@ -1,10 +1,20 @@
-import { getNotificationPlatformSettings, getNotificationSettingsHistory, getYoutubeImportSettings, saveYoutubeImportClientSecret, saveYoutubeImportSettings } from '@/lib/api/admin';
+import {
+  getDownloadRateLimitHistory,
+  getDownloadRateLimitSettings,
+  getNotificationPlatformSettings,
+  getNotificationSettingsHistory,
+  getYoutubeImportSettings,
+  saveDownloadRateLimitSettings,
+  saveYoutubeImportClientSecret,
+  saveYoutubeImportSettings,
+} from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia, canManagePlatformSettings } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { NotificationMenuSetting } from './NotificationMenuSetting';
+import { DownloadRateLimitSetting } from './DownloadRateLimitSetting';
 import { YoutubeImportSetting } from './YoutubeImportSetting';
 
 export const dynamic = 'force-dynamic';
@@ -18,11 +28,15 @@ export default async function PlatformSettingsPage() {
   const session = await getAdminSession();
   // YouTube import (wiki AUN-YT-IMPORT): admin-api needs media:manage even to read it, so only those roles load it
   const showYoutube = canManageMedia(session?.user.role);
-  const [settingsResult, historyResult, youtubeResult] = await Promise.allSettled([
-    getNotificationPlatformSettings(),
-    getNotificationSettingsHistory(),
-    showYoutube ? getYoutubeImportSettings() : Promise.resolve(null),
-  ]);
+  const canEditPlatform = canManagePlatformSettings(session?.user.role);
+  const [settingsResult, historyResult, downloadRateLimitResult, downloadRateLimitHistoryResult, youtubeResult] =
+    await Promise.allSettled([
+      getNotificationPlatformSettings(),
+      getNotificationSettingsHistory(),
+      getDownloadRateLimitSettings(),
+      getDownloadRateLimitHistory(),
+      showYoutube ? getYoutubeImportSettings() : Promise.resolve(null),
+    ]);
   if (youtubeResult.status === 'rejected') {
     logger.error('[platform-settings] Could not load the YouTube import settings', { error: String(youtubeResult.reason) });
   }
@@ -32,6 +46,14 @@ export default async function PlatformSettingsPage() {
   }
   const settings = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
   const history = historyResult.status === 'fulfilled' ? historyResult.value.entries : [];
+  if (downloadRateLimitResult.status === 'rejected') {
+    logger.error('[platform-settings] Could not load the download rate limit settings', {
+      error: String(downloadRateLimitResult.reason),
+    });
+  }
+  const downloadRateLimit = downloadRateLimitResult.status === 'fulfilled' ? downloadRateLimitResult.value : null;
+  const downloadRateLimitHistory =
+    downloadRateLimitHistoryResult.status === 'fulfilled' ? downloadRateLimitHistoryResult.value.entries : [];
 
   return (
     <div>
@@ -40,9 +62,19 @@ export default async function PlatformSettingsPage() {
         <p className="text-fg-muted mt-1">{t('platformSettings.subtitle')}</p>
       </div>
       {settings ? (
-        <NotificationMenuSetting settings={settings} history={history} canEdit={canManagePlatformSettings(session?.user.role)} />
+        <NotificationMenuSetting settings={settings} history={history} canEdit={canEditPlatform} />
       ) : (
         <ErrorAlert testId="platform-settings-error">{t('platformSettings.loadFailed')}</ErrorAlert>
+      )}
+      {downloadRateLimit ? (
+        <DownloadRateLimitSetting
+          settings={downloadRateLimit}
+          history={downloadRateLimitHistory}
+          canEdit={canEditPlatform}
+          save={saveDownloadRateLimitSettings}
+        />
+      ) : (
+        <ErrorAlert testId="download-rate-limit-error">{t('platformSettings.downloadRateLimitLoadFailed')}</ErrorAlert>
       )}
       {showYoutube &&
         (youtube ? (

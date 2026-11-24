@@ -678,8 +678,8 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     group: 'site',
     name: { en: 'Offline downloads', ar: 'التنزيل دون اتصال' },
     help: {
-      en: 'Viewers can’t start new offline downloads or refresh download licenses, and the download toggle disappears from Studio. Removing existing downloads still works.',
-      ar: 'لا يستطيع المشاهدون بدء تنزيلات جديدة دون اتصال أو تجديد تراخيص التنزيل، ويختفي خيار السماح بالتنزيل من الاستوديو. يبقى حذف التنزيلات الموجودة متاحًا.',
+      en: 'Viewers can’t start new downloads, and the download toggle disappears from Studio. Removing existing downloads still works.',
+      ar: 'لا يستطيع المشاهدون بدء تنزيلات جديدة، ويختفي خيار السماح بالتنزيل من الاستوديو. يبقى حذف التنزيلات الموجودة متاحًا.',
     },
     default: false,
     toggle: 'admin',

@@ -145,38 +145,10 @@ export interface CreatorTier {
   livePremieres?: boolean;
   /** Event tags on streams (wiki E17). Absent = the same as `live` */
   liveEvents?: boolean;
-  /** Offline downloads (wiki E14): whether holders of this tier may download videos/audio */
-  offlineDownloads?: boolean;
-  /** Highest downloadable quality ('audio' = audio-only); unlimited tiers allow '1080p' */
-  offlineMaxQuality?: OfflineDownloadQuality;
-  /** Maximum active (non-expired, non-revoked) download licenses per user; null = unlimited */
-  offlineMaxVideos?: number | null;
-  /** Days before an offline license expires without an online refresh (1..90) */
-  offlineLicenseDays?: number;
   /** Private video notes (wiki E21-D9) a holder may keep; null = no limit */
   notesMax?: number | null;
   updatedAt: string | null;
   updatedBy: string | null;
-}
-
-/** Allowed quality levels for offline downloads, lowest to highest (wiki E14). */
-export const OFFLINE_DOWNLOAD_QUALITIES = ['audio', '360p', '480p', '720p', '1080p'] as const;
-export type OfflineDownloadQuality = (typeof OFFLINE_DOWNLOAD_QUALITIES)[number];
-
-export function isOfflineDownloadQuality(value: unknown): value is OfflineDownloadQuality {
-  return typeof value === 'string' && (OFFLINE_DOWNLOAD_QUALITIES as readonly string[]).includes(value);
-}
-
-/** 0 for audio-only up to 4 for 1080p; -1 for unknown. */
-export function offlineQualityRank(quality: OfflineDownloadQuality): number {
-  return OFFLINE_DOWNLOAD_QUALITIES.indexOf(quality);
-}
-
-/** True when `requested` does not exceed `maxQuality`. */
-export function offlineQualityAllowed(requested: OfflineDownloadQuality, maxQuality: OfflineDownloadQuality): boolean {
-  const req = offlineQualityRank(requested);
-  const max = offlineQualityRank(maxQuality);
-  return req >= 0 && max >= 0 && req <= max;
 }
 
 /**
@@ -211,11 +183,7 @@ export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> =
   liveHoursMonth: 20,
   liveMaxConcurrent: 1,
   liveMaxStreamMinutes: 240,
-  offlineDownloads: true,
-  offlineMaxQuality: '480p',
-  offlineMaxVideos: 25,
   notesMax: 1000,
-  offlineLicenseDays: 30,
 };
 
 /** The defaults of the shipped Creator tier (also the fallback when D1 has no row). */
@@ -246,11 +214,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   liveHoursMonth: 20,
   liveMaxConcurrent: 1,
   liveMaxStreamMinutes: 240,
-  offlineDownloads: true,
-  offlineMaxQuality: '1080p',
-  offlineMaxVideos: 100,
   notesMax: 1000,
-  offlineLicenseDays: 30,
 };
 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
@@ -277,11 +241,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   liveHoursMonth: 0,
   liveMaxConcurrent: 0,
   liveMaxStreamMinutes: 0,
-  offlineDownloads: true,
-  offlineMaxQuality: '1080p',
-  offlineMaxVideos: null,
   notesMax: null,
-  offlineLicenseDays: 30,
 };
 
 /** Bounds an admin may set on a tier (validation, not a policy). */
@@ -295,9 +255,7 @@ export const CREATOR_TIER_BOUNDS = {
   liveHoursMonth: { min: 1, max: 10_000 },
   liveMaxConcurrent: { min: 1, max: 100 },
   liveMaxStreamMinutes: { min: 10, max: 1440 },
-  offlineMaxVideos: { min: 1, max: 1000 },
   notesMax: { min: 1, max: 100_000 },
-  offlineLicenseDays: { min: 1, max: 90 },
   sortOrder: { min: 0, max: 10_000 },
 } as const;
 
@@ -324,33 +282,11 @@ export const tierAllowsChannels = (tier: Pick<CreatorTier, 'unlimited' | 'channe
 /** Whether a tier lets its holder go live (unlimited implies it). */
 export const tierAllowsLive = (tier: Pick<CreatorTier, 'unlimited' | 'live'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.live);
 
-/** Whether a tier lets its holder download videos/audio for offline playback (unlimited implies it). */
-export const tierAllowsOfflineDownloads = (tier: Pick<CreatorTier, 'unlimited' | 'offlineDownloads'> | null | undefined): boolean =>
-  !!tier && (tier.unlimited || tier.offlineDownloads === true);
-
-/** Effective offline download limits of a tier. */
-export function tierOfflineLimits(tier: Pick<CreatorTier, 'unlimited' | 'offlineDownloads' | 'offlineMaxQuality' | 'offlineMaxVideos' | 'offlineLicenseDays'> | null | undefined): {
-  allowed: boolean;
-  maxQuality: OfflineDownloadQuality;
-  maxVideos: number | null;
-  licenseDays: number;
-} {
-  if (!tier) return { allowed: false, maxQuality: 'audio', maxVideos: 0, licenseDays: 30 };
-  if (tier.unlimited) return { allowed: true, maxQuality: '1080p', maxVideos: null, licenseDays: tier.offlineLicenseDays ?? 30 };
-  return {
-    allowed: tier.offlineDownloads === true,
-    maxQuality: tier.offlineMaxQuality ?? '480p',
-    maxVideos: tier.offlineMaxVideos === undefined ? 25 : tier.offlineMaxVideos,
-    licenseDays: tier.offlineLicenseDays ?? 30,
-  };
-}
-
-/** Error codes for offline download licensing (wiki E14). */
+/** Error codes for offline download requests (wiki E14, E14-D1 & E14-D2). */
 export const OFFLINE_DOWNLOAD_ERROR_CODES = {
-  disabled: 'downloads_disabled',
-  notInTier: 'downloads_not_in_tier',
-  qualityNotAllowed: 'download_quality_not_allowed',
-  limitReached: 'download_limit_reached',
+  disabled: 'download_disabled_by_creator',
+  notAllowed: 'download_not_allowed',
+  rateLimited: 'download_rate_limited',
   renditionNotReady: 'rendition_not_ready',
 } as const;
 export type OfflineDownloadErrorCode = (typeof OFFLINE_DOWNLOAD_ERROR_CODES)[keyof typeof OFFLINE_DOWNLOAD_ERROR_CODES];
