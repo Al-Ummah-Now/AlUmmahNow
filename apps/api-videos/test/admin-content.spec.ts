@@ -628,7 +628,7 @@ describe('channel actions', () => {
 
 	it('takes an official handle back from the channel holding it and releases handles to a default (CC-4)', async () => {
 		const { raw, call } = await setup({
-			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, handle: 'lamahat', name: 'Early bird', isMain: true }) },
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, handle: 'LamaHat', name: 'Early bird', isMain: true }) },
 			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { channels: ['ch2'] }) },
 		});
 		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
@@ -638,7 +638,7 @@ describe('channel actions', () => {
 		const took = await call('POST', '/channels/ch1/handle/take', { handle: 'Lamahat' });
 		assert.equal(took.status, 200, JSON.stringify(took.body));
 		const holderNow = JSON.parse(raw.channels.store.get('ch2')!).handle;
-		assert.deepEqual(took.body.result, { handle: 'lamahat', previousHandle: 'ch1', tookFrom: 'ch2', holderHandle: holderNow });
+		assert.deepEqual(took.body.result, { handle: 'lamahat', previousHandle: 'ch1', tookFrom: 'ch2', holderHandle: holderNow, holderPreviousHandle: 'LamaHat' });
 		const read = (key: string) => JSON.parse(raw.channel_tabs.store.get(key)!);
 		assert.equal(read('channel-handles/lamahat').channelId, 'ch1');
 		const holder = JSON.parse(raw.channels.store.get('ch2')!);

@@ -299,6 +299,8 @@ interface HandleTakeResult {
   previousHandle: string | null;
   tookFrom: string | null;
   holderHandle: string | null;
+  /** The handle as the channel it was taken from wrote it (display casing) */
+  holderPreviousHandle?: string | null;
 }
 
 const handleReason = async (c: C): Promise<string | null> => {
@@ -329,7 +331,7 @@ app.post('/channels/:id/handle/take', async (c) => {
       action: 'handle-taken-away',
       actorId: actorOf(c),
       details: { handle: taken.holderHandle, takenFor: id, reason },
-      previous: { handle: taken.handle },
+      previous: { handle: taken.holderPreviousHandle ?? taken.handle },
     }).catch((e) => logger.error('[Content] Could not audit the channel a handle was taken from', { channelId: taken.tookFrom, error: String(e) }));
   }
   return ok(c, taken);

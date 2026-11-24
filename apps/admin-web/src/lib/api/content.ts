@@ -91,14 +91,15 @@ export async function uploadChannelImage(id: string, kind: 'avatar' | 'cover', f
 }
 
 /** Admin handle tools (wiki AUN-CHANNEL-CLAIM §4), super admins only: take an official handle back, or release the handle. */
-export async function takeOfficialHandle(id: string, handle: string, reason: string): Promise<ActionResult<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null }>> {
-  return toResult(() => fetchAdmin<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null }>(`${BASE}/channels/${enc(id)}/handle/take`, json('POST', { handle, reason })));
+export async function takeOfficialHandle(id: string, handle: string, reason: string): Promise<ActionResult<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null; holderPreviousHandle?: string | null }>> {
+  return toResult(() => fetchAdmin<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null; holderPreviousHandle?: string | null }>(`${BASE}/channels/${enc(id)}/handle/take`, json('POST', { handle, reason })));
 }
 
 export async function releaseChannelHandle(id: string, reason: string): Promise<ActionResult<{ handle: string; previousHandle: string | null }>> {
   return toResult(() => fetchAdmin<{ handle: string; previousHandle: string | null }>(`${BASE}/channels/${enc(id)}/handle/release`, json('POST', { reason })));
 }
 
+/** Verification reuses the existing channel verification endpoint (its own audit log). */
 /** Grants or removes the scholar label (wiki Epic 21, E21-D4): a reason is required, and a grant names its kind. */
 export async function setChannelVerified(id: string, verified: boolean, reason: string, kind?: 'scholar' | 'institution'): Promise<ActionResult<unknown>> {
   return toResult(() => fetchAdmin(`/api/channels/${enc(id)}/verification`, json('PUT', { verified, reason, ...(verified && kind ? { kind } : {}) })));

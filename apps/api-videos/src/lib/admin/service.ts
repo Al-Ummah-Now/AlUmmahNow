@@ -377,7 +377,7 @@ export async function takeOfficialHandle(
 	channelId: string,
 	handle: string,
 	actorId: string,
-): Promise<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null }> {
+): Promise<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null; holderPreviousHandle: string | null }> {
 	if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
 	const wanted = normalizeHandleInput(handle).toLowerCase();
 	if (!OFFICIAL_HANDLES.has(wanted)) throw new AdminError(400, 'not_official_handle');
@@ -390,9 +390,11 @@ export async function takeOfficialHandle(
 	}
 	const previousHandle = typeof target.handle === 'string' ? target.handle : null;
 	let holderHandle: string | null = null;
+	let holderPreviousHandle: string | null = null;
 	if (tookFrom) {
 		const replaced = await replaceWithDefaultHandle(env, tookFrom);
 		holderHandle = replaced.to;
+		holderPreviousHandle = replaced.from;
 		await notifyHandleChange(env, replaced.channel, replaced.to, actorId);
 	}
 	// The name must not keep redirecting to a channel that gave it up, and a take-back overrides the
@@ -400,7 +402,7 @@ export async function takeOfficialHandle(
 	await env.channel_tabs.delete(handleHistoryKey(wanted)).catch(() => undefined);
 	const saved = await updateChannel(env, channelId, { handle: wanted }, { officialTakeBack: true });
 	logger.info('[Admin] Official handle taken back', { channelId, handle: wanted, tookFrom, actorId });
-	return { handle: saved.handle as string, previousHandle, tookFrom, holderHandle };
+	return { handle: saved.handle as string, previousHandle, tookFrom, holderHandle, holderPreviousHandle };
 }
 
 async function notifyHandleChange(env: AdminServiceEnv, channel: Row, handle: string, actorId: string): Promise<void> {
