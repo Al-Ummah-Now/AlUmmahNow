@@ -20,8 +20,12 @@ export function FeatureStatusLine({ featureKey, item, className = '' }: { featur
       <Icon name="toggle" className="me-1 size-4 shrink-0 text-fg-muted" />
       {item && (
         <>
-          <span className="font-medium">{t(item.effective ? 'features.statusLine.on' : 'features.statusLine.off', { name })}</span>
-          <span className="text-fg-muted">{t('features.statusLine.separator')}</span>
+          <span className="font-medium">
+            {t(item.effective ? 'features.statusLine.on' : 'features.statusLine.off', { name })}
+            {/* An Arabic comma touches the word before it; the English dot stands between the two */}
+            {locale === 'ar' && <span className="text-fg-muted">{t('features.statusLine.separator').trim()}</span>}
+          </span>
+          {locale !== 'ar' && <span className="text-fg-muted">{t('features.statusLine.separator')}</span>}
         </>
       )}
       <AppLink href={`/features#${featureKey}`} className={linkClass}>
