@@ -23667,7 +23667,7 @@
           "Live Streams"
         ],
         "summary": "Remind me of a live stream",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 15 minutes before and when it starts, within the person’s notification settings and quiet hours.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 30 minutes before and when it starts, within the person’s notification settings and quiet hours.",
         "operationId": "post_LiveReminderSet",
         "parameters": [
           {
@@ -23769,7 +23769,7 @@
           "Live Streams"
         ],
         "summary": "Do not remind me of a live stream",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 15 minutes before and when it starts, within the person’s notification settings and quiet hours.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 30 minutes before and when it starts, within the person’s notification settings and quiet hours.",
         "operationId": "delete_LiveReminderClear",
         "parameters": [
           {
