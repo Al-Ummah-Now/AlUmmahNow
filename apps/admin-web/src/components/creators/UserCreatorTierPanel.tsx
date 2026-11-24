@@ -1,5 +1,6 @@
 import { creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
 import { getUserCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
+import { openWorkflowRequests } from '@/lib/api/workflows';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
@@ -21,6 +22,7 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
   } catch (e) {
     logger.error('[creators] Failed to load the user tier', { userId, error: e instanceof Error ? e.message : String(e) });
   }
+  const pending = canManage && current ? (await openWorkflowRequests('tiers.change', [`user:${userId}`]))[`user:${userId}`] : undefined;
   // No tier (null): before every account had a stored tier
   const nameOf = (id: unknown) => {
     if (typeof id !== 'string' || !id) return t('creators.defaultTierHistory');
@@ -43,6 +45,7 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
             canManage={canManage}
             testId="user-creator-tier-control"
             setTier={setUserCreatorTier}
+            pendingRequest={pending}
           />
           {!canManage && <p className="text-sm text-fg-muted mt-2">{t('creators.noAccess')}</p>}
           <h3 className="text-base font-semibold text-fg mt-6 mb-2">{t('creators.historyTitle')}</h3>

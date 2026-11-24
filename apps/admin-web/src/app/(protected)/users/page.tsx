@@ -2,6 +2,7 @@ import Link from '@/components/AppLink';
 import { ADMIN_USER_SORTS, type AdminUsersPage, type CreatorTier } from '@al-ummah/shared-types';
 import { listUsers } from '@/lib/api/content';
 import { bulkSetCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
+import { openWorkflowRequests } from '@/lib/api/workflows';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { parseUserTierFilter, tierLabel } from '@/lib/creator-tiers';
@@ -36,6 +37,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   let data: AdminUsersPage | null = null;
   // Definitions only (no per-tier counts: those scan every profile; the Tiers page shows them)
   let tiers: CreatorTier[] | null = null;
+  let pending: Record<string, string> = {};
   try {
     let choices: { items: CreatorTier[]; defaultTierId: string } | null;
     [data, choices] = await Promise.all([
@@ -46,6 +48,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       }),
     ]);
     tiers = choices?.items ?? null;
+    if (canManage && tiers) pending = await openWorkflowRequests('tiers.change', data.items.map((u) => `user:${u.id}`));
   } catch (e) {
     logger.error('[users] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
@@ -93,7 +96,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {data && data.items.length === 0 && <EmptyState>{t('content.empty')}</EmptyState>}
       {data && data.items.length > 0 && (
         <>
-          <UsersTable items={data.items} tiers={tiers} canManage={canManage} setTier={setUserCreatorTier} bulkSetTier={bulkSetCreatorTier} />
+          <UsersTable items={data.items} tiers={tiers} canManage={canManage} setTier={setUserCreatorTier} bulkSetTier={bulkSetCreatorTier} pending={pending} />
           <Pager page={page} pageSize={PAGE_SIZE} total={data.total} t={t} href={(p) => hrefWith('/users', params, { page: p > 1 ? String(p) : undefined })} />
         </>
       )}

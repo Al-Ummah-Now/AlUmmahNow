@@ -3,17 +3,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CreatorTier } from '@al-ummah/shared-types';
-import type { ActionResult } from '@/lib/api/errors';
-import { arabicMissing, isUnexpectedFailure, tierActionMessage, tierLabel } from '@/lib/creator-tiers';
+import type { GovernedResult } from '@/lib/api/errors';
+import { arabicMissing, isUnexpectedFailure, tierActionMessage, TierChangeSent, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/translate';
 import { cardClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
+import { useSentRequest } from '@/components/workflows/useSentRequest';
+import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 
-type Reorder = (ids: string[], opts?: { undo?: boolean }) => Promise<ActionResult<{ previous: string[]; order: string[] }>>;
+type Reorder = (ids: string[], opts?: { undo?: boolean }) => Promise<GovernedResult<{ previous: string[]; order: string[] }>>;
 
 class ReorderFailure extends Error {
   constructor(readonly result: { status: number; code?: string }) {
@@ -24,24 +26,27 @@ class ReorderFailure extends Error {
 /**
  * The tiers' rank (owner, 2026-11-15): lowest first, the order of the Upgrade
  * page and every tier picker. Admins drag a row or use Move up / Move down
- * (keyboard); each change saves at once, audited, with Undo.
+ * (keyboard); each change saves at once, audited, with Undo, or is sent for
+ * approval when the rule has approvers (the list then waits for that request).
  */
-export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder }) {
+export function TierRankList({ tiers, defaultTierId, canManage, reorder, pendingRequest }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder; /** An order waiting for approval */ pendingRequest?: string }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
   const [order, setOrder] = useState<string[]>(tiers.map((tier) => tier.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useSentRequest(pendingRequest);
   const [dragging, setDragging] = useState<string | null>(null);
   const [announce, setAnnounce] = useState('');
   const serverOrder = tiers.map((tier) => tier.id).join(',');
   useEffect(() => setOrder(serverOrder.split(',')), [serverOrder]);
   const byId = new Map(tiers.map((tier) => [tier.id, tier]));
-  const editable = canManage && !!reorder;
+  const editable = canManage && !!reorder && !pendingRequest;
 
   async function call(ids: string[], undo = false) {
     const result = await reorder!(ids, undo ? { undo: true } : undefined);
+    if (result.ok === 'sent') throw new TierChangeSent(result.requestId);
     if (!result.ok) throw new ReorderFailure(result);
     return result.data;
   }
@@ -51,6 +56,7 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
     setOrder(next);
     setBusy(true);
     setError(null);
+    setSent(null);
     // The tier's name in the admin's language, and the rank in its digits («صارت «عالِم» رقم ٤»)
     const movedTier = byId.get(moved);
     const name = movedTier ? tierLabel(movedTier, locale) : moved;
@@ -69,6 +75,11 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
       router.refresh();
     } catch (e) {
       setOrder(before);
+      if (e instanceof TierChangeSent) {
+        setSent(e.requestId);
+        router.refresh();
+        return;
+      }
       const result = e instanceof ReorderFailure ? e.result : { status: 0 };
       logger.warn('[creators] Tier reorder failed', { status: result.status });
       if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
@@ -96,7 +107,8 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
   return (
     <section className={`${cardClass} mb-6`} aria-labelledby="tiers-rank-title" data-testid="tiers-rank">
       <h2 id="tiers-rank-title" className="text-lg font-semibold text-fg mb-1">{t('creators.rankTitle')}</h2>
-      <p className="text-sm text-fg-muted mb-3 max-w-3xl">{t('creators.rankBody')}</p>
+      <p className="text-sm text-fg-muted mb-3 max-w-3xl">{t('creators.rankBody')}{editable ? ` ${t('creators.rankHow')}` : ''}</p>
+      {sent ? <SentForApproval requestId={sent} testId="tiers-rank-sent" className="mb-3" /> : canManage && pendingRequest ? <WaitingForApproval requestId={pendingRequest} testId="tiers-rank-waiting" className="mb-3" /> : null}
       <ol className="flex flex-col gap-2" data-testid="tiers-rank-list" data-order={order.join(',')}>
         {order.map((id, i) => {
           const tier = byId.get(id);

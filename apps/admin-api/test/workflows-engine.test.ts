@@ -371,6 +371,7 @@ describe('rules and storage', () => {
       "SELECT id FROM workflow_rules WHERE action_type = 'a' AND scope = '' ORDER BY version DESC LIMIT 1",
       "SELECT id FROM workflow_requests WHERE id = 'x'",
       "SELECT id FROM workflow_requests WHERE open_key = 'x'",
+      "SELECT id, open_key FROM workflow_requests WHERE open_key IN ('x', 'y')",
       "SELECT seq FROM workflow_steps WHERE request_id = 'x' ORDER BY seq",
       "SELECT COALESCE(MAX(seq), 0) + 1 FROM workflow_steps WHERE request_id = 'x'",
       "SELECT id FROM workflow_requests WHERE status = 'pending' AND expires_at <= 'x' ORDER BY expires_at LIMIT 50",

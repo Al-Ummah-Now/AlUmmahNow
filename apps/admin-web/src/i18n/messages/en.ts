@@ -1394,6 +1394,8 @@ const en = {
   },
   /** Approval workflows (wiki AUN-WORKFLOWS §10): change requests and their rules */
   workflows: {
+    sent: 'Sent for approval. It takes effect once it is approved.',
+    viewRequest: 'View request',
     title: 'Approvals',
     subtitle: 'Changes that need someone else’s approval before they take effect. Nothing here changes until it is approved.',
     navBadge: '{count, plural, one {# request waiting for you} other {# requests waiting for you}}',
@@ -1556,6 +1558,7 @@ const en = {
     },
   },
   tierRequests: {
+    changePending: 'A change to this is already waiting for approval.',
     allowTitle: 'Upgrade page',
     allowLabel: 'Allow tier requests',
     modePay: 'A payment provider is on: the Upgrade page sells tiers, and requests are off.',
@@ -1815,6 +1818,7 @@ const en = {
     errorReason: 'Enter a reason of up to {#500} characters.',
   },
   creators: {
+    errorChangePending: 'A change to this is already waiting for approval.',
     noticeLimited: '{count} creators hit their upload limit this week.',
     noticeLimitedOne: '{#1} creator hit their upload limit this week.',
     noticeLimitedLink: 'See who',
@@ -1897,7 +1901,8 @@ const en = {
     tiersDefaultBody: 'New sign-ups get the default tier, written to their account. Changing it only affects people who sign up afterwards; existing users keep their tier. Invites start on it too.',
     tiersDefaultCurrent: 'The default is {tier}.',
     rankTitle: 'Rank',
-    rankBody: 'Lowest first. The Upgrade page and every tier picker use this order; an upgrade is a tier ranked above the user’s current one. Drag a tier, or use Move up and Move down.',
+    rankBody: 'Lowest first. The Upgrade page and every tier picker use this order; an upgrade is a tier ranked above the user’s current one.',
+    rankHow: 'Drag a tier, or use Move up and Move down.',
     rankMoveUp: 'Move {tier} up',
     rankMoveDown: 'Move {tier} down',
     rankSaved: '{tier} is now number {rank}.',

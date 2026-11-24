@@ -5,7 +5,7 @@
  * /users/:id/creator-tier). Videos-side data: never the Auth admin or Auth RBAC.
  */
 import type { AdminAuditEntry, CaptionGrantScope, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
-import { AdminApiError, type ActionResult } from './errors';
+import { AdminApiError, sentForApproval, type ActionResult, type GovernedResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
 import type { TierPayload } from '@/lib/creator-tiers';
 
@@ -23,6 +23,12 @@ async function mutate<T>(endpoint: string, method: string, body?: unknown): Prom
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
+}
+
+/** A tier change (admin-api `tiers.change`): changed at once, or sent for approval when its rule has approvers. */
+async function change<T>(endpoint: string, method: string, body?: unknown): Promise<GovernedResult<T>> {
+  const result = await mutate<T>(endpoint, method, body);
+  return (result.ok && sentForApproval(result.data)) || result;
 }
 
 /** The tier definitions, how many users hold each, and the week's limit hits. */
@@ -44,16 +50,16 @@ export async function listCreatorTierChoices(): Promise<Pick<CreatorTiersList, '
 }
 
 /** Reorders the tiers (every tier id, lowest rank first); audited; `undo` marks the change that puts the old order back. */
-export async function reorderCreatorTiers(ids: string[], opts: { undo?: boolean } = {}): Promise<ActionResult<{ previous: string[]; order: string[] }>> {
-  return mutate('/api/content/creator-tiers/order', 'PUT', { ids, ...(opts.undo ? { undo: true } : {}) });
+export async function reorderCreatorTiers(ids: string[], opts: { undo?: boolean } = {}): Promise<GovernedResult<{ previous: string[]; order: string[] }>> {
+  return change('/api/content/creator-tiers/order', 'PUT', { ids, ...(opts.undo ? { undo: true } : {}) });
 }
 
 /**
  * Makes a tier the default: accounts that sign up afterwards get it (existing
  * accounts keep their stored tier). Audited; `undo` marks the change that puts the previous default back.
  */
-export async function setDefaultCreatorTier(tierId: string, opts: { undo?: boolean } = {}): Promise<ActionResult<{ previous: string; defaultTierId: string }>> {
-  return mutate('/api/content/creator-tiers/default', 'PUT', { tierId, ...(opts.undo ? { undo: true } : {}) });
+export async function setDefaultCreatorTier(tierId: string, opts: { undo?: boolean } = {}): Promise<GovernedResult<{ previous: string; defaultTierId: string }>> {
+  return change('/api/content/creator-tiers/default', 'PUT', { tierId, ...(opts.undo ? { undo: true } : {}) });
 }
 
 export async function creatorTierAudit(): Promise<AdminAuditEntry[]> {
@@ -69,24 +75,24 @@ export async function getUserCreatorTier(userId: string): Promise<{ assignment: 
  * request. A super admin's automatic Unlimited changes only with
  * `confirmSuperAdmin` (admin-api answers 409 super_admin_tier otherwise).
  */
-export async function setUserCreatorTier(userId: string, tierId: string | null, opts: { confirmSuperAdmin?: boolean } = {}): Promise<ActionResult<unknown>> {
-  return mutate(`/api/content/users/${encodeURIComponent(userId)}/creator-tier`, 'PUT', { tierId, source: 'admin', ...(opts.confirmSuperAdmin ? { confirmSuperAdmin: true } : {}) });
+export async function setUserCreatorTier(userId: string, tierId: string | null, opts: { confirmSuperAdmin?: boolean } = {}): Promise<GovernedResult<unknown>> {
+  return change(`/api/content/users/${encodeURIComponent(userId)}/creator-tier`, 'PUT', { tierId, source: 'admin', ...(opts.confirmSuperAdmin ? { confirmSuperAdmin: true } : {}) });
 }
 
 /** One tier (or none: null) for the selected users; super admins are skipped. */
-export async function bulkSetCreatorTier(userIds: string[], tierId: string | null): Promise<ActionResult<CreatorTierBulkResult>> {
-  return mutate<CreatorTierBulkResult>('/api/content/creators/tier', 'POST', { userIds, tierId });
+export async function bulkSetCreatorTier(userIds: string[], tierId: string | null): Promise<GovernedResult<CreatorTierBulkResult>> {
+  return change<CreatorTierBulkResult>('/api/content/creators/tier', 'POST', { userIds, tierId });
 }
 
 /** Creates or edits a tier; the body is lib/creator-tiers tierFormPayload. */
-export async function saveCreatorTier(tier: TierPayload, create: boolean): Promise<ActionResult<unknown>> {
+export async function saveCreatorTier(tier: TierPayload, create: boolean): Promise<GovernedResult<unknown>> {
   return create
-    ? mutate('/api/content/creator-tiers', 'POST', tier)
-    : mutate(`/api/content/creator-tiers/${encodeURIComponent(tier.id ?? '')}`, 'PUT', { ...tier, id: undefined });
+    ? change('/api/content/creator-tiers', 'POST', tier)
+    : change(`/api/content/creator-tiers/${encodeURIComponent(tier.id ?? '')}`, 'PUT', { ...tier, id: undefined });
 }
 
-export async function deleteCreatorTier(id: string): Promise<ActionResult<unknown>> {
-  return mutate(`/api/content/creator-tiers/${encodeURIComponent(id)}`, 'DELETE');
+export async function deleteCreatorTier(id: string): Promise<GovernedResult<unknown>> {
+  return change(`/api/content/creator-tiers/${encodeURIComponent(id)}`, 'DELETE');
 }
 
 /** A user's caption minutes this month, their grants and the grant history (admin-api /users/:id/caption-minutes). */

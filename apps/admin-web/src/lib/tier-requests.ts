@@ -39,8 +39,9 @@ export function emailTone(status: string | null): EmailTone | null {
 export const requesterName = (row: Pick<AdminTierRequestRow, 'displayName' | 'name'>) => row.displayName || row.name;
 
 /** A refused decision, in the queue's words: someone else got there first, or it failed. */
-export type DecisionFailure = 'alreadyDecided' | 'readOnly' | 'failed';
+export type DecisionFailure = 'changePending' | 'alreadyDecided' | 'readOnly' | 'failed';
 export function decisionFailure(result: { status: number; code?: string }): DecisionFailure {
+  if (result.code === 'change_pending') return 'changePending';
   if (result.status === 409 || result.code === TIER_REQUEST_ERRORS.notPending) return 'alreadyDecided';
   if (result.status === 403) return 'readOnly';
   return 'failed';

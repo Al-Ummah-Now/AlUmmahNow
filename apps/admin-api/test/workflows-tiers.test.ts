@@ -17,7 +17,7 @@ import { registerStepUpRoutes } from '../src/middleware/step-up-routes';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import { approveRequest, retryRequest, ruleVersionStatement } from '../src/lib/workflows/engine';
 import { TIER_DIFF_FIELDS, tierScope } from '../src/lib/workflows/tier-actions';
-import { workflowCtx } from '../src/routers/workflows.router';
+import workflowsRouter, { workflowCtx } from '../src/routers/workflows.router';
 import { sqliteD1 } from './d1-sqlite';
 
 function searchD1() {
@@ -507,6 +507,33 @@ describe('tiers.change: step-up', () => {
       }
     });
   }
+});
+
+describe('tiers.change: requests the admin pages show as waiting', () => {
+  it('one lookup answers each target with its open request, and not once it is decided', async () => {
+    const t = setup();
+    await t.needApprover('assign');
+    const id = (await t.call('PUT', '/users/u1/creator-tier', { tierId: 'creator' })).body.result.request.id as string;
+    const pending = async (query: string, roles = ['admin']) => {
+      const app = new Hono();
+      app.use('*', errorEnvelope);
+      app.use('*', async (c, next) => {
+        c.set('auth' as never, { userId: 'admin-1', roles } as never);
+        await next();
+      });
+      app.route('/api/workflows', workflowsRouter as never);
+      const res = await app.request(`/api/workflows/pending?${query}`, {}, t.env as never);
+      return { status: res.status, items: ((await res.json()) as any).result?.items };
+    };
+    const query = 'type=tiers.change&target=user:u1&target=user:u2&target=creator-tiers:reorder';
+    assert.deepEqual(await pending(query), { status: 200, items: { 'user:u1': id } });
+    assert.equal((await pending(query, ['user'])).status, 403);
+    assert.equal((await pending('type=nope&target=user:u1')).status, 404);
+    assert.deepEqual((await pending('type=tiers.change')).items, {});
+    assert.deepEqual((await pending('type=support.fees.set&target=user:u1')).items, {});
+    await t.approve(id);
+    assert.deepEqual((await pending(query)).items, {});
+  });
 });
 
 describe('tiers.change: the diff', () => {

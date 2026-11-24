@@ -3,16 +3,18 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TIER_REQUEST_LIMITS } from '@al-ummah/shared-types';
-import type { ActionResult } from '@/lib/api/errors';
+import type { GovernedResult } from '@/lib/api/errors';
 import { decisionFailure } from '@/lib/tier-requests';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { ConfirmButton } from '@/components/content/actions';
+import { useSentRequest } from '@/components/workflows/useSentRequest';
+import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
 import { logger } from '@/lib/logger-client';
 
 /** Server actions (lib/api/tier-requests), passed down from the page. */
 export interface TierRequestDecisions {
-  approve: (id: string) => Promise<ActionResult<unknown>>;
-  decline: (id: string, reason: string) => Promise<ActionResult<unknown>>;
+  approve: (id: string) => Promise<GovernedResult<unknown>>;
+  decline: (id: string, reason: string) => Promise<GovernedResult<unknown>>;
 }
 
 interface Props {
@@ -20,21 +22,26 @@ interface Props {
   name: string;
   tier: string;
   actions: TierRequestDecisions;
+  /** Its approval waiting for another approver */
+  pendingRequest?: string;
 }
 
 /** Approve (assigns the tier) or Decline (optional reason, shown to the user) one pending request. */
-export function TierRequestActions({ id, name, tier, actions }: Props) {
+export function TierRequestActions({ id, name, tier, actions, pendingRequest }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
+  const [sent, setSent] = useSentRequest(pendingRequest);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   async function run(kind: 'approve' | 'decline', reason = '') {
     setBusy(kind);
     setMessage(null);
+    setSent(null);
     try {
       const result = kind === 'approve' ? await actions.approve(id) : await actions.decline(id, reason);
-      if (result.ok) {
+      if (result.ok === 'sent') setSent(result.requestId);
+      else if (result.ok) {
         setMessage({ tone: 'ok', text: kind === 'approve' ? t('tierRequests.approved', { name, tier }) : t('tierRequests.declinedDone') });
       } else {
         const failure = decisionFailure(result);
@@ -53,8 +60,9 @@ export function TierRequestActions({ id, name, tier, actions }: Props) {
   return (
     // The card's actions sit at its end edge on every width (owner rule: card buttons end-aligned)
     <div className="flex flex-col items-end gap-2 ms-auto">
+      {sent ? <SentForApproval requestId={sent} testId={`tier-request-sent-${id}`} /> : pendingRequest ? <WaitingForApproval requestId={pendingRequest} testId={`tier-request-waiting-${id}`} /> : null}
       <div className="flex flex-wrap justify-end gap-2">
-        <ConfirmButton
+        {!pendingRequest && !sent && <ConfirmButton
           label={t('tierRequests.approve')}
           busy={busy === 'approve'}
           disabled={busy !== null}
@@ -66,7 +74,7 @@ export function TierRequestActions({ id, name, tier, actions }: Props) {
           testId={`tier-request-approve-${id}`}
           dialogTestId="tier-request-approve"
           onConfirm={() => run('approve')}
-        />
+        />}
         <ConfirmButton
           label={t('tierRequests.decline')}
           busy={busy === 'decline'}

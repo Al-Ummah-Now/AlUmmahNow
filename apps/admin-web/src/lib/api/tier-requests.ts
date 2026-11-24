@@ -8,7 +8,7 @@
  * throwing, because production builds redact server-action error messages.
  */
 import type { AdminTierRequestFilter, AdminTierRequestRow, AdminTierRequestsPage } from '@al-ummah/shared-types';
-import { AdminApiError, type ActionResult } from './errors';
+import { AdminApiError, sentForApproval, type GovernedResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
 
 export async function listTierRequests(params: { filter?: AdminTierRequestFilter; cursor?: string; pageSize?: number } = {}): Promise<AdminTierRequestsPage> {
@@ -26,10 +26,10 @@ export async function pendingTierRequestCount(): Promise<number> {
   return (await listTierRequests({ filter: 'pending', pageSize: 1 })).pending;
 }
 
-async function decide(id: string, action: 'approve' | 'decline', body?: unknown): Promise<ActionResult<{ request: AdminTierRequestRow }>> {
+async function decide(id: string, action: 'approve' | 'decline', body?: unknown): Promise<GovernedResult<{ request: AdminTierRequestRow }>> {
   try {
     const res = await requestAdmin(`/api/content/tier-requests/${encodeURIComponent(id)}/${action}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-    return { ok: true, data: res.result as { request: AdminTierRequestRow } };
+    return sentForApproval(res.result) ?? { ok: true, data: res.result as { request: AdminTierRequestRow } };
   } catch (error) {
     await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };

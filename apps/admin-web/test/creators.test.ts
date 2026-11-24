@@ -31,6 +31,8 @@ import { CreatorTierControl } from '../src/components/creators/CreatorTierContro
 import { UsersTable } from '../src/components/users/UsersTable';
 import { LimitHitsNotice } from '../src/components/creators/LimitHitsNotice';
 import { TierEditor } from '../src/components/creators/TierEditor';
+import { TierRequestActions } from '../src/components/tier-requests/TierRequestActions';
+import { sentForApproval } from '../src/lib/api/errors';
 import { TierRankList } from '../src/components/creators/TierRankList';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
@@ -207,6 +209,7 @@ describe('friendly errors', () => {
     assert.equal(tierActionMessage({ status: 409, code: 'tier_in_use' }), 'creators.tierInUse');
     assert.equal(tierActionMessage({ status: 409, code: 'tier_is_default' }), 'creators.tierIsDefault');
     assert.equal(tierActionMessage({ status: 409, code: 'default_tier_deleted' }), 'creators.errorDefaultDeleted');
+    assert.equal(tierActionMessage({ status: 409, code: 'change_pending' }), 'creators.errorChangePending');
     assert.equal(tierActionMessage({ status: 403 }), 'creators.errorForbidden');
     assert.equal(tierActionMessage({ status: 401 }), 'errors.notAuthenticated');
     assert.equal(tierActionMessage({ status: 500, code: 'internal_error' }), 'creators.saveFailed');
@@ -310,6 +313,42 @@ describe('rendered components', () => {
     assert.match(html, /Make Creator/);
     assert.match(html, /href="\/users\/usr_c"/, 'rows open the videos user page');
     assert.doesNotMatch(html, /auth-requests/, 'never the Auth admin');
+  });
+
+  it('a change waiting for approval replaces the control, with the link to its request (AUN-WORKFLOWS §10)', () => {
+    const control = { userId: 'usr_3', userName: 'Sara', current: { tierId: 'creator', origin: 'admin' as const, assignedBy: 'a', assignedAt: '2026-11-08T00:00:00Z' }, tiers: TIERS, setTier, pendingRequest: 'wfr_1' };
+    const html = render(el(CreatorTierControl, { ...control, canManage: true }));
+    assert.match(html, /data-testid="creator-tier-waiting"/);
+    assert.match(html, /Waiting for approval/);
+    assert.match(html, /href="\/approvals\/wfr_1"/);
+    assert.doesNotMatch(html, /<select/);
+    assert.doesNotMatch(render(el(CreatorTierControl, { ...control, canManage: false })), /waiting/i, 'only for who manages tiers');
+    const table = render(el(UsersTable, { items: [row({ id: 'usr_c' }), row({ id: 'usr_d' })], tiers: TIERS, canManage: true, setTier, bulkSetTier, pending: { 'user:usr_c': 'wfr_2' } }));
+    assert.equal(table.match(/creator-tier-waiting"/g)?.length, 1);
+    assert.match(table, /href="\/approvals\/wfr_2"/);
+
+    const pending = { 'creator-tier:creator': 'wfr_3', 'creator-tiers:setDefault': 'wfr_4' };
+    const tiers = render(el(TierEditor, { tiers: TIERS, counts: {}, defaultTierId: 'member', canManage: true, actions: { ...tierActions, setDefault: async () => ({ ok: 'sent', requestId: 'x' }) }, pending }));
+    const card = tiers.slice(tiers.indexOf('data-testid="tier-card-creator"'), tiers.indexOf('data-testid="tier-card-unlimited"'));
+    assert.match(card, /data-testid="tier-creator-waiting"/);
+    assert.match(card, /href="\/approvals\/wfr_3"/);
+    assert.doesNotMatch(card, /data-testid="tier-creator-save"/);
+    assert.match(tiers, /data-testid="tier-unlimited-save"/, 'the other tiers stay editable');
+    assert.doesNotMatch(tiers, /set-default"/, 'one default at a time');
+    const rank = render(el(TierRankList, { tiers: TIERS, defaultTierId: 'member', canManage: true, reorder: async () => ({ ok: 'sent', requestId: 'x' }), pendingRequest: 'wfr_5' }));
+    assert.match(rank, /data-testid="tiers-rank-waiting"/);
+    assert.doesNotMatch(rank, /<button/);
+    const decide = { id: 'r1', name: 'Sara', tier: 'Creator', actions: { approve: async () => ({ ok: 'sent' as const, requestId: 'x' }), decline: async () => ({ ok: true as const, data: {} }) } };
+    const request = render(el(TierRequestActions, { ...decide, pendingRequest: 'wfr_6' }));
+    assert.match(request, /data-testid="tier-request-waiting-r1"/);
+    assert.doesNotMatch(request, /tier-request-approve-r1/);
+    assert.match(request, /tier-request-decline-r1/, 'declining stays direct');
+    assert.match(render(el(TierRequestActions, decide)), /tier-request-approve-r1/);
+  });
+
+  it('reads a 202 as sent for approval, and anything else as an ordinary answer', () => {
+    assert.deepEqual(sentForApproval({ status: 'pending_approval', request: { id: 'wfr_1' } }), { ok: 'sent', requestId: 'wfr_1' });
+    for (const other of [{ previous: 'member', defaultTierId: 'creator' }, { status: 'applied', result: {} }, { status: 'pending_approval' }, null, undefined]) assert.equal(sentForApproval(other), null);
   });
 
   it('the Users table is read-only without creators:manage: no selection, no bulk change, no tier select', () => {
