@@ -5,6 +5,7 @@ import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TierEditor, type TierActions } from './TierEditor';
 import { WaitingForApproval } from '@/components/workflows/SentForApproval';
+import { pendingFor, type PendingRequests } from '@/lib/workflows';
 import { TierRankList } from './TierRankList';
 import { defaultTierName } from '@/lib/creator-tiers';
 import { LimitHitsNotice } from './LimitHitsNotice';
@@ -67,7 +68,7 @@ export interface CreatorTiersViewProps {
   locale: Locale;
   actions: TierActions;
   /** Open change requests by target (lib/api/workflows openWorkflowRequests) */
-  pending?: Record<string, string>;
+  pending?: PendingRequests;
 }
 
 /** The tier limits page body: the limit-hit notice, each tier's editor with its users, and recent changes. */
@@ -85,7 +86,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions, p
           <h2 id="tiers-default-title" className="text-lg font-semibold text-fg mb-1">{t('creators.tiersDefaultTitle')}</h2>
           <p className="text-sm text-fg" data-testid="tiers-default-current">{t('creators.tiersDefaultCurrent', { tier: defaultTierName(list.defaultTierId, list.items, t, locale) })}</p>
           <p className="mt-1 text-sm text-fg-muted max-w-3xl">{t('creators.tiersDefaultBody')}</p>
-          {canManage && pending['creator-tiers:setDefault'] && <WaitingForApproval requestId={pending['creator-tiers:setDefault']} testId="tiers-default-waiting" className="mt-2" />}
+          {canManage && pending?.['creator-tiers:setDefault'] && <WaitingForApproval requestId={pending['creator-tiers:setDefault']} testId="tiers-default-waiting" className="mt-2" />}
           {list.counts.none > 0 && (
             <p className="mt-2 text-sm text-fg-muted" data-testid="tiers-none-count">
               {t('creators.tiersNone', { count: formatNumber(list.counts.none, locale), tier: (() => { const free = list.items.find((x) => x.id === CREATOR_TIER_IDS.member); return free ? tierLabel(free, locale) : t('creators.none'); })() })}{' '}
@@ -94,7 +95,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions, p
           )}
         </section>
       )}
-      {list && <TierRankList tiers={list.items} defaultTierId={list.defaultTierId} canManage={canManage} reorder={actions.reorder} pendingRequest={pending['creator-tiers:reorder']} />}
+      {list && <TierRankList tiers={list.items} defaultTierId={list.defaultTierId} canManage={canManage} reorder={actions.reorder} pendingRequest={pendingFor(pending, 'creator-tiers:reorder')} />}
       {!canManage && <p className="mb-4 text-sm text-fg-muted">{t('creators.noAccess')}</p>}
       {list ? <TierEditor tiers={list.items} counts={memberCounts(list)} invites={list.pendingInvites} defaultTierId={list.defaultTierId} canManage={canManage} actions={actions} pending={pending} /> : <ErrorAlert testId="tiers-load-failed">{t('creators.loadFailed')}</ErrorAlert>}
       <section className={`${cardClass} mt-8`} aria-labelledby="tiers-audit" data-testid="tiers-audit">

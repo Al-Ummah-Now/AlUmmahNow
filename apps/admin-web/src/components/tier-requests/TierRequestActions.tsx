@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { ConfirmButton } from '@/components/content/actions';
 import { useSentRequest } from '@/components/workflows/useSentRequest';
 import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
+import type { PendingRequest } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 
 /** Server actions (lib/api/tier-requests), passed down from the page. */
@@ -23,7 +24,7 @@ interface Props {
   tier: string;
   actions: TierRequestDecisions;
   /** Its approval waiting for another approver */
-  pendingRequest?: string;
+  pendingRequest?: PendingRequest;
 }
 
 /** Approve (assigns the tier) or Decline (optional reason, shown to the user) one pending request. */
@@ -31,16 +32,15 @@ export function TierRequestActions({ id, name, tier, actions, pendingRequest }: 
   const router = useRouter();
   const { t } = useLanguage();
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
-  const [sent, setSent] = useSentRequest(pendingRequest);
+  const [sent, send] = useSentRequest(pendingRequest);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   async function run(kind: 'approve' | 'decline', reason = '') {
     setBusy(kind);
     setMessage(null);
-    setSent(null);
     try {
       const result = kind === 'approve' ? await actions.approve(id) : await actions.decline(id, reason);
-      if (result.ok === 'sent') setSent(result.requestId);
+      if (result.ok === 'sent') send(result.requestId);
       else if (result.ok) {
         setMessage({ tone: 'ok', text: kind === 'approve' ? t('tierRequests.approved', { name, tier }) : t('tierRequests.declinedDone') });
       } else {

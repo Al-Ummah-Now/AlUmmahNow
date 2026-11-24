@@ -767,7 +767,10 @@ async function tierChange(c: C, raw: Record<string, unknown>, reason?: unknown) 
       const why = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 1000) : 'Tier change';
       const out = await proposeChange(ctx, actor, { type: 'tiers.change', payload: op, reason: why });
       logger.info('[Content] Tier change sent for approval', { op: op.op, scope: tierScope(op), actorId: actorOf(c), status: out.status });
-      return c.json({ success: true, result: out }, out.status === 'applied' ? 200 : 202);
+      if (out.status === 'pending_approval') return c.json({ success: true, result: out }, 202);
+      // The rule became direct between the two reads: the change ran, so this answers as a direct change does
+      if (out.status === 'applied') return ok(c, out.result);
+      return apiError(c, 500, 'internal_error', { requestId: out.request.id } as never);
     }
   }
   return ok(c, await runTierOp(c.env, actorOf(c), op));

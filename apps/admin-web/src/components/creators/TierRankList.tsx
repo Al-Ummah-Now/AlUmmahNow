@@ -12,6 +12,7 @@ import { Chip, smallButtonClass } from '@/components/content/parts';
 import { useSentRequest } from '@/components/workflows/useSentRequest';
 import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
 import { useUndoableAction } from '@/components/undo/UndoToast';
+import type { PendingRequest } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 
@@ -29,20 +30,20 @@ class ReorderFailure extends Error {
  * (keyboard); each change saves at once, audited, with Undo, or is sent for
  * approval when the rule has approvers (the list then waits for that request).
  */
-export function TierRankList({ tiers, defaultTierId, canManage, reorder, pendingRequest }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder; /** An order waiting for approval */ pendingRequest?: string }) {
+export function TierRankList({ tiers, defaultTierId, canManage, reorder, pendingRequest }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder; /** An order waiting for approval */ pendingRequest?: PendingRequest }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
   const [order, setOrder] = useState<string[]>(tiers.map((tier) => tier.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useSentRequest(pendingRequest);
+  const [sent, send] = useSentRequest(pendingRequest);
   const [dragging, setDragging] = useState<string | null>(null);
   const [announce, setAnnounce] = useState('');
   const serverOrder = tiers.map((tier) => tier.id).join(',');
   useEffect(() => setOrder(serverOrder.split(',')), [serverOrder]);
   const byId = new Map(tiers.map((tier) => [tier.id, tier]));
-  const editable = canManage && !!reorder && !pendingRequest;
+  const editable = canManage && !!reorder && !pendingRequest && !sent;
 
   async function call(ids: string[], undo = false) {
     const result = await reorder!(ids, undo ? { undo: true } : undefined);
@@ -56,7 +57,6 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder, pending
     setOrder(next);
     setBusy(true);
     setError(null);
-    setSent(null);
     // The tier's name in the admin's language, and the rank in its digits («صارت «عالِم» رقم ٤»)
     const movedTier = byId.get(moved);
     const name = movedTier ? tierLabel(movedTier, locale) : moved;
@@ -76,8 +76,7 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder, pending
     } catch (e) {
       setOrder(before);
       if (e instanceof TierChangeSent) {
-        setSent(e.requestId);
-        router.refresh();
+        send(e.requestId);
         return;
       }
       const result = e instanceof ReorderFailure ? e.result : { status: 0 };

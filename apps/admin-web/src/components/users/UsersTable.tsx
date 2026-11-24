@@ -14,6 +14,7 @@ import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { CreatorTierControl, type SetTierAction } from '@/components/creators/CreatorTierControl';
 import { SentForApproval } from '@/components/workflows/SentForApproval';
 import { TierChangeDialog } from '@/components/creators/TierChangeDialog';
+import { pendingFor, type PendingRequests } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { adminUserName } from '@/lib/user-name';
@@ -45,7 +46,7 @@ export interface UsersTableProps {
   setTier: SetTierAction;
   bulkSetTier: BulkSetTierAction;
   /** Tier changes waiting for approval, by target (user:<id>) */
-  pending?: Record<string, string>;
+  pending?: PendingRequests;
 }
 
 /**
@@ -88,7 +89,6 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier, pend
     setBusy(true);
     setError(null);
     setNotice(null);
-    setSent(null);
     let result: GovernedResult<CreatorTierBulkResult>;
     try {
       result = await bulkSetTier(chosen.map((u) => u.id), bulkTier);
@@ -112,6 +112,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier, pend
     const parts = [t('creators.bulkChanged', { count: n(result.data.changed.length) })];
     if (result.data.unchanged.length) parts.push(t('creators.bulkUnchanged', { count: n(result.data.unchanged.length) }));
     if (result.data.skippedSuperAdmin.length) parts.push(t('creators.bulkSkipped', { count: n(result.data.skippedSuperAdmin.length) }));
+    setSent(null);
     setNotice(parts.join(' '));
     setSelected(new Set());
     setBulkTier('');
@@ -234,7 +235,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier, pend
                         canManage={canManage}
                         needsTier={creator.needsTier}
                         setTier={setTier}
-                        pendingRequest={pending[`user:${u.id}`]}
+                        pendingRequest={pendingFor(pending, `user:${u.id}`)}
                         noticeClassName="max-w-36 sm:max-w-52"
                       />
                     ) : (
