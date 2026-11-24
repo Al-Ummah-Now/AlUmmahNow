@@ -47,7 +47,7 @@ import type { FetchedItem } from './fetchers';
 import { postItem } from './post';
 import { changes, claimItemIds, readSource, SourceError, sourceDb, type ItemRow, type SourceDbEnv, type SourceRow } from './store';
 import { initiateImportVideo, markVideoImported, type ImportUpload } from './video';
-import type { SourceSyncEnv } from './job';
+import { uploadsOn, type SourceSyncEnv } from './job';
 import { codedError } from './errors';
 import { logger } from '../logger';
 
@@ -454,6 +454,7 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 		.bind(source.id, IMPORT_POSTS_PER_STEP)
 		.all<TakeoutRow>();
 	const { ctx, settle } = stepContext();
+	let uploadsOff = false;
 	try {
 		for (const file of results ?? []) {
 			// An admin's Cancel stops the job between files
@@ -461,12 +462,22 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 				logger.info('[Takeout] Cancelled', { jobId: job.id, sourceId: source.id });
 				return { done: true, result: { ...result(), cancelled: true } };
 			}
+			// Uploads off: skip posting uploaded files quietly (they stay 'uploaded' for when uploads return)
+			if (!(await uploadsOn(env))) {
+				uploadsOff = true;
+				break;
+			}
 			params[await attachFile(env, ctx, source, file, job.actorId)]++;
 		}
 	} finally {
 		await settle();
 	}
 	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
+	if (uploadsOff) {
+		await db(env).prepare('UPDATE import_sources SET takeout_job_id = NULL WHERE id = ? AND takeout_job_id = ?').bind(source.id, job.id).run();
+		logger.info('[Takeout] Uploads are off: skipping posting uploaded files', { jobId: job.id, sourceId: source.id, ...result() });
+		return { done: true, result: { ...result(), skipped: 'uploads_off' } };
+	}
 	// Finishing: release the source's job id first, then look for files listed or uploaded meanwhile. A
 	// start after the release queues a new job; files from before it are counted here and this job
 	// continues (taking the id back unless a new job already holds it)
