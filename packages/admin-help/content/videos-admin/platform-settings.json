@@ -77,8 +77,8 @@
         "ar": "أقصى عدد من التنزيلات للمشاهدة دون اتصال يبدؤه مشاهد مسجّل الدخول في اليوم بالتوقيت العالمي. تُرفض الطلبات الزائدة حتى اليوم التالي."
       },
       "tipCaution": {
-        "en": "Too low blocks real viewers saving lessons for travel; too high lets one account pull many files.",
-        "ar": "الحدّ المنخفض جدًا يمنع مشاهدين حقيقيين من حفظ الدروس للسفر، والمرتفع جدًا يسمح لحساب واحد بسحب ملفات كثيرة."
+        "en": "Too low blocks real viewers saving videos for a trip; too high lets one account pull many files.",
+        "ar": "الحدّ المنخفض جدًا يمنع مشاهدين حقيقيين من حفظ المرئيات للسفر، والمرتفع جدًا يسمح لحساب واحد بسحب ملفات كثيرة."
       },
       "what": {
         "en": "Viewers can save videos for offline watching or listening in the apps. Each save is a download request to the API. This is the per-user daily limit on those requests. Every signed-in viewer has the same limit; it does not depend on creator tiers.",
