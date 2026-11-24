@@ -19,6 +19,7 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ACTION_TYPES,
   WORKFLOW_SEEDED_SCOPES,
+  WORKFLOW_LISTED_SCOPES,
   WORKFLOW_STATUSES,
   isMoneyRule,
   workflowFloorFor,
@@ -56,6 +57,7 @@ import { createWorkflowDirectory, ownerIdsFrom } from '../lib/workflows/director
 import { registerRuleChangeExecutor } from '../lib/workflows/rule-change';
 import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
 import { registerFeatureExecutor } from '../lib/workflows/feature-actions';
+import { registerTierExecutor } from '../lib/workflows/tier-actions';
 import { FEATURE_PRECONDITIONS } from '../lib/feature-preconditions';
 import type { WorkflowCtx, WorkflowEvent } from '../lib/workflows/types';
 import { enqueueWorkflowNotify } from '../lib/workflows/notify';
@@ -67,6 +69,7 @@ type C = Context<Env>;
 registerRuleChangeExecutor();
 registerSupportFinanceExecutors();
 registerFeatureExecutor(FEATURE_PRECONDITIONS);
+registerTierExecutor();
 
 const app = new Hono<Env>();
 const ok = (c: C, result: unknown, status: 200 | 202 = 200) => c.json({ success: true, result }, status);
@@ -165,8 +168,9 @@ app.get('/actions', async (c) => {
       .prepare('SELECT scope, MAX(version) AS version FROM workflow_rules WHERE action_type = ? GROUP BY scope LIMIT 100')
       .bind(type)
       .all<{ scope: string; version: number }>();
-    // The default scope, the seeded scopes (money rule changes) and any edited one
-    const scopes = [...new Set(['', ...(WORKFLOW_SEEDED_SCOPES[type] ?? []), ...(results ?? []).map((r) => r.scope)])];
+    // The default scope, the seeded scopes (money rule changes), the listed
+    // ones (tiers.change: assign, default, tiers) and any edited one
+    const scopes = [...new Set(['', ...(WORKFLOW_SEEDED_SCOPES[type] ?? []), ...(WORKFLOW_LISTED_SCOPES[type] ?? []), ...(results ?? []).map((r) => r.scope)])];
     const rules = [];
     for (const scope of scopes) {
       // Money rules (by their floor, not only the action's domain) are for people who can see money
@@ -337,3 +341,19 @@ export async function requestNeedsStepUp(c: Context): Promise<boolean> {
 }
 
 export default app;
+
+/**
+ * Step-up `when` for the tier routes (WF-10): only when the change would become a request whose rule asks
+ * for a step-up to propose. `scopeOf` names the route's scope (tiers.change: assign, default, tiers), or reads it
+ * from the route (PUT /creator-tiers/:id also matches /creator-tiers/default).
+ */
+export function tierProposalNeedsStepUp(scopeOf: string | ((c: Context) => string)) {
+  return async (c: Context): Promise<boolean> => {
+    const scope = typeof scopeOf === 'string' ? scopeOf : scopeOf(c);
+    const env = c.env as AdminBindings;
+    if (!env.SEARCH_DB) return false;
+    const ctx = workflowCtx(env as never);
+    if (!(await ruleNeedsApproval(ctx, 'tiers.change', scope))) return false;
+    return (await ruleForProposal(ctx, 'tiers.change', scope)).stepUp === 'propose_and_approve';
+  };
+}
