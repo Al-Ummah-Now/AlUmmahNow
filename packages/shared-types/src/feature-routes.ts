@@ -279,6 +279,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   hijriCalendar: 'E21.2 adds the season and preference routes and maps them here',
   ramadanMode: 'E21.2 adds the season routes and maps them here',
+  ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',
   appUpdates: 'GET /api/v1/app-config stays public while off and answers update.enabled false with no notice (wiki AUN-APP-UPDATES §4.1); it also serves flags and config',
 });
 
