@@ -63,8 +63,8 @@ async function dropped(page: Page, files: Array<{ name: string; mimeType: string
 /** The upload-status the server keeps for a video: the type it was told */
 async function storedFormat(videoId: string): Promise<string | undefined> {
   const u = userApi('single');
-  const res = await u.api.get<{ originalFormat?: string }>(`/api/videos/${videoId}/upload-status`, { token: u.token, channelId: u.channelIds[0] });
-  return res.data.originalFormat;
+  const res = await u.api.get<{ result?: { metadata?: { originalFormat?: string } } }>(`/api/videos/${videoId}/upload-status`, { token: u.token, channelId: u.channelIds[0] });
+  return res.data.result?.metadata?.originalFormat;
 }
 
 test.describe('Video formats - single upload', () => {
