@@ -858,7 +858,7 @@ async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, 
  * Reads the moved records back from R2 and lists what still names the previous owner. A non-empty
  * list fails the job, so its retry runs every (idempotent) step again.
  */
-async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: string | null, to: string, videoIds: string[]): Promise<string[]> {
+async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: string | null, to: string, videoIds: string[], options: { subscriptions: boolean } = { subscriptions: true }): Promise<string[]> {
 	const problems: string[] = [];
 	const channel = await repo(env.channels).getObject(channelId);
 	if (channel && !channel.isDeleted && channel.userId !== to) problems.push('channel');
@@ -891,7 +891,7 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 			if (n) problems.push(`schedules:${n}`);
 		}
 		const subs = env.NOTIFICATIONS_DB as D1Database | undefined;
-		if (subs) {
+		if (subs && options.subscriptions) {
 			const row = await subs.prepare('SELECT COUNT(*) AS n FROM channel_subscriptions WHERE user_id = ? AND subscriber_channel_id = ?').bind(from, channelId).first<{ n: number }>();
 			if (Number(row?.n)) problems.push(`subscriptions:${row!.n}`);
 		}
@@ -986,9 +986,11 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 				const channel = await repo(env.channels).getObject(row.target_id);
 				// Deleted, or no longer on this move's new owner (moved on, or back): nothing to check
 				if (!channel || channel.isDeleted || channel.userId !== params.newOwnerId || !params.previousOwnerId) continue;
+				// Being moved again: that move's own steps and verify handle its records
+				if (await openTransferJob(env, row.target_id)) continue;
 				checked++;
 				const videoIds = await idsOf(env, 'video', { channelId: row.target_id }, { includeDeleted: true });
-				const problems = await verifyTransfer(env, row.target_id, params.previousOwnerId, params.newOwnerId, videoIds);
+				const problems = await verifyTransfer(env, row.target_id, params.previousOwnerId, params.newOwnerId, videoIds, reverifyOptions(channel, params.previousOwnerId));
 				if (!problems.length) continue;
 				logger.warn('[Admin] A moved channel had records back on the previous owner; moving them again', { channelId: row.target_id, jobId: row.id, problems });
 				await repairMovedChannel(env, channel, params.previousOwnerId, params.newOwnerId, videoIds);
@@ -1003,6 +1005,11 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 		cursor = { updatedAt: last.updated_at, id: last.id };
 	}
 	return { checked, repaired, failed };
+}
+
+/** A previous owner still on the team may subscribe as the channel: those subscriptions are theirs, not left behind. */
+function reverifyOptions(channel: Row, from: string): { subscriptions: boolean } {
+	return { subscriptions: !(Array.isArray(channel.members) && channel.members.some((m: { userId?: string } | null) => m?.userId === from)) };
 }
 
 /**
@@ -1038,10 +1045,9 @@ async function repairMovedChannel(env: AdminServiceEnv, channel: Row, from: stri
 	const db = env.SEARCH_DB as D1Database | undefined;
 	const movedStreamIds = onFrom.map((key) => key.replace(/^livestream:/, ''));
 	if (db && movedStreamIds.length) {
-		const open = (await db
-			.prepare(`SELECT * FROM live_sessions WHERE channel_id = ? AND status IN ('provisioned', 'live') AND stream_id IN (${movedStreamIds.map(() => '?').join(',')})`)
-			.bind(id, ...movedStreamIds)
-			.all<LiveSessionRow>()).results ?? [];
+		// The channel's open sessions are few; its streams may pass D1's bound-parameter limit
+		const moved = new Set(movedStreamIds);
+		const open = ((await db.prepare(`SELECT * FROM live_sessions WHERE channel_id = ? AND status IN ('provisioned', 'live')`).bind(id).all<LiveSessionRow>()).results ?? []).filter((s) => moved.has(s.stream_id));
 		for (const session of open) {
 			try {
 				await ensureProviderStopped(env as never, await endSession(env as never, session, 'channel_transferred'));
@@ -1058,10 +1064,13 @@ async function repairMovedChannel(env: AdminServiceEnv, channel: Row, from: stri
 		return true;
 	});
 	const posts = await movePosts(env, id, from, to);
-	await moveChannelSubscriptions(env, id, from, to);
+	const options = reverifyOptions(channel, from);
+	if (options.subscriptions) await moveChannelSubscriptions(env, id, from, to);
+	// An invitation to the new owner written as the channel flipped: an owner holds no member role
+	await cancelInvitesToNewOwner(env, id, to, await authEmail(env, to));
 	const failed = videos.failed + schedules.failed + streams.failed + sessionsFailed + playlists.failed + posts.failed;
 	if (failed) throw new Error(`${failed} record(s) could not be moved back to the new owner`);
-	const problems = await verifyTransfer(env, id, from, to, videoIds);
+	const problems = await verifyTransfer(env, id, from, to, videoIds, options);
 	if (problems.length) throw new Error(`Still on the previous owner after the repair: ${problems.join(', ')}`);
 }
 

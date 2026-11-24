@@ -751,6 +751,42 @@ describe('channel actions', () => {
 		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 0, repaired: 0, failed: 0 });
 	});
 
+	it('the re-verify closes a late invitation to the new owner and leaves a kept previous owner their own subscriptions as the channel (CC-1c)', async () => {
+		const { raw, env, call, jobOf, db } = await setup();
+		const notifications = createSqliteD1();
+		(env as Record<string, unknown>).NOTIFICATIONS_DB = notifications;
+		const n = notifications.raw;
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, keepPreviousOwnerAsAdmin: true }))).status, 'succeeded');
+		assert.ok(JSON.parse(raw.channels.store.get('ch1')!).members.some((m: { userId: string }) => m.userId === OWNER), 'kept as an admin');
+		// Since the move, the previous owner (an admin now) subscribes as the channel
+		n.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES ('chX', 'ch1', ?, 's1', 1)`).run(OWNER);
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
+		const subscriber = () => (n.prepare(`SELECT user_id FROM channel_subscriptions WHERE subscriber_channel_id = 'ch1'`).get() as { user_id: string }).user_id;
+		assert.equal(subscriber(), OWNER, 'a member subscribed as the channel: not left behind by the move');
+		// An invitation to the new owner that was written as the channel flipped
+		db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES ('late', 'ch1', 'editor', ?, NULL, 0, ?, 'pending', '2026-01-01', '2030-01-01')`).run(OTHER, OWNER);
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		assert.equal((db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'late'`).get() as { status: string }).status, 'cancelled');
+		assert.equal(subscriber(), OWNER, 'a repair leaves it too');
+		// No longer on the team: their leftover subscription as the channel moves
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), members: [] }));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(subscriber(), OTHER);
+	});
+
+	it('the re-verify leaves a channel that is being moved again to that move (CC-1c)', async () => {
+		const { raw, env, call, jobOf } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+		});
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+		// Queued, not run yet
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }, { hold: true })).status < 300, true);
+		assert.ok(await openTransferJob(env as never, 'ch1'));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 0, repaired: 0, failed: 0 });
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OWNER);
+	});
+
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
 		const { raw, env, jobs, call } = await setup({
 			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
