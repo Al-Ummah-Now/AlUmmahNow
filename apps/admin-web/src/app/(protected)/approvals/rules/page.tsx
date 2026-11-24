@@ -2,7 +2,7 @@ import { WORKFLOW_DOMAINS, type WorkflowActionType, type WorkflowDomain } from '
 import Link from '@/components/AppLink';
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
-import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
+import { ErrorAlert, cardClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { RuleEditor } from '@/components/workflows/RuleEditor';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, translateDynamic } from '@/i18n/translate';
@@ -50,14 +50,14 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
 
   return (
     <div className="max-w-5xl">
-      <p className="mb-4 text-sm">
-        <Link href="/approvals" className={linkClass} data-testid="approval-rules-back">
-          <span aria-hidden="true" className="inline-block rtl:-scale-x-100">←</span> {t('workflows.rules.back')}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-fg">{t('workflows.rules.title')}</h1>
+          <p className="text-fg-muted mt-2 max-w-prose">{t('workflows.rules.subtitle')}</p>
+        </div>
+        <Link href="/approvals" className={`${secondaryButtonClass} shrink-0 self-start`} data-testid="approval-rules-back">
+          {t('workflows.rules.back')}
         </Link>
-      </p>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-fg">{t('workflows.rules.title')}</h1>
-        <p className="text-fg-muted mt-2 max-w-prose">{t('workflows.rules.subtitle')}</p>
       </div>
       {!actions && <ErrorAlert testId="approval-rules-error">{t('workflows.rules.loadFailed')}</ErrorAlert>}
       <div className="space-y-6">
