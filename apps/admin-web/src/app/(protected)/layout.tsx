@@ -5,6 +5,7 @@ import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
 import { getUser } from '@/lib/api/content';
 import { pendingTierRequestCount } from '@/lib/api/tier-requests';
+import { workflowsWaitingCount } from '@/lib/api/workflows';
 import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canReadAudit, canManageMedia, canReadOps, canReadBilling, isReviewOnly, isSuperAdmin, canManagePlatformSettings, canManageEmails, canManageImports } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
@@ -30,6 +31,14 @@ export default async function ProtectedLayout({
     ? Promise.resolve(null)
     : pendingTierRequestCount().catch((e: unknown) => {
         logger.warn('[layout] Tier request count unavailable', { error: e instanceof Error ? e.message : String(e) });
+        return null;
+      });
+
+  // Approvals nav badge: change requests waiting for this admin (wiki AUN-WORKFLOWS); a failure only hides it
+  const approvalsWaiting = isReviewOnly(session.user.role)
+    ? Promise.resolve(null)
+    : workflowsWaitingCount().catch((e: unknown) => {
+        logger.warn('[layout] Approvals count unavailable', { error: e instanceof Error ? e.message : String(e) });
         return null;
       });
 
@@ -105,7 +114,7 @@ export default async function ProtectedLayout({
           emails: canManageEmails(role),
           imports: canManageImports(role),
         }}
-        badges={{ contact: contactNew, errors: errorsBadge, tierRequests: await tierRequestsPending }}
+        badges={{ contact: contactNew, errors: errorsBadge, tierRequests: await tierRequestsPending, approvals: await approvalsWaiting }}
       >
         {graceBanner}
         {children}
