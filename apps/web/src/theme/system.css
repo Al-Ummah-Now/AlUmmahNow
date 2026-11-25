@@ -628,5 +628,8 @@ html[dir=rtl] .aun-start-text [dir=auto]:not(input,textarea){text-align:right}ht
 /* Buttons on a cover photo (EditableCover, #2079): the photo is any colour, so they wear the theme's media chrome
    (the player's pill, always dark with light text) in every mode instead of the page's outline button */
 .media-cover .b-secondary{background:var(--fanous-player-pill)!important;color:var(--fanous-player-icon)!important;border-color:var(--fanous-player-pill-edge)!important;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-@media(hover:hover){.media-cover .b-secondary:hover{background:linear-gradient(var(--fanous-player-hover),var(--fanous-player-hover)),var(--fanous-player-pill)!important}}
+/* Hover keeps the dark pill (a lighter fill lost contrast in zujaj) and draws a solid light edge; never on a disabled button */
+@media(hover:hover){.media-cover .b-secondary:not(:disabled):hover{border-color:var(--fanous-player-icon)!important}}
 .media-cover .b-secondary:disabled{color:var(--fanous-player-dim)!important;opacity:.75}
+/* Focus: a light ring around a dark one, so one of them stands out on any cover (.b-secondary drops the page's halo) */
+.media-cover .b-secondary:focus-visible{outline:2px solid var(--fanous-player-icon);outline-offset:2px;box-shadow:0 0 0 4px var(--fanous-player-cue)!important}
