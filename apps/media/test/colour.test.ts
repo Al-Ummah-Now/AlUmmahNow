@@ -104,7 +104,7 @@ describe('toSdrFilters', () => {
 		assert.throws(() => cubePath("C:\\a'b.cube"));
 	});
 	it('says the source matrix, primaries and range when it converts', () => {
-		assert.match(toSdrFilters(planOf(tags('bt470bg', 'bt470bg', 'bt470bg', 'pc'))), /^scale=w=trunc\(iw\/2\)\*2:h=trunc\(ih\/2\)\*2:[^,]*,colorspace=ispace=bt470bg:iprimaries=bt470bg:itrc=bt709:irange=pc:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,setparams/);
+		assert.match(toSdrFilters(planOf(tags('bt470bg', 'bt470bg', 'bt470bg', 'pc'))), /^crop=trunc\(iw\/2\)\*2:trunc\(ih\/2\)\*2:0:0,colorspace=ispace=bt470bg:iprimaries=bt470bg:itrc=bt709:irange=pc:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,setparams/);
 	});
 });
 

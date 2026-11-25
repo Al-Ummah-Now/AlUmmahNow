@@ -29,10 +29,14 @@ export function frameInterval(durationSeconds, opts) {
 export function framesArgs(o) {
 	const scene = Math.min(0.9, Math.max(0.05, Number(o.sceneThreshold) || 0.3));
 	const select = `select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,${o.interval})+gt(scene\\,${scene})'`;
-	const scale = "scale='if(gt(iw\\,ih)\\,min(512\\,iw)\\,-2)':'if(gt(iw\\,ih)\\,-2\\,min(512\\,ih))'";
-	// The reviewer sees the colours viewers get (colour.mjs), whatever the source is
-	const shown = [o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '', scale, toJpegFilters].filter(Boolean).join(',');
-	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', `mpdecimate=hi=768:lo=320:frac=0.33,${select},${shown},showinfo`, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
+	const scale = "scale='if(gt(iw\\,ih)\\,trunc(min(512\\,iw)/2)*2\\,-2)':'if(gt(iw\\,ih)\\,-2\\,trunc(min(512\\,ih)/2)*2)'";
+	// The reviewer sees the colours viewers get (colour.mjs), whatever the source is. SDR is converted before
+	// anything reads the frames (the format conversions in front of mpdecimate cannot read YCgCo); HDR, the
+	// costly one, only on the frames kept
+	const sdr = o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '';
+	const hdr = o.plan?.kind === 'hlg' || o.plan?.kind === 'pq';
+	const chain = [hdr ? '' : sdr, 'mpdecimate=hi=768:lo=320:frac=0.33', select, hdr ? sdr : '', scale, toJpegFilters, 'showinfo'].filter(Boolean).join(',');
+	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', chain, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
 }
 
 /** Frame times (ms) from showinfo's stderr lines, in output order. */
