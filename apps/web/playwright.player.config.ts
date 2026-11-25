@@ -20,6 +20,9 @@ const MOBILE_SPECS = /\/mobile-[^/]*\.spec\.ts$/;
 const port = Number(process.env.PLAYER_PORT || 3101);
 const baseURL = process.env.PLAYER_BASE_URL || `http://localhost:${port}`;
 
+/** Linux: not the FFmpeg H.264 decoder, which aborts WebKit on a rendition switch (why: playwright.release.config.ts, #2013) */
+if (process.platform === 'linux') process.env.GST_PLUGIN_FEATURE_RANK ??= 'avdec_h264:NONE';
+
 export default defineConfig({
   testDir: './e2e/player',
   snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',

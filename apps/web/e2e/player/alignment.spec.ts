@@ -35,6 +35,10 @@ const parkPointer = (page: Page) => page.mouse.move(1, 1);
 async function openPaused(page: Page, lang: 'en' | 'ar', opts: { width?: number; at?: number } = {}) {
   const player = await openHarness(page, { lang, width: opts.width });
   await startPlayback(page, player);
+  // The captions button joins the bar when the subtitles answer, which can come after the start on a
+  // slow runner: the buttons before it then move along by its width in the middle of a measurement
+  // (over 15 s after the start in the first Firefox page of a run, while the dev server compiles)
+  await expect(player.locator('.vjs-fanous-captions')).toBeVisible({ timeout: 30_000 });
   await pauseAt(page, player, opts.at ?? 20);
   await parkPointer(page);
   return player;
