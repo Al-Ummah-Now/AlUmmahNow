@@ -366,6 +366,41 @@ describe('rules and storage', () => {
     assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'history', type: 'features.set' })).items.length, 3);
   });
 
+  it('a later page seeks to its cursor in the index, and rows proposed at the same time are neither repeated nor lost', async () => {
+    const insert = search.raw.prepare(
+      `INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, updated_at)
+       VALUES (?, 'features.set', '', 'platform', '{}', 'feature', ?, '{}', '{"title":{"en":"t","ar":"t"},"fields":[]}', '1', 'r', 'u-p', '2026-11-23T10:00:00.000Z', '2026-12-23T10:00:00.000Z', 'pending', 1, '2026-11-23T10:00:00.000Z')`,
+    );
+    for (let n = 0; n < 5; n++) insert.run(`wfr_tie_${n}`, `tie_${n}`);
+    const seen: { sql: string; args: unknown[] }[] = [];
+    const base = ctx();
+    const watched = { ...base, db: { ...base.db, prepare: (sql: string) => ({ bind: (...args: unknown[]) => (seen.push({ sql, args }), base.db.prepare(sql).bind(...args)) }) } } as unknown as WorkflowCtx;
+    const views = [
+      { view: 'mine' },
+      { view: 'open' },
+      { view: 'open', status: 'pending' },
+      { view: 'history' },
+      { view: 'history', status: 'pending' },
+      { view: 'history', type: 'features.set' },
+      { view: 'history', type: 'features.set', status: 'pending' },
+    ] as const;
+    for (const v of views) {
+      const ids: string[] = [];
+      let cursor: string | null = null;
+      do {
+        seen.length = 0;
+        const page: Awaited<ReturnType<typeof listRequests>> = await listRequests(watched, 'u-p', { ...v, limit: 2, cursor });
+        if (cursor) {
+          const plan = (search.raw.prepare(`EXPLAIN QUERY PLAN ${seen[0].sql}`).all(...(seen[0].args as never[])) as { detail: string }[]).map((r) => r.detail);
+          assert.ok(plan.some((d) => /^SEARCH r USING INDEX .*proposed_at</.test(d)), `${JSON.stringify(v)}\n${plan.join('\n')}`);
+        }
+        ids.push(...page.items.map((i) => i.id));
+        cursor = page.next;
+      } while (cursor && ids.length < 20);
+      assert.deepEqual(ids, ['wfr_tie_4', 'wfr_tie_3', 'wfr_tie_2', 'wfr_tie_1', 'wfr_tie_0'], JSON.stringify(v));
+    }
+  });
+
   it('every engine query uses an index (no table scans)', () => {
     const queries = [
       "SELECT id FROM workflow_rules WHERE action_type = 'a' AND scope = '' ORDER BY version DESC LIMIT 1",
