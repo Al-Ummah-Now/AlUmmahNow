@@ -5,7 +5,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { rethrowBusy } from "../../lib/r2Repo";
-import { flagNeedsReupload } from "../../lib/uploads/lifecycle";
+import { flagNeedsReupload, isStoppedUpload } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
 import { roleOnRecord, type AccessVideo } from '../../lib/channelAccess';
 
@@ -56,8 +56,8 @@ export class UploadFailedEndpoint extends AuthenticatedRoute {
 			// the uploading browser reports its own failure: another member
 			// cannot flag someone else's upload.
 			const object = isInternalVideoKey(videoId) ? null : await c.env.videos.get(videoId);
-			if (!object) return c.json({ success: false, error: 'Video not found' }, 404);
-			const video = (await object.json()) as AccessVideo;
+			const video = object ? ((await object.json()) as AccessVideo | null) : null;
+			if (!video || isStoppedUpload(video)) return c.json({ success: false, error: 'Video not found' }, 404);
 			const role = await roleOnRecord(c.env as never, video, userId);
 			const isUploader = !!video.uploadedBy && video.uploadedBy === userId;
 			if (role !== 'owner' && !(isUploader && can(role, 'video.upload'))) {

@@ -175,6 +175,10 @@ export async function channelVideosFromIndex<T>(
 	};
 
 	const result = compare ? await sortedInMemory() : await filledPages();
-	if (!result && !cursor) scheduleOwnershipHeal(env, options.waitUntil ?? null, 'video');
+	if (!result && !cursor) {
+		scheduleOwnershipHeal(env, options.waitUntil ?? null, 'video');
+		// A user's own private videos are found by the channels' rows
+		if (typeof query.privateFor === 'string') scheduleOwnershipHeal(env, options.waitUntil ?? null, 'channel');
+	}
 	return result;
 }

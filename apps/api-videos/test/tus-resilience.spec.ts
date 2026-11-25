@@ -20,6 +20,8 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { createTusRouter, clearTusSessionCache } from '../src/endpoints/video/tus/tusProxy';
+import { UploadCompleteEndpoint } from '../src/endpoints/video/uploadComplete';
+import { UploadFailedEndpoint } from '../src/endpoints/video/uploadFailed';
 import { UploadResumeEndpoint } from '../src/endpoints/video/uploadResume';
 import { MessageType } from '../src/lib/queue';
 import { markUploadComplete } from '../src/lib/uploads/lifecycle';
@@ -315,6 +317,7 @@ describe('TUS proxy resilience', () => {
 
 	it('an admin\'s import needs no role on the channel, from before the mark too', async () => {
 		const h = harness('admin');
+		h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), uploadedBy: 'admin' }));
 		(h.env as any).channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
 		const session = JSON.parse(h.kv.data.get('tus:session:s1')!);
 		h.kv.data.set('tus:session:s1', JSON.stringify({ ...session, userId: 'admin' }));
@@ -324,6 +327,20 @@ describe('TUS proxy resilience', () => {
 		const head = () => h.head(id);
 		assert.equal((await head()).status, 200);
 		assert.equal(h.videos.read('vid').tusUpload.adminImport, true);
+		// Its durable copy says so when KV is gone
+		clearTusSessionCache();
+		const kept = new Map(h.kv.data);
+		h.kv.data.clear();
+		assert.equal((await head()).status, 200);
+		for (const [k, v] of kept) h.kv.data.set(k, v);
+		// Another user's session is nobody else's import
+		h.kv.data.set('tus:session:s1', JSON.stringify({ ...session, userId: 'other', adminImport: true }));
+		const own = `tus:upload:${id.split('.')[0]}`;
+		const { adminImport: _m, ...unmarked } = JSON.parse(h.kv.data.get(own)!);
+		h.kv.data.set(own, JSON.stringify(unmarked));
+		clearTusSessionCache();
+		assert.equal((await head()).status, 404);
+		h.kv.data.set('tus:session:s1', JSON.stringify({ ...session, userId: 'admin', adminImport: true }));
 		// An upload created before the mark: its initiate session says so
 		const key = `tus:upload:${id.split('.')[0]}`;
 		const { adminImport: _mark, ...old } = JSON.parse(h.kv.data.get(key)!);
@@ -342,6 +359,97 @@ describe('TUS proxy resilience', () => {
 			assert.equal(await markUploadComplete(h.env as never, { videoId: 'vid', userId: 'alice', fileSize: SIZE }), false);
 			assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
 		}
+	});
+
+	it('a failure after the upload was stopped does not mark it again', async () => {
+		const h = harness();
+		const env = { ...h.env, channels: new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } }) } as any;
+		const put = h.videos.put.bind(h.videos);
+		(h.videos as any).put = async () => {
+			(h.videos as any).put = put;
+			h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), abandoned: { at: 'x' } }));
+			throw new Error('R2 down');
+		};
+		const res = await buildApp((r: any) => r.post('/api/videos/upload/complete', UploadCompleteEndpoint), { userId: 'alice' }).request('/api/videos/upload/complete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ videoId: 'vid', fileSize: SIZE }) }, env);
+		assert.ok(res.status >= 500);
+		assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
+	});
+
+	it('a session is not written onto an upload that is stopped while it is created', async () => {
+		const h = harness();
+		(h.env as any).channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+		const bunnyFetch = globalThis.fetch;
+		globalThis.fetch = (async (url: any, init: any) => {
+			const res = await bunnyFetch(url, init);
+			h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), abandoned: { at: 'x' } }));
+			return res;
+		}) as typeof fetch;
+		await h.post();
+		globalThis.fetch = bunnyFetch;
+		assert.equal(h.videos.read('vid').tusUpload, undefined);
+	});
+
+	it('no upload step brings a stopped or removed upload back, also when it is stopped meanwhile', async () => {
+		const abandoned = { at: 'x', reason: 'r', by: 'channel-move:j', bunnyDeleted: true };
+		const routes = (r: any) => {
+			r.post('/api/videos/upload/complete', UploadCompleteEndpoint);
+			r.get('/api/videos/upload/resume/:videoId', UploadResumeEndpoint);
+			r.post('/api/videos/upload/failed/:videoId', UploadFailedEndpoint);
+		};
+		const steps: Array<[string, string, unknown]> = [['POST', '/api/videos/upload/complete', { videoId: 'vid', fileSize: SIZE }], ['GET', '/api/videos/upload/resume/vid', undefined], ['POST', '/api/videos/upload/failed/vid', {}]];
+		for (const [method, path, body] of steps) {
+			for (const gone of [{ abandoned }, { isDeleted: true }]) {
+				for (const when of ['before', 'meanwhile'] as const) {
+					const h = harness();
+					const env = { ...h.env, channels: new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } }) } as any;
+					const stop = () => h.videos.store.set('vid', JSON.stringify({ ...JSON.parse(h.videos.store.get('vid')!), ...gone }));
+					if (when === 'before') stop();
+					else {
+						// Between the first read and the conditional write
+						const get = env.channels.get.bind(env.channels);
+						env.channels.get = async (key: string) => {
+							stop();
+							return get(key);
+						};
+					}
+					const res = await buildApp(routes, { userId: 'alice' }).request(path, { method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env);
+					const name = `${method} ${path} ${JSON.stringify(gone).slice(0, 14)} ${when}`;
+					assert.equal(res.status, 404, name);
+					if (method === 'GET') assert.ok(![...h.kv.data.keys()].some((k) => k.startsWith('tus:session:') && k !== 'tus:session:s1'), `${name}: no session is left`);
+					const stored = h.videos.read('vid');
+					assert.deepEqual([stored.uploadStatus, stored.processingIssue, stored.lastResumeAt], ['uploading', undefined, undefined], name);
+					assert.equal(h.queue.messages.length, 0, name);
+				}
+			}
+			// A channel that cannot be read: try again
+			const h = harness();
+			const env = { ...h.env, channels: { get: async () => Promise.reject(new Error('R2 down')) } } as any;
+			const res = await buildApp(routes, { userId: 'alice' }).request(path, { method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env);
+			assert.deepEqual([res.status, !!res.headers.get('Retry-After')], [503, true], path);
+			assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
+		}
+	});
+
+	it('stopped and moved to another owner while it completes: gone, not forbidden', async () => {
+		const h = harness();
+		const channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+		const get = channels.get.bind(channels);
+		(channels as any).get = async (key: string) => {
+			const channel = await get(key);
+			h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), userId: 'next', abandoned: { at: 'x' } }));
+			return channel;
+		};
+		const app = buildApp((r: any) => r.post('/api/videos/upload/complete', UploadCompleteEndpoint), { userId: 'alice' });
+		const res = await app.request('/api/videos/upload/complete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ videoId: 'vid', fileSize: SIZE }) }, { ...h.env, channels } as any);
+		assert.equal(res.status, 404);
+	});
+
+	it('a stopped upload is not found, whoever reports it failed', async () => {
+		const h = harness();
+		h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), abandoned: { at: 'x' } }));
+		const env = { ...h.env, channels: { get: async () => Promise.reject(new Error('R2 down')) } } as any;
+		const app = buildApp((r: any) => r.post('/api/videos/upload/failed/:videoId', UploadFailedEndpoint), { userId: 'nobody' });
+		assert.equal((await app.request('/api/videos/upload/failed/vid', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }, env)).status, 404);
 	});
 
 	it('an upload id of another video or another user is refused', async () => {

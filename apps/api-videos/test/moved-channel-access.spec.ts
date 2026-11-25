@@ -6,7 +6,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
-import { runOwnershipPass } from '../src/lib/search/ownership';
+import { ownershipCompleteKey } from '@al-ummah/shared-types';
+import { channelVideoIds, ownVideoIds, runOwnershipPass, videoListIds } from '../src/lib/search/ownership';
 import { PlaylistsList } from '../src/endpoints/playlist/playlistsList';
 import { PlaylistFetch } from '../src/endpoints/playlist/playlistFetch';
 import { PlaylistQueue } from '../src/endpoints/playlist/playlistQueue';
@@ -39,7 +40,14 @@ import { UploadFailedEndpoint } from '../src/endpoints/video/uploadFailed';
 import { chatRole, forgetChatTiers, ownerTierHasChat, type ChatStream } from '../src/lib/live/chat';
 import { withLiveVideoFields } from '../src/lib/watch-history';
 import { loadOwnedVideos } from '../src/lib/analytics';
-import { moveOutcome } from '../src/lib/channelMoveOutcome';
+import { can, markCategorySuggestionPending } from '@al-ummah/shared-types';
+import { createSqliteD1 } from './sqlite-d1';
+import { saveTier } from '../src/lib/creatorTiers';
+import { uploaderProcessingIssue } from '../src/lib/transformations';
+import { CategorySuggestionGet } from '../src/endpoints/video/categorySuggestions';
+import { LikedVideosList } from '../src/endpoints/library/liked';
+import { ContinueWatchingList, WatchStatePut } from '../src/endpoints/watch-state/watchState';
+import { moveOutcome, moveOutcomeOfRow } from '../src/lib/channelMoveOutcome';
 import { resolvePlaylistCovers } from '../src/lib/playlistCovers';
 
 const BEFORE = 'usr_before';
@@ -456,6 +464,119 @@ describe('what hangs on a private video follows its channel of now, a move finis
 		});
 	}
 
+	it('the index finds the new owner\'s videos by the channel, and spends nothing on the old owner\'s moved ones', async () => {
+		const { env, call, b } = await open(true);
+		// Many moved videos, all newer than the old owner's own; their rows still name the old owner
+		for (let i = 0; i < 520; i++) b.videos.store.set(`m${i}`, JSON.stringify(videoFixture({ id: `m${i}`, title: 'moved', userId: BEFORE, channelId: 'ch1', isPublic: false, uploadStatus: 'ready', dateCreated: '2026-06-01T00:00:00.000Z' })));
+		b.videos.store.set('gone', JSON.stringify(videoFixture({ id: 'gone', title: 'on a channel that is gone', userId: BEFORE, channelId: 'gone', isPublic: false, uploadStatus: 'ready', dateCreated: '2026-01-01T00:00:00.000Z' })));
+		await runOwnershipPass(env as never, 'video', { maxPages: 50, restart: true } as never);
+		const db = (env as any).SEARCH_DB;
+		assert.equal(db.db.prepare(`SELECT owner_id FROM content_ownership WHERE kind = 'video' AND id = 'vp'`).get().owner_id, BEFORE, 'the row has not caught up');
+		const found = async (who: string) => new Set<string>((JSON.stringify((await call(who, 'GET', '/api/videos/search?isOwner=true&limit=50')).body).match(/"id":"[a-z0-9-]+"/g) ?? []).map((m) => m.slice(6, -1)));
+		const before = await found(BEFORE);
+		assert.ok(before.has('vo') && before.has('gone'), 'their own, though 520 newer rows still name them');
+		assert.ok(![...before].some((id) => /^m\d|^v[1p]$/.test(id)));
+		assert.ok([...(await found(NOW))].some((id) => /^m\d/.test(id)));
+		assert.deepEqual((await ownVideoIds(env as never, NOW, { newest: 1000 }))!.length, 522, 'v1, vp and the moved ones');
+		assert.deepEqual((await ownVideoIds(env as never, BEFORE))!, ['gone', 'vo']);
+		const scheduled = async (who: string) => JSON.stringify((await call(who, 'GET', '/api/videos/scheduled')).body).includes('"vp"');
+		assert.deepEqual([await scheduled(NOW), await scheduled(BEFORE)], [true, false]);
+		const list = async (who: string) => new Set<string>((await call(who, 'GET', '/api/videos?limit=50&filter=private')).body.data.map((v: any) => v.id));
+		assert.ok([...(await list(NOW))].some((id) => /^m\d|^vp$/.test(id)), 'the general list too');
+		const own = await list(BEFORE);
+		assert.deepEqual([...own].sort(), ['gone', 'vo'], 'not buried under rows that are no longer theirs');
+		// Every statement by an index
+		db.trace = [];
+		await ownVideoIds(env as never, NOW, { newest: 500 });
+		await ownVideoIds(env as never, NOW, { scheduled: true, channelId: 'ch1', scheduleStatus: 'scheduled' });
+		const statements = (db.trace as Array<{ sql?: string } | string>).map((s) => (typeof s === 'string' ? s : (s.sql ?? ''))).filter((text) => /channel_id IN/.test(text));
+		assert.equal(statements.length, 2);
+		for (const text of statements) {
+			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${text}`).all(...Array((text.match(/\?/g) ?? []).length).fill('x')) as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+			assert.match(plan, /SEARCH content_ownership USING (COVERING )?INDEX idx_content_ownership_channel/, plan);
+			assert.doesNotMatch(plan, /SCAN content_ownership|SCAN c\b/, plan);
+		}
+	});
+
+	it('while the channel index is rebuilt the lists scan instead', async () => {
+		const { env } = await open(true);
+		(env as any).SEARCH_DB.db.prepare(`DELETE FROM search_meta WHERE key = ?`).run(ownershipCompleteKey('channel'));
+		assert.equal(await ownVideoIds(env as never, NOW), null);
+		const mine = { sort: 'latest' as const, limit: 10, privateFor: NOW };
+		for (const channelId of [null, 'ch1']) {
+			assert.equal(await channelVideoIds(env as never, channelId, mine), null);
+			assert.ok(await channelVideoIds(env as never, channelId, { ...mine, privateFor: null }), 'public lists do not need it');
+		}
+		assert.equal(await videoListIds(env as never, 'ch1', mine), null);
+		assert.ok(await videoListIds(env as never, 'ch1', { ...mine, privateFor: null }));
+	});
+
+	it('a list or search that scans asks for the channel index too', async () => {
+		for (const path of ['/api/videos?limit=50', '/api/videos/search?isOwner=true']) {
+			const { env, call } = await open(true);
+			env.ADMIN_JOBS_QUEUE = new MemoryQueue();
+			const db = env.SEARCH_DB.db;
+			db.prepare(`DELETE FROM search_meta WHERE key = ?`).run(ownershipCompleteKey('channel'));
+			const r = await call(NOW, 'GET', path);
+			assert.equal(r.status, 200);
+			assert.ok(JSON.stringify(r.body).includes('"id":"vp"'), path);
+			for (let i = 0; i < 50 && !db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal-queued:channel'").get(); i++) await new Promise((done) => setTimeout(done, 5));
+			assert.ok(db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal-queued:channel'").get(), path);
+		}
+	});
+
+	it('the general list reads public rows in order and the caller\'s own apart', async () => {
+		const { env, b } = await open(true);
+		const put = (id: string, over: Record<string, unknown>) => b.videos.store.set(id, JSON.stringify(videoFixture({ id, title: id, userId: NOW, channelId: 'ch1', uploadStatus: 'ready', ...over })));
+		for (let i = 0; i < 6; i++) put(`p${i}`, { userId: 'usr_x', channelId: 'other', isPublic: true, views: i, dateCreated: `2026-05-0${i + 1}T00:00:00.000Z` });
+		put('own-old', { isPublic: false, views: 100, dateCreated: '2026-05-03T12:00:00.000Z' });
+		put('own-busy', { isPublic: true, uploadStatus: 'processing', views: 1, dateCreated: '2026-05-05T12:00:00.000Z' });
+		put('theirs', { userId: 'usr_x', channelId: 'other', isPublic: false, dateCreated: '2026-05-06T12:00:00.000Z' });
+		put('lone', { channelId: null, isPublic: false, dateCreated: '2026-05-04T12:00:00.000Z' });
+		await runOwnershipPass(env as never, 'video', { maxPages: 50, restart: true } as never);
+		const may = (ids: string[]) => ids.filter((id) => /^(p\d|own-|theirs|lone)/.test(id));
+		const list = async (over = {}) => (await channelVideoIds(env as never, null, { sort: 'latest', limit: 50, privateFor: NOW, ...over }))!;
+		assert.deepEqual(may((await list()).ids), ['p5', 'own-busy', 'p4', 'lone', 'p3', 'own-old', 'p2', 'p1', 'p0']);
+		assert.deepEqual(may((await list({ sort: 'oldest' })).ids), ['p0', 'p1', 'p2', 'own-old', 'p3', 'lone', 'p4', 'own-busy', 'p5']);
+		assert.equal(may((await list({ sort: 'popular' })).ids)[0], 'own-old');
+		assert.deepEqual(may((await list({ isPublic: false })).ids), ['lone', 'own-old']);
+		assert.deepEqual(may((await list({ privateFor: 'usr_none' })).ids), ['p5', 'p4', 'p3', 'p2', 'p1', 'p0']);
+		const whole = (await list()).ids;
+		const pages: string[] = [];
+		for (let offset = 0; ; offset += 2) {
+			const page = await list({ limit: 2, offset });
+			pages.push(...page.ids);
+			if (!page.hasMore) break;
+		}
+		assert.deepEqual(pages, whole, 'every page, nothing twice or left out');
+		// Plans: public rows by (kind, created_at) without reading the rest, own rows by their channels and by owner
+		const db = env.SEARCH_DB;
+		const plans = async (read: () => Promise<unknown>) => {
+			db.trace = [];
+			await read();
+			return (db.trace as Array<{ sql?: string } | string>).map((s) => (typeof s === 'string' ? s : (s.sql ?? ''))).filter((text) => /FROM content_ownership WHERE|FROM \(SELECT/.test(text) && /privateFor|is_hidden/.test(text))
+				.map((text) => (db.db.prepare(`EXPLAIN QUERY PLAN ${text}`).all(...Array((text.match(/\?/g) ?? []).length).fill(1)) as Array<{ detail: string }>).map((r) => r.detail));
+		};
+		for (const sort of ['latest', 'oldest'] as const) {
+			const [plan] = await plans(() => list({ sort }));
+			const text = plan.join(' | ');
+			assert.match(text, /content_ownership USING INDEX idx_content_ownership_created \(kind=\?\)/, text);
+			assert.match(text, /content_ownership USING INDEX idx_content_ownership_channel\w* \(kind=\? AND channel_id=\?/, text);
+			assert.match(text, /content_ownership USING INDEX idx_content_ownership_owner \(kind=\? AND owner_id=\?\)/, text);
+			assert.equal(plan.filter((line) => /CORRELATED/.test(line)).length, 1, `only the caller's own rows: ${text}`);
+			assert.doesNotMatch(text, /SCAN content_ownership|SCAN c\b|AUTOMATIC/, text);
+			assert.equal((text.match(/idx_content_ownership_created/g) ?? []).length, 1);
+		}
+		const [own] = await plans(() => list({ isPublic: false }));
+		assert.doesNotMatch(own.join(' | '), /idx_content_ownership_(kind_)?created/, own.join(' | '));
+		for (const read of [() => channelVideoIds(env as never, 'ch1', { sort: 'latest', limit: 5, privateFor: NOW }), () => videoListIds(env as never, 'ch1', { sort: 'latest', limit: 5, privateFor: NOW })]) {
+			const [plan] = await plans(read);
+			const text = plan.join(' | ');
+			assert.match(text, /SEARCH content_ownership USING INDEX idx_content_ownership_channel/, text);
+			assert.doesNotMatch(text, /CORRELATED|SCAN content_ownership/, text);
+		}
+	});
+
 	it('an upload is reported failed by the owner of today, or its uploader while they may upload', async () => {
 		for (const [who, status] of [[BEFORE, 403], [NOW, 200], [EDITOR, 403]] as const) {
 			const { b, call } = await open();
@@ -471,6 +592,129 @@ describe('what hangs on a private video follows its channel of now, a move finis
 		const { env } = await open();
 		const entries = [{ videoId: 'vp', videoTitle: 'as it was' }];
 		for (const [who, title] of [[BEFORE, 'as it was'], [NOW, 'private lesson']] as const) assert.equal((await withLiveVideoFields(env as never, who, entries))[0].videoTitle, title, who);
+	});
+
+	it('a comment on a closed video can no longer be edited by the account it named', async () => {
+		const { b, call } = await open();
+		b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), comments: [commentFixture('mine', { userId: BEFORE, channelId: null, text: 'mine' }), commentFixture('now', { userId: NOW, channelId: null, text: 'now' })] }));
+		assert.equal((await call(BEFORE, 'PUT', '/api/videos/vp/comments/mine', { text: 'changed' })).status, 404);
+		assert.equal((await call(NOW, 'PUT', '/api/videos/vp/comments/now', { text: 'changed' })).status, 200);
+	});
+
+	it('a comment or a like on a video that moves meanwhile is judged by where it lands', async () => {
+		const meanwhile = (b: any, when: number, channelId: string) => {
+			const get = b.videos.get.bind(b.videos);
+			let reads = 0;
+			b.videos.get = async (key: string) => {
+				if (key === 'vp' && ++reads === when) b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), channelId }));
+				return get(key);
+			};
+		};
+		// From a channel the commenter has nothing on to theirs: written
+		const into = await open();
+		into.b.videos.store.set('vp', JSON.stringify({ ...into.b.videos.read('vp'), channelId: 'own' }));
+		meanwhile(into.b, 2, 'ch1');
+		assert.equal((await into.call(NOW, 'POST', '/api/videos/vp/comments', { text: 'x' })).status, 200);
+		// Between the check and the write, to a channel they have nothing on: not
+		const away = await open();
+		meanwhile(away.b, 2, 'own');
+		assert.equal((await away.call(NOW, 'POST', '/api/videos/vp/comments/c1/likes', {})).status, 404);
+		assert.deepEqual(away.b.videos.read('vp').comments[0].likes ?? [], []);
+	});
+
+	it('the owner of today hears of a comment', async () => {
+		const { b, env, call } = await open();
+		b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), isPublic: true, commentSettings: 'on', scheduledPublishStatus: undefined, scheduledPublishDate: undefined }));
+		Object.assign(env, { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
+		const told: string[] = [];
+		const real = globalThis.fetch;
+		globalThis.fetch = (async (url: string, init?: RequestInit) => {
+			told.push(`${url} ${String(init?.body ?? '')}`);
+			return Response.json({ success: true });
+		}) as typeof fetch;
+		try {
+			assert.equal((await call('usr_x', 'POST', '/api/videos/vp/comments', { text: 'hello' })).status, 200);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		} finally {
+			globalThis.fetch = real;
+		}
+		const all = told.filter((t) => t.includes('newComment') || t.includes('user:')).join('\n');
+		assert.ok(all.includes(NOW), all);
+		assert.ok(!all.includes(BEFORE), all);
+	});
+
+	it('watch state, continue watching and liked videos keep a private video to who may open it', async () => {
+		const { env } = await open();
+		env.NOTIFICATIONS_DB = createSqliteD1();
+		env.global_settings = new MemoryBucket();
+		for (const who of [BEFORE, NOW]) await env.NOTIFICATIONS_DB.prepare('INSERT INTO liked_videos (user_id, video_id, liked_at) VALUES (?, ?, 1)').bind(who, 'vp').run();
+		const app = (who: string) => buildApp((r: any) => {
+			r.put('/api/watch-state/:videoId', WatchStatePut);
+			r.get('/api/continue-watching', ContinueWatchingList);
+			r.get('/api/library/liked', LikedVideosList);
+		}, { userId: who });
+		for (const [who, shown] of [[BEFORE, false], [NOW, true]] as const) {
+			const put = await app(who).request('/api/watch-state/vp', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ position: 30, duration: 100, clientUpdatedAt: new Date().toISOString() }) }, env as never);
+			assert.equal(put.status, shown ? 200 : 404, `${who}: ${await put.clone().text()}`);
+			env.watch_history.store.set(`${who}:vp`, JSON.stringify({ id: `${who}:vp`, userId: who, videoId: 'vp', videoTitle: 'x', videoDuration: 100, progress: 30, completed: false, percentageWatched: 30, firstWatchedAt: '2026-11-01T00:00:00.000Z', lastWatchedAt: new Date().toISOString() }));
+			const text = async (path: string) => (await app(who).request(path, {}, env as never)).text();
+			assert.equal((await text('/api/continue-watching?limit=10')).includes('"vp"'), shown, `${who} continue`);
+			assert.equal((await text('/api/library/liked?limit=10')).includes('"vp"'), shown, `${who} liked`);
+		}
+	});
+
+	it('an AI category suggestion is the owner of today\'s to read', async () => {
+		const { env } = await open(true);
+		await markCategorySuggestionPending((env as any).SEARCH_DB, { subjectId: 'vp', subjectType: 'video', reason: 'upload', now: Date.now() });
+		for (const [who, status] of [[BEFORE, 404], [NOW, 200]] as const) {
+			const res = await buildApp((r: any) => r.get('/api/videos/category-suggestions', CategorySuggestionGet), { userId: who }).request('/api/videos/category-suggestions?videoId=vp', {}, env as never);
+			assert.equal(res.status, status, who);
+		}
+	});
+
+	it('a member acting as the channel lists its private videos, one without that role does not', async () => {
+		for (const indexed of [true, false]) {
+			const { env } = await open(indexed);
+			const list = async (who: string, role: string) => {
+				const app = buildApp((r: any) => {
+					r.use('*', async (c: any, next: any) => {
+						c.set('channelRole', role);
+						c.set('channelOwnerId', NOW);
+						await next();
+					});
+					r.get('/api/videos', VideosList);
+				}, { userId: who });
+				const res = await app.request('/api/videos?limit=50&channelId=ch1', { headers: { channelId: 'ch1' } }, env as never);
+				return ((await res.json()) as any).data.map((v: any) => v.id).sort();
+			};
+			assert.deepEqual(await list(EDITOR, 'editor'), ['v1', 'vp'], `${indexed}`);
+			assert.deepEqual(await list('usr_x', 'moderator'), can('moderator', 'video.view_private') ? ['v1', 'vp'] : ['v1'], `${indexed}`);
+		}
+	});
+
+	it('the processing issue\'s reason goes to who may upload to the channel now', () => {
+		const video = { userId: BEFORE, channelId: 'ch1', processingIssue: { kind: 'needs_reupload', reason: 'r' } };
+		const channel = { userId: NOW, members: [{ userId: EDITOR, role: 'editor' as const }] };
+		for (const [who, sees] of [[BEFORE, false], [NOW, true], [EDITOR, true]] as const) assert.equal(!!uploaderProcessingIssue(video, channel as never, who).processingIssue, sees, who);
+		assert.deepEqual(uploaderProcessingIssue(video, null, BEFORE), {}, 'a channel that was not read');
+		assert.ok(uploaderProcessingIssue({ ...video, channelId: null }, null, BEFORE).processingIssue, 'a video without one');
+	});
+
+	it('an uploader whose role no longer uploads cannot report a failure', async () => {
+		const { b, call } = await open();
+		b.channels.store.set('ch1', JSON.stringify({ ...b.channels.read('ch1'), members: [{ userId: EDITOR, role: 'moderator' }] }));
+		b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), uploadStatus: 'uploading', uploadedBy: EDITOR }));
+		assert.equal((await call(EDITOR, 'POST', '/api/videos/upload/failed/vp', {})).status, 403);
+	});
+
+	it('live chat goes by the tier of the owner of today, channel by channel', async () => {
+		const { env } = await open(true);
+		const db = (env as any).SEARCH_DB;
+		await saveTier(db, 'creator', { live: true }, 'test');
+		db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'creator', 'admin', 'test', '2026-11-01')").run(NOW);
+		forgetChatTiers();
+		const has = (channelId: string) => ownerTierHasChat(env as never, { id: channelId, channelId, ownerId: BEFORE } as ChatStream);
+		assert.deepEqual([await has('ch1'), await has('own')], [true, false], 'both rows name the owner before');
 	});
 
 	it('analytics count what is on the channels, whoever the records name', async () => {
@@ -501,6 +745,8 @@ describe('what hangs on a private video follows its channel of now, a move finis
 		assert.equal(moveOutcome(job('succeeded', { skipped: 'stopped' })), 'unknown', 'only the field says it did not');
 		for (const skipped of ['channel_deleted', 'channel_not_found']) assert.equal(moveOutcome(job('succeeded', { skipped })), 'unknown');
 		assert.equal(moveOutcome(job('succeeded', { skipped: 'channel_deleted' }), { userId: NOW }), 'moved');
+		for (const result of ['{', '"x"', 'null', '[]']) assert.notEqual(moveOutcomeOfRow({ status: 'failed', params: null, result }), 'not_moved', result);
+		assert.equal(moveOutcomeOfRow({ status: 'succeeded', params: '{', result: null }), 'unknown', 'unreadable is never "did not"');
 		for (const status of ['failed', 'succeeded', 'cancelled']) {
 			assert.equal(moveOutcome(job(status, { changedHands: true })), 'moved');
 			assert.equal(moveOutcome(job(status, { changedHands: false })), 'not_moved');

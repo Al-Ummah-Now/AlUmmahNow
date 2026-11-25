@@ -1,5 +1,7 @@
 import { bunnyLibraryForVideo, type LibraryHints } from '../../lib/bunny/libraries';
-import { canOnVideo } from "../../lib/channelAccess";
+import { can } from '@al-ummah/shared-types';
+import { apiError } from '../../lib/api-error';
+import { roleOnRecord } from "../../lib/channelAccess";
 import { OpenAPIRoute } from "chanfana";
 import { Str } from "../../lib/chanfana-params";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -8,9 +10,9 @@ import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { bunnyRef } from "../../lib/media/providers";
-import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
+import { generateTUSConfig, createTusProxySession, deleteTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
-import { reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
+import { isStoppedUpload, reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
 
 /**
@@ -114,16 +116,22 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			const video = await repository.getObject(videoId);
 
 			// An abandoned placeholder (the upload reaper deleted it at Bunny) is gone too
-			const removed = video as (VideoType & { abandoned?: unknown; isDeleted?: boolean }) | null;
-			if (!video || removed?.abandoned || removed?.isDeleted) {
+			if (!video || isStoppedUpload(video)) {
 				return c.json({
 					success: false,
 					error: "Video not found. Please initiate a new upload.",
 				}, 404);
 			}
 
-			// Check ownership
-			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
+			// Check ownership: the channel of now; one that cannot be read is asked again, never refused
+			let mayUpload: boolean;
+			try {
+				mayUpload = can(await roleOnRecord(c.env as never, video, userId), 'video.upload');
+			} catch (error) {
+				logger.warn('[UploadResume] Channel record unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
+				return apiError(c, 503, 'service_unavailable', undefined, { 'Retry-After': '5' });
+			}
+			if (!mayUpload) {
 				return c.json({
 					success: false,
 					error: "Forbidden - you can only resume uploads for your own videos",
@@ -178,17 +186,26 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			// Record the resume attempt; best effort, never blocks the upload
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
 			const resumedAt = new Date().toISOString();
+			let stopped = false;
 			try {
 				// A re-upload of a flagged video reopens it (back to uploading,
 				// needs_reupload cleared); it is flagged again if this attempt fails.
-				await repository.updateObject(videoId, (fresh) => {
-					if (fresh.userId !== video.userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
+				const saved = await repository.updateObject(videoId, (fresh) => {
+					stopped = isStoppedUpload(fresh);
+					if (stopped || fresh.userId !== video.userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
 					reopenForReupload(fresh as UploadVideo);
 					Object.assign(fresh, { dateModified: resumedAt, lastResumeAt: resumedAt });
 					return true;
 				});
+				if (!saved) stopped = true;
 			} catch (error) {
 				logger.warn('[UploadResume] Could not record the resume attempt', { videoId, error: error instanceof Error ? error.message : String(error) });
+			}
+
+			// Stopped or deleted meanwhile: the session goes with it
+			if (stopped) {
+				await deleteTusProxySession(c.env.TUS_SESSIONS, userId, tusSessionId).catch(() => undefined);
+				return apiError(c, 404, 'video_not_found', { error: 'Video not found. Please initiate a new upload.' });
 			}
 
 			return c.json({

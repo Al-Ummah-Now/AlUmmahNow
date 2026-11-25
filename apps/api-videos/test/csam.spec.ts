@@ -413,6 +413,28 @@ describe('taking a video down', () => {
 		}
 	});
 
+	it('the purge job a takedown leaves only removes references', async () => {
+		const t = setup();
+		const env = t.env as Record<string, any>;
+		env.playlists = new MemoryBucket({ pl1: { id: 'pl1', userId: OWNER, channelId: 'chan-synth-01', videos: ['vid-synth-01', 'other'] } });
+		await runOwnershipPass(env as never, 'playlist', { maxPages: 10 });
+		t.env.videos.store.delete('vid-synth-01');
+		const real = globalThis.fetch;
+		const asked: string[] = [];
+		globalThis.fetch = (async (url: string, init?: RequestInit) => {
+			asked.push(`${init?.method ?? 'GET'} ${url}`);
+			return new Response('{}', { status: 500 });
+		}) as typeof fetch;
+		try {
+			const outcome = (await ADMIN_JOB_HANDLERS['video.purge']!(env as never, { id: 'j', kind: 'video.purge', targetId: 'vid-synth-01', params: { userId: null, channelId: 'chan-synth-01', referencesOnly: true } } as never)) as any;
+			assert.equal(outcome.done, true);
+		} finally {
+			globalThis.fetch = real;
+		}
+		assert.deepEqual(asked, [], 'no provider or CDN is asked again');
+		assert.deepEqual(env.playlists.read('pl1').videos, ['other']);
+	});
+
 	it('a takedown that stopped after the record was gone still cleans what lists the video', async () => {
 		const t = setup();
 		const env = t.env as Record<string, any>;

@@ -67,6 +67,12 @@ export interface UploadLifecycleEnv {
   VIDEO_REVIEW_ALLOWED?: string;
 }
 
+/** Removed, or stopped (the reaper, a channel move): no upload step brings it back. */
+export const isStoppedUpload = (video: unknown): boolean => {
+  const { abandoned, isDeleted } = (video ?? {}) as { abandoned?: unknown; isDeleted?: unknown };
+  return !!abandoned || isDeleted === true;
+};
+
 const UNFINISHED = new Set(['initiated', 'uploading', 'failed', undefined]);
 
 /** Drop the upload-side flags once the bytes are in (or a re-upload starts). */
@@ -99,8 +105,8 @@ export async function markUploadComplete(
     // that processing already marked ready stays ready.
     await repository.updateObject(upload.videoId, (video) => {
       changed = false;
-      // Removed, or stopped (the reaper, a channel move): late bytes do not bring it back
-      if ((video as { abandoned?: unknown }).abandoned || (video as { isDeleted?: boolean }).isDeleted) return false;
+      // Late bytes do not bring it back
+      if (isStoppedUpload(video)) return false;
       if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') {
         if (!video.tusUpload && !video.uploadWatch) return false;
         delete video.tusUpload;
@@ -180,6 +186,10 @@ export async function flagNeedsReupload(
   let flagged: UploadVideo | null = null;
   const saved = await repository.updateObject(videoId, (video) => {
     flagged = null;
+    if (isStoppedUpload(video)) {
+      result = 'missing';
+      return false;
+    }
     if (opts.ownerId !== undefined && video.userId !== opts.ownerId) {
       result = 'forbidden';
       return false;

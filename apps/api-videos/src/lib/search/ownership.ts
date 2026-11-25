@@ -359,6 +359,44 @@ export function memberChannelRoles(env: OwnershipEnv, userId: string): Promise<A
 }
 
 /**
+ * Whose a video's row is, by its channel: on a channel the user owns now, or the user's own where the
+ * channel has no row (a personal video, a channel that is gone). A channel's own row follows a move at
+ * once, the rows of its videos one by one. Primary key and idx_content_ownership_owner lookups.
+ */
+const OWN_CHANNELS = `channel_id IN (SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ?)`;
+const NO_CHANNEL = `NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} c WHERE c.kind = 'channel' AND c.id = ${OWNERSHIP_TABLE}.channel_id)`;
+/** The same for the rows of one channel: asked once, not per row. Binds: channel, user, user, channel. */
+const THEIRS_ON_CHANNEL = `(EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} own WHERE own.kind = 'channel' AND own.id = ? AND own.owner_id = ?)
+  OR (owner_id = ? AND NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} c WHERE c.kind = 'channel' AND c.id = ?)))`;
+
+/** Lists with a user's own private videos need both kinds complete: whose a video is, is its channel's row. */
+function whenListComplete<T>(env: OwnershipEnv, query: ChannelVideoQuery, read: (db: SearchDb) => Promise<T>): Promise<T | null> {
+  if (typeof query.privateFor !== 'string') return whenComplete(env, 'video', read);
+  return whenComplete(env, 'channel', () => whenComplete(env, 'video', read));
+}
+
+/** Ids of the user's not-deleted videos by the channels they own now (see OWN_CHANNELS), moderation-hidden ones included; newest first with `newest`. */
+export async function ownVideoIds(env: OwnershipEnv, userId: string, opts: { newest?: number; channelId?: string; scheduled?: boolean; scheduleStatus?: string } = {}): Promise<string[] | null> {
+  return whenComplete(env, 'channel', () => whenComplete(env, 'video', async db => {
+    const filter = ['is_deleted = 0'];
+    const binds: unknown[] = [];
+    if (opts.scheduled) filter.push('schedule_status IS NOT NULL');
+    if (opts.channelId) { filter.push('channel_id = ?'); binds.push(opts.channelId); }
+    if (opts.scheduleStatus) { filter.push('schedule_status = ?'); binds.push(opts.scheduleStatus); }
+    const rest = filter.join(' AND ');
+    const { results } = await db.prepare(
+      `SELECT id FROM (
+         SELECT id, created_at FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND ${OWN_CHANNELS} AND ${rest}
+         UNION ALL
+         SELECT id, created_at FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND owner_id = ? AND ${NO_CHANNEL} AND ${rest}
+       ) ${opts.newest ? 'ORDER BY created_at DESC, id DESC LIMIT ?' : ''}`,
+    ).bind(userId, ...binds, userId, ...binds, ...(opts.newest ? [opts.newest] : [])).all<{ id: string }>();
+    const ids = (results ?? []).map(r => r.id);
+    return opts.newest ? ids : byKey(ids);
+  }));
+}
+
+/**
  * Ids of the not-deleted videos on `channelIds`, and of the user's in no channel, moderation-hidden
  * ones included: owner-only views such as analytics still count them.
  */
@@ -393,14 +431,7 @@ export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: 
  * bucket scan (SCALABILITY-AUDIT AV-16).
  */
 export function ownerScheduledVideoIds(env: OwnershipEnv, userId: string, filter: { channelId?: string; status?: string } = {}): Promise<string[] | null> {
-  return whenComplete(env, 'video', async db => {
-    const clauses = [`kind = 'video'`, 'owner_id = ?', 'is_deleted = 0', 'schedule_status IS NOT NULL'];
-    const binds: unknown[] = [userId];
-    if (filter.channelId) { clauses.push('channel_id = ?'); binds.push(filter.channelId); }
-    if (filter.status) { clauses.push('schedule_status = ?'); binds.push(filter.status); }
-    const { results } = await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${clauses.join(' AND ')}`).bind(...binds).all<{ id: string }>();
-    return byKey((results ?? []).map(r => r.id));
-  });
+  return ownVideoIds(env, userId, { scheduled: true, channelId: filter.channelId, scheduleStatus: filter.status });
 }
 
 /** Video totals from the ownership index for the metrics endpoint, or null when it is not usable. */
@@ -474,8 +505,8 @@ function videoListFilters(channelId: string, query: ChannelVideoQuery): { where:
   // Public, ready and not waiting for a scheduled publish, unless the viewer may see it
   const PUBLIC = `(is_public = 1 AND ${READY_SQL} AND (schedule_status IS NULL OR schedule_status NOT IN ('scheduled', 'publishing')))`;
   if (typeof query.privateFor === 'string') {
-    where.push(`(${PUBLIC} OR owner_id = ?)`);
-    params.push(query.privateFor);
+    where.push(`(${PUBLIC} OR ${THEIRS_ON_CHANNEL})`);
+    params.push(channelId, query.privateFor, query.privateFor, channelId);
   } else if (!query.privateFor) {
     where.push(PUBLIC);
   }
@@ -498,7 +529,7 @@ export function videoListIds(
     return Promise.reject(new Error(`videoListIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
   }
   const sort: OwnershipSort = query.sort === 'popular' ? 'popular' : query.sort === 'oldest' ? 'oldest' : 'latest';
-  return whenComplete(env, 'video', async db => {
+  return whenListComplete(env, query, async db => {
     const { where, params } = videoListFilters(channelId, query);
     return keysetPage(db, { kind: 'video', sort, limit: query.limit, after: query.after, offset: query.offset, where, params });
   });
@@ -517,7 +548,7 @@ export function channelVideoIds(
   if (!(query.limit >= 1) || !((query.offset ?? 0) >= 0)) {
     return Promise.reject(new Error(`channelVideoIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
   }
-  return whenComplete(env, 'video', async db => {
+  return whenListComplete(env, query, async db => {
     const order = CHANNEL_VIDEO_ORDER[query.sort] ?? CHANNEL_VIDEO_ORDER.latest;
     const where = [`kind = 'video'`, 'is_deleted = 0', 'is_hidden = 0'];
     const params: unknown[] = [];
@@ -535,19 +566,37 @@ export function channelVideoIds(
     if (query.liveOnly) where.push('is_live = 1');
     if (query.notLive) where.push('is_live = 0');
     if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');
-    if (typeof query.privateFor === 'string') {
-      where.push('(is_public = 1 OR owner_id = ?)');
-      params.push(query.privateFor);
-    } else if (!query.privateFor) {
-      where.push('is_public = 1');
-    }
     // Videos still uploading/processing (or failed) are listed only to their
     // owner: the playlist does not exist yet (2026-11-10 incident)
+    const PUBLIC = `(is_public = 1 AND ${READY_SQL})`;
+    if (typeof query.privateFor === 'string' && channelId === null) {
+      // Every channel's: what is public in list order, and only then the caller's own rest by their
+      // channels, and by their rows where there is no channel (never the whole index, row by row)
+      const base = where.join(' AND ');
+      const end = query.limit + 1 + (query.offset ?? 0);
+      // The caller's by index: for an order by date the planner would walk every row in date order instead
+      const arm = (condition: string, index = '') => `SELECT * FROM (SELECT id, created_at, views FROM ${OWNERSHIP_TABLE}${index && ` INDEXED BY ${index}`} WHERE ${base} AND ${condition} ORDER BY ${order} LIMIT ?)`;
+      const arms = [
+        arm(`${OWN_CHANNELS} AND NOT ${PUBLIC}`, 'idx_content_ownership_channel'),
+        arm(`owner_id = ? AND ${NO_CHANNEL} AND NOT ${PUBLIC}`, 'idx_content_ownership_owner'),
+      ];
+      const binds: unknown[] = [query.privateFor, end, query.privateFor, end];
+      // Private ones only: nothing public to walk
+      if (query.isPublic !== false) {
+        arms.unshift(arm(PUBLIC));
+        binds.unshift(end);
+      }
+      const { results } = await db.prepare(
+        `SELECT id FROM (${arms.join(' UNION ALL ')}) ORDER BY ${order} LIMIT ? OFFSET ?`,
+      ).bind(...binds, query.limit + 1, query.offset ?? 0).all<{ id: string }>();
+      const ids = (results ?? []).map(r => r.id);
+      return { ids: ids.slice(0, query.limit), hasMore: ids.length > query.limit };
+    }
     if (typeof query.privateFor === 'string') {
-      where.push(`(${READY_SQL} OR owner_id = ?)`);
-      params.push(query.privateFor);
+      where.push(`(${PUBLIC} OR ${THEIRS_ON_CHANNEL})`);
+      params.push(channelId, query.privateFor, query.privateFor, channelId);
     } else if (!query.privateFor) {
-      where.push(READY_SQL);
+      where.push(PUBLIC);
     }
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`,
