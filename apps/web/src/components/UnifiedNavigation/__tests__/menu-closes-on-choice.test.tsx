@@ -47,6 +47,19 @@ it.each([['nav-channel-option-none', null], ['nav-channel-option', 'ch1']] as co
   expect(screen.queryByTestId('nav-menu')).toBeNull();
 });
 
+it('drops a half filled create form when another identity is chosen', async () => {
+  mockSwitch.mockResolvedValue(true);
+  await openSwitcher();
+  fireEvent.click(screen.getByTestId('nav-create-channel'));
+  fireEvent.change(document.getElementById('nav-new-channel-name')!, { target: { value: 'Noor' } });
+  await act(async () => { fireEvent.click(screen.getByTestId('nav-channel-option-none')); });
+  fireEvent.click(screen.getByTestId('nav-menu-trigger'));
+  fireEvent.click(await screen.findByTestId('nav-switch-channel'));
+  expect(document.getElementById('nav-new-channel-name')).toBeNull();
+  fireEvent.click(screen.getByTestId('nav-create-channel'));
+  expect(document.getElementById('nav-new-channel-name')).toHaveValue('');
+});
+
 it('stays open when the switch is refused', async () => {
   mockSwitch.mockResolvedValue(false);
   await openSwitcher();

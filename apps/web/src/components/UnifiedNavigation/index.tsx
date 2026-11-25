@@ -269,7 +269,11 @@ export function UnifiedNavigation() {
 
   // Choosing who you act as closes the menu once it is done; a refused switch keeps it open with its message
   const actAs = async (channelId: string | null) => {
-    if ((await switchToChannel(channelId)) !== false) setIsOpen(false);
+    if ((await switchToChannel(channelId)) === false) return;
+    setIsOpen(false);
+    // A create form left half filled goes with the menu, as on Escape and the backdrop
+    setIsCreatingChannel(false);
+    setNewChannelName('');
   };
 
   const handleCreateChannel = async () => {
