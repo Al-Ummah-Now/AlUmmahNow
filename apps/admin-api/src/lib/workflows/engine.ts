@@ -698,7 +698,8 @@ export interface RequestListItem {
 export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { view: RequestListView; status?: WorkflowStatus; type?: WorkflowActionType; cursor?: string | null; limit?: number; money?: boolean }): Promise<{ items: RequestListItem[]; next: string | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 50);
   const [cAt, cId] = opts.cursor ? opts.cursor.split('|') : [null, null];
-  const cursorSql = cAt ? ' AND (r.proposed_at < ? OR (r.proposed_at = ? AND r.id < ?))' : '';
+  // `proposed_at <= ?` first, so the index seeks to the cursor; the rest breaks ties
+  const cursorSql = cAt ? ' AND r.proposed_at <= ? AND (r.proposed_at < ? OR r.id < ?)' : '';
   const cursorArgs = cAt ? [cAt, cAt, cId ?? ''] : [];
   // The action filter applies to every view; each view still starts from its own index.
   const typeSql = opts.type ? ' AND r.action_type = ?' : '';
