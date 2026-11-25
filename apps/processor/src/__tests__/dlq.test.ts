@@ -278,6 +278,22 @@ describe('dead letters flag the admin Errors page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('answers only /health without the internal key', async () => {
+    const e = { ENVIRONMENT: 'qa', LOG_LEVEL: 'error', INTERNAL_API_KEY: 'secret' } as unknown as QueueEnvironment;
+    const get = async (path: string, key?: string) => (await worker.fetch(new Request(`https://p${path}`, { headers: key ? { 'X-API-Key': key } : {} }), e, { waitUntil: () => undefined })).status;
+    const post = async (path: string) => (await worker.fetch(new Request(`https://p${path}`, { method: 'POST', body: '{}' }), e, { waitUntil: () => undefined })).status;
+    for (const path of ['/', '/queue/status', '/dlq', '/anything']) {
+      expect([path, await get(path)]).toEqual([path, 401]);
+      expect([path, await get(path, 'wrong1')]).toEqual([path, 401]);
+    }
+    for (const path of ['/dlq/replay', '/internal/quran/sync', '/internal/review-alerts/x', '/internal/push-devices', '/internal/translate', '/internal/captions/claim', '/internal/search/transcript']) {
+      expect([path, await post(path)]).toEqual([path, 401]);
+    }
+    expect(await get('/queue/status', 'secret')).toBe(200);
+    expect(await get('/anything', 'secret')).toBe(404);
+    expect(await get('/health')).not.toBe(401);
+  });
+
   it('answers a crash of the fetch handler with a reference, not the error', async () => {
     global.fetch = jest.fn(async () => new Response(null, { status: 202 })) as typeof fetch;
     const res = await worker.fetch(new Request('https://p/health'), null as unknown as QueueEnvironment, { waitUntil: () => undefined });

@@ -136,6 +136,23 @@ describe('web production config', () => {
 	});
 });
 
+describe('workers without a public route', () => {
+	for (const app of ['processor', 'scheduler', 'cost-monitor']) {
+		it(`${app}: has no public address, in production, stage and QA`, () => {
+			const config = load(app);
+			assert.ok(!has(checkApp(rule(app), config), 'no public route, so'));
+			for (const key of ['workers_dev', 'preview_urls']) {
+				for (const value of [true, undefined]) {
+					const open = { ...load(app), [key]: value } as WranglerConfig;
+					assert.ok(has(checkApp(rule(app), open), `no public route, so ${key} must be false`), `${key}: ${String(value)}`);
+				}
+				const qa = parseJsonc(readFileSync(join(ROOT, rule(app).qaConfigPath!), 'utf8')) as WranglerConfig;
+				assert.equal(qa[key], false, `${app} QA ${key}`);
+			}
+		});
+	}
+});
+
 describe('worker production configs', () => {
 	it('ignore the local `dev` block (127.0.0.1 there is expected)', () => {
 		assert.ok(!has(checkApp(rule('websocket-server'), load('websocket-server')), 'localhost'));
