@@ -10,7 +10,8 @@
  *   TUS), comments, likes, subscriptions, channels, videos, playlists,
  *   community posts, Studio, watch history, profile create/edit.
  * - GET /api/profile answers the same code, so clients show the state instead
- *   of the "create your profile" flow; so does GET /api/videos/upload/resume/:id.
+ *   of the "create your profile" flow; so do GET /api/videos/upload/resume/:id
+ *   and the channel move reads (CHANNEL_MOVE_READS).
  * - Allowed: /api/privacy/* (export or erase one's own data), playback
  *   counters a visitor also sends (view, watch-time, retention, client
  *   analytics events) and push-device registration (part of a native sign-in).
@@ -23,6 +24,7 @@ import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_M
 import { cachedPendingUserDeletion } from '../lib/admin/pendingUserDeletion';
 import { logger } from '../lib/logger';
 import { apiError } from '../lib/api-error';
+import { CHANNEL_MOVE_READS } from '../lib/channelMoveData';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const ALWAYS_ALLOWED = [/^\/api\/privacy(\/|$)/];
@@ -34,7 +36,7 @@ const ALLOWED_WRITES: Array<[method: string, path: RegExp]> = [
 	['DELETE', /^\/api\/devices\/[^/]+$/],
 ];
 /** Signed-in reads that only make sense for an active account (resume hands out upload credentials). */
-const BLOCKED_READS = [/^\/api\/profile$/, /^\/api\/videos\/upload\/resume(\/|$)/];
+const BLOCKED_READS = [/^\/api\/profile$/, /^\/api\/videos\/upload\/resume(\/|$)/, ...CHANNEL_MOVE_READS];
 
 export function isBlockedForPendingDeletion(method: string, path: string): boolean {
 	const m = method.toUpperCase();

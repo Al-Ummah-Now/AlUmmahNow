@@ -69,34 +69,34 @@ async function profileOf(env: Env, userId: string): Promise<Row | null> {
 	return new R2Repository<Row>(env.profiles).getObject(userId);
 }
 
-function nameOf(profile: Row | null, fallback: string): string {
-	const userName = typeof profile?.userName === 'string' ? profile.userName.trim() : '';
-	return resolveDisplayName(profile as NameFields | null) || userName || fallback;
+/** A person in a notice: `owner`, and `owner_ar`/`owner_en`; never an id, a handle or an email. */
+function personParams(key: string, profile: Row | null): Record<string, string> {
+	const name = resolveDisplayName(profile as NameFields | null);
+	// As the web says it (i18n-channel-moves `someone`)
+	if (!name) return { [key]: 'Someone', [`${key}_en`]: 'Someone', [`${key}_ar`]: 'أحد الأشخاص' };
+	return { [key]: name, ...Object.fromEntries(Object.entries(localizedDisplayNames(profile as NameFields | null)).map(([lang, text]) => [`${key}_${lang}`, text])) };
 }
 
-/** A person as notice params: `owner`, and `owner_ar`/`owner_en` when their name is localized. */
-function personParams(key: string, profile: Row | null, id: string): Record<string, string> {
-	const localized = localizedDisplayNames(profile as NameFields | null);
-	return { [key]: nameOf(profile, id), ...Object.fromEntries(Object.entries(localized).map(([lang, name]) => [`${key}_${lang}`, name])) };
-}
+/** A profile whose person is not shown: none, deleted, or its videos data is being deleted. */
+export const isGone = (profile: Row | null | undefined): boolean => !profile || profile.isDeleted === true || !!profile.adminDeletion;
 
 /**
- * The channel's admins (channel roles), for the owner's receiver autocomplete, matched on name or
- * @username. The receiver is always picked by user id from this list, never matched by an email.
+ * The channel's admins (channel roles), for the owner's receiver autocomplete, matched on name in any
+ * language. The receiver is always picked by user id from this list, never matched by an email.
  */
-export async function moveReceivers(env: Env, channelId: string, ownerId: string, q: string): Promise<Array<{ userId: string; name: string; userName: string | null; avatarUrl: string | null }>> {
+export async function moveReceivers(env: Env, channelId: string, ownerId: string, q: string): Promise<Array<{ userId: string; name: string | null; nameLocalized?: Record<string, string>; avatarUrl: string | null }>> {
 	const channel = await loadChannel(env, channelId);
 	if (channel.userId !== ownerId) throw new MoveError(403, 'not_owner', 'Only the channel owner can move it');
 	const admins = (Array.isArray(channel.members) ? channel.members : []).filter((m: Row) => m?.role === 'admin' && typeof m.userId === 'string');
-	const needle = q.trim().replace(/^@/, '').toLowerCase();
+	const needle = q.trim().toLowerCase();
 	const out = [];
 	for (const member of admins) {
 		const profile = await profileOf(env, member.userId);
-		if (!profile || profile.isDeleted) continue;
-		const name = nameOf(profile, member.userId);
-		const userName = typeof profile.userName === 'string' ? profile.userName : null;
-		if (needle && ![name.toLowerCase(), (userName ?? '').toLowerCase()].some((v) => v.includes(needle))) continue;
-		out.push({ userId: member.userId, name, userName, avatarUrl: typeof profile.avatarUrl === 'string' ? profile.avatarUrl : null });
+		if (isGone(profile)) continue;
+		const name = resolveDisplayName(profile as NameFields) || null;
+		const nameLocalized = localizedDisplayNames(profile as NameFields);
+		if (needle && ![name ?? '', ...Object.values(nameLocalized)].some((v) => v.toLowerCase().includes(needle))) continue;
+		out.push({ userId: member.userId, name, ...(Object.keys(nameLocalized).length ? { nameLocalized } : {}), avatarUrl: typeof profile!.avatarUrl === 'string' ? profile!.avatarUrl : null });
 	}
 	return out;
 }
@@ -113,7 +113,8 @@ async function notify(env: Env, recipient: string, key: string, params: Record<s
 /** Everything that must hold for the channel to go from its owner to `toUserId` (offer and accept both check it). */
 async function checkMovable(env: Env, channel: Row, toUserId: string): Promise<void> {
 	// Spec §5: a suspended channel stays with its owner until the suspension is lifted
-	if (channel.isSuspended) throw new MoveError(409, 'channel_suspended', 'A suspended channel can’t be moved');
+	// ... and one hidden with its owner's account (a ban, or its data being deleted) stays with it
+	if (channel.isSuspended || (Array.isArray(channel.suspensionHolds) && channel.suspensionHolds.length)) throw new MoveError(409, 'channel_suspended', 'A suspended channel can’t be moved');
 	if (channelRoleOf(channel as never, toUserId) !== 'admin') throw new MoveError(409, 'receiver_not_channel_admin', 'The channel can only go to one of its admins');
 	const handle = typeof channel.handle === 'string' ? channel.handle.toLowerCase() : '';
 	if (handle && OFFICIAL_HANDLES.has(handle)) throw new MoveError(409, 'official_handle', 'A channel with an official handle is moved by the team');
@@ -176,7 +177,7 @@ export async function createMoveOffer(
 		.run();
 	if (Number(inserted.meta?.changes ?? 0) !== 1) throw new MoveError(409, 'offer_open', 'This channel already has an open offer');
 	const owner = await profileOf(env, input.ownerId);
-	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), ...personParams('owner', owner, input.ownerId) }, channel.id, offer.id, `move-offer:${offer.id}`);
+	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), ...personParams('owner', owner) }, channel.id, offer.id, `move-offer:${offer.id}`);
 	logger.info('[ChannelMoves] Offer made', { channelId: channel.id, offerId: offer.id });
 	return offer;
 }
@@ -287,7 +288,7 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 	// An erasure closed it after the job was made: the job stops before the channel changes hands, unless it already has
 	if (settled && Number(settled.meta?.changes ?? 0) !== 1 && (await readOffer(env, id))?.status !== 'moved') throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const receiver = await profileOf(env, userId);
-	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), ...personParams('member', receiver, userId) }, channel.id, id, `move-offer:${id}:accepted`);
+	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), ...personParams('member', receiver) }, channel.id, id, `move-offer:${id}:accepted`);
 	logger.info('[ChannelMoves] Offer accepted; move queued', { channelId: channel.id, offerId: id, jobId });
 	return { offer: { ...offer, status: 'moved', job_id: jobId }, jobId };
 }
@@ -298,7 +299,7 @@ export async function declineMoveOffer(env: Env, id: string, userId: string, now
 	if (!(await closeOffer(env, id, 'declined', now))) throw new MoveError(404, 'offer_not_found', 'This offer is no longer open');
 	const channel = await loadChannel(env, offer.channel_id).catch(() => ({ id: offer.channel_id }) as Row);
 	const receiver = await profileOf(env, userId);
-	await notify(env, offer.from_user_id, 'channelMoveDeclined', { ...channelParams('channel', channel as never), ...personParams('member', receiver, userId) }, offer.channel_id, id, `move-offer:${id}:declined`);
+	await notify(env, offer.from_user_id, 'channelMoveDeclined', { ...channelParams('channel', channel as never), ...personParams('member', receiver) }, offer.channel_id, id, `move-offer:${id}:declined`);
 }
 
 /** The owner withdraws the offer. */
@@ -325,12 +326,44 @@ export async function stopMoveOffer(env: Env, channelId: string, id: string, now
 	return { ...offer, status: 'stopped' };
 }
 
-/** Open offers made to me and by me (indexed by user and status). */
-export async function myMoveOffers(env: Env, userId: string, now = Date.now()): Promise<{ received: MoveOfferRow[]; sent: MoveOfferRow[] }> {
-	const at = iso(now);
-	const [received, sent] = await Promise.all([
-		db(env).prepare(`SELECT * FROM channel_move_offers WHERE to_user_id = ? AND status = 'offered' AND expires_at > ? ORDER BY created_at DESC LIMIT 20`).bind(userId, at).all<MoveOfferRow>(),
-		db(env).prepare(`SELECT * FROM channel_move_offers WHERE from_user_id = ? AND status = 'offered' AND expires_at > ? ORDER BY created_at DESC LIMIT 20`).bind(userId, at).all<MoveOfferRow>(),
-	]);
-	return { received: received.results ?? [], sent: sent.results ?? [] };
+/** Offers per page and side. */
+export const MOVE_OFFERS_PAGE = 10;
+
+/**
+ * My open offers, newest first: a page of one side after a cursor. The rows of each status come from
+ * the side's index in row order, which is the order they were made in, so neither is sorted.
+ */
+export const MY_OFFERS_SQL = Object.fromEntries(
+	(['to_user_id', 'from_user_id'] as const).map((side) => [
+		side,
+		`SELECT rowid AS seq, * FROM channel_move_offers WHERE ${side} = ?1 AND status = 'offered' AND rowid < ?2
+		 UNION ALL SELECT rowid AS seq, * FROM channel_move_offers WHERE ${side} = ?1 AND status = 'accepting' AND rowid < ?2
+		 ORDER BY seq DESC LIMIT ?3`,
+	]),
+) as Record<'to_user_id' | 'from_user_id', string>;
+
+export interface MoveOfferPage {
+	offers: MoveOfferRow[];
+	/** Pass back for the next page; null: no more */
+	cursor: string | null;
+}
+
+/** Offered and not expired, or being accepted (an accept that never finished is neither). */
+export function isOpenOffer(o: MoveOfferRow, now: number): boolean {
+	if (o.status === 'offered') return o.expires_at > iso(now);
+	return o.status === 'accepting' && Date.parse(o.updated_at) > now - MOVE_STALE_ACCEPT_MS;
+}
+
+/** One page of the open offers made to me (`received`) or by me (`sent`). */
+export async function myMoveOffers(env: Env, userId: string, side: 'received' | 'sent', cursor?: string | null, now = Date.now()): Promise<MoveOfferPage> {
+	const before = cursor ? Number(cursor) : Number.MAX_SAFE_INTEGER;
+	const { results } = await db(env)
+		.prepare(MY_OFFERS_SQL[side === 'received' ? 'to_user_id' : 'from_user_id'])
+		.bind(userId, before, MOVE_OFFERS_PAGE + 1)
+		.all<MoveOfferRow & { seq: number }>();
+	const rows = (results ?? []).slice(0, MOVE_OFFERS_PAGE);
+	// Every offer is open for the same time, so past one that expired there are only older ones, expired too
+	const expired = rows.some((o) => o.status === 'offered' && o.expires_at <= iso(now));
+	const more = !expired && (results ?? []).length > MOVE_OFFERS_PAGE;
+	return { offers: rows.filter((o) => isOpenOffer(o, now)), cursor: more ? String(rows[rows.length - 1].seq) : null };
 }

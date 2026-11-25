@@ -4,6 +4,13 @@
  */
 import R2Repository from './r2Repo';
 
+/**
+ * Reads about channel moves, refused to a banned account and to one whose videos data is being deleted:
+ * neither can give, receive or answer, and an offer names another person. Their notifications still say
+ * what happened.
+ */
+export const CHANNEL_MOVE_READS: readonly RegExp[] = [/^\/api\/move-offers(\/|$)/, /^\/api\/channels\/[^/]+\/move-(offers|receivers)\/?$/];
+
 const SIDES = ['to_user_id', 'from_user_id'] as const;
 
 /**

@@ -317,6 +317,13 @@ for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/ini
 for (const path of ['/api/search', '/api/videos/search']) {
 	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.search', ['GET']));
 }
+// Channel move offers: each read names people and channels from their records
+for (const path of ['/api/move-offers', '/api/move-offers/:id', '/api/channels/:id/move-offers', '/api/channels/:id/move-receivers']) {
+	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.move_offers', ['GET']));
+}
+for (const path of ['/api/move-offers/:id', '/api/move-offers/:id/accept', '/api/move-offers/:id/decline', '/api/channels/:id/move-offers']) {
+	app.use(path, edgeRateLimit('REACTION_LIMITER', 'videos.move_offer_answer', ['POST', 'DELETE']));
+}
 // Viewer-side translated titles (public): direct callers share the search budget per IP or user
 app.use('/api/videos/:id/translated-metadata', edgeRateLimit('SEARCH_LIMITER', 'videos.translated_metadata', ['GET']));
 

@@ -5,14 +5,13 @@
  */
 import { localizedDisplayNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { logger } from './logger';
-import { MOVE_COOLDOWN_DAYS, MOVE_STALE_ACCEPT_MS, type MoveOfferRow } from './channelMoves';
+import { isGone, isOpenOffer, MOVE_COOLDOWN_DAYS, type MoveOfferRow } from './channelMoves';
 import R2Repository from './r2Repo';
 
 type Env = { SEARCH_DB?: unknown; profiles?: R2Bucket; channels?: R2Bucket };
 type Row = Record<string, any>;
 
 export interface MovePerson {
-	userId: string | null;
 	/** Null when the account has no name, or is gone */
 	name: string | null;
 	nameLocalized?: Record<string, string>;
@@ -37,30 +36,36 @@ export interface MoveOfferView {
 const iso = (ms: number) => new Date(ms).toISOString();
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+/** Records read at once for a page. */
+const READS_AT_ONCE = 6;
+
 /** Records of `bucket` by id, each read once; an unreadable one shows without its name. */
 async function records(bucket: R2Bucket | undefined, ids: string[]): Promise<Map<string, Row>> {
 	const out = new Map<string, Row>();
 	if (!bucket) return out;
 	const repository = new R2Repository<Row>(bucket);
-	await Promise.all(
-		[...new Set(ids)].map(async (id) => {
-			try {
-				const record = await repository.getObject(id);
-				if (record) out.set(id, record);
-			} catch (error) {
-				logger.warn('[ChannelMoves] Record unreadable for an offer', { id, error: error instanceof Error ? error.message : String(error) });
-			}
-		}),
-	);
+	const unique = [...new Set(ids)];
+	for (let i = 0; i < unique.length; i += READS_AT_ONCE) {
+		await Promise.all(
+			unique.slice(i, i + READS_AT_ONCE).map(async (id) => {
+				try {
+					const record = await repository.getObject(id);
+					if (record) out.set(id, record);
+				} catch (error) {
+					logger.warn('[ChannelMoves] Record unreadable for an offer', { id, error: error instanceof Error ? error.message : String(error) });
+				}
+			}),
+		);
+	}
 	return out;
 }
 
 function person(id: string, profiles: Map<string, Row>): MovePerson {
 	const profile = profiles.get(id);
-	// Erased or deleted: the offer stays, the person doesn't
-	if (!profile || profile.isDeleted) return { userId: profile ? id : null, name: null, avatarUrl: null };
+	// Erased, deleted or being deleted: the offer stays, the person doesn't
+	if (!profile || isGone(profile)) return { name: null, avatarUrl: null };
 	const localized = localizedDisplayNames(profile as NameFields);
-	return { userId: id, name: resolveDisplayName(profile as NameFields) || null, ...(Object.keys(localized).length ? { nameLocalized: localized } : {}), avatarUrl: text(profile.avatarUrl) };
+	return { name: resolveDisplayName(profile as NameFields) || null, ...(Object.keys(localized).length ? { nameLocalized: localized } : {}), avatarUrl: text(profile.avatarUrl) };
 }
 
 function statusOf(o: MoveOfferRow, now: number): string {
@@ -76,12 +81,13 @@ function keepsContactEmail(o: MoveOfferRow): boolean {
 	}
 }
 
-/** The offers `viewerId` may read, as views, in the given order. At most one read per channel and person. */
+/** The offers `viewerId` may read, as views, in the given order: one read per channel and person. None to an account that is gone or being deleted. */
 export async function offerViews(env: Env, offers: MoveOfferRow[], viewerId: string, now = Date.now()): Promise<MoveOfferView[]> {
 	const [channels, profiles] = await Promise.all([
 		records(env.channels, offers.map((o) => o.channel_id)),
-		records(env.profiles, offers.flatMap((o) => [o.from_user_id, o.to_user_id])),
+		records(env.profiles, offers.length ? [viewerId, ...offers.flatMap((o) => [o.from_user_id, o.to_user_id])] : []),
 	]);
+	if (isGone(profiles.get(viewerId))) return [];
 	const out: MoveOfferView[] = [];
 	for (const o of offers) {
 		const channel = channels.get(o.channel_id);
@@ -136,7 +142,7 @@ export async function channelMoveState(env: Env, channelId: string, ownerId: str
 		db.prepare(LAST_MOVE_SQL).bind(channelId).first<{ responded_at: string | null }>(),
 	]);
 	// Expired, or an accept that never finished: no longer open (the next offer settles the row)
-	const live = open && (open.status === 'offered' ? open.expires_at > iso(now) : Date.parse(open.updated_at) > now - MOVE_STALE_ACCEPT_MS);
+	const live = open && isOpenOffer(open, now);
 	const until = last?.responded_at ? Date.parse(last.responded_at) + MOVE_COOLDOWN_DAYS * 86_400_000 : 0;
 	return { offer: live ? ((await offerViews(env, [open], ownerId, now))[0] ?? null) : null, movableAt: until > now ? iso(until) : null };
 }

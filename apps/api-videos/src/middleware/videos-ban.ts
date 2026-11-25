@@ -13,11 +13,12 @@ import { VIDEOS_BANNED_CODE, type SearchDb } from '@al-ummah/shared-types';
 import { cachedBan } from '../lib/admin/bans';
 import { logger } from '../lib/logger';
 import { apiError } from '../lib/api-error';
+import { CHANNEL_MOVE_READS } from '../lib/channelMoveData';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const ALWAYS_ALLOWED = [/^\/api\/privacy(\/|$)/];
 /** Signed-in reads that only make sense for an active account. */
-const BLOCKED_READS = [/^\/api\/profile$/];
+const BLOCKED_READS = [/^\/api\/profile$/, ...CHANNEL_MOVE_READS];
 
 export function isBlockedForBannedUser(method: string, path: string): boolean {
 	if (ALWAYS_ALLOWED.some((re) => re.test(path))) return false;

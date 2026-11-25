@@ -40,10 +40,11 @@ A ban wins: a banned user with a pending deletion gets `videos_banned`.
   - profile create and edit
 - `GET /api/profile`. Show the account state, never the "create your profile" flow.
 - `GET /api/videos/upload/resume/:videoId`. Resuming an upload hands out upload credentials.
+- `GET /api/move-offers`, `GET /api/move-offers/:id`, `GET /api/channels/:id/move-offers` and `/move-receivers`. An offer names another person. A banned account is refused these too.
 
 ### Still allowed
 
-- Every other `GET`, `HEAD` and `OPTIONS` request.
+- Every other `GET`, `HEAD` and `OPTIONS` request, notifications included.
 - `/api/privacy/*`: export or erase one's own data.
 - The playback signals a visitor also sends:
   - `POST /api/videos/:id/view`
