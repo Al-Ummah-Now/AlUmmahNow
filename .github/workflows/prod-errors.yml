@@ -31,6 +31,7 @@ on:
       - scripts/ops/public-report.ts
       - scripts/ops/seal.ts
       - scripts/ops/scrub.ts
+      - scripts/ops/restricted.ts
       - scripts/ops/__tests__/**
       - .github/workflows/prod-errors.yml
 
@@ -52,7 +53,7 @@ jobs:
         with:
           node-version: '22'
       - name: Tests
-        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts scripts/ops/__tests__/public-report.test.ts scripts/ops/__tests__/seal.test.ts scripts/ops/__tests__/scrub.test.ts scripts/ops/__tests__/error-routine.test.ts
+        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts scripts/ops/__tests__/public-report.test.ts scripts/ops/__tests__/seal.test.ts scripts/ops/__tests__/scrub.test.ts scripts/ops/__tests__/error-routine.test.ts scripts/ops/__tests__/restricted.test.ts
       - name: Report (stage, public part)
         if: github.event_name == 'pull_request'
         env:

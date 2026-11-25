@@ -25,6 +25,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { publicErrors, publicSummary, type ErrorsData } from './public-report.ts';
+import { type LeftOut, leftOutLine, messageTemplate, placeLog, restrictedPath, unrestricted } from './restricted.ts';
 import { clip, scrub } from './scrub.ts';
 import { seal } from './seal.ts';
 
@@ -86,8 +87,13 @@ export const LATEST_EVENT_SQL = `SELECT occurred_at, release, worker_version, ro
 export const ACTIONS_SQL = `SELECT app, source, title, detail, item_type, item_id, status, occurrences, attempts, updated_at
  FROM error_actions cs WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 AND NOT (${SUPER_ADMINS_ONLY}) ORDER BY updated_at DESC LIMIT 100`;
 
+/** How many the two above leave out (the same indexes). */
+export const GROUPS_LEFT_OUT_SQL = `SELECT COUNT(*) AS n FROM error_groups g WHERE last_seen >= ?1 AND environment = ?2
+ AND EXISTS (SELECT 1 FROM error_actions cs WHERE cs.group_id = g.id AND (${SUPER_ADMINS_ONLY})) LIMIT 1`;
+export const ACTIONS_LEFT_OUT_SQL = `SELECT COUNT(*) AS n FROM error_actions cs WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 AND (${SUPER_ADMINS_ONLY}) LIMIT 1`;
+
 /** Every statement this script sends: SELECT only. */
-export const ALL_SQL = [GROUPS_SQL, LATEST_EVENT_SQL, ACTIONS_SQL, COLLECTOR_RUNS_SQL, COST_JOB_RUNS_SQL];
+export const ALL_SQL = [GROUPS_SQL, GROUPS_LEFT_OUT_SQL, ACTIONS_LEFT_OUT_SQL, LATEST_EVENT_SQL, ACTIONS_SQL, COLLECTOR_RUNS_SQL, COST_JOB_RUNS_SQL];
 
 function arg(name: string, fallback: string): string {
 	const i = process.argv.indexOf(`--${name}`);
@@ -134,6 +140,14 @@ const out: string[] = [];
 const data: Pick<ErrorsData, 'groups' | 'actions' | 'collectorFailures' | 'logs'> = { groups: null, actions: null, collectorFailures: null, logs: [] };
 const p = (s = '') => out.push(scrub(s));
 
+const left: LeftOut = { lines: 0, groups: null, items: null };
+
+async function leftOutBySql(env: EnvName, sql: string, since: Date): Promise<number | null> {
+	const r = await d1(env, sql, [since.toISOString(), env]);
+	const n = Number(r.rows[0]?.n);
+	return r.ok && Number.isSafeInteger(n) ? n : null;
+}
+
 async function d1(env: EnvName, sql: string, params: unknown[], db = REPORTS_D1[env]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
 	if (!/^\s*SELECT\b/i.test(sql)) throw new Error('SELECT only');
 	const r = await post(`/accounts/${account}/d1/database/${db}/query`, { sql, params });
@@ -145,16 +159,23 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 	p('## Error groups seen in the window');
 	const g = await d1(env, GROUPS_SQL, [since.toISOString(), env]);
 	if (!g.ok) return p(`- not readable: ${g.error}`), p();
-	p(`${g.rows.length} groups (test = only release-E2E controlled errors)`);
-	data.groups = g.rows;
-	p();
+	// Each with its latest sample, which can say more than the group's own row
+	const read: { row: any; ev: any; error?: string }[] = [];
 	for (const row of g.rows) {
+		const e = await d1(env, LATEST_EVENT_SQL, [row.id]);
+		read.push({ row, ev: e.rows[0], ...(e.ok ? {} : { error: e.error }) });
+	}
+	const kept = unrestricted(read);
+	const bySql = await leftOutBySql(env, GROUPS_LEFT_OUT_SQL, since);
+	p(`${kept.rows.length} groups (test = only release-E2E controlled errors)`);
+	left.groups = bySql === null ? null : bySql + kept.leftOut;
+	data.groups = kept.rows.map((x) => x.row);
+	p();
+	for (const { row, ev, error } of kept.rows) {
 		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${clip(row.message, 300)}`);
 		p(`- group ${row.id}, status ${row.status}${row.test ? ', test' : ''}, ×${row.occurrences}, users ${row.users}`);
 		p(`- route ${row.route ?? '–'}, culprit ${row.culprit ?? '–'}`);
 		p(`- first ${row.first_seen} (${row.first_release ?? '–'}), last ${row.last_seen} (${row.last_release ?? '–'})`);
-		const e = await d1(env, LATEST_EVENT_SQL, [row.id]);
-		const ev = e.rows[0];
 		if (ev) {
 			row.http_status = ev.status;
 			p(`- latest: ${ev.occurred_at} ${ev.method ?? ''} ${ev.route ?? ''} → ${ev.status ?? '–'}, release ${ev.release ?? '–'}, version ${ev.worker_version ?? '–'}, request ${ev.request_id ?? '–'}`);
@@ -162,7 +183,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 			if (ev.origin) p(`- origin: ${originLine(ev.origin)}`);
 			for (const f of topFrames(ev.stack)) p(`  - ${clip(f, 240)}`);
 			if (ev.extra) p(`- extra: ${ev.extra}`);
-		} else if (!e.ok) p(`- latest sample not readable: ${e.error}`);
+		} else if (error) p(`- latest sample not readable: ${error}`);
 		p();
 	}
 }
@@ -171,9 +192,12 @@ async function actions(env: EnvName, since: Date): Promise<void> {
 	p('## Open needs-action items');
 	const a = await d1(env, ACTIONS_SQL, [since.toISOString(), env]);
 	if (!a.ok) return p(`- not readable: ${a.error}`), p();
-	p(`${a.rows.length} open`);
-	data.actions = a.rows;
-	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${clip(r.detail, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
+	const { rows, leftOut } = unrestricted(a.rows);
+	const bySql = await leftOutBySql(env, ACTIONS_LEFT_OUT_SQL, since);
+	p(`${rows.length} open`);
+	left.items = bySql === null ? null : bySql + leftOut;
+	data.actions = rows;
+	for (const r of rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${clip(r.detail, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
 	p();
 }
 
@@ -234,26 +258,42 @@ async function pathTrace(app: string, script: string, needles: string[], since: 
 		if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
 		all.push(...(r.body.result?.events?.events ?? []));
 	}
+	const r2 = pathLines(all, needles);
+	left.lines += r2.leftOut;
+	for (const line of r2.lines) p(line);
+	p();
+}
+
+const requestPath = (e: any): string => pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
+
+/** The events of one Worker that may be in the report. A restricted request takes all its lines with it. */
+function placed(events: any[]): { e: any; template: boolean }[] {
+	const of = events.map((e) => ({ e, place: placeLog(e, requestPath(e)) }));
+	const requests = new Set(of.filter((x) => x.place === 'restricted').map((x) => x.e.$workers?.requestId).filter(Boolean));
+	return of.filter((x) => x.place !== 'restricted' && !requests.has(x.e.$workers?.requestId)).map((x) => ({ e: x.e, template: x.place === 'template' }));
+}
+
+/** The --paths listing. Pure. */
+export function pathLines(all: any[], needles: string[]): { lines: string[]; leftOut: number } {
 	const hit = (e: any) => {
-		const path = pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
-		return path && needles.some((n) => path.includes(n));
+		const path = requestPath(e);
+		return !!path && needles.some((n) => path.includes(n));
 	};
-	const matched = all.filter(hit);
-	const ids = new Set(matched.map((e) => e.$workers?.requestId).filter(Boolean));
-	p(`${matched.length} matching events (of ${all.length} read)`);
-	const rows = all
-		.filter((e) => hit(e) || (e.$workers?.requestId && ids.has(e.$workers.requestId)))
-		.sort((a, b) => Number(a.timestamp ?? 0) - Number(b.timestamp ?? 0));
-	for (const e of rows.slice(-200)) {
+	const ids = new Set(all.filter(hit).map((e) => e.$workers?.requestId).filter(Boolean));
+	const wanted = all.filter((e) => hit(e) || (e.$workers?.requestId && ids.has(e.$workers.requestId)));
+	const kept = placed(wanted);
+	const lines = [`${kept.filter((x) => hit(x.e)).length} matching events (of ${all.length} read)`];
+	for (const { e, template } of kept.sort((a, b) => Number(a.e.timestamp ?? 0) - Number(b.e.timestamp ?? 0)).slice(-200)) {
 		const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
 		const req = e.$workers?.event?.request;
 		const status = e.$workers?.event?.response?.status ?? '';
 		const level = e.$metadata?.level ?? e.source?.level ?? '';
-		const msg = clip(e.$metadata?.message ?? e.source?.message, 300);
+		const text = e.$metadata?.message ?? e.source?.message;
+		const msg = template ? messageTemplate(text) : clip(text, 300);
 		const ua = uaFamily(req?.headers?.['user-agent'] ?? req?.headers?.['User-Agent']);
-		p(`- ${t} ${req?.method ?? ''} ${pathOf(req?.url ?? req?.path)} ${status ? `→ ${status}` : ''} ${e.$workers?.outcome ?? ''} ${ua} ${level ? `[${level}] ` : ''}${msg}`.replace(/\s+/g, ' ').trim());
+		lines.push(`- ${t} ${req?.method ?? ''} ${requestPath(e)} ${status ? `→ ${status}` : ''} ${e.$workers?.outcome ?? ''} ${ua} ${level ? `[${level}] ` : ''}${msg}`.replace(/\s+/g, ' ').trim());
 	}
-	p();
+	return { lines, leftOut: wanted.length - kept.length };
 }
 
 async function logs(app: string, script: string, since: Date, until: Date): Promise<void> {
@@ -270,28 +310,43 @@ async function logs(app: string, script: string, since: Date, until: Date): Prom
 		return p(`unavailable: ${errs(r)}`), p();
 	}
 	const all = r.body.result?.events?.events ?? [];
-	const events = all.filter((e: any) => /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')) || e.$workers?.outcome === 'exception');
-	p(`${events.length} warn/error events (of ${all.length} read)`);
-	const warn = events.filter((e: any) => /warn/i.test(String(e.$metadata?.level ?? e.source?.level ?? ''))).length;
-	data.logs.push({ app, warn, error: events.length - warn, readable: true });
+	const r2 = logLines(all);
+	left.lines += r2.leftOut;
+	for (const line of r2.lines) p(line);
+	data.logs.push({ app, warn: r2.warn, error: r2.error, readable: true });
+	p();
+}
+
+/** The warn and error lines of one Worker, repeats collapsed. Pure. */
+export function logLines(all: any[]): { lines: string[]; leftOut: number; warn: number; error: number } {
+	const level = (e: any) => String(e.$metadata?.level ?? e.source?.level ?? '');
+	const wanted = all.filter((e) => /warn|error/i.test(level(e)) || e.$workers?.outcome === 'exception');
+	const ids = new Set(wanted.map((e) => e.$workers?.requestId).filter(Boolean));
+	// Placed with every line of their requests: one of them can name the area the others do not
+	const may = new Set(placed(all.filter((e) => wanted.includes(e) || ids.has(e.$workers?.requestId))).map((x) => x.e));
+	const events = wanted.filter((e) => may.has(e));
+	const warn = events.filter((e) => /warn/i.test(level(e))).length;
+	const lines = [`${events.length} warn/error events (of ${all.length} read)`];
 	// Collapse repeats: same level + message → one line with a count and the latest time
 	const seen = new Map<string, { n: number; last: string; sample: string }>();
 	for (const e of events) {
 		const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
-		const level = e.$metadata?.level ?? e.source?.level ?? e.$workers?.outcome ?? '';
-		const msg = clip(e.$metadata?.message ?? e.source?.message ?? e.$metadata?.error, 300);
+		const mark = e.$metadata?.level ?? e.source?.level ?? e.$workers?.outcome ?? '';
+		const text = e.$metadata?.message ?? e.source?.message ?? e.$metadata?.error;
+		const template = placeLog(e, requestPath(e)) === 'template';
+		const msg = template ? messageTemplate(text) : clip(text, 300);
 		const req = e.$workers?.event?.request;
-		const where = req ? `${req.method ?? ''} ${String(req.url ?? req.path ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]}` : e.$workers?.eventType ?? '';
-		const key = `${level}|${msg.replace(/[0-9a-f]{8,}|\d+/g, '#')}`;
-		const sample = clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 600);
+		const where = req ? `${req.method ?? ''} ${requestPath(e)}` : e.$workers?.eventType ?? '';
+		const key = `${mark}|${msg.replace(/[0-9a-f]{8,}|\d+/g, '#')}`;
+		const sample = template ? '' : clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 600);
 		const cur = seen.get(key);
 		if (cur) {
 			cur.n++;
 			if (t > cur.last) cur.last = t;
-		} else seen.set(key, { n: 1, last: `${t}`, sample: `[${level}] ${where} ${msg} ${sample}` });
+		} else seen.set(key, { n: 1, last: `${t}`, sample: `[${mark}] ${where} ${msg} ${sample}` });
 	}
-	for (const v of [...seen.values()].sort((a, b) => b.n - a.n).slice(0, 60)) p(`- ×${v.n} last ${v.last} ${v.sample}`);
-	p();
+	for (const v of [...seen.values()].sort((a, b) => b.n - a.n).slice(0, 60)) lines.push(`- ×${v.n} last ${v.last} ${v.sample}`);
+	return { lines, leftOut: wanted.length - events.length, warn, error: events.length - warn };
 }
 
 async function main(): Promise<void> {
@@ -309,8 +364,9 @@ async function main(): Promise<void> {
 	// Observability keeps 7 days at most; the query window is capped at 72 h to bound the read
 	const logSince = new Date(Math.max(since.getTime(), until.getTime() - 72 * 3600_000));
 	for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await logs(app, s, logSince, until);
-	const needles = arg('paths', '').split(',').map((n) => n.trim()).filter((n) => n.startsWith('/')).slice(0, 10);
+	const needles = arg('paths', '').split(',').map((n) => n.trim()).filter((n) => n.startsWith('/') && !restrictedPath(n)).slice(0, 10);
 	if (needles.length) for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await pathTrace(app, s, needles, logSince, until);
+	p(leftOutLine(left));
 	const sealedPath = arg('sealed', '');
 	if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(out.join('\n') + '\n')));
 	const summaryPath = arg('summary', '');
