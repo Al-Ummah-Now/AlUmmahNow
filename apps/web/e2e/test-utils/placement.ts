@@ -285,6 +285,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/themes/phone-menu.spec.ts': { placement: 'local', reason: 'already local: mocked API and routed WebSocket' },
   'apps/web/e2e/themes/sweep.spec.ts': { placement: 'local', reason: 'already local, report-only (SWEEP=1)' },
   'apps/web/e2e/themes/toasts.spec.ts': { placement: 'local', reason: 'already local: mocked API and routed WebSocket (#1169)' },
+  'apps/web/e2e/themes/photo-picker.spec.ts': { placement: 'local', reason: 'next dev + mock-server.mjs: Change photo opens the picker at once (slow CPU, during an upload, before hydration); the channel cache never re-renders the page' },
   'apps/web/e2e/themes/street.spec.ts': { placement: 'local', reason: 'next dev + mock-server.mjs: the Fawanees lantern street (whole lanterns, no see-through controls, reduced motion)' },
   'apps/web/e2e/visual/visual-pages.spec.ts': { placement: 'local', reason: 'snapshots need deterministic seed data (baselines from QA content)' },
 };
