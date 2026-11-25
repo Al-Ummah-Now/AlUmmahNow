@@ -36,7 +36,7 @@ import { finalizeSelfHosted } from '../src/lib/live/finalize';
 import { setOnVodReady } from '../src/lib/live/vod-ready';
 import { startLiveVodReview } from '../src/lib/review/live';
 import { deleteSessionMedia } from '../src/lib/csam/recordings';
-import { STEP_READS, copyStep, type CopyState } from '../src/lib/csam/evidence';
+import { STEP_MS, STEP_READS, copyStep, type CopyState } from '../src/lib/csam/evidence';
 import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../src/lib/csam/imageOwners';
 import { endParts, holdTargets, takePart, writeTarget } from '../src/lib/privacy/erase-targets';
 import { createJob } from '../src/lib/admin/jobs';
@@ -392,6 +392,17 @@ describe('CSAM URLs (shared-types)', () => {
 		for (const base of [...bases.map(([b]) => b), 'https://alummahnow.link/e/live-synth-01', 'https://live.alummahnow.net/hls/sess-synth-01/master.m3u8', 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg', 'https://images.alummahnow.net/thumbnails/vid-synth-01/x.jpg', 'https://vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg', 'https://videos.alummahnow.net/og/v/vid-synth-01.jpg']) {
 			for (const tail of ['#comments', '?comment=', '?comment=a b', '?message=msg-synth-01', '#chat', '?comment=cmt-synth-01&reply=rep-synth-01']) assert.ok(!names(parseCsamUrl(base + tail)), base + tail);
 		}
+	});
+
+	it('a page whose query or fragment says something we do not know maps to nothing', () => {
+		const bases = ['https://videos.alummahnow.net/en/video/vid-synth-01', 'https://videos.alummahnow.net/en/post/post-synth-01', 'https://videos.alummahnow.net/en/live/live-synth-01', 'https://alummahnow.link/v/vid-synth-01', 'https://alummahnow.link/p/post-synth-01', 'https://scholar.alummahnow.org/en/watch/vid-synth-01', 'https://scholar.example/en/watch/vid-synth-01', 'https://videos.alummahnow.net/og/v/vid-synth-01.jpg'];
+		const named = (t: any) => !!t && t.kind !== 'other' && !(t.kind === 'site' && !t.item);
+		for (const base of bases) {
+			for (const tail of ['?cid=cmt-synth-01', '?highlight_comment=cmt-synth-01', '?thread=cmt-synth-01', '?comment[]=cmt-synth-01', '?v=vid-synth-02', '?id=vid-synth-02', '?video=vid-synth-02', '?stream=live-synth-01', '?tab=comments', '?open=comments', '#cmt-synth-01', '#c-cmt-synth-01', '#thread-cmt-synth-01', '#/comments/cmt-synth-01', '#tab=comments', '#:~:text=x', '#%zz', '?comment=cmt-synth-01&cid=cmt-synth-02', '#post-post-synth-02']) assert.ok(!named(parseCsamUrl(base + tail)), base + tail);
+			for (const tail of ['', '?t=30', '?list=pl-synth-01&index=2', '?lang=ar&utm_source=x&UTM_Medium=y', '?fbclid=abc', '#t=90', '#top']) assert.ok(named(parseCsamUrl(base + tail)), base + tail);
+		}
+		// What delivery adds to a file's address is not about another item
+		for (const url of ['https://media.alummahnow.net/pub/vid-synth-01/r1/720p.m3u8?token=abc&expires=1', 'https://images.alummahnow.net/thumbnails/vid-synth-01/x.jpg?class=w640', 'https://vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg?v=3']) assert.ok(named(parseCsamUrl(url)), url);
 	});
 
 	it('a page that names two items maps to neither', () => {
@@ -1006,6 +1017,22 @@ describe('taking a live stream down', () => {
 		for (let n = 0; n < 700; n++) t.env.LIVE_MEDIA.store.set(`live/sess-synth-01/720/seg_${n}.m4s`, { bytes: new Uint8Array(10), meta: undefined });
 		await assert.rejects(copyStep(t.env as never, keys, CASE, plan, { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 }), /too many to read/);
 		assert.equal(t.env.CSAM_EVIDENCE.uploads.size, 0);
+	});
+
+	it('a step that has run long enough leaves the rest to the next one', async () => {
+		const t = setup();
+		const keys = { current: { key: await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']), version: 1 } } as never;
+		const plan = { name: '06-live-recording-1.mp4', source: { type: 'live' as const, sessionId: 'sess-synth-01', rendition: '720' }, contentType: 'video/mp4' };
+		for (let n = 0; n < 3; n++) t.env.LIVE_MEDIA.store.set(`live/sess-synth-01/720/seg_${n}.m4s`, { bytes: new Uint8Array(CHUNK_BYTES), meta: undefined });
+		let at = 0;
+		let state: CopyState = { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 };
+		for (const chunk of [1, 2]) {
+			const step = await copyStep(t.env as never, keys, CASE, plan, state, () => (at += STEP_MS));
+			assert.ok(step.status === 'copying' && step.state.chunk === chunk);
+			state = (step as { state: CopyState }).state;
+		}
+		const last = await copyStep(t.env as never, keys, CASE, plan, state, () => (at += STEP_MS));
+		assert.ok(last.status === 'file_done' && last.file!.bytes === 3 * CHUNK_BYTES);
 	});
 
 	it('a copy starts over when its source changed under it', async () => {
