@@ -117,53 +117,32 @@ describe('/internal/admin/import/initiate', () => {
 		const flag = { uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', at: '2026-11-25T07:00:00Z', code: 'source_changed' } };
 		const started = async () => {
 			const h = harness();
-			const deletes: any[] = [];
-			Object.assign(h.env, { PROCESSING_CHECK_QUEUE: { send: async (m: unknown) => void deletes.push(m) } });
 			await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: OWNER }));
 			const id = (await h.initiate({ fingerprint: FP, sha256 })).body.result.videoId as string;
 			const read = () => JSON.parse(h.env.videos.store.get(id)!);
 			const patch = (over: object) => h.env.videos.put(id, JSON.stringify({ ...read(), ...over }));
-			return { h, id, read, patch, deletes };
+			return { h, id, read, patch };
 		};
 
-		it('another admin and another fingerprint of the file keep the video', async () => {
+		it('another admin and another fingerprint of the file keep the video; a new round opens', async () => {
 			const { h, id, read, patch } = await started();
-			await patch(flag);
+			const guid = 'b2859ed0-e618-4d04-8438-874a74a251dd';
+			const media = { providers: { bunny: { ref: guid, status: 'failed', error: 'source_changed' }, r2: { ref: id, status: 'failed' } } };
+			await patch({ ...flag, media });
 			const again = await h.initiate({ fingerprint: { ...FP, lastModified: 1 }, sha256, videoId: id }, OTHER);
 			assert.equal(again.status, 200, JSON.stringify(again.body));
-			assert.deepEqual([again.body.result.videoId, again.body.result.reused], [id, true]);
-			assert.equal(read().uploadStatus, 'uploading');
-			assert.equal(read().processingIssue, undefined);
-			assert.equal(read().uploadedBy, OTHER);
-			assert.equal(read().userId, OWNER);
+			assert.deepEqual([again.body.result.videoId, again.body.result.reused, again.body.result.tusUploadId], [id, true, undefined]);
+			const v = read();
+			assert.deepEqual([v.uploadStatus, v.processingIssue, v.uploadedBy, v.userId, v.uploadRound, v.sourceSha256], ['uploading', undefined, OTHER, OWNER, 1, sha256]);
+			assert.deepEqual(v.media, media, 'every copy stays until the new one plays');
+			assert.equal(JSON.parse(h.env.TUS_SESSIONS.data.get(`tus:session:${again.body.result.tusSessionId}`)!).uploadRound, 1);
 		});
 
 		it('an upload another admin began starts again from byte 0; the same admin resumes it', async () => {
 			const { h, id, patch } = await started();
-			const tusUpload = { sessionId: 's1', bunnyUploadUrl: '', target: 'r2', fileSize: FP.size, createdAt: 'x' };
-			await patch({ tusUpload });
+			await patch({ tusUpload: { sessionId: 's1', bunnyUploadUrl: '', target: 'r2', fileSize: FP.size, createdAt: 'x' } });
 			assert.ok((await h.initiate({ fingerprint: FP, sha256, videoId: id })).body.result.tusUploadId);
 			assert.equal((await h.initiate({ fingerprint: FP, sha256, videoId: id }, OTHER)).body.result.tusUploadId, undefined);
-		});
-
-		it('Bunny\'s copy of the wrong bytes leaves the record and is deleted at Bunny', async () => {
-			const { h, id, read, patch, deletes } = await started();
-			const guid = 'b2859ed0-e618-4d04-8438-874a74a251dd';
-			await patch({ ...flag, media: { providers: { bunny: { ref: guid, status: 'ready', libraryId: 123 }, r2: { ref: id, status: 'failed' } } } });
-			const again = await h.initiate({ fingerprint: FP, sha256, videoId: id });
-			assert.equal(again.body.result.videoId, id);
-			assert.deepEqual(Object.keys(read().media.providers), ['r2']);
-			assert.equal(read().bunnyRemoved.guid, guid);
-			assert.deepEqual(deletes.map((m) => [m.kind, m.videoId]), [['bunny-delete', guid]]);
-		});
-
-		it('a held video takes no new upload and keeps its copies', async () => {
-			const { h, id, read, patch, deletes } = await started();
-			await patch({ ...flag, suspensionHolds: [{ kind: 'csam' }] });
-			const again = await h.initiate({ fingerprint: FP, sha256, videoId: id });
-			assert.deepEqual([again.status, again.body.code], [409, 'video_held']);
-			assert.equal(read().uploadStatus, 'failed');
-			assert.equal(deletes.length, 0);
 		});
 
 		it('a video of another channel, a finished or a deleted one is not continued', async () => {
@@ -175,25 +154,19 @@ describe('/internal/admin/import/initiate', () => {
 			}
 		});
 
-		it('a caller without the hash leaves no old hash behind', async () => {
-			const { h, id, read } = await started();
-			assert.equal(read().sourceSha256, sha256);
-			await h.initiate({ fingerprint: FP });
-			assert.equal(read().sourceSha256, undefined);
-			assert.equal(read().id, id);
+		it('nothing but the import reopens it or changes its hash', async () => {
+			const { checkReusable, reuseFields } = await import('../src/lib/uploads/placeholder');
+			const { markUploadComplete, reopenForReupload } = await import('../src/lib/uploads/lifecycle');
+			const { h, id, read, patch } = await started();
+			await patch(flag);
+			const who = { ownerId: OWNER, uploadedBy: ADMIN, channelId: 'ch1' };
+			assert.deepEqual(await checkReusable(h.env as never, id, who), { kind: 'replace', why: 'needs its import' });
+			assert.deepEqual(await checkReusable(h.env as never, id, { ...who, adminImport: true }), { kind: 'reuse' });
+			assert.equal(reuseFields(read(), {}, 'x'), false);
+			assert.equal(reopenForReupload(read()), false);
+			assert.equal(await markUploadComplete(h.env as never, { videoId: id, userId: OWNER, fileSize: FP.size }), false);
+			assert.deepEqual([read().uploadStatus, read().processingIssue.code, read().sourceSha256], ['failed', 'source_changed', sha256]);
 		});
-	});
-
-	it('finishing the old upload again does not clear the flag; reopening does, with the hash', async () => {
-		const { markUploadComplete, reopenForReupload } = await import('../src/lib/uploads/lifecycle');
-		const h = harness();
-		const video = { id: 'v1', userId: OWNER, channelId: 'ch1', sourceSha256: 'd'.repeat(64), uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', at: 'x', code: 'source_changed' } };
-		await h.env.videos.put('v1', JSON.stringify(video));
-		assert.equal(await markUploadComplete(h.env as never, { videoId: 'v1', userId: OWNER, fileSize: 1 }), false);
-		assert.equal(JSON.parse(h.env.videos.store.get('v1')!).uploadStatus, 'failed');
-		const record = { ...video } as never as Parameters<typeof reopenForReupload>[0];
-		assert.deepEqual(reopenForReupload(record), { reopened: true });
-		assert.deepEqual([record.uploadStatus, record.processingIssue, (record as { sourceSha256?: string }).sourceSha256], ['uploading', undefined, undefined]);
 	});
 
 	it('an admin importing into their own channel is the owner, not a separate uploader', async () => {

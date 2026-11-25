@@ -97,7 +97,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   forbidden: { action: 'none', en: 'You don’t have permission to do this.', ar: 'ليست لديك صلاحية للقيام بهذا.' },
   not_found: { action: 'none', en: 'We couldn’t find what you were looking for.', ar: 'لم نعثر على ما تبحث عنه.' },
   video_not_found: { action: 'none', en: 'This video isn’t available.', ar: 'هذا المرئي غير متاح.' },
-  video_held: { action: 'none', en: 'This video is on hold, so it can’t take a new upload.', ar: 'هذا المرئي موقوف، فلا يمكن رفع ملفه من جديد.' },
+  import_reupload: { action: 'none', en: 'The team imported this video and will upload its file again.', ar: 'استورد الفريق هذا المرئي، وسيعيد رفع ملفه.' },
   channel_not_found: { action: 'none', en: 'This channel isn’t available.', ar: 'هذه القناة غير متاحة.' },
   playlist_not_found: { action: 'none', en: 'This playlist isn’t available.', ar: 'قائمة التشغيل هذه غير متاحة.' },
   method_not_allowed: { action: 'none', en: 'This action isn’t possible here.', ar: 'لا يمكن القيام بهذا الإجراء هنا.' },

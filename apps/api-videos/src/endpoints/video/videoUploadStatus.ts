@@ -1,5 +1,5 @@
 import { privateAnswer } from '../../lib/private-answer';
-import { bunnyRef } from '../../lib/media/providers';
+import { usableBunnyRef } from '../../lib/media/source-changed';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute } from "chanfana";
@@ -156,7 +156,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
 		// Bunny's id of the video; none when Bunny holds no copy (R2 only: the record's own status)
-		const bunnyId = bunnyRef(video as never);
+		const bunnyId = usableBunnyRef(video);
 		try {
 			if (bunnyId) {
 				// The video's own library (lib/bunny/libraries.ts)

@@ -112,4 +112,32 @@ describe('TUS sessions written once (AV-24)', () => {
 		assert.equal(h.videos.read('vid').uploadStatus, 'processing');
 		assert.equal(h.queue.messages.filter((m: any) => m.type === MessageType.VideoUploadCompleted).length, 1);
 	});
+
+	it('an upload whose bytes were not the file is closed for good: 410 before and after the file comes again', async () => {
+		const h = harness();
+		const create = (session: string) =>
+			h.request('/api/videos/tus', { method: 'POST', headers: { 'Tus-Resumable': '1.0.0', 'Upload-Length': String(SIZE), 'Upload-Metadata': `tusSessionId ${btoa(session)}` } });
+		const old = (await create('s1')).headers.get('Location')!.split('/').pop()!;
+		const head = async (id: string) => (await h.request(`/api/videos/tus/${id}`, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' } })).status;
+		const patch = async (id: string) =>
+			(await h.request(`/api/videos/tus/${id}`, { method: 'PATCH', body: new Uint8Array(CHUNK), headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0', 'Tus-Resumable': '1.0.0' } })).status;
+		globalThis.fetch = ((orig) => (async (url: string | URL | Request, init?: RequestInit) => orig(String(url).replace('https://video.bunnycdn.com', 'https://bunny.test'), init)) as typeof fetch)(globalThis.fetch);
+		assert.equal(await head(old), 200);
+		// Every byte arrived, and the transcode refused them
+		const flagged = { ...h.videos.read('vid'), uploadStatus: 'failed', tusUpload: undefined, processingIssue: { kind: 'needs_reupload', at: 'x', code: 'source_changed' } };
+		await h.videos.put('vid', JSON.stringify(flagged));
+		bunnyOffset = SIZE;
+		assert.deepEqual([await head(old), await patch(old), (await create('s1')).status], [410, 410, 410]);
+		assert.equal(h.videos.read('vid').uploadStatus, 'failed');
+		// The import opened it again: only its own session may create an upload
+		await h.videos.put('vid', JSON.stringify({ ...flagged, uploadStatus: 'uploading', processingIssue: undefined, uploadRound: 1 }));
+		assert.deepEqual([await head(old), await patch(old), (await create('s1')).status], [410, 410, 410]);
+		assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
+		h.kv.data.set('tus:session:s2', JSON.stringify({ ...JSON.parse(h.kv.data.get('tus:session:s1')!), uploadRound: 1 }));
+		const created = await create('s2');
+		assert.equal(created.status, 201);
+		const next = created.headers.get('Location')!.split('/').pop()!;
+		assert.equal(await patch(next), 204);
+		assert.deepEqual([h.videos.read('vid').tusUpload.uploadRound, await head(old)], [1, 410]);
+	});
 });

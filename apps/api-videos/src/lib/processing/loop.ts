@@ -17,7 +17,8 @@
  * a record that is already in the target state is not written again.
  */
 
-import { bunnyRef, videoProviderRecords } from '../media/providers';
+import { videoProviderRecords } from '../media/providers';
+import { bunnyCopyRefused, usableBunnyRef } from '../media/source-changed';
 import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -225,7 +226,7 @@ export async function syncVideoFromBunny(
 	const host = library.host;
 	if (!host) return { videoId, found: true, dryRun: !!opts.dryRun, changed: false, error: 'bunny_hostname is not configured' };
 	// Bunny's id of the video (new videos: the stored ref); none: Bunny holds no copy to sync from
-	const bunnyId = bunnyRef(video as never);
+	const bunnyId = usableBunnyRef(video);
 	if (!bunnyId) return { videoId, found: true, dryRun: !!opts.dryRun, changed: false, error: 'Bunny holds no copy of this video' };
 
 	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, bunnyId, video);
@@ -253,6 +254,9 @@ export async function syncVideoFromBunny(
 	// edit (title, visibility, views) is never overwritten.
 	let transition: 'ready' | 'failed' | null = null;
 	const saved = await repo.updateObject(videoId, (fresh) => {
+		// Refused meanwhile (source-changed.ts): what Bunny made of those bytes is not the video
+		transition = null;
+		if (bunnyCopyRefused(fresh)) return false;
 		const freshPlan = planSync(fresh, bunny, syncOpts);
 		transition = freshPlan.terminalTransition;
 		const statusChanged = syncBunnyRefStatus(fresh as never, freshPlan, now);
@@ -311,7 +315,7 @@ export async function startProcessingLoop(
 	const saved = await repo.updateObject(videoId, (fresh) => {
 		why = undefined;
 		// Checks Bunny's encode: a video Bunny holds no copy of is made ready by its R2 transcode
-		if (!bunnyRef(fresh as never)) {
+		if (!usableBunnyRef(fresh)) {
 			why = 'Bunny holds no copy';
 			return false;
 		}
@@ -404,7 +408,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	if (unannounced) await announceAndRecordProcessingResult(env as never, video, unannounced);
 
 	// Bunny's id of the video (new videos: the stored GUID); syncVideoFromBunny ends the loop when Bunny holds no copy
-	const loopBunnyId = bunnyRef(video as never);
+	const loopBunnyId = usableBunnyRef(video);
 	const bunny = loopBunnyId ? await fetchBunnyVideo(env, loopBunnyId, video) : null;
 	// A video Bunny still has at the library root goes into its channel's (or
 	// owner's) collection: the upload's collection step failed or was skipped
