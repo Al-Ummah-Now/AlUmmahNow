@@ -75,6 +75,7 @@
 --   apps/api-videos/migrations/search/0121_channel_move_offers.sql
 --   apps/api-videos/migrations/search/0122_live_chat_ai_hold.sql
 --   apps/api-videos/migrations/search/0123_image_owners_channel.sql
+--   apps/api-videos/migrations/search/0124_admin_comments_by_id.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -245,6 +246,7 @@ CREATE TABLE yt_import_items (id TEXT PRIMARY KEY, import_id TEXT NOT NULL, chan
 CREATE TABLE yt_import_playlists (import_id TEXT NOT NULL, yt_playlist_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', yt_visibility TEXT NOT NULL, video_ids_json TEXT NOT NULL DEFAULT '[]', selected INTEGER NOT NULL DEFAULT 0, playlist_id TEXT, state TEXT NOT NULL DEFAULT 'none', PRIMARY KEY (import_id, yt_playlist_id));
 CREATE TABLE yt_imports (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, owner_id TEXT NOT NULL, status TEXT NOT NULL, yt_channel_json TEXT, captions INTEGER NOT NULL DEFAULT 0, visibility_mode TEXT NOT NULL DEFAULT 'keep', refresh_token_enc TEXT, token_iv TEXT, scopes TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, snapshot_purged_at TEXT);
 CREATE TABLE yt_oauth_states (state TEXT PRIMARY KEY, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, owner_id TEXT NOT NULL, locale TEXT NOT NULL, captions INTEGER NOT NULL DEFAULT 0, verifier TEXT NOT NULL, code TEXT, connect_hash TEXT, expires_at TEXT NOT NULL);
+CREATE INDEX idx_admin_comments_comment ON admin_comments (comment_id);
 CREATE INDEX idx_admin_comments_created ON admin_comments (created_at);
 CREATE INDEX idx_admin_comments_user ON admin_comments (user_id, created_at);
 CREATE INDEX idx_admin_deletions_channel ON admin_deletions (kind, channel_id, purged_at, deleted_at);
