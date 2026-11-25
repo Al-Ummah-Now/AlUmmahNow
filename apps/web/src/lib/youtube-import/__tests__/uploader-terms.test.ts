@@ -85,9 +85,12 @@ describe('ImportUploader terms_required pause and resume', () => {
     expect(uploader.isPausedForTerms()).toBe(true);
     expect(initiatedIds).not.toContain('c');
 
-    // Dismissing the dialog and retrying via enqueue() re-prompts instead of getting stuck silently
-    uploader.enqueue([items[0]]);
-    expect(onTermsRequired).toHaveBeenCalledTimes(2);
+    // Paused, not failed; more items wait with them, and nothing asks again (the page polls every few seconds)
+    expect(states.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(states.filter((s) => s.phase === 'paused').map((s) => s.id).sort()).toEqual(['a', 'b']);
+    uploader.enqueue([]);
+    uploader.enqueue([items[0], items[1]]);
+    expect(onTermsRequired).toHaveBeenCalledTimes(1);
     expect(uploader.isPausedForTerms()).toBe(true);
 
     // Accepting Terms and calling resume() retries the queued items and completes all three
@@ -98,6 +101,35 @@ describe('ImportUploader terms_required pause and resume', () => {
 
     expect(initiatedIds).toContain('c');
     expect(states.filter((s) => s.phase === 'processing').map((s) => s.id).sort()).toEqual(['a', 'b', 'c']);
+    await uploader.stop();
+  });
+
+  it('a refusal of an item sent before the acceptance does not pause the queue again', async () => {
+    const onTermsRequired = jest.fn();
+    const answers: Record<string, Array<(v: unknown) => void>> = { a: [], b: [] };
+    const uploader = new ImportUploader({
+      importId: 'imp-1', channelId: 'ch-1', takeout: makeTakeout(['a', 'b']), onState: jest.fn(), onTermsRequired,
+      deps: {
+        initiate: jest.fn((req) => new Promise((resolve) => answers[req.youtubeImport!.itemId].push(resolve))) as unknown as never,
+        complete: jest.fn().mockResolvedValue({ success: true }) as unknown as never,
+        createUpload: (opts) => ({ start: async () => { opts.onSuccess?.(); }, abort: async () => undefined }),
+      },
+    });
+    const refused = { success: false, status: 403, code: 'terms_required' };
+    const tick = () => new Promise((r) => setTimeout(r, 20));
+    uploader.enqueue([makeItem('a'), makeItem('b')]);
+    await tick();
+    answers.a[0](refused);
+    await tick();
+    expect(onTermsRequired).toHaveBeenCalledTimes(1);
+    uploader.resume();
+    await tick();
+    answers.b[0](refused);
+    await tick();
+    expect(onTermsRequired).toHaveBeenCalledTimes(1);
+    expect(uploader.isPausedForTerms()).toBe(false);
+    // Both are sent again
+    expect([answers.a.length, answers.b.length]).toEqual([2, 2]);
     await uploader.stop();
   });
 });

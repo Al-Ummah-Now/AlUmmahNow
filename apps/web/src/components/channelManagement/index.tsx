@@ -6,8 +6,8 @@ import { CHANNEL_DELETED_PARAM } from '@/components/channelManagement/DeleteChan
 import { Channel, formatNumber } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
-import { mayCreateChannel, needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { mayCreateChannel, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ChannelManagementSectionProps, CreateChannelFormData } from './types';
 import { ChannelGrid } from './ChannelGrid';
@@ -34,9 +34,13 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const creatorAccess = useCreatorAccess();
   const canCreate = mayCreateChannel(creatorAccess);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [termsDialogOpen, setTermsDialogOpen] = useState(false);
-  const [openCreateAfterTerms, setOpenCreateAfterTerms] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const termsTriggeredRef = React.useRef(false);
+  // Accepting goes on with what was asked: opening the form, or creating the channel that was refused
+  const terms = useCreatorTermsPrompt<'open' | CreateChannelFormData>(async (what) => {
+    if (what === 'open') setDialogOpen(true);
+    else await handleCreateChannel(what);
+  });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Get userId from auth - use user's first channel or empty string
@@ -56,8 +60,6 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     initialChannels,
     onTermsRequired: () => {
       termsTriggeredRef.current = true;
-      setOpenCreateAfterTerms(false);
-      setTermsDialogOpen(true);
     },
   });
 
@@ -79,17 +81,13 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
   // Handle create channel
   const handleOpenCreate = () => {
-    if (needsCreatorTerms(creatorAccess)) {
-      setOpenCreateAfterTerms(true);
-      setTermsDialogOpen(true);
-    } else {
-      setDialogOpen(true);
-    }
+    if (!terms.askFirst(creatorAccess, 'open')) setDialogOpen(true);
   };
 
   const handleCreateChannel = async (data: CreateChannelFormData): Promise<boolean> => {
     logger.debug('ChannelManagementSection: Creating channel with data:', data);
     termsTriggeredRef.current = false;
+    terms.clear();
 
     const success = await createChannel({
       name: data.name,
@@ -99,9 +97,11 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     if (success) {
       showToast(t.success.created);
       setDialogOpen(false);
+      setFormKey((k) => k + 1);
       return true;
     }
     if (termsTriggeredRef.current) {
+      terms.refused(data);
       // Keep CreateChannelDialog mounted with the user's draft while CreatorTermsDialog opens over it
       return false;
     }
@@ -207,25 +207,24 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 
       {/* Keep CreateChannelDialog mounted so a focus refresh or 403 terms_required preserves typed form fields */}
       <CreateChannelDialog
+        // A channel created after the Terms leaves an empty form for the next one
+        key={formKey}
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) terms.clear();
+          setDialogOpen(open);
+        }}
         onSubmit={handleCreateChannel}
         isLoading={isLoading}
         lang={locale}
+        notice={terms.needed && (
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="create-channel-terms">
+            <span>{t.creator.termsRequired}</span>
+            {terms.reviewLink('create-channel-review-terms')}
+          </div>
+        )}
       />
-      <CreatorTermsDialog
-        open={termsDialogOpen}
-        onOpenChange={(open) => {
-          setTermsDialogOpen(open);
-          if (!open) setOpenCreateAfterTerms(false);
-        }}
-        onAccepted={() => {
-          if (openCreateAfterTerms) {
-            setOpenCreateAfterTerms(false);
-            setDialogOpen(true);
-          }
-        }}
-      />
+      {terms.dialog}
 
       {/* Toast Message */}
       {toastMessage && (

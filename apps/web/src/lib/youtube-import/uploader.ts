@@ -32,7 +32,7 @@ export interface ImportUploaderOptions {
   channelId: string;
   takeout: TakeoutSet;
   onState: (itemId: string, state: LiveState | null) => void;
-  /** Called once when the server refuses with `terms_required`; the queue pauses until `resume()` is called. */
+  /** The server refused with `terms_required` and the queue is paused until `resume()`; once per pause. */
   onTermsRequired?: () => void;
   /** The server's import moved on without this page (another tab, a cancel): read it again */
   onServerChanged?: () => void;
@@ -57,6 +57,8 @@ export class ImportUploader {
   private active = new Map<string, Pick<ResilientUpload, 'start' | 'abort'> | null>();
   private stopped = false;
   private pausedForTerms = false;
+  /** How often the queue was resumed: a refusal of an item sent before the last one is out of date */
+  private resumes = 0;
   private takeout: TakeoutSet;
   private readonly deps: UploaderDeps;
 
@@ -78,13 +80,9 @@ export class ImportUploader {
     return this.pausedForTerms;
   }
 
-  /** Queues items (already queued or running ones are ignored). */
+  /** Queues items (already queued or running ones are ignored); while paused they wait for `resume()`. */
   enqueue(items: readonly YtImportItem[]): void {
     if (this.stopped) return;
-    if (this.pausedForTerms) {
-      this.opts.onTermsRequired?.();
-      return;
-    }
     for (const item of items) {
       if (this.has(item.id)) continue;
       this.queue.push(item);
@@ -97,6 +95,7 @@ export class ImportUploader {
   resume(): void {
     if (this.stopped || !this.pausedForTerms) return;
     this.pausedForTerms = false;
+    this.resumes++;
     for (const item of this.queue) {
       this.opts.onState(item.id, { phase: 'waiting' });
     }
@@ -144,6 +143,7 @@ export class ImportUploader {
     const fingerprint = source.kind === 'zip' ? await zipEntryFingerprint(source.zip, source.entry, fileName).catch(() => undefined) : await tryFileFingerprint(source.file);
     if (this.stopped) return;
 
+    const sentAfter = this.resumes;
     const initiated = await this.deps.initiate(
       {
         title: item.title,
@@ -157,12 +157,18 @@ export class ImportUploader {
     if (!initiated.success || !initiated.result) {
       const code = initiateErrorCode(initiated);
       if (code === 'terms_required') {
-        const firstPause = !this.pausedForTerms;
+        if (this.stopped) return;
+        // Back at the front: resuming sends it again. It waits; nothing failed
+        this.queue.unshift(item);
+        if (sentAfter !== this.resumes) {
+          onState(item.id, { phase: 'waiting' });
+          return;
+        }
+        onState(item.id, { phase: 'paused' });
+        if (this.pausedForTerms) return;
         this.pausedForTerms = true;
-        // Put the item back at the front so resuming after acceptance retries it automatically
-        if (!this.queue.some((q) => q.id === item.id)) this.queue.unshift(item);
-        this.fail(item, code, Object.assign(new Error(initiated.error || 'terms_required'), { status: initiated.status }), 'initiate');
-        if (firstPause) this.opts.onTermsRequired?.();
+        logger.info('[YtImport] Paused until the creator Terms are accepted', { importId, itemId: item.id });
+        this.opts.onTermsRequired?.();
         return;
       }
       if (code === 'youtube_item_taken') {

@@ -114,7 +114,8 @@ export function freeFiles(files: readonly TakeoutFile[], matches: ReadonlyMap<st
 }
 
 /** What the uploader does on this page for one item (the server's state, overlaid with the page's own upload). */
-export type LivePhase = 'waiting' | 'preparing' | 'uploading' | 'processing' | 'ready' | 'failed' | 'needsFile';
+/** `paused`: the server waits for the creator to accept the Terms. */
+export type LivePhase = 'waiting' | 'paused' | 'preparing' | 'uploading' | 'processing' | 'ready' | 'failed' | 'needsFile';
 
 export interface LiveState {
   phase: LivePhase;

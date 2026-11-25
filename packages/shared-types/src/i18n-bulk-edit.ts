@@ -597,7 +597,7 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
     description_too_long: 'سيصبح الوصف أطول من المسموح',
     playlist_other_channel: 'قائمة التشغيل في قناة أخرى',
     playlist_full: 'قائمة التشغيل ممتلئة',
-    terms_required: 'وافق على شروط الخدمة وإرشادات المجتمع أولًا',
+    terms_required: 'وافق على شروط الاستخدام وإرشادات المجتمع أولًا',
     schedule_invalid: 'وقت النشر غير ممكن',
     already_published: 'منشور بالفعل',
     failed: 'حدث خطأ ما',

@@ -9,8 +9,7 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VideoObject } from '@/interfaces';
 import { fillTemplate, type VideoCommentSettings as CommentSettings, type VideoCategory } from '@al-ummah/shared-types';
@@ -79,8 +78,7 @@ export default function VideoEdit({
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [termsOpen, setTermsOpen] = useState(false);
+  const terms = useCreatorTermsPrompt(() => handleSave());
   const [success, setSuccess] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [chapterMode, setChapterMode] = useState<'none' | 'manual' | 'upload'>('none');
@@ -224,6 +222,7 @@ export default function VideoEdit({
   };
 
   const handleSave = async () => {
+    terms.clear();
     setError(null);
     setSuccess(null);
 
@@ -264,17 +263,13 @@ export default function VideoEdit({
 
       if (result?.success && result.result?.video) {
         setSuccess(t.video.updateSuccess ?? null);
-        setErrorCode(null);
         setHasUnsavedChanges(false);
         onSave?.(result.result.video);
       } else if (result?.code === 'terms_required') {
-        markCreatorTermsRequired();
-        setErrorCode('terms_required');
-        setError(t.upload.termsGateBody);
-        setTermsOpen(true);
+        setError(t.creator.termsRequired);
+        terms.refused();
       } else {
         logger.error('[VideoEdit] Update failed', { videoId: video.id, error: result?.error });
-        setErrorCode(result?.code ?? null);
         setError(
           (result?.code === 'thumbnail_shape' ? t.video.thumbnailWrongShape
             : result?.code === 'thumbnail_unreadable' || result?.code === 'thumbnail_host' ? t.video.thumbnailUnreadable
@@ -674,30 +669,12 @@ export default function VideoEdit({
 
         {/* Error/Success Messages */}
         {error && (
-          <div role="alert" data-testid="video-edit-error" data-code={errorCode ?? undefined} className="flex flex-wrap items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-[var(--fanous-color-error-text)]">
+          <div role="alert" data-testid="video-edit-error" data-code={terms.needed ? 'terms_required' : undefined} className="flex flex-wrap items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-[var(--fanous-color-error-text)]">
             <span>{error}</span>
-            {errorCode === 'terms_required' && (
-              <button
-                type="button"
-                onClick={() => setTermsOpen(true)}
-                className="underline font-medium text-[var(--fanous-color-accent)]"
-                data-testid="video-edit-review-terms"
-              >
-                {t.upload.termsGateReviewAction}
-              </button>
-            )}
+            {terms.reviewLink('video-edit-review-terms')}
           </div>
         )}
-        <CreatorTermsDialog
-          open={termsOpen}
-          onOpenChange={setTermsOpen}
-          onAccepted={() => {
-            if (errorCode === 'terms_required') {
-              setError(null);
-              setErrorCode(null);
-            }
-          }}
-        />
+        {terms.dialog}
         {success && (
           <div role="status" data-testid="video-edit-success" className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400">
             {success}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Channel } from '@al-ummah/shared-types';
 
 export interface ChannelCardProps {
@@ -31,6 +32,8 @@ export interface CreateChannelDialogProps {
   onSubmit: (data: CreateChannelFormData) => Promise<boolean | void>;
   isLoading?: boolean;
   lang?: 'en' | 'ar';
+  /** Said above the buttons (what keeps the last try from finishing). */
+  notice?: ReactNode;
 }
 
 export interface CreateChannelFormData {

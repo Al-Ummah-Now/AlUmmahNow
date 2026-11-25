@@ -112,8 +112,8 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   // Feature switches (the message comes from the registry entry; this is the fallback)
   feature_off: { action: 'none', en: 'This feature isn’t available right now.', ar: 'هذه الميزة غير متاحة الآن.' },
   // Creator Terms gate (Play UGC policy)
-  terms_required: { action: 'none', en: 'Please review and accept the Terms of Service and Community Guidelines before continuing.', ar: 'يُرجى مراجعة شروط الخدمة وإرشادات المجتمع والموافقة عليها قبل المتابعة.' },
-  terms_version_changed: { action: 'retry', en: 'The Terms of Service were updated. Please review and accept the latest version.', ar: 'تم تحديث شروط الخدمة. يُرجى مراجعة أحدث إصدار والموافقة عليه.' },
+  terms_required: { action: 'none', en: 'Please review and accept the Terms of Service and Community Guidelines before continuing.', ar: 'يُرجى مراجعة شروط الاستخدام وإرشادات المجتمع والموافقة عليها قبل المتابعة.' },
+  terms_version_changed: { action: 'retry', en: 'The Terms of Service were updated. Please review and accept the latest version.', ar: 'تم تحديث شروط الاستخدام. يُرجى مراجعة أحدث إصدار والموافقة عليه.' },
   // Live chat (wiki E17)
   live_chat_empty: { action: 'none', en: 'Write a message first.', ar: 'اكتب رسالة أولًا.' },
   live_chat_too_long: { action: 'none', en: 'This message is too long.', ar: 'هذه الرسالة طويلة جدًا.' },

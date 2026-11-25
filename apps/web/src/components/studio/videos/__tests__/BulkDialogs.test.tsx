@@ -5,6 +5,7 @@ import { BulkScheduleDialog } from '../BulkDialogs';
 const schedule = jest.fn();
 
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio } }) }));
+jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => ({ status: 'loading' }), needsCreatorTerms: () => false, markCreatorTermsRequired: jest.fn(), acceptCreatorTerms: jest.fn() }));
 jest.mock('@/lib/api/studio-content', () => ({
   bulkScheduleVideos: (...args: unknown[]) => schedule(...args),
 }));

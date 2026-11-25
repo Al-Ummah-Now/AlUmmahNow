@@ -131,10 +131,22 @@ const UploadPage: React.FC = () => {
   // Once the upload form mounts, keep it mounted across focus refreshes or 403 terms_required so drafts stay intact
   const formMountedRef = useRef(false);
   const [termsModalDismissed, setTermsModalDismissed] = useState(false);
+  const [termsReviewing, setTermsReviewing] = useState(false);
+  // Counts acceptances here: what the Terms refused (the single upload, the batch's files) starts then
+  const [termsAccepted, setTermsAccepted] = useState(0);
   const termsNeeded = needsCreatorTerms(creator);
   useEffect(() => {
-    if (!termsNeeded) setTermsModalDismissed(false);
+    if (termsNeeded) return;
+    setTermsModalDismissed(false);
+    setTermsReviewing(false);
   }, [termsNeeded]);
+
+  // A refusal for the Terms is not a failed upload: the page asks, again if it was dismissed before
+  const showUploadError = (error: string) => {
+    if (error !== t.creator.termsRequired) return setUploadError(error);
+    setUploadError(null);
+    setTermsModalDismissed(false);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Batch category: a default for every video, each row can have its own
@@ -160,6 +172,7 @@ const UploadPage: React.FC = () => {
     pauseAll,
     resumeAll,
     cancelAll,
+    addRefusedFiles,
     clearQueue,
     clearFinished,
     reorderQueue,
@@ -170,9 +183,7 @@ const UploadPage: React.FC = () => {
     onUploadComplete: (videoId) => {
       logger.debug('Video uploaded:', videoId);
     },
-    onError: (error) => {
-      setUploadError(error);
-    },
+    onError: (error) => showUploadError(error),
   });
 
   // Playlists: the channel's list (both modes), the adds this page asked for,
@@ -367,7 +378,7 @@ const UploadPage: React.FC = () => {
   };
 
   const handleUploadError = (error: string) => {
-    setUploadError(error);
+    showUploadError(error);
     setUploadComplete(false);
   };
 
@@ -561,6 +572,8 @@ const UploadPage: React.FC = () => {
   }
 
   formMountedRef.current = true;
+  // Asked by itself when nothing is uploading; during uploads the banner offers it
+  const termsDialogOpen = termsNeeded && (termsReviewing || (canPromptTerms && !termsModalDismissed));
 
   return (
     <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -576,7 +589,7 @@ const UploadPage: React.FC = () => {
         </div>
 
         {/* Where the video goes: before any file is chosen, in both modes */}
-        {canPromptTerms && termsModalDismissed && (
+        {termsNeeded && !termsDialogOpen && (
           <div
             role="status"
             data-testid="upload-terms-banner"
@@ -586,7 +599,7 @@ const UploadPage: React.FC = () => {
             <button
               type="button"
               data-testid="upload-terms-reopen"
-              onClick={() => setTermsModalDismissed(false)}
+              onClick={() => setTermsReviewing(true)}
               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               {t.upload.termsGateReviewAction}
@@ -724,6 +737,15 @@ const UploadPage: React.FC = () => {
                 resumeTitle={resumeTitle}
                 playlists={singlePlaylists}
                 onVideoReady={handleSingleVideoReady}
+                termsAccepted={termsAccepted}
+                termsNotice={termsNeeded && !termsDialogOpen && (
+                  <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--fanous-color-error-text)]" data-testid="upload-terms-notice">
+                    <span>{t.creator.termsRequired}</span>
+                    <button type="button" onClick={() => setTermsReviewing(true)} className="font-medium text-[var(--fanous-color-accent)] underline" data-testid="upload-review-terms">
+                      {t.upload.termsGateReviewAction}
+                    </button>
+                  </div>
+                )}
               />
             </div>
           </>
@@ -954,9 +976,16 @@ const UploadPage: React.FC = () => {
       />
       {batchSetValues.panel}
       <CreatorTermsDialog
-        open={canPromptTerms && !termsModalDismissed}
+        open={termsDialogOpen}
         onOpenChange={(open) => {
-          if (!open) setTermsModalDismissed(true);
+          if (open) return;
+          setTermsReviewing(false);
+          setTermsModalDismissed(true);
+        }}
+        onAccepted={() => {
+          setUploadError(null);
+          setTermsAccepted((n) => n + 1);
+          void addRefusedFiles();
         }}
       />
     </main>

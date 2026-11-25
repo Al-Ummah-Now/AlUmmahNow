@@ -29,7 +29,10 @@ let inflight: Promise<void> | null = null;
 let lastFetch = 0;
 /** The account the cached answer is for: switching accounts (no page load) reads it again. */
 let cachedFor: string | null = null;
+/** Answers asked for before it changed are dropped (an account switch, a refusal, an acceptance). */
 let generation = 0;
+/** Changes only when another account becomes active. */
+let accountEpoch = 0;
 /**
  * After a 403 `terms_required` refusal, keep `termsAccepted: false` sticky past the
  * 30-second Worker isolate switch memo so a stale isolate's `/api/me/creator` response
@@ -103,6 +106,7 @@ export function useCreatorAccess(): CreatorAccessState {
     // Another account: drop the previous one's answer at once, then read this one's
     if (!first) {
       generation += 1;
+      accountEpoch += 1;
       termsRequiredUntil = 0;
       publish({ status: 'loading' });
       inflight = null;
@@ -165,7 +169,7 @@ export async function acceptCreatorTerms(
   version?: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<AcceptCreatorTermsResult> {
-  const mine = generation;
+  const mine = accountEpoch;
   const auth = await fetchClientAuthInfo();
   if (!auth.accessToken) return { ok: false, code: 'authentication_required' };
   try {
@@ -185,7 +189,7 @@ export async function acceptCreatorTerms(
       result?: { termsAccepted?: boolean; termsAcceptedAt?: string; termsVersion?: string };
     } | null;
     // Account switched while Agree was in flight: never write the previous account's answer onto the new one
-    if (mine !== generation) return { ok: false, code: 'account_switched' };
+    if (mine !== accountEpoch) return { ok: false, code: 'account_switched' };
     if (!res.ok) {
       // Switch turned off while the gate was open: clear terms fields so open gates unblock cleanly
       if (res.status === 404 && body?.code === 'feature_off') {

@@ -19,8 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LivePlayer } from '@/components/live/LivePlayer';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LIVE_TIER_CODES, LiveApiError, endStream, getIngest, getState, getStream, isLiveOff, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { logger } from '@/lib/logger-client';
 import type { LiveOffers } from '@/lib/studio/nav';
 import { HeldReview } from './HeldReview';
@@ -68,7 +67,12 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
+  /** What the creator Terms refused, done again once they are accepted. */
+  const terms = useCreatorTermsPrompt<'load' | 'start'>((what): Promise<void> => {
+    if (what === 'start') return goLive();
+    return reload();
+  });
+  const { refused: termsRefused, clear: termsClear } = terms;
   const phase = goLivePhase(state, started);
 
   const fetchAll = useCallback(async (signal?: AbortSignal) => {
@@ -98,11 +102,10 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
       }
       const code = liveErrorCode(err);
       if (code === 'terms_required') {
-        markCreatorTermsRequired();
         setError(errors.terms_required);
         setErrorCode('terms_required');
-        setTermsOpen(true);
         setLoad('failed');
+        termsRefused('load');
       } else if (err instanceof LiveApiError && err.status === 404) setLoad('missing');
       else if (err instanceof LiveApiError && err.status === 403 && !LIVE_TIER_CODES.includes(code)) setLoad('forbidden');
       else {
@@ -112,7 +115,15 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
         setLoad('failed');
       }
     }
-  }, [streamId, errors, router]);
+  }, [streamId, errors, router, termsRefused]);
+
+  const reload = () => {
+    termsClear();
+    setError('');
+    setErrorCode('');
+    setLoad('loading');
+    return fetchAll();
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -132,6 +143,7 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
   }, [load, settled, premiere, streamId]);
 
   const goLive = async () => {
+    terms.clear();
     setBusy('start');
     setError('');
     setErrorCode('');
@@ -148,10 +160,7 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
         return;
       }
       const code = liveErrorCode(err);
-      if (code === 'terms_required') {
-        markCreatorTermsRequired();
-        setTermsOpen(true);
-      }
+      if (code === 'terms_required') terms.refused('start');
       if (code === 'generic') logger.error('[StudioGoLive] Go live failed', { streamId, error: err });
       setError(errors[code]);
       setErrorCode(code);
@@ -208,23 +217,14 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
           {message}
         </p>
         <div className="flex flex-wrap gap-2">
-          {errorCode === 'terms_required' && (
-            <Button onClick={() => setTermsOpen(true)} data-testid="studio-golive-review-terms">
+          {terms.needed && (
+            <Button className="min-h-11" onClick={terms.review} data-testid="studio-golive-review-terms">
               {t.upload.termsGateReviewAction}
             </Button>
           )}
-          {load === 'failed' && <Button variant={errorCode === 'terms_required' ? 'outline' : 'default'} onClick={() => { setLoad('loading'); void fetchAll(); }}>{t.studio.live.retry}</Button>}
+          {load === 'failed' && <Button className="min-h-11" variant={terms.needed ? 'outline' : 'default'} onClick={() => void reload()}>{t.studio.live.retry}</Button>}
         </div>
-        <CreatorTermsDialog
-          open={termsOpen}
-          onOpenChange={setTermsOpen}
-          onAccepted={() => {
-            setError('');
-            setErrorCode('');
-            setLoad('loading');
-            void fetchAll();
-          }}
-        />
+        {terms.dialog}
       </div>
     );
   }
@@ -268,16 +268,7 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
         {error && (
           <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-golive-error" data-code={errorCode}>
             <span>{error}</span>
-            {errorCode === 'terms_required' && (
-              <button
-                type="button"
-                onClick={() => setTermsOpen(true)}
-                className="underline font-medium text-[var(--fanous-color-accent)]"
-                data-testid="studio-golive-review-terms"
-              >
-                {t.upload.termsGateReviewAction}
-              </button>
-            )}
+            {terms.reviewLink('studio-golive-review-terms')}
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -370,16 +361,7 @@ export function GoLive({ locale, channelId, streamId, offers }: { locale: string
         confirmLabel={text.end}
         testId="studio-golive-end-dialog"
       />
-      <CreatorTermsDialog
-        open={termsOpen}
-        onOpenChange={setTermsOpen}
-        onAccepted={() => {
-          if (errorCode === 'terms_required') {
-            setError('');
-            setErrorCode('');
-          }
-        }}
-      />
+      {terms.dialog}
     </div>
   );
 }

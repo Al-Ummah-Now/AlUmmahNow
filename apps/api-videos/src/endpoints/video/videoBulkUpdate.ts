@@ -121,6 +121,25 @@ function editChecker(env: AppContext['env'], userId: string) {
 	};
 }
 
+/** What was read for a video before the Terms check; a read that failed fails that video's own step, not the request. */
+type Prefetched<T> = { value: T } | { error: unknown };
+
+async function prefetch<T>(read: () => Promise<T>): Promise<Prefetched<T>> {
+	try {
+		return { value: await read() };
+	} catch (error) {
+		return { error };
+	}
+}
+
+function prefetchedValue<T>(read: Prefetched<T>): T {
+	if ('error' in read) throw read.error;
+	return read.value;
+}
+
+/** A draft or private video: opening it needs accepted Creator Terms. */
+const isClosed = (video: { isDraft?: boolean; isPublic?: boolean; isUnlisted?: boolean }) => video.isDraft === true || (video.isPublic === false && video.isUnlisted !== true);
+
 /**
  * PATCH /api/videos/bulk (also POST /api/videos/bulk-update): edit many
  * videos at once.
@@ -190,16 +209,16 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 		// Only gate when the bulk edit actually opens at least one closed (draft/private) video,
 		// so closing public -> unlisted stays allowed (matching VideoUpdate).
 		const opensVideo = changes.visibility === 'public' || changes.visibility === 'unlisted' || changes.isPublic === true;
-		const prefetched = new Map<string, VideoType | null>();
+		const prefetched = new Map<string, Prefetched<VideoType | null>>();
 		if (opensVideo) {
 			let opensAnyClosed = false;
 			await Promise.all(videoIds.map(async (videoId) => {
-				const current = await repository.getObject(videoId);
-				prefetched.set(videoId, current);
-				if (!current || current.isDeleted) return;
-				if (!(await mayEdit(current))) return;
-				const wasClosed = current.isDraft === true || (current.isPublic === false && current.isUnlisted !== true);
-				if (wasClosed) opensAnyClosed = true;
+				const read = await prefetch(() => repository.getObject(videoId).then(async (current) => {
+					if (!current || current.isDeleted || !(await mayEdit(current))) return current;
+					if (isClosed(current)) opensAnyClosed = true;
+					return current;
+				}));
+				prefetched.set(videoId, read);
 			}));
 			if (opensAnyClosed) {
 				const termsRefused = await enforceCreatorTerms(c, userId);
@@ -230,7 +249,8 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 					results.set(videoId, { videoId, success: true, changed: false, replayed: true });
 					return;
 				}
-				const current = prefetched.has(videoId) ? prefetched.get(videoId) : await repository.getObject(videoId);
+				const read = prefetched.get(videoId);
+				const current = read ? prefetchedValue(read) : await repository.getObject(videoId);
 				if (!current || current.isDeleted) return void results.set(videoId, fail(videoId, 'not_found'));
 				if (!(await mayEdit(current))) return void results.set(videoId, fail(videoId, 'forbidden'));
 				for (const id of changes.addPlaylists ?? []) {
@@ -398,23 +418,18 @@ export class VideoBulkUndo extends AuthenticatedRoute {
 
 		const records = new Map<string, BulkUndoRecord>();
 		const results = new Map<string, Outcome>();
-		const undoPrefetch = new Map<string, { record: BulkUndoRecord | null; current: VideoType | null }>();
+		const undoPrefetch = new Map<string, Prefetched<{ record: BulkUndoRecord | null; current: VideoType | null }>>();
 		let reopensAnyClosed = false;
 		await Promise.all(ids.map(async (videoId) => {
-			const record = await readUndo(kv, userId, body.operationId, videoId);
-			if (!record || record.undoneAt) {
-				undoPrefetch.set(videoId, { record, current: null });
-				return;
-			}
-			const current = await repository.getObject(videoId);
-			undoPrefetch.set(videoId, { record, current });
-			if (!current || current.isDeleted) return;
-			if (!(await mayEdit(current))) return;
-			const currentClosed = current.isDraft === true || (current.isPublic === false && current.isUnlisted !== true);
-			if (!currentClosed) return;
-			const reverted = revertFields(current, record.before, record.after, now);
-			const nextOpen = reverted.video.isDraft !== true && (reverted.video.isPublic !== false || reverted.video.isUnlisted === true);
-			if (reverted.restored.length > 0 && nextOpen) reopensAnyClosed = true;
+			undoPrefetch.set(videoId, await prefetch(async () => {
+				const record = await readUndo(kv, userId, body.operationId, videoId);
+				if (!record || record.undoneAt) return { record, current: null };
+				const current = await repository.getObject(videoId);
+				if (!current || current.isDeleted || !(await mayEdit(current)) || !isClosed(current)) return { record, current };
+				const reverted = revertFields(current, record.before, record.after, now);
+				if (reverted.restored.length > 0 && !isClosed(reverted.video)) reopensAnyClosed = true;
+				return { record, current };
+			}));
 		}));
 		if (reopensAnyClosed) {
 			const termsRefused = await enforceCreatorTerms(c, userId);
@@ -422,12 +437,10 @@ export class VideoBulkUndo extends AuthenticatedRoute {
 		}
 		await Promise.all(ids.map(async (videoId) => {
 			try {
-				const pref = undoPrefetch.get(videoId);
-				const record = pref ? pref.record : await readUndo(kv, userId, body.operationId, videoId);
+				const { record, current } = prefetchedValue(undoPrefetch.get(videoId)!);
 				// Unchanged by the edit, or the record expired: nothing to put back (not a failure)
 				if (!record) return void results.set(videoId, { videoId, success: true, changed: false, code: 'nothing_to_undo', error: MESSAGES.nothing_to_undo });
 				if (record.undoneAt) return void results.set(videoId, { videoId, success: true, changed: false, replayed: true });
-				const current = pref ? pref.current : await repository.getObject(videoId);
 				if (!current || current.isDeleted) return void results.set(videoId, fail(videoId, 'not_found'));
 				if (!(await mayEdit(current))) return void results.set(videoId, fail(videoId, 'forbidden'));
 

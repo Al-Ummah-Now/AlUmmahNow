@@ -67,6 +67,10 @@ interface VideoUploadProps {
   channel: UploadDestination | null;
   /** Whether a file is chosen and whether its upload has started, for the page's channel picker */
   onWorkChange?: (work: { hasFile: boolean; busy: boolean }) => void;
+  /** How often the creator Terms were accepted on the page: an upload they refused starts then. */
+  termsAccepted?: number;
+  /** Said above the buttons: the creator Terms are not accepted. */
+  termsNotice?: React.ReactNode;
 }
 
 export interface UploadDestination {
@@ -114,6 +118,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   onVideoReady,
   channel,
   onWorkChange,
+  termsAccepted = 0,
+  termsNotice,
 }) => {
   const { t, lang } = useLanguage();
 
@@ -188,6 +194,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // The page's channel picker locks once bytes go to a video on this channel
   const workBusy = !!uploadProgress && uploadProgress.state !== 'idle';
+  const termsRefusedRef = useRef(false);
   const workHasFile = !!selectedFile;
   useEffect(() => {
     onWorkChange?.({ hasFile: workHasFile, busy: workBusy });
@@ -331,6 +338,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     const channelId = activeChannel.id;
 
     try {
+      termsRefusedRef.current = false;
       // Step 1: Initiate upload and get TUS configuration
       setUploadProgress({ percentage: 5, state: 'uploading' });
       onProgress(5);
@@ -426,7 +434,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           if (refusal) {
             logger.warn('[VideoUpload] Upload refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
-            if (initiateResult.code === 'terms_required') markCreatorTermsRequired();
+            if (initiateResult.code === 'terms_required') {
+              // Not a failed upload: the form is as it was, and goes on once they are accepted
+              markCreatorTermsRequired();
+              termsRefusedRef.current = true;
+              setUploadProgress(null);
+              onProgress(0);
+              onError(refusal);
+              return;
+            }
             throw Object.assign(new Error(refusal), { refusal: true });
           }
           throw Object.assign(new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED), { status: initiateResult.status, serverRef: initiateResult.serverRef });
@@ -591,8 +607,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 logger.debug('Video scheduled successfully:', schedulingInfo);
                 setScheduleError(null);
               } else {
-                const ref = reportUploadError('schedule', scheduleResult?.error || 'Scheduling failed', { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) });
-                setScheduleError(t.upload.scheduleFailed.replace('{error}', uploadErrorMessage(t.errors.genericError, ref, lang)));
+                // The Terms changed since the upload began: said in those words, nothing for the Errors page
+                const refusal = creatorRefusalMessage(t, scheduleResult, lang);
+                if (scheduleResult?.code === 'terms_required') markCreatorTermsRequired();
+                const said = refusal ?? uploadErrorMessage(t.errors.genericError, reportUploadError('schedule', scheduleResult?.error || 'Scheduling failed', { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) }), lang);
+                setScheduleError(t.upload.scheduleFailed.replace('{error}', said));
               }
             } catch (schedError) {
               const ref = reportUploadError('schedule', schedError, { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) });
@@ -686,7 +705,16 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     uploadVideo();
   };
 
+  // The Terms were accepted on this page: the upload they refused starts, once per acceptance
+  const retryRef = useRef(retryUpload);
+  retryRef.current = retryUpload;
+  useEffect(() => {
+    if (!termsAccepted || !termsRefusedRef.current) return;
+    retryRef.current();
+  }, [termsAccepted]);
+
   const resetForm = () => {
+    termsRefusedRef.current = false;
     setSelectedFile(null);
     pickedFileRef.current = null;
     uploadAgainRef.current = false;
@@ -1065,6 +1093,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           />
         </div>
 
+        {termsNotice}
         <div className="flex gap-3">
           {!uploadProgress || uploadProgress.state === 'idle' ? (
             <>

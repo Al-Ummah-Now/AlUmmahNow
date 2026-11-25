@@ -501,7 +501,7 @@ export const STUDIO_EN = {
       live_provider_error: 'The live service could not be reached. Try again.',
       live_hours_used: 'This month’s live streaming hours are used. They renew on the 1st.',
       live_concurrent_limit: 'You already have the most streams live at once. End one to go live.',
-      terms_required: 'Please review and agree to the Terms of Service and Community Guidelines before going live.',
+      terms_required: 'Please review and accept the Terms of Service and Community Guidelines before going live.',
       generic: 'That didn’t work. Please try again.',
     },
     apps: {

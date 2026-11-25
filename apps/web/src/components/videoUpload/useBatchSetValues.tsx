@@ -200,9 +200,9 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
           </div>
         </details>
         {state && (
-          <p role="status" className={`text-xs sm:col-span-2 ${state === 'failed' ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}
+          <p role="status" className={`text-xs sm:col-span-2 ${state === 'failed' || state === 'terms' ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}
             data-testid="batch-file-values-save" data-state={state}>
-            {state === 'saving' ? b.rowSaving : state === 'saved' ? b.rowSaved : b.rowSaveFailed}
+            {state === 'saving' ? b.rowSaving : state === 'saved' ? b.rowSaved : state === 'terms' ? t.creator.termsRequired : b.rowSaveFailed}
           </p>
         )}
       </div>

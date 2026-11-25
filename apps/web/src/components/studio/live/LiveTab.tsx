@@ -18,8 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/common/Switch';
 import { useLanguage } from '@/hooks/useLanguage';
 import { createStream, deleteStream, isLiveOff, listChannelStreams, liveErrorCode, type LiveStreamRow } from '@/lib/live/api';
-import { markCreatorTermsRequired, needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import type { LiveOffers } from '@/lib/studio/nav';
@@ -91,10 +91,10 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
     return () => controller.abort();
   }, [load]);
 
-  const [termsOpen, setTermsOpen] = useState(false);
+  const terms = useCreatorTermsPrompt(() => create());
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const create = async () => {
+    terms.clear();
     if (!title.trim()) {
       setFormError(text.form.titleRequired);
       return;
@@ -104,10 +104,7 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
       setFormError(at === 'past' ? text.apps.timeTooSoon : text.apps.timeRequired);
       return;
     }
-    if (needsCreatorTerms(creator)) {
-      setTermsOpen(true);
-      return;
-    }
+    if (terms.askFirst(creator, undefined)) return;
     setCreating(true);
     setFormError('');
     setFormErrorCode('');
@@ -121,10 +118,7 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
         return;
       }
       const code = liveErrorCode(error);
-      if (code === 'terms_required') {
-        markCreatorTermsRequired();
-        setTermsOpen(true);
-      }
+      if (code === 'terms_required') terms.refused();
       if (code === 'generic') logger.error('[StudioLive] Could not create a live stream', { channelId, error });
       setFormError(text.errors[code]);
       setFormErrorCode(code);
@@ -165,7 +159,7 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
       )}
       {canManage && offers.premieres && kind === 'premiere' && <PremiereForm locale={locale} channelId={channelId} offers={offers} />}
       {canManage && (blocked || !offers.streams || kind === 'premiere') ? null : canManage ? (
-        <form onSubmit={(e) => void submit(e)} className="mb-6 grid gap-3 rounded-lg border border-border bg-card p-4" data-testid="studio-live-form" noValidate>
+        <form onSubmit={(e: FormEvent) => { e.preventDefault(); void create(); }} className="mb-6 grid gap-3 rounded-lg border border-border bg-card p-4" data-testid="studio-live-form" noValidate>
           <h2 className="text-base font-semibold text-foreground">{text.newStream}</h2>
           <div className="grid gap-1">
             <label htmlFor={`${ids}-title`} className="text-sm font-medium text-foreground">{text.form.title}</label>
@@ -187,28 +181,10 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
           {formError && (
             <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-live-error" data-code={formErrorCode}>
               <span>{formError}</span>
-              {formErrorCode === 'terms_required' && (
-                <button
-                  type="button"
-                  onClick={() => setTermsOpen(true)}
-                  className="underline font-medium text-[var(--fanous-color-accent)]"
-                  data-testid="studio-live-review-terms"
-                >
-                  {t.upload.termsGateReviewAction}
-                </button>
-              )}
+              {terms.reviewLink('studio-live-review-terms')}
             </div>
           )}
-          <CreatorTermsDialog
-            open={termsOpen}
-            onOpenChange={setTermsOpen}
-            onAccepted={() => {
-              if (formErrorCode === 'terms_required') {
-                setFormError('');
-                setFormErrorCode('');
-              }
-            }}
-          />
+          {terms.dialog}
           <div>
             <Button type="submit" disabled={creating} className="min-h-11" data-testid="studio-live-create">
               {creating ? text.form.creating : text.form.create}

@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { formatNumber } from '@al-ummah/shared-types';
 import { primaryText, trimPair } from '@/lib/localized-input';
 import React, { useState } from 'react';
 import { CreateChannelDialogProps, CreateChannelFormData } from './types';
@@ -25,6 +26,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
   onSubmit,
   isLoading,
   lang = 'en',
+  notice,
 }) => {
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>(lang);
   const [formData, setFormData] = useState<CreateChannelFormData>({
@@ -253,7 +255,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
                       <p className="text-sm text-red-600 dark:text-red-400">{errors.description}</p>
                     ) : (
                       <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {formData.descriptionLocalized?.en?.length || 0}/500 {t.charactersCount}
+                        {formatNumber(lang, formData.descriptionLocalized?.en?.length || 0)}/{formatNumber(lang, 500)} {t.charactersCount}
                       </span>
                     )}
                   </div>
@@ -276,13 +278,14 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
                     dir="rtl"
                   />
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {formData.descriptionLocalized?.ar?.length || 0}/500 {t.charactersCount}
+                    {formatNumber(lang, formData.descriptionLocalized?.ar?.length || 0)}/{formatNumber(lang, 500)} {t.charactersCount}
                   </span>
                 </>
               )}
             </div>
           </div>
 
+          {notice}
           <DialogFooter>
             <Button
               type="button"
