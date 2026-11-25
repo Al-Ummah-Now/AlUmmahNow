@@ -222,6 +222,37 @@ export interface AdminChannelRow {
   openReports?: number;
 }
 
+/** The emails of a channel move (wiki AUN-CHANNEL-CLAIM §3.6, §5): an offer made, and a finished move to each owner. */
+export const CHANNEL_MOVE_MAIL_EVENTS = ['offered', 'moved_in', 'moved_out'] as const;
+export type ChannelMoveMailEvent = (typeof CHANNEL_MOVE_MAIL_EVENTS)[number];
+
+/** A job on admin-api's contact mail queue: `id` is the offer's (offered) or the move job's. */
+export interface ChannelMoveMailJob {
+  v: 1;
+  kind: 'channel_move';
+  event: ChannelMoveMailEvent;
+  id: string;
+}
+
+interface MailName {
+  name: string | null;
+  nameLocalized?: Record<string, string>;
+}
+
+/** What one such email says, read when it is sent (api-videos lib/channelMoveMail.ts). */
+export interface ChannelMoveMail {
+  event: ChannelMoveMailEvent;
+  recipientId: string;
+  channel: MailName & { id: string };
+  /** The other person of an owner's move; null for a move by the team */
+  other: MailName | null;
+  /** The team's reason, for the previous owner only */
+  reason: string | null;
+  /** The previous owner stays on as channel admin */
+  keptAsAdmin: boolean;
+  offer: { id: string; expiresAt: string; keepContactEmail: boolean } | null;
+}
+
 /** An owner's open offer to hand their channel to one of its admins (wiki AUN-CHANNEL-CLAIM §5), for the admin channel page. */
 export interface AdminChannelMoveOffer {
   id: string;

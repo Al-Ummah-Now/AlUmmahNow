@@ -11,7 +11,7 @@
  * service in wrangler (all environments), and report items with that retry
  * spec (docs/features/error-reporting.md).
  */
-import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type NeedsActionRetry, type NeedsActionStatus } from '@al-ummah/shared-types';
+import { ADMIN_JOB_PERMISSIONS, CHANNEL_MOVE_MAIL_EVENTS, type AdminContentPermission, type NeedsActionRetry, type NeedsActionStatus } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import type { Permission } from './roles';
 import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
@@ -21,6 +21,7 @@ import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
 import { retryConfirm, retryNotification } from './status-notify';
 import { enqueueTierChangeMail } from './tier-change-mail';
+import { enqueueChannelMoveMail } from './channel-move-mail';
 import { enqueueTierRequestMail, tierRequestMailJob, type DecidedRequest } from './tier-request-mail';
 import { callVideos, VideosError } from './content/videosClient';
 import { logger } from './logger';
@@ -203,6 +204,13 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
   'tier-change-delivery': async (env, args) => {
     if (!args.id) return { ok: false, status: 'open', result: 'Not a tier change' };
     if (!(await enqueueTierChangeMail(env, args.id))) return { ok: false, status: 'open', result: 'Could not queue the email' };
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Sends a channel move email again (lib/channel-move-mail.ts), if it still applies; a sent one is never sent twice. */
+  'channel-move-mail': async (env, args) => {
+    const event = CHANNEL_MOVE_MAIL_EVENTS.find((e) => e === args.event);
+    if (!event || !args.id) return { ok: false, status: 'open', result: 'Not a channel move email' };
+    if (!(await enqueueChannelMoveMail(env, event, args.id))) return { ok: false, status: 'open', result: 'Could not queue the email' };
     return { ok: true, status: 'resolved', result: 'Queued again' };
   },
   /** Delivers a tier request decision again (notice + email), if the request still has that decision. */

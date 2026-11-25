@@ -76,6 +76,7 @@ import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { runProfileEmails, type ProfileEmailsEnv } from './profile-emails';
 import { accountEmailForDisplay, authEmail, normalizeEmail } from './authUsers';
+import { queueMoveMail } from '../channelMoveMail';
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
@@ -1044,6 +1045,9 @@ async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, fro
 			logger.warn('[Admin] Channel move notice failed', { channelId: job.targetId, jobId: job.id, key: notice.notificationKey, error: error instanceof Error ? error.message : String(error) });
 		}
 	}
+	// And an email each (CC-D11): the previous owner may not open the app. Whoever accepted or offered it gets theirs too
+	await queueMoveMail(env, 'moved_in', job.id);
+	if (from) await queueMoveMail(env, 'moved_out', job.id);
 }
 
 /** How long after a move its records are checked again (§3.3): an old-owner write that read before the flip. */
