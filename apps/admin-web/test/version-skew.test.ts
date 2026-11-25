@@ -39,7 +39,7 @@ describe('admin version-skew recovery', () => {
     assert.equal(reloads, 1);
   });
 
-  for (const file of ['recovery.ts', 'skew-host.ts']) {
+  for (const file of ['recovery.ts', 'skew-host.ts', 'skew-hop.ts']) {
     it(`${file} stays identical to the web copy (one behaviour for both apps)`, () => {
       const strip = (s: string) => s.split('\n').filter((l) => !l.includes(`${file} is`)).join('\n');
       const admin = readFileSync(join(__dirname, '../src/lib/version-skew', file), 'utf8');

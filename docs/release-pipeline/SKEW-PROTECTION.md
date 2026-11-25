@@ -59,6 +59,8 @@ every action once, like the old behaviour did on every deploy, so rotate only wi
 - **Public host.** The old version is reached on a workers.dev host. `worker.ts` stamps the public host on each request
   (`x-aun-public-host`) and restores it on the old version. Without this, middleware redirects and the sign-in
   `redirect_uri`, which are built from `host`, would point at workers.dev. Only `*.alummahnow.net` is accepted.
+- **Signed hop.** The current version signs each request it forwards (`skew-hop.ts`: host, method, path and minute, with
+  a key derived from `INTERNAL_API_KEY`). A version answers on its preview URL only with a valid signature, else 421.
 - **Retention and rollback.** Old versions are never deleted. A rollback (`rollback.ts`) re-deploys a version together
   with its own mapping, so pages from older builds still route. A page opened on a rolled-back candidate falls back to
   the client recovery.
