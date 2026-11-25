@@ -71,7 +71,7 @@ jobs:
           --event "$EVENT" --base "$BASE" --head "$HEAD" --labels "$LABELS" --out "$RUNNER_TEMP/test-selection.json"
 
       - name: Upload plan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-selection
           path: ${{ runner.temp }}/test-selection.json
@@ -113,7 +113,7 @@ jobs:
           (cd apps/admin-web && pnpm opennextjs-cloudflare build)
 
       - name: Upload builds
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-stack-build
           path: |
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload test outcomes
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-release-outcomes-${{ strategy.job-index }}
           path: |
@@ -256,7 +256,7 @@ jobs:
       # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
       - name: Upload leftovers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-release-leftovers-${{ strategy.job-index }}
           path: ${{ runner.temp }}/leftovers.json
@@ -271,7 +271,7 @@ jobs:
 
       - name: Upload report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-release-${{ strategy.job-index }}
           path: |
@@ -393,7 +393,7 @@ jobs:
       # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
       - name: Upload leftovers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-admin-leftovers-${{ strategy.job-index }}
           path: ${{ runner.temp }}/leftovers.json
@@ -440,7 +440,7 @@ jobs:
 
       - name: Upload report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-admin-${{ strategy.job-index }}
           path: |
@@ -531,7 +531,7 @@ jobs:
 
       - name: Upload test outcomes
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-web-outcomes-${{ strategy.job-index }}
           path: |
@@ -579,7 +579,7 @@ jobs:
       # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
       - name: Upload leftovers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-web-leftovers-${{ strategy.job-index }}
           path: ${{ runner.temp }}/leftovers.json
@@ -594,7 +594,7 @@ jobs:
 
       - name: Upload visual baselines
         if: always() && github.event_name == 'workflow_dispatch' && inputs.update_visual
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-baselines-${{ strategy.job-index }}
           path: apps/web/e2e/visual/__screenshots__
@@ -603,7 +603,7 @@ jobs:
 
       - name: Upload report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: local-web-${{ strategy.job-index }}
           path: |
@@ -641,7 +641,7 @@ jobs:
 
       - name: Upload audit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: selection-audit
           path: ${{ runner.temp }}/selection-audit.json

@@ -70,13 +70,13 @@ jobs:
           set -euo pipefail
           node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json --release "$RELEASE"
           mv next.json baseline.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.due.outputs.due == 'true'
         with:
           name: prod-errors-baseline
           path: baseline.json
           retention-days: 90
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && steps.due.outputs.due == 'true' }}
         with:
           name: prod-errors-production
