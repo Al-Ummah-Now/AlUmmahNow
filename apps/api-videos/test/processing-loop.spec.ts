@@ -143,21 +143,6 @@ describe('planSync', () => {
 		assert.equal(old.patch.processingIssue?.kind, 'needs_reupload');
 	});
 
-	it('other bytes arrived than were sent: never ready from Bunny, the flag stays', () => {
-		const processingIssue = { kind: 'needs_reupload' as const, reason: 'x', at: '2026-11-25T07:00:00.000Z', code: 'source_changed' as const };
-		for (const uploadStatus of ['failed', 'ready', 'processing'] as const) {
-			const video = stuck({ uploadStatus, processingIssue });
-			const plan = planSync(video, FINISHED, { host: HOST, now: NOW });
-			assert.equal(plan.outcome, 'needs_reupload');
-			applyPlan(video, plan);
-			assert.equal(video.uploadStatus, 'failed');
-			assert.deepEqual(video.processingIssue, processingIssue);
-		}
-		assert.equal(uploadStatusView('ready', FINISHED, { uploadStatus: 'failed', processingIssue }).status, 'failed');
-		// Any other re-upload flag still clears once Bunny has the file
-		assert.equal(planSync(stuck({ uploadStatus: 'failed', processingIssue: { ...processingIssue, code: undefined } }), FINISHED, { host: HOST, now: NOW }).outcome, 'ready');
-	});
-
 	it('missing at Bunny: needs re-upload', () => {
 		assert.equal(planSync(stuck(), null, { host: HOST, now: NOW }).outcome, 'needs_reupload');
 	});

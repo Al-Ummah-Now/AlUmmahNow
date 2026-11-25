@@ -1,4 +1,3 @@
-import { apiError } from '../../lib/api-error';
 import { uploadIdentity } from "../../lib/channelAccess";
 import { categoryRefusal } from "../../lib/categories";
 import { reportServerError, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
@@ -17,8 +16,6 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
-import { dropBunnyCopy } from "../../lib/uploads/lifecycle";
-import { withoutBunnyCopy } from "../../lib/media/source-changed";
 import { patchVideo } from "../../lib/videoWrites";
 import { markUploadCreated } from "../../lib/uploads/reaper";
 import { thumbnailProcessor } from "../../lib/thumbnail";
@@ -403,10 +400,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			}
 		}
 		// An import item's unfinished video takes its file again, whichever admin sends it
-		const continues = who.continueVideoId ? await checkReusable(c.env as never, who.continueVideoId, { ownerId, uploadedBy, channelId, anyUploader: true }) : null;
-		if (continues?.kind === 'replace' && continues.why === 'held') {
-			return apiError(c, 409, 'video_held');
-		}
+		const continues = who.continueVideoId ? await checkReusable(c.env as never, who.continueVideoId, { ownerId, uploadedBy, channelId, adminImport: who.adminImport }) : null;
 		if (who.continueVideoId && continues?.kind === 'reuse') {
 			videoId = who.continueVideoId;
 			reused = true;
@@ -415,7 +409,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				store: c.env.global_settings as never,
 				userId,
 				channelId,
-				check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId }),
+				check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId, adminImport: who.adminImport }),
 				create,
 			});
 			videoId = outcome.videoId;
@@ -436,17 +430,16 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 		let stored: PlaceholderRecord | null = null;
 		let thumbnailUrl: string | undefined;
 		let thumbnailSizes: Record<string, string> | undefined;
-		// Another admin's upload of the file cannot be resumed (its session is theirs): from byte 0
 		let sameUploader = true;
 		if (reused) {
 			// Same video again: latest metadata (and thumbnail, when one was sent)
 			const thumb = thumbnail?.data ? await processThumbnail(c, videoId, thumbnail) : null;
 			const nowIso = new Date().toISOString();
 			const result = await patchVideo(repository, videoId, (fresh) => {
-				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
+				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso, { adminImport: who.adminImport });
 				if (!fields) return false;
-				// Who sends the file now: the session restored from the record is theirs (tusProxy.ts)
-				Object.assign(fields, { sourceSha256: who.sourceSha256, ...(who.continueVideoId === videoId ? { uploadedBy } : {}) });
+				// The import's new session: its hash, and who sends the file now (the session restored from the record is theirs, tusProxy.ts)
+				if (who.adminImport) Object.assign(fields, { sourceSha256: who.sourceSha256, uploadedBy });
 				if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
 				return fields as Partial<VideoType>;
 			}, { ownerId });
@@ -457,9 +450,6 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			stored = result.video as unknown as PlaceholderRecord;
 			const before = result.previous as unknown as PlaceholderRecord;
 			sameUploader = (before.uploadedBy ?? before.userId) === userId;
-			// Its copy of other bytes left the record (reuseFields): it goes at Bunny too
-			const dropped = result.changed ? withoutBunnyCopy(result.previous as never, nowIso) : null;
-			if (dropped) await dropBunnyCopy(c.env as never, videoId, dropped.guid);
 			// The earlier initiate may have left its Bunny video outside its collection
 			const reusedGuid = bunnyRef(stored as never);
 			if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId);
@@ -484,7 +474,8 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			userId,
 			channelId,
 			videoId,
-			video: reused && sameUploader ? stored : null,
+			video: reused ? stored : null,
+			resume: sameUploader,
 			...(who.adminImport ? { adminImport: true } : {}),
 		});
 

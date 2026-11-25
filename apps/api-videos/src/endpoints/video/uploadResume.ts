@@ -1,7 +1,7 @@
 import { bunnyLibraryForVideo, type LibraryHints } from '../../lib/bunny/libraries';
-import { can, underHold } from '@al-ummah/shared-types';
-import { isSourceChanged } from '../../lib/media/source-changed';
+import { can } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
+import { isSourceChanged } from '../../lib/media/source-changed';
 import { roleOnRecord } from "../../lib/channelAccess";
 import { OpenAPIRoute } from "chanfana";
 import { Str } from "../../lib/chanfana-params";
@@ -13,7 +13,7 @@ import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { bunnyRef } from "../../lib/media/providers";
 import { generateTUSConfig, createTusProxySession, deleteTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
-import { dropBunnyCopy, isStoppedUpload, reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
+import { isStoppedUpload, reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
 
 /**
@@ -139,6 +139,9 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				}, 403);
 			}
 
+			// Its bytes were not the file: only the import sends it again
+			if (isSourceChanged(video)) return apiError(c, 409, 'import_reupload');
+
 			// Any upload that has not finished can be resumed; a finished one
 			// tells the client so (it treats the file as uploaded).
 			const uploadStatus = video.uploadStatus || 'initiated';
@@ -173,6 +176,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 					userId,
 					channelId: video.channelId,
 					tusConfig,
+					uploadRound: (video as { uploadRound?: number }).uploadRound,
 				});
 			} catch (error) {
 				logger.warn('[UploadResume] Session store unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
@@ -188,21 +192,17 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
 			const resumedAt = new Date().toISOString();
 			let stopped = false;
-			let droppedGuid: string | undefined;
 			try {
 				// A re-upload of a flagged video reopens it (back to uploading,
 				// needs_reupload cleared); it is flagged again if this attempt fails.
 				const saved = await repository.updateObject(videoId, (fresh) => {
-					// Under a hold a copy of wrong bytes is kept as it is: no new upload
-					stopped = isStoppedUpload(fresh) || (isSourceChanged(fresh as never) && underHold(fresh as never));
-					droppedGuid = undefined;
+					stopped = isStoppedUpload(fresh) || isSourceChanged(fresh);
 					if (stopped || fresh.userId !== video.userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
-					droppedGuid = reopenForReupload(fresh as UploadVideo).bunnyGuid;
+					reopenForReupload(fresh as UploadVideo);
 					Object.assign(fresh, { dateModified: resumedAt, lastResumeAt: resumedAt });
 					return true;
 				});
 				if (!saved) stopped = true;
-				else if (droppedGuid) await dropBunnyCopy(c.env as never, videoId, droppedGuid);
 			} catch (error) {
 				logger.warn('[UploadResume] Could not record the resume attempt', { videoId, error: error instanceof Error ? error.message : String(error) });
 			}

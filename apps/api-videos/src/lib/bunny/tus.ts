@@ -223,6 +223,8 @@ export interface TusProxySession {
   /** Opened by an admin import (wiki TOOLS-ADMIN TA-5, /internal/admin/import/initiate): its TUS create
    *  skips the tier gate (middleware/upload-limits.ts). Only the server writes sessions. */
   adminImport?: true;
+  /** The video's uploadRound when the session was issued (uploads/placeholder.ts) */
+  uploadRound?: number;
 }
 
 /**
@@ -289,7 +291,7 @@ export const TUS_PROXY_SESSION_TTL_SECONDS = 7 * 24 * 3600;
  */
 export async function createTusProxySession(
   kv: KVNamespace,
-  params: { videoId: string; userId: string; channelId: string; tusConfig: TUSUploadConfig; adminImport?: boolean },
+  params: { videoId: string; userId: string; channelId: string; tusConfig: TUSUploadConfig; adminImport?: boolean; uploadRound?: number },
   ttlSeconds: number = TUS_PROXY_SESSION_TTL_SECONDS
 ): Promise<string> {
   const tusSessionId = crypto.randomUUID();
@@ -302,6 +304,7 @@ export async function createTusProxySession(
     expiresAt: params.tusConfig.expiresAt,
     createdAt: new Date().toISOString(),
     ...(params.adminImport ? { adminImport: true as const } : {}),
+    ...(params.uploadRound ? { uploadRound: params.uploadRound } : {}),
   };
 
   await kv.put(getTusSessionKey(tusSessionId), JSON.stringify(session), {

@@ -506,27 +506,70 @@ describe('failure details', () => {
 		assert.equal(record().processingIssue.kind, 'encode_failed');
 	});
 
-	it('other bytes on a video Bunny holds too: failed, kept failed, then a right transcode makes it ready', async () => {
-		const { requeueAfterBunnyReady } = await import('../src/lib/media/r2-delivery');
-		const { env, raw, videos } = setup({ uploadStatus: 'ready' });
-		const record = () => videos.read(ID);
-		const media = { providers: { bunny: { ref: 'b2859ed0-e618-4d04-8438-874a74a251dd', status: 'ready' }, r2: { ref: ID, status: 'pending' } } };
-		await raw.videos.put(ID, JSON.stringify({ ...record(), sourceSha256: SHA, media }));
-		await enqueueTranscode(env, ID, 'upload');
-		const fail = { type: 'failed' as const, error: 'source_changed', final: true };
-		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, fail));
-		assert.equal(record().uploadStatus, 'failed');
-		assert.equal(record().processingIssue.code, 'source_changed');
-		assert.equal((await requeueAfterBunnyReady(env, ID)).queued, false);
-		// An admin transcodes it again (Delivery panel) and the bytes are right after all
+	const BUNNY = 'b2859ed0-e618-4d04-8438-874a74a251dd';
+	const FAIL = { type: 'failed' as const, error: 'source_changed', final: true };
+	const dual = async (bunnyStatus: string, uploadStatus: string, over: object = {}) => {
+		const s = setup({ uploadStatus });
+		const record = () => s.videos.read(ID);
+		await s.raw.videos.put(ID, JSON.stringify({ ...record(), sourceSha256: SHA, ...over, media: { providers: { bunny: { ref: BUNNY, status: bunnyStatus, libraryId: 123 }, r2: { ref: ID, status: 'pending' } } } }));
+		await enqueueTranscode(s.env, ID, 'upload');
+		return { ...s, record, job: (i: number) => s.raw.TRANSCODE_QUEUE.messages[i] as TranscodeJobMessage };
+	};
+
+	it('other bytes while a copy is ready: nothing is taken down or deleted', async () => {
+		for (const [bunny, status] of [['ready', 'ready'], ['ready', 'processing'], ['processing', 'ready']] as const) {
+			const { env, raw, record, job } = await dual(bunny, status);
+			const before = record();
+			await applyJobEvent(env, undefined, ev(job(0), FAIL));
+			const after = record();
+			assert.deepEqual([after.uploadStatus, after.processingIssue, after.media.providers.bunny, after.sourceSha256], [status, undefined, before.media.providers.bunny, SHA]);
+			assert.equal(after.r2.status, 'failed');
+			assert.equal(raw.PROCESSING_CHECK_QUEUE.messages.length, 0);
+		}
+		// An earlier R2 rendition counts too
+		const { env, record, job, raw } = await dual('pending', 'processing');
+		await applyJobEvent(env, undefined, ev(job(0), { type: 'ready', result: RESULT }));
 		await enqueueTranscode(env, ID, 'retry', { force: true });
-		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage, { type: 'ready', result: RESULT }));
-		assert.equal(record().uploadStatus, 'ready');
+		const status = record().uploadStatus;
+		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage, FAIL));
+		assert.equal(record().uploadStatus, status);
 		assert.equal(record().processingIssue, undefined);
-		// A later transcode of a video with a rendition that plays does not take it down
-		await enqueueTranscode(env, ID, 'retry', { force: true });
-		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[2] as TranscodeJobMessage, fail));
+	});
+
+	it('other bytes before anything is ready: failed until the file comes again; Bunny\'s copy goes only once that plays', async () => {
+		const { syncVideoFromBunny, startProcessingLoop } = await import('../src/lib/processing/loop');
+		const { uploadsToBunny } = await import('../src/lib/media/ingest');
+		const { sourceCandidates } = await import('../src/lib/media/r2-delivery');
+		const { env, raw, record, job } = await dual('processing', 'processing');
+		await applyJobEvent(env, undefined, ev(job(0), FAIL));
+		assert.deepEqual([record().uploadStatus, record().processingIssue.kind, record().processingIssue.code], ['failed', 'needs_reupload', 'source_changed']);
+		// Bunny finishes its encode: the video is not made of it, checked against it or transcoded from it
+		const sync = await syncVideoFromBunny(env as never, ID, { bunny: { status: 4, availableResolutions: '720p' } as never });
+		assert.equal(sync.changed, false);
+		assert.equal((await startProcessingLoop(env as never, ID, { reason: 't' })).started, false);
+		assert.deepEqual(await sourceCandidates(env, ID, record()), []);
+		assert.equal(record().uploadStatus, 'failed');
+		assert.equal(record().media.providers.bunny.ref, BUNNY, 'still there');
+		assert.equal(uploadsToBunny(record()), false, 'the file comes again to our own target');
+		assert.equal(raw.PROCESSING_CHECK_QUEUE.messages.length, 0);
+		// The file came again and its transcode is ready
+		await raw.videos.put(ID, JSON.stringify({ ...record(), uploadStatus: 'processing', processingIssue: undefined }));
+		await enqueueTranscode(env, ID, 'upload');
+		assert.equal(job(1).sha256, SHA);
+		await applyJobEvent(env, undefined, ev(job(1), { type: 'ready', result: RESULT }));
 		assert.equal(record().uploadStatus, 'ready');
+		assert.deepEqual(Object.keys(record().media.providers), ['r2']);
+		assert.equal(record().bunnyRemoved.guid, BUNNY);
+		assert.deepEqual(raw.PROCESSING_CHECK_QUEUE.messages.map((m: any) => [m.kind, m.videoId]), [['bunny-delete', BUNNY]]);
+	});
+
+	it('a hold keeps Bunny\'s copy even when the replacement plays', async () => {
+		const { env, raw, record, job } = await dual('processing', 'processing', { suspensionHolds: [{ kind: 'csam' }] });
+		await applyJobEvent(env, undefined, ev(job(0), FAIL));
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		await applyJobEvent(env, undefined, ev(job(1), { type: 'ready', result: RESULT }));
+		assert.equal(record().media.providers.bunny.ref, BUNNY);
+		assert.equal(raw.PROCESSING_CHECK_QUEUE.messages.length, 0);
 	});
 
 	it('the Errors page offers no "Transcode again" for other bytes', async () => {

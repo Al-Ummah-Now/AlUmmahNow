@@ -101,6 +101,17 @@ describe('the browser reports an upload it cannot finish', () => {
 });
 
 describe('re-uploading a flagged video', () => {
+	it('uploadResume leaves an import whose bytes were not the file to its import', async () => {
+		const flagged = videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'failed', sourceSha256: 'a'.repeat(64), processingIssue: { kind: 'needs_reupload', at: NOW.toISOString(), code: 'source_changed' } });
+		const e = env({ vid: flagged });
+		const app = buildApp((r) => r.get('/api/videos/upload/resume/:videoId', UploadResumeEndpoint), { userId: 'alice' });
+		const res = await app.request('/api/videos/upload/resume/vid', {}, e);
+		assert.equal(res.status, 409);
+		assert.equal(((await res.json()) as any).code, 'import_reupload');
+		const v = e.videos.read('vid');
+		assert.deepEqual([v.uploadStatus, v.processingIssue.code, v.sourceSha256], ['failed', 'source_changed', 'a'.repeat(64)]);
+	});
+
 	it('uploadResume reopens it (uploading, flag cleared) and completing keeps it clear', async () => {
 		const e = env({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', at: NOW.toISOString() }, processingAnnounced: 'failed' }) });
 		const app = buildApp((r) => r.get('/api/videos/upload/resume/:videoId', UploadResumeEndpoint), { userId: 'alice' });

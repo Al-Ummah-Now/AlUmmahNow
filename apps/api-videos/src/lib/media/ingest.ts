@@ -12,6 +12,7 @@
  */
 import { ingestTargets, type MediaProviderId, type VideoMediaProviders } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { bunnyCopyRefused } from './source-changed';
 import { initialMedia, newVideoId, recordProviderRef } from './refs';
 import { readMediaSettings } from './settings';
 
@@ -49,5 +50,5 @@ export async function planIngest(
 
 /** Does this record take its bytes through Bunny's TUS upload? */
 export function uploadsToBunny(video: { media?: VideoMediaProviders } | null | undefined): boolean {
-	return !video?.media || !!video.media.providers.bunny;
+	return !video?.media || (!!video.media.providers.bunny && !bunnyCopyRefused(video));
 }

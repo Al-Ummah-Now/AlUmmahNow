@@ -11,7 +11,7 @@
  */
 import { originalManifestKey, originalPartKey, originalPrefix, partsCover, partsFromKeys, type OriginalManifest } from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import { bunnyRef } from './providers';
+import { usableBunnyRef } from './source-changed';
 
 export interface OriginalsEnv {
 	MEDIA_ORIGINALS?: R2Bucket;
@@ -143,14 +143,14 @@ export async function deleteOriginal(env: OriginalsEnv, videoId: string): Promis
 
 /**
  * Is this original the master of the video's only copy? The record decides: no Bunny copy
- * (bunnyRef null) means R2 plays it alone. A missing record keeps today's rule (the purge removes
+ * that counts (usableBunnyRef null) means R2 plays it alone. A missing record keeps today's rule (the purge removes
  * originals of removed videos). Throws when the bucket fails (the sweep skips the row this run).
  */
 async function isSoleCopyMaster(env: OriginalsEnv, videoId: string): Promise<boolean> {
 	if (!env.videos) return false;
 	const object = await env.videos.get(videoId);
 	if (!object) return false;
-	return !bunnyRef((await object.json()) as never);
+	return !usableBunnyRef(await object.json());
 }
 
 const days = (v: string | undefined, d: number) => {

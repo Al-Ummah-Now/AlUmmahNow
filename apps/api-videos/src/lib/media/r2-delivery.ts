@@ -30,6 +30,7 @@ import {
 	sanitizeFailure,
 	sanitizeSourceFacts,
 	SOURCE_SHA256,
+	underHold,
 	sourceVerdict,
 	sanitizeRungs,
 	scrubMediaText,
@@ -55,8 +56,8 @@ import {
 import { queueReviewScan, reviewExtractionFor } from '../review/scan';
 import { getSecret } from '../env-helpers';
 import { markPublished } from '../published';
-import { bunnyRef } from './providers';
-import { isSourceChanged, isSourceChangedError, SOURCE_CHANGED, SOURCE_CHANGED_REASON } from './source-changed';
+import { isSourceChangedError, bunnyCopyRefused, SOURCE_CHANGED, SOURCE_CHANGED_REASON, usableBunnyRef } from './source-changed';
+import { enqueueBunnyDelete } from '../uploads/bunnyDelete';
 import { fetchBunnyVideo } from '../processing/loop';
 import { closeOriginal, deleteOriginal } from './originals';
 import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
@@ -427,6 +428,11 @@ export function r2DecidesState(video: { media?: VideoMediaProviders }): boolean 
 	return !!m?.providers.r2 && (!m.providers.bunny || m.providers.bunny.status === 'failed');
 }
 
+/** A copy of the video that plays: it is ready, an earlier rendition is kept, or a provider holds one. */
+function hasReadyCopy(video: SoleCopyVideo): boolean {
+	return video.uploadStatus === 'ready' || !!video.r2?.previous || Object.values(video.media?.providers ?? {}).some((p) => p?.status === 'ready');
+}
+
 /** Point a non-custom thumbnail that is (or should be) the R2 frame at the current rendition. */
 function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
 	if (video.thumbnailType === 'custom') return;
@@ -447,8 +453,7 @@ function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
  * sync makes it ready (lib/processing/sync.ts). Mutates; true when it turned ready now.
  */
 function readyFromR2(v: SoleCopyVideo, at: string, host: string | undefined): boolean {
-	// A source_changed video whose bytes proved right after all is R2's to make ready, Bunny's copy or not
-	if (!(r2DecidesState(v) || isSourceChanged(v)) || v.r2?.status !== 'ready' || !v.r2.result) return false;
+	if (!r2DecidesState(v) || v.r2?.status !== 'ready' || !v.r2.result) return false;
 	refreshR2Frame(v, host);
 	if (v.uploadStatus === 'ready') return false;
 	const result = v.r2.result;
@@ -507,9 +512,11 @@ export async function applyJobEvent(
 	let why: string | undefined;
 	let previous: { rev: string; access: MediaAccess } | undefined;
 	let transition: 'ready' | 'failed' | null = null;
+	let droppedGuid: string | undefined;
 	const saved = await repo(env).updateObject(ev.videoId, (video) => {
 		why = undefined;
 		transition = null;
+		droppedGuid = undefined;
 		const r2 = video.r2;
 		if (!r2 || r2.jobId !== ev.jobId) {
 			why = 'stale job';
@@ -551,6 +558,13 @@ export async function applyJobEvent(
 			// R2 is the video's playable copy (docs/media-delivery/PROVIDERS.md §R2 only): it makes the
 			// video ready the way Bunny's sync does (lib/processing/sync.ts planSync/applyPlan)
 			if (readyFromR2(video as SoleCopyVideo, ev.at, env.MEDIA_PUBLIC_HOST)) transition = 'ready';
+			// The file came again and plays: Bunny's copy of the other bytes goes (never under a hold)
+			const refused = (video as SoleCopyVideo).media?.providers.bunny;
+			if (refused && bunnyCopyRefused(video as SoleCopyVideo) && !underHold(video as never)) {
+				droppedGuid = refused.ref;
+				delete (video as SoleCopyVideo).media!.providers.bunny;
+				Object.assign(video, { bunnyRemoved: { at: ev.at, guid: refused.ref, libraryId: refused.libraryId } });
+			}
 		} else if (ev.type === 'failed') {
 			r2.error = scrubMediaText(ev.error ?? 'failed', 500);
 			if (ev.failure) r2.failure = sanitizeFailure(ev.failure);
@@ -561,12 +575,13 @@ export async function applyJobEvent(
 				// The only copy failed: the video failed (the uploader is told; Errors page has Retry)
 				const v = video as SoleCopyVideo;
 				if (isSourceChangedError(r2.error)) {
-					// The bytes that arrived are not the file, and Bunny got the same ones: never published
-					// (a ready video with an earlier rendition was made of other bytes and stays)
-					if (!isSourceChanged(v) && !(v.uploadStatus === 'ready' && r2.previous)) {
+					// The kept original is not the file that was sent (source-changed.ts): a copy that plays keeps playing
+					if (!hasReadyCopy(v)) {
 						if (v.uploadStatus !== 'failed') transition = 'failed';
 						v.uploadStatus = 'failed';
 						v.processingIssue = { kind: 'needs_reupload', reason: SOURCE_CHANGED_REASON, at: ev.at, code: SOURCE_CHANGED };
+						const bunny = v.media?.providers.bunny;
+						if (bunny) Object.assign(bunny, { status: 'failed', error: SOURCE_CHANGED });
 					}
 				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
 					v.uploadStatus = 'failed';
@@ -604,6 +619,7 @@ export async function applyJobEvent(
 	if (ev.type === 'ready') {
 		resolveNeedsAction(env, ctx, needsActionKey(ev.videoId));
 		// A re-transcode replaced an older rendition set: remove it
+		if (droppedGuid) await enqueueBunnyDelete(env.PROCESSING_CHECK_QUEUE, droppedGuid, 'source-changed-replaced');
 		if (previous && previous.rev !== saved.r2?.rev) await deleteRendition(env, ev.videoId, previous.access, previous.rev).catch(() => undefined);
 		// Visibility changed while it transcoded: move it now
 		const drift = accessDrift(saved);
@@ -632,14 +648,16 @@ export async function applyJobEvent(
 		reportNeedsAction('api-videos', env, ctx, {
 			key: needsActionKey(ev.videoId),
 			source: 'processing',
-			title: changed ? `${SOURCE_CHANGED_REASON}: upload it again` : r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
+			title: changed
+				? `${SOURCE_CHANGED_REASON}: ${(saved as SoleCopyVideo).uploadStatus === 'failed' ? 'import it again' : 'the copy that plays is kept'}`
+				: r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
 			message: details.summary,
 			// The Errors page shows this as the item's details (expandable)
 			error: details.error,
 			itemType: 'video',
 			itemId: ev.videoId,
 			itemUrl: `/videos/${ev.videoId}`,
-			// The same bytes fail the same way: only a new upload helps
+			// The same bytes fail the same way
 			...(changed
 				? {}
 				: { retry: { kind: 'service' as const, service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } }, retryLabel: 'Transcode again' }),
@@ -679,7 +697,7 @@ export function sourceFiles(bunny: { hasOriginal?: boolean | null; availableReso
 export async function sourceCandidates(env: MediaEnv, videoId: string, record?: LibraryHints | null): Promise<string[]> {
 	// The video's own library (host and token key; lib/bunny/libraries.ts)
 	// Bunny's id of the video; none when Bunny holds no copy (the original is then the only source)
-	const guid = record ? bunnyRef({ id: videoId, ...record } as never) : videoId;
+	const guid = record ? usableBunnyRef({ id: videoId, ...record }) : videoId;
 	if (!guid) return [];
 	const library = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, record);
 	const host = library.host;
@@ -1143,7 +1161,6 @@ export async function requeueAfterBunnyReady(env: MediaEnv, videoId: string): Pr
 		const r2 = video?.r2;
 		if (!video || !r2 || video.isDeleted) return { queued: false, why: 'no R2 job' };
 		if (r2.status !== 'failed') return { queued: false, why: `R2 ${r2.status}` };
-		if (isSourceChangedError(r2.error)) return { queued: false, why: 'other bytes arrived than were sent' };
 		return await enqueueTranscode(env, videoId, 'retry', { force: true });
 	} catch (error) {
 		logger.warn('[Media] Re-queue after Bunny ready failed', { videoId, error: error instanceof Error ? error.message : String(error) });
