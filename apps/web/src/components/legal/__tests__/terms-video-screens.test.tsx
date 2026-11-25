@@ -180,6 +180,18 @@ describe('bulk scheduling', () => {
     expect(onDone).toHaveBeenCalledWith({ succeeded: 2, failed: 0 });
   });
   it('does not loop', () => doesNotAskInALoop(schedule));
+  it('closed and opened again, it no longer says it was refused', async () => {
+    const onOpenChange = jest.fn();
+    mockApi.bulkScheduleVideos.mockResolvedValueOnce({ termsRequired: true });
+    render(<BulkScheduleDialog open videoIds={['a']} onOpenChange={onOpenChange} onDone={onDone} />);
+    fireEvent.change(document.getElementById('studio-bulk-start')!, { target: { value: `${day}T10:30` } });
+    fireEvent.click(screen.getByTestId('studio-bulk-schedule-submit'));
+    fireEvent.click(await screen.findByTestId('creator-terms-cancel'));
+    expect(await screen.findByTestId('studio-bulk-schedule-terms')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: mockEn.studio.videos.bulkSchedule.cancel }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId('studio-bulk-schedule-terms')).toBeNull();
+  });
 });
 
 describe('an audio track', () => {

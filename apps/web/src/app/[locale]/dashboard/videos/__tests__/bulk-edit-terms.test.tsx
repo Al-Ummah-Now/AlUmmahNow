@@ -67,3 +67,12 @@ it('refused again right after accepting: said in the dialog, not asked in a loop
   expect(await screen.findByTestId('bulk-edit-terms')).toBeInTheDocument();
   expect(modal()).toBeNull();
 });
+
+it('what was refused is not offered again once the edit is changed', async () => {
+  mockBulk.mockImplementation(async ([id]: string[]) => refused(id));
+  await apply();
+  fireEvent.click(screen.getByTestId('creator-terms-cancel'));
+  expect(await screen.findByTestId('bulk-edit-terms')).toBeInTheDocument();
+  fireEvent.change(screen.getByTestId('bulk-edit-visibility'), { target: { value: 'private' } });
+  expect(screen.queryByTestId('bulk-edit-terms')).toBeNull();
+});

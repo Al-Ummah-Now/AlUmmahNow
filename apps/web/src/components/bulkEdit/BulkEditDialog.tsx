@@ -33,6 +33,8 @@ interface BulkEditDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Resolves when the request finished (the dialog closes on success). */
   onApply: (changes: BulkVideoChanges) => Promise<boolean>;
+  /** A field changed: what was refused before is not what the form says now. */
+  onEdit?: () => void;
   /** Tags of the selected videos (suggested for "remove") */
   selectedTags?: string[];
   /** Tags used on the creator's videos (suggested for "add") */
@@ -45,7 +47,7 @@ const fieldClass =
   'mt-1 block w-full min-h-11 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 ' +
   'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600';
 
-export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTags = [], knownTags = [], notice }: BulkEditDialogProps) {
+export function BulkEditDialog({ open, count, onOpenChange, onApply, onEdit, selectedTags = [], knownTags = [], notice }: BulkEditDialogProps) {
   const { t, lang, isRTL } = useLanguage();
   const { active: activeCategories } = useVideoCategories();
   const b = t.bulkEdit;
@@ -60,7 +62,10 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTag
     }
   }, [open]);
 
-  const set = <K extends keyof BulkEditForm>(key: K, value: BulkEditForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const set = <K extends keyof BulkEditForm>(key: K, value: BulkEditForm[K]) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    onEdit?.();
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();

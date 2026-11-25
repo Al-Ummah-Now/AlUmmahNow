@@ -61,9 +61,11 @@ interface UseBatchSetValuesInput {
   /** Put the queue in this order (uploads and batch playlist adds follow it) */
   reorderQueue?: (rowIds: string[]) => void;
   disabled?: boolean;
+  /** Opens the creator Terms, for a row that waits for them */
+  onReviewTerms?: () => void;
 }
 
-export function useBatchSetValues({ seed, files, channelId, channelName, playlists, batchPlaylists, setBatchCategory, setRowCategories, reorderQueue, disabled }: UseBatchSetValuesInput) {
+export function useBatchSetValues({ seed, files, channelId, channelName, playlists, batchPlaylists, setBatchCategory, setRowCategories, reorderQueue, disabled, onReviewTerms }: UseBatchSetValuesInput) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
@@ -203,6 +205,14 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
           <p role="status" className={`text-xs sm:col-span-2 ${state === 'failed' || state === 'terms' ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}
             data-testid="batch-file-values-save" data-state={state}>
             {state === 'saving' ? b.rowSaving : state === 'saved' ? b.rowSaved : state === 'terms' ? t.creator.termsRequired : b.rowSaveFailed}
+            {state === 'terms' && onReviewTerms && (
+              <>
+                {' '}
+                <button type="button" onClick={onReviewTerms} className="font-medium text-[var(--fanous-color-accent)] underline" data-testid="batch-file-review-terms">
+                  {t.upload.termsGateReviewAction}
+                </button>
+              </>
+            )}
           </p>
         )}
       </div>

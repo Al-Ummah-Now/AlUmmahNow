@@ -147,6 +147,16 @@ describe('BatchUploadQueue processing status', () => {
     }
   }
 
+  it('counts each status in Arabic digits in Arabic', () => {
+    mockLang = 'ar';
+    const statuses: UploadStatus[] = ['uploading', 'pending', 'paused', 'completed', 'failed', 'cancelled'];
+    renderQueue(statuses.flatMap((s, i) => [queueItem(s, i), queueItem(s, i + 10)]), {}, true);
+    const t = jest.requireActual('@/lib/i18n/translations/ar').AR_TRANSLATIONS;
+    for (const label of [t.batch.uploading, t.batch.pending, t.batch.paused, t.uploadStatus.uploadedLabel, t.upload.failed, t.batch.cancelled]) {
+      expect(screen.getAllByText(label).map((el) => el.previousElementSibling?.textContent)).toContain('٢');
+    }
+  });
+
   it('asks to keep the page open while files upload', () => {
     renderQueue([queueItem('completed', 1), queueItem('uploading', 2)], {}, true);
     expect(screen.getByTestId('batch-notice')).toHaveTextContent(

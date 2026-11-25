@@ -2,7 +2,7 @@
 
 import { formatDateTime } from '@al-ummah/shared-types';
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Bell, BellOff, X, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Calendar, Bell, BellOff, X, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -295,18 +295,15 @@ export default function ScheduleSection({
             <Label htmlFor="schedule-time" className="text-sm font-medium dark:text-gray-200">
               {s.timeLabel}
             </Label>
-            <div className="relative mt-1">
-              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                id="schedule-time"
-                data-testid="edit-schedule-time"
-                type="time"
-                value={scheduleTime}
-                onChange={(e) => setScheduleTime(e.target.value)}
-                className="w-full ps-10 pe-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading || status === 'published'}
-              />
-            </div>
+            <input
+              id="schedule-time"
+              data-testid="edit-schedule-time"
+              type="time"
+              value={scheduleTime}
+              onChange={(e) => setScheduleTime(e.target.value)}
+              className="mt-1 w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading || status === 'published'}
+            />
           </div>
         </div>
 
@@ -316,12 +313,12 @@ export default function ScheduleSection({
         </div>
 
         {/* Notify on Publish Toggle */}
-        <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
-          <div className="flex items-center gap-2">
+        <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
+          <div className="flex min-w-0 items-center gap-2">
             {notifyOnPublish ? (
-              <Bell className="w-4 h-4 text-blue-500" />
+              <Bell className="w-4 h-4 shrink-0 text-blue-500" />
             ) : (
-              <BellOff className="w-4 h-4 text-gray-400" />
+              <BellOff className="w-4 h-4 shrink-0 text-gray-400" />
             )}
             <span className="text-sm dark:text-gray-200">
               {s.notifyOnPublish}
@@ -333,7 +330,7 @@ export default function ScheduleSection({
             checked={notifyOnPublish}
             onChange={(e) => setNotifyOnPublish(e.target.checked)}
             disabled={loading || status === 'published'}
-            className="w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+            className="ms-auto w-5 h-5 shrink-0 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
           />
         </label>
 

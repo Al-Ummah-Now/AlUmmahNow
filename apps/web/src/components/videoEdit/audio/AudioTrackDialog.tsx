@@ -145,13 +145,12 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
 
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent data-testid="audio-track-dialog" className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
-        <div className="space-y-1 pe-8">
-          <DialogTitle className="text-lg font-semibold text-foreground">{editing ? t.form.editTitle : t.form.addTitle}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">{t.hint}</DialogDescription>
-        </div>
+      <DialogContent data-testid="audio-track-dialog" className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg flex-col">
+        <DialogTitle className="shrink-0 pe-8 text-lg font-semibold text-foreground">{editing ? t.form.editTitle : t.form.addTitle}</DialogTitle>
 
-        <div className="space-y-4">
+        {/* The fields scroll on a short screen; the title, what went wrong and the buttons stay */}
+        <div className="-mx-2 min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-1" data-testid="audio-track-fields">
+          <DialogDescription className="text-sm text-muted-foreground">{t.hint}</DialogDescription>
           {!editing && (
             <fieldset className="space-y-2">
               <legend className="mb-1 text-sm font-medium text-foreground">{t.form.source}</legend>
@@ -296,18 +295,18 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
               {t.form.makeDefault}
             </label>
           )}
-
-          {error && (
-            <div role="alert" data-testid="audio-track-error" data-code={terms.needed ? 'terms_required' : undefined} className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]">
-              <span>{error}</span>
-              {terms.reviewLink('audio-track-review-terms')}
-            </div>
-          )}
         </div>
+
+        {error && (
+          <div role="alert" data-testid="audio-track-error" data-code={terms.needed ? 'terms_required' : undefined} className="flex shrink-0 flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]">
+            <span>{error}</span>
+            {terms.reviewLink('audio-track-review-terms')}
+          </div>
+        )}
 
         {terms.dialog}
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} disabled={busy} className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground hover:bg-muted disabled:opacity-50">
             {t.cancel}
           </button>

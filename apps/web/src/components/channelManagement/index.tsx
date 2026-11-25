@@ -215,6 +215,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
           setDialogOpen(open);
         }}
         onSubmit={handleCreateChannel}
+        onEdit={terms.clear}
         isLoading={isLoading}
         lang={locale}
         notice={terms.needed && (

@@ -172,7 +172,7 @@
   "apps/web/src/components/videoCard/rtl/index.tsx": 4,
   "apps/web/src/components/videoEdit/ChapterEditor.tsx": 56,
   "apps/web/src/components/videoEdit/ChapterUpload.tsx": 70,
-  "apps/web/src/components/videoEdit/ScheduleSection.tsx": 59,
+  "apps/web/src/components/videoEdit/ScheduleSection.tsx": 58,
   "apps/web/src/components/videoEdit/SubtitlePreview.tsx": 31,
   "apps/web/src/components/videoEdit/SubtitleUploadModal.tsx": 64,
   "apps/web/src/components/videoEdit/SubtitleUploadSection.tsx": 52,

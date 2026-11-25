@@ -37,9 +37,9 @@ export function Stepper({ step }: { step: WizardStep }) {
         {WIZARD_STEPS.map((id, i) => {
           const state = i < index ? 'done' : i === index ? 'current' : 'todo';
           return (
-            <li key={id} className="yt-step flex min-w-0 flex-1 items-center gap-2" data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
+            <li key={id} className="yt-step flex min-w-0 flex-1 items-center gap-2 sm:flex-auto" data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
               <span className="yt-step-dot" aria-hidden="true">{state === 'done' ? <Check className="h-3.5 w-3.5" /> : num(lang, i + 1)}</span>
-              <span className={`hidden truncate text-sm sm:inline ${state === 'current' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} aria-hidden="true">
+              <span className={`hidden text-sm leading-tight sm:inline ${state === 'current' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} aria-hidden="true">
                 {text[id]}
               </span>
               <span className="sr-only">{label(i, text[id])}</span>
