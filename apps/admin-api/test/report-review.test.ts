@@ -8,7 +8,7 @@ import { channelReportsRouter } from '../src/routers/channelReports.router';
 import { setReportReview } from '../src/lib/moderation/reportReview';
 import { sqliteD1 } from './d1-sqlite';
 
-async function setup() {
+async function setup(extra: Record<string, string> = {}) {
   const db = sqliteD1();
   const report = (id: string, type: string, entity: string, status = 'pending') =>
     db.prepare(`INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, status, created_at, moderator_name, meta_synced_at) VALUES (?, ?, ?, 'usr_r', 'spam', ?, '2026-11-01T10:00:00Z', 'Old name', 'x')`).bind(id, type, entity, status).run();
@@ -16,7 +16,10 @@ async function setup() {
   await report('r2', 'channel', 'ch_1');
   await report('done', 'channel', 'ch_2', 'dismissed');
   await report('chat', 'live_chat', 'm_1');
-  const env = { REPORTS_DB: db, INTERNAL_API_KEY: 'k' };
+  const env = { REPORTS_DB: db, INTERNAL_API_KEY: 'k', ...extra };
+  const sql: string[] = [];
+  const prepare = db.prepare.bind(db);
+  db.prepare = ((q: string) => (sql.push(q), prepare(q))) as typeof db.prepare;
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('auth' as never, { userId: c.req.header('x-test-user') ?? 'usr_mod', roles: [c.req.header('x-test-role') ?? 'moderator'], payload: {} } as never);
@@ -31,7 +34,7 @@ async function setup() {
   };
   const underReview = async (id: string) => ((await (await app.request(`/internal/channel-reports/${id}`, { headers: { 'X-API-Key': 'k' } }, env)).json()) as any).result.underReview;
   const log = async () => ((await db.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY rowid').all<any>()).results ?? []).map((r: any) => [r.key, JSON.parse(r.new_value).action, JSON.parse(r.new_value).details.reportId, JSON.parse(r.old_value).status, r.actor_id]);
-  return { db, review, underReview, log };
+  return { db, review, underReview, log, sql };
 }
 
 describe('start review', () => {
@@ -53,6 +56,25 @@ describe('start review', () => {
     ]);
   });
 
+  it('other open admin pages are told, and only of a review that was set', async () => {
+    const { review } = await setup({ WEBSOCKET_URL: 'wss://realtime.test/ws' });
+    const sent: unknown[] = [];
+    const fetched = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      sent.push([url, JSON.parse(String(init.body)).items[0].channel]);
+      return new Response('{}');
+    }) as never;
+    try {
+      await review('r1', { reviewing: true });
+      await review('done', { reviewing: true });
+      await review('r1', { reviewing: false });
+      await new Promise((r) => setTimeout(r, 20));
+    } finally {
+      globalThis.fetch = fetched;
+    }
+    assert.deepEqual(sent, [['https://realtime.test/broadcast', 'admin:moderation'], ['https://realtime.test/broadcast', 'admin:moderation']]);
+  });
+
   it('asked for what it already is, it changes and records nothing', async () => {
     const { review, log } = await setup();
     assert.equal((await review('r1', { reviewing: false })).status, 200);
@@ -63,11 +85,12 @@ describe('start review', () => {
   });
 
   it('a closed report, an unknown one and a malformed body are refused, nothing recorded', async () => {
-    const { review, log } = await setup();
+    const { review, log, sql } = await setup();
     for (const reviewing of [true, false]) {
       const closed = await review('done', { reviewing });
       assert.deepEqual([closed.status, closed.code], [409, 'already_closed']);
     }
+    assert.ok(!sql.some((q) => /^INSERT|^DELETE/i.test(q.trim())), 'no audit row is written, even for a moment');
     const none = await review('nope', { reviewing: true });
     assert.deepEqual([none.status, none.code], [404, 'not_found']);
     for (const body of [{}, { reviewing: 'yes' }]) assert.equal((await review('r1', body)).status, 400);

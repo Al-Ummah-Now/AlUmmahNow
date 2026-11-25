@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { ReportReview } from '../src/app/(protected)/moderation/reports/[id]/ReportReview';
+import { openReports } from '../src/app/(protected)/dashboard/openReports';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -30,9 +31,14 @@ describe('start review', () => {
         const text = JSDOM.fragment(renderToStaticMarkup(element(props, locale) as never)).textContent!;
         assert.equal(text, shown.join(''));
       }
-      assert.ok(m.auditLog.actions.report_review_start && m.auditLog.actions.report_review_stop && m.content.errors.already_closed);
+      assert.ok(m.auditLog.actions.report_review_start && m.auditLog.actions.report_review_stop && m.auditLog.detailKeys.reportId && m.content.errors.already_closed);
     });
   }
+
+  it('the dashboard counts a report under review as open', () => {
+    assert.equal(openReports({ pending: 2, reviewing: 3, resolved: 5, dismissed: 7 }), 5);
+    assert.equal(openReports({}), 0);
+  });
 
   describe('the button', () => {
     let dom: JSDOM;

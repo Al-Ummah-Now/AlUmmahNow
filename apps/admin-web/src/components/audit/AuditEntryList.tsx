@@ -7,7 +7,7 @@ import type { AdminNames } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { type MessageKey, type Translator } from '@/i18n/translate';
 import { MonoId } from '@/components/content/parts';
-import { actionLabel, detailKeyLabel, detailText, detailViews, itemView, paymentsLine, personView, settingLabel, splitTemplate, type AuditTierNames } from './audit-model';
+import { actionLabel, detailKeyLabel, detailText, detailValue, detailViews, itemView, paymentsLine, personView, settingLabel, splitTemplate, type AuditTierNames } from './audit-model';
 import { ItemName, PersonName } from './Named';
 
 import { LocalTime } from '@/components/LocalTime';
@@ -54,7 +54,7 @@ function Details({ entry, names, t }: { entry: AuditEntryLike; names: AdminNames
       )}
       {entry.previous && Object.keys(entry.previous).length > 0 && (
         <p className="mt-1 text-xs text-fg-subtle break-words" dir="auto">
-          {t('auditLog.previous', { value: Object.entries(entry.previous).map(([k, v]) => (k === 'value' ? detailText(v) : `${k}: ${detailText(v)}`)).join(t('common.sep')) })}
+          {t('auditLog.previous', { value: Object.entries(entry.previous).map(([k, v]) => (k === 'value' ? detailText(v) : `${detailKeyLabel(k, t)}: ${detailValue(k, v, t)}`)).join(t('common.sep')) })}
         </p>
       )}
     </>

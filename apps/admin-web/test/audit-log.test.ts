@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AdminNames } from '@al-ummah/shared-types';
 import { canReadAudit } from '../src/lib/roles';
-import { actionKey, actionLabel, auditHref, splitTemplate, detailViews, itemHref, itemView, namesRequestOf, paymentsLine, personView } from '../src/components/audit/audit-model';
+import { actionKey, actionLabel, auditHref, splitTemplate, detailValue, detailViews, itemHref, itemView, namesRequestOf, paymentsLine, personView } from '../src/components/audit/audit-model';
 import { createTranslator } from '../src/i18n/translate';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
@@ -94,7 +94,13 @@ describe('audit log', () => {
 
   it('names id-valued details and leaves the rest as text', () => {
     const views = detailViews({ channelId: 'ch_1', newOwnerId: 'usr_1', reason: 'spam', count: 3, empty: '' }, names, t);
-    assert.deepEqual(views.map((v) => (v.type === 'ref' ? `${v.key}=${v.item.label}` : `${v.key}:${v.value}`)), ['channelId=Daily reminders', 'newOwnerId=Aisha Rahman', 'reason:spam', 'count:3']);
+    assert.deepEqual(views.map((v) => (v.type === 'ref' ? `${v.key}=${v.item.label}` : `${v.key}:${v.value}`)), ['channelId=Daily reminders', 'newOwnerId=Aisha Rahman', 'reason:Spam', 'count:3']);
+  });
+
+  it('says a report’s reason and status in words, and any other text as it was written', () => {
+    assert.deepEqual(['misinformation', 'Asked by the owner', 'constructor'].map((v) => detailValue('reason', v, t)), ['Misinformation', 'Asked by the owner', 'constructor']);
+    assert.deepEqual(['reviewing', 'suspended'].map((v) => detailValue('status', v, t)), ['Reviewing', 'suspended']);
+    assert.equal(detailValue('note', 'spam', t), 'spam');
   });
 
   it('asks for every person and item a page mentions, once, and never for the system', () => {
