@@ -3,7 +3,8 @@
  * (the native admin app) use the same JSON API. Plain functions over D1, R2 and the api-videos
  * service so they are unit tested without the Workers runtime.
  *
- * Rules: content reviewers never see escalations (minors, extremism; VR7); an appeal is decided by
+ * Rules: content reviewers never see escalations (minors, extremism; VR7); only super admins see an
+ * item under a takedown; an appeal is decided by
  * someone other than the person who rejected it (VR10); every decision, undo and NSFW reveal is
  * audited in moderation_actions; a decision is applied to the video by api-videos (the single
  * writer of its review state) before the row records it.
@@ -13,6 +14,7 @@ import {
   REVIEW_UNDO_MINUTES,
   isReviewReasonCode,
   isSeniorReviewer,
+  isSuperAdmin,
   readVideoReviewSettings,
   type D1Database,
   type ReviewDecisionRequest,
@@ -20,6 +22,7 @@ import {
   type VideoReviewReasonCode,
 } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
+import { noCaseAboutReviewSql } from '../csam';
 import { enqueueRejectionMail, flagRejectionMailFailure, rejectionMailJob } from './rejection-mail';
 
 export class ReviewError extends Error {
@@ -150,9 +153,10 @@ export async function listQueue(db: D1Database, reviewer: Reviewer, q: QueueQuer
     }
   }
   if (!senior) where.push('escalate = 0');
+  if (withheldFrom(reviewer)) where.push(noCaseAboutReviewSql('r'));
   if (q.escalatedOnly) where.push('escalate = 1');
   const rows = await db
-    .prepare(`SELECT * FROM content_reviews WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`)
+    .prepare(`SELECT * FROM content_reviews r WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`)
     .bind(...params, limit + 1)
     .all<ReviewRow>();
   const items = (rows.results ?? []).slice(0, limit);
@@ -188,14 +192,22 @@ interface VideoSummary {
   review?: { status?: string; manifestKey?: string };
 }
 
-function assertMayOpen(row: ReviewRow, reviewer: Reviewer): void {
+/** Items under a takedown are for super admins only (lib/moderation/takedown.ts). */
+const withheldFrom = (reviewer: Reviewer): boolean => !isSuperAdmin(reviewer.roles);
+
+/** The review, if this reviewer may open it. */
+async function openReview(db: D1Database, reviewer: Reviewer, id: string): Promise<ReviewRow> {
+  const row = await db
+    .prepare(`SELECT * FROM content_reviews r WHERE id = ?${withheldFrom(reviewer) ? ` AND ${noCaseAboutReviewSql('r')}` : ''}`)
+    .bind(id)
+    .first<ReviewRow>();
+  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
   if (row.escalate && !isSeniorReviewer(reviewer.roles)) throw new ReviewError(403, 'senior_only', 'Only a senior reviewer may open an escalated review');
+  return row;
 }
 
 export async function getReview(env: ReviewEnv, reviewer: Reviewer, id: string) {
-  const row = await env.REPORTS_DB.prepare('SELECT * FROM content_reviews WHERE id = ?').bind(id).first<ReviewRow>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row, reviewer);
+  const row = await openReview(env.REPORTS_DB, reviewer, id);
   // An appeal shows the findings of the review it appeals
   const findingsOf = row.appeal_of ?? row.id;
   const findings = await env.REPORTS_DB.prepare('SELECT id, source, category, score, at_ms, end_ms, media_key, text, quran_ref, model, rationale FROM content_review_findings WHERE review_id = ? ORDER BY score DESC LIMIT 200')
@@ -314,9 +326,7 @@ async function audioTrackSubject(env: ReviewEnv, subjectId: string): Promise<Aud
 
 /** The audio track under review, streamed from api-videos (Range passed through). */
 export async function reviewAudio(env: ReviewEnv, reviewer: Reviewer, id: string, range: string | null): Promise<Response> {
-  const row = await env.REPORTS_DB.prepare('SELECT id, subject_type, subject_id, escalate FROM content_reviews WHERE id = ?').bind(id).first<Pick<ReviewRow, 'id' | 'subject_type' | 'subject_id' | 'escalate'>>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row as ReviewRow, reviewer);
+  const row = await openReview(env.REPORTS_DB, reviewer, id);
   const parts = row.subject_type === 'audio_track' ? audioTrackSubjectParts(row.subject_id) : null;
   if (!parts) throw new ReviewError(404, 'not_audio', 'This review has no audio track');
   if (!env.VIDEOS) throw new ReviewError(502, 'not_configured', 'The VIDEOS service binding is not configured');
@@ -335,9 +345,7 @@ export async function reviewAudio(env: ReviewEnv, reviewer: Reviewer, id: string
 
 /** A media object of the review (frames, manifest), only under the subject's own review/ prefix. */
 export async function reviewMedia(env: ReviewEnv, reviewer: Reviewer, id: string, key: string) {
-  const row = await env.REPORTS_DB.prepare('SELECT id, subject_type, subject_id, escalate FROM content_reviews WHERE id = ?').bind(id).first<Pick<ReviewRow, 'id' | 'subject_type' | 'subject_id' | 'escalate'>>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row as ReviewRow, reviewer);
+  const row = await openReview(env.REPORTS_DB, reviewer, id);
   const prefix = reviewMediaPrefixOf(row);
   if (!prefix || !key.startsWith(prefix) || key.includes('..')) throw new ReviewError(403, 'outside_review', 'Not a file of this review');
   const object = await env.REVIEW_MEDIA?.get(key);
@@ -405,9 +413,7 @@ export interface DecisionInput {
 
 export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: string, input: DecisionInput, now = new Date()) {
   const db = env.REPORTS_DB;
-  const row = await db.prepare('SELECT * FROM content_reviews WHERE id = ?').bind(id).first<ReviewRow>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row, reviewer);
+  const row = await openReview(db, reviewer, id);
   const iso = now.toISOString();
   const note = typeof input.note === 'string' ? input.note.trim().slice(0, 1000) : undefined;
 
@@ -461,18 +467,14 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
 }
 
 export async function claimReview(db: D1Database, reviewer: Reviewer, id: string, now = new Date()) {
-  const row = await db.prepare('SELECT * FROM content_reviews WHERE id = ?').bind(id).first<ReviewRow>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row, reviewer);
+  const row = await openReview(db, reviewer, id);
   await db.prepare('UPDATE content_reviews SET assigned_to = ?, updated_at = ? WHERE id = ?').bind(reviewer.id, now.toISOString(), id).run();
   return { assignedTo: reviewer.id };
 }
 
 /** Reveal of a blurred NSFW item: audited (who, what, when). */
 export async function recordReveal(db: D1Database, reviewer: Reviewer, id: string, target: string, now = new Date()) {
-  const row = await db.prepare('SELECT * FROM content_reviews WHERE id = ?').bind(id).first<ReviewRow>();
-  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
-  assertMayOpen(row, reviewer);
+  const row = await openReview(db, reviewer, id);
   await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_reveal', actorId: reviewer.id, details: { target: String(target).slice(0, 300) } }, now.toISOString());
   return { recorded: true };
 }
@@ -496,11 +498,13 @@ export async function alertsOn(db: D1Database, reviewer: Reviewer): Promise<bool
   return !!(await db.prepare('SELECT 1 AS x FROM review_alert_subscribers WHERE user_id = ?').bind(reviewer.id).first());
 }
 
-export async function reviewStats(db: D1Database, now = new Date()) {
+/** `reviewer`: whose page shows them (without it, the numbers of the whole queue). */
+export async function reviewStats(db: D1Database, reviewer?: Reviewer, now = new Date()) {
+  const shown = reviewer && withheldFrom(reviewer) ? ` AND ${noCaseAboutReviewSql('r')}` : '';
   const day = now.toISOString().slice(0, 10);
   const since = new Date(now.getTime() - 14 * 86_400_000).toISOString();
-  const counts = await db.prepare(`SELECT status, COUNT(*) AS n FROM content_reviews WHERE status IN ('checking', 'in_review', 'appealed') GROUP BY status`).all<{ status: string; n: number }>();
-  const oldest = await db.prepare(`SELECT MIN(sla_due_at) AS t FROM content_reviews WHERE status IN ('in_review', 'appealed')`).first<{ t: string | null }>();
+  const counts = await db.prepare(`SELECT status, COUNT(*) AS n FROM content_reviews r WHERE status IN ('checking', 'in_review', 'appealed')${shown} GROUP BY status`).all<{ status: string; n: number }>();
+  const oldest = await db.prepare(`SELECT MIN(sla_due_at) AS t FROM content_reviews r WHERE status IN ('in_review', 'appealed')${shown}`).first<{ t: string | null }>();
   // The live queue time creators see when flagged (VR6): median wait of the last 50 decisions
   const waits = await db
     .prepare(`SELECT (julianday(decided_at) - julianday(sla_due_at)) * 1440 AS m FROM content_reviews WHERE decided_at IS NOT NULL AND sla_due_at IS NOT NULL ORDER BY decided_at DESC LIMIT 50`)

@@ -56,8 +56,8 @@ app.get('/queue', async (c) => {
 });
 
 app.get('/stats', async (c) => {
-  reviewerOf(c);
-  return c.json({ success: true, result: await reviewStats(c.env.REPORTS_DB) });
+  const reviewer = reviewerOf(c);
+  return c.json({ success: true, result: await reviewStats(c.env.REPORTS_DB, reviewer) });
 });
 
 app.get('/alerts', async (c) => {

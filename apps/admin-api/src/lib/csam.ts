@@ -457,6 +457,19 @@ export const noCaseAboutSql = (a: string): string =>
 export const noCaseAboutSignalSql = (a: string): string =>
   `NOT EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_item WHERE tc.item_id IS NOT NULL AND tc.item_type IN ('video', 'livestream', 'comment', 'post', 'live_chat') AND tc.item_id IN (${a}.subject_id, ${a}.parent_id))`;
 
+/**
+ * SQL: no case is about the subject of a content_reviews row (alias `a`). A review names an audio track as
+ * `<videoId>:<trackId>`, a post as `<channelId>/<postId>`, a channel image by its channel and an account image by its
+ * account; a case about a channel image or an account image counts only while it is open.
+ */
+export const noCaseAboutReviewSql = (a: string): string =>
+  `NOT EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_item WHERE tc.item_id IS NOT NULL
+     AND tc.item_type = CASE ${a}.subject_type WHEN 'audio_track' THEN 'video' WHEN 'avatar' THEN 'channel' WHEN 'banner' THEN 'channel' ELSE ${a}.subject_type END
+     AND tc.item_id = CASE ${a}.subject_type WHEN 'audio_track' THEN substr(${a}.subject_id, 1, instr(${a}.subject_id, ':') - 1) WHEN 'post' THEN substr(${a}.subject_id, instr(${a}.subject_id, '/') + 1) ELSE ${a}.subject_id END
+     AND ${hides('tc')})
+   AND NOT (${a}.subject_type IN ('profile_picture', 'profile_banner') AND EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY csam_cases_status
+     WHERE tc.status IN ('containing', 'contained', 'containment_failed', 'reported') AND tc.item_kind = 'profile_image' AND tc.uploader_id = ${a}.subject_id))`;
+
 /** Starts the takedown of a mapped case and freezes its uploader. */
 async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolution, actorId: string): Promise<void> {
   const facts = await captureFacts(env, row.matched_url, row.detected_at, resolution);
