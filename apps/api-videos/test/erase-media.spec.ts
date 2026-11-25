@@ -1352,6 +1352,41 @@ describe('the day before anything is deleted', () => {
 		}
 	});
 
+	it('what fails of a run account is tried again within seconds', async () => {
+		const env = await setup();
+		env.videos.store.clear();
+		out.failBunny = true;
+		const id = await start(env, [video('v-mine')]);
+		env.SEARCH_DB.db.prepare("UPDATE admin_jobs SET params = json_set(params, '$.run', json('true')) WHERE id = ?").run(id);
+		for (const delay of [5, 5, 10, 15, 20, 30]) assert.equal((await step(env, id)).delaySeconds, delay);
+		await assert.rejects(step(env, id), /Not erased/);
+	});
+
+	it('a thumbnail folder that cannot be listed keeps the item, not the rest of the video', async () => {
+		const env = await setup();
+		env.videos.store.clear();
+		out.failImages = true;
+		const id = await start(env, [video('v-mine')]);
+		const first = await step(env, id);
+		assert.match(first.note, /^video v-mine: Image storage list answered 500/);
+		assert.deepEqual([out.bunny.has('v-mine'), left(env, 'v-mine'), first.result.videos], [false, [], 0]);
+		out.failImages = false;
+		assert.equal((await step(env, id)).result.videos, 1);
+		assert.equal(out.images.has('/thumbnails/v-mine/t.jpg'), false);
+	});
+
+	it('files left to finish of an account are finished by their rows alone', async () => {
+		const env = await setup();
+		env.profiles.store.delete(ME);
+		const id = await start(env, [{ t: 'files', kind: 'user', id: '', paths: ['/a-me_avatar.jpg'], own: true }, { t: 'files', kind: 'user', id: '', paths: ['/gone.jpg'], own: true }]);
+		const opened = await openCase(env, 'user', ME);
+		assert.match((await step(env, id)).note, /a takedown case is open/);
+		assert.ok(out.images.has('/a-me_avatar.jpg'));
+		closeCase(env, opened.id);
+		for (let i = 0; i < 2; i++) await step(env, id);
+		assert.deepEqual([out.images.has('/a-me_avatar.jpg'), rowOf(env, '/a-me_avatar.jpg')], [false, undefined]);
+	});
+
 	it('nor does the job of a run account run, or go at once, anywhere but there', async () => {
 		for (const over of [{}, { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'production' }, { BUNNY_TEST_LIBRARY: 'false', ENVIRONMENT: 'qa' }]) {
 			const env = Object.assign(await setup(), over);
