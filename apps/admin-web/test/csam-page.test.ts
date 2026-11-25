@@ -194,3 +194,9 @@ describe('CSAM copy', () => {
     }
   });
 });
+
+describe('the accepted addresses of the intake', () => {
+  it('keep ?comment= left to right and in one piece, in both languages', () => {
+    for (const messages of [en, ar]) assert.ok(messages.csamPage.intake.shapes.includes('\u2066?\u2060comment=\u2069'));
+  });
+});
