@@ -110,8 +110,6 @@ export interface SmokeOptions {
 export const VERSION_WAIT_MS = 90_000;
 export const VERSION_PAUSE_MS = 5_000;
 
-/** Tries of the one check whose proof may be lost on the way (production robots.txt). */
-export const ROBOTS_TRIES = 3;
 /** One request may take this long (a stalled one must not outlive the waits around it). */
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const isTimeout = (error: unknown): boolean => (error as Error)?.name === 'TimeoutError';
@@ -150,13 +148,10 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	 * A check of `app`'s Worker. With a candidate of it, the verdict counts only when the candidate answered every
 	 * request of the check; otherwise (an older version, an edge error page, a stalled request) the whole check runs
 	 * again until the deadline. A verdict of the candidate, pass or fail, and a failed connection end it at once.
-	 * `proofMayBeLost`: something in front may rewrite the answer and drop the header; then it is a printed warning,
-	 * however little of the deadline is left. The answer's content still decides.
 	 */
-	const check = async (name: string, app: string, fn: (get: Get) => Promise<string>, proofMayBeLost = false) => {
+	const check = async (name: string, app: string, fn: (get: Get) => Promise<string>) => {
 		const worker = workerName(opts.env, app);
 		const wanted = worker ? opts.overrides?.[worker] : undefined;
-		let unproven: CheckResult | null = null;
 		for (let tries = 1; ; tries++) {
 			const proven: boolean[] = [];
 			let broken = false;
@@ -179,19 +174,12 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 				result = { name, ok: false, detail: (error as Error).message };
 			}
 			const answeredByCandidate = proven.length > 0 && proven.every(Boolean) && !stalled;
-			// A try that breaks after an answer without the proof was only there to look for the proof
-			const lostOnly = proofMayBeLost && broken && unproven !== null;
-			if (!lostOnly && (!wanted || broken || answeredByCandidate)) {
+			if (!wanted || broken || answeredByCandidate) {
 				if (wanted && tries > 1 && result.ok) result.detail += ` (after ${waited()} s)`;
 				results.push(result);
 				return;
 			}
-			if (!stalled && !broken) unproven = result;
 			const timeUp = now() + VERSION_PAUSE_MS > deadline;
-			if (proofMayBeLost && unproven && (tries >= ROBOTS_TRIES || timeUp || broken)) {
-				results.push({ ...unproven, detail: `${unproven.detail} (WARNING: no proof that candidate ${wanted} answered; not required yet)` });
-				return;
-			}
 			if (timeUp) {
 				const last = stalled ? 'no answer in time' : `last answer, of another version: ${result.detail}`;
 				results.push({ name, ok: false, detail: `not answered by candidate ${wanted} of ${worker} (after ${waited()} s; ${last})` });
@@ -303,8 +291,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		assert(!disallowAll, 'production robots.txt disallows everything for User-agent: *');
 		assert(sitemaps.includes(`${hosts.web}/sitemap.xml`), `no Sitemap: ${hosts.web}/sitemap.xml`);
 		return 'indexable, sitemap listed';
-		// Cloudflare's managed robots.txt rewrites production's answer: whether the header survives is seen first, then required
-	}, production);
+	});
 
 	await check('web: sitemap index lists this host', 'web', async (get) => {
 		const res = await get(`${hosts.web}/sitemap.xml`);
