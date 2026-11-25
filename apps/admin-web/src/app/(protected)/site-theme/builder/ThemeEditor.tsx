@@ -16,7 +16,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { ThemeApiError, deleteAsset, draftAssetUrl, exportUrl, publish, saveDraft, uploadAsset } from './api';
 import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
-import { blockedText, issueText, issueWhere } from './issues';
+import { blockedText, issueLine, issueText, issueWhere } from './issues';
 import { Preview } from './Preview';
 import { formatUnit } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
@@ -61,6 +61,9 @@ export interface EditorProps {
   activeVersion: string | null;
   canEdit: boolean;
 }
+
+const disabledLook = 'disabled:cursor-not-allowed disabled:opacity-60';
+const secondaryAction = `${secondaryButtonClass} ${disabledLook}`;
 
 /** The theme package schema's limit for a name or description. */
 const THEME_TEXT_MAX = 80;
@@ -131,7 +134,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
   const run = (kind: NonNullable<typeof busy>, task: () => Promise<void>) => start(async () => {
     setBusy(kind); setFailure(null); setNotice(null);
     try { await task(); } catch (e) {
-      if (e instanceof ThemeApiError) { setServerIssues(e.issues); setFailure(t('themeBuilder.failed', { error: e.message })); } else setFailure(t('themeBuilder.failed', { error: String(e) }));
+      if (e instanceof ThemeApiError) { setServerIssues(e.issues); setFailure(t('themeBuilder.failed', { error: e.issues.length ? e.issues.map((i) => issueLine(t, locale, i)).join(' ') : e.message })); } else setFailure(t('themeBuilder.failed', { error: String(e) }));
     } finally { setBusy(null); }
   });
 
@@ -211,9 +214,9 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
         </div>
         <div className="flex flex-wrap gap-2">
           <a href={exportUrl(theme.id)} className={secondaryButtonClass} data-testid="theme-export">{t('themeBuilder.export')}</a>
-          {canEdit && <button type="button" className={`${secondaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`} disabled={pending || !dirty} onClick={save} data-testid="theme-save">{busy === 'save' ? t('themeBuilder.saving') : t('themeBuilder.save')}</button>}
-          {canEdit && <button type="button" className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`} disabled={pending || issues.length > 0} onClick={doPublish} data-testid="theme-publish">{busy === 'publish' ? t('themeBuilder.publishing') : t('themeBuilder.publish')}</button>}
-          {canEdit && latest && active !== latest && <button type="button" className={secondaryButtonClass} disabled={pending || dirty} onClick={activate} data-testid="theme-activate">{t('themeBuilder.useAsSite')} ({latest})</button>}
+          {canEdit && <button type="button" className={secondaryAction} disabled={pending || !dirty} onClick={save} data-testid="theme-save">{busy === 'save' ? t('themeBuilder.saving') : t('themeBuilder.save')}</button>}
+          {canEdit && <button type="button" className={`${primaryButtonClass} ${disabledLook}`} disabled={pending || issues.length > 0} onClick={doPublish} data-testid="theme-publish">{busy === 'publish' ? t('themeBuilder.publishing') : t('themeBuilder.publish')}</button>}
+          {canEdit && latest && active !== latest && <button type="button" className={secondaryAction} disabled={pending || dirty} onClick={activate} data-testid="theme-activate">{t('themeBuilder.useAsSite')} ({latest})</button>}
         </div>
       </div>
       {!canEdit && <p className="text-fg-muted mb-3">{t('themeBuilder.adminOnly')}</p>}
@@ -373,7 +376,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                     <label className="block text-xs text-fg mt-1" dir="ltr">color (#rrggbbaa)
                       <input className={`${fieldClass} !py-1 w-32 font-mono text-xs ms-2`} readOnly={readOnly} value={e?.color ?? ''} onChange={(ev) => update(['tokens', 'elevation', level, 'color'], ev.target.value.trim())} />
                     </label>
-                    <IssueText messages={issues.filter((i) => i.path.startsWith(`tokens.elevation.${level}`)).map((i) => i.message)} />
+                    <IssueText messages={issues.filter((i) => i.path.startsWith(`tokens.elevation.${level}`)).map((i) => issueText(t, locale, i))} />
                   </fieldset>
                 );
               })}
@@ -405,8 +408,8 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                   {canEdit && <button type="button" className="underline" onClick={() => update(['typography', 'faces'], (theme.typography.faces ?? []).filter((_, j) => j !== i))}>{t('themeBuilder.remove')}</button>}
                 </div>
               ))}
-              {canEdit && <button type="button" className={secondaryButtonClass} disabled={pending} onClick={() => chooseFile('.woff2,font/woff2', (path) => update(['typography', 'faces'], [...(theme.typography.faces ?? []), { family: path.split('/').pop()!.replace(/\.woff2$/, '').replace(/[^A-Za-z0-9 -]/g, ' ').slice(0, 40), weight: 400, src: path }]))} data-testid="font-upload">{t('themeBuilder.addFont')}</button>}
-              <IssueText messages={issues.filter((i) => i.path.startsWith('typography')).map((i) => `${i.path}: ${i.message}`)} />
+              {canEdit && <button type="button" className={secondaryAction} disabled={pending} onClick={() => chooseFile('.woff2,font/woff2', (path) => update(['typography', 'faces'], [...(theme.typography.faces ?? []), { family: path.split('/').pop()!.replace(/\.woff2$/, '').replace(/[^A-Za-z0-9 -]/g, ' ').slice(0, 40), weight: 400, src: path }]))} data-testid="font-upload">{t('themeBuilder.addFont')}</button>}
+              <IssueText messages={issues.filter((i) => i.path.startsWith('typography')).map((i) => issueLine(t, locale, i))} />
             </div>
           )}
 
@@ -450,7 +453,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
 
           {section === 'assets' && (
             <div>
-              {canEdit && <button type="button" className={secondaryButtonClass} disabled={pending} onClick={() => chooseFile('image/*,.svg,.ico,.woff2', () => undefined)} data-testid="asset-upload">{busy === 'upload' ? t('themeBuilder.working') : t('themeBuilder.upload')}</button>}
+              {canEdit && <button type="button" className={secondaryAction} disabled={pending} onClick={() => chooseFile('image/*,.svg,.ico,.woff2', () => undefined)} data-testid="asset-upload">{busy === 'upload' ? t('themeBuilder.working') : t('themeBuilder.upload')}</button>}
               <ul className="mt-3 space-y-1" data-testid="asset-list">
                 {assets.map((a) => (
                   <li key={a.path} className="flex items-center gap-2 text-xs" dir="ltr" data-testid="asset-row" data-path={a.path}>
@@ -460,7 +463,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                   </li>
                 ))}
               </ul>
-              <IssueText messages={issues.filter((i) => i.path.startsWith('assets/')).map((i) => `${i.path} ${i.message}`)} />
+              <IssueText messages={issues.filter((i) => i.path.startsWith('assets/')).map((i) => issueLine(t, locale, i))} />
             </div>
           )}
         </div>
