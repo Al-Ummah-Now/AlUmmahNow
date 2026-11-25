@@ -20,7 +20,7 @@ import { bidiIsolate } from '@/components/content/transfer-model';
 const REASON = { reasonMinLength: 10, reasonMaxLength: 500 } as const;
 
 export function ChannelHandleTools({ channel }: { channel: { id: string; handle: string | null } }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
   const current = channel.handle ?? '';
@@ -28,7 +28,7 @@ export function ChannelHandleTools({ channel }: { channel: { id: string; handle:
   const [picked, setPicked] = useState<string>(choices[0] ?? '');
   // After a take the page refreshes with the new current handle, which leaves the list: fall back to the first choice
   const official = (choices as readonly string[]).includes(picked) ? picked : (choices[0] ?? '');
-  const at = (handle: string) => bidiIsolate(`@${handle}`, locale);
+  const at = (handle: string) => bidiIsolate(`@${handle}`);
 
   return (
     <SectionCard title={t('channels.handleTools.title')} id={`${ids}-handles`} testId="channel-handle-tools">

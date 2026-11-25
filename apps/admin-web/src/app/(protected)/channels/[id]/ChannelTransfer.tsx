@@ -125,7 +125,7 @@ export function ChannelTransfer({ channel }: Props) {
 
   const name = target ? userName(target) : '';
   const confirmValues = target ? transferConfirmValues(channel.handle, target.id) : [];
-  const iso = (value: string) => bidiIsolate(value, locale);
+  const iso = (value: string) => bidiIsolate(value);
 
   return (
     <SectionCard title={t('channels.transferTitle')} id={`${ids}-transfer`} testId="channel-transfer">
