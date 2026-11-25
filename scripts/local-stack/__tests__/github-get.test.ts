@@ -1,7 +1,7 @@
 /** GitHub's own trouble is waited out when the stack's bundles are downloaded; anything else fails at once. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { githubGet, HttpStatusError, retryAfterMs, RETRY_MS, type GetDeps } from '../github-get.ts';
+import { githubGet, HttpStatusError, retryAfterMs, RETRY_MS, TRY_MS, type GetDeps } from '../github-get.ts';
 import { bundleRelease, download } from '../fetch-auth.ts';
 import { releasedRefs } from '../resolve-refs.ts';
 
@@ -19,6 +19,7 @@ const cut: Answer = () => new Response(new ReadableStream({ start(c) { c.enqueue
 function fake(...answers: Answer[]) {
   let t = 1_000_000;
   const sleeps: number[] = [];
+  const limits: number[] = [];
   const sent: { url: string; headers: Record<string, string> }[] = [];
   const deps: GetDeps = {
     fetch: (async (url: string, init: RequestInit) => {
@@ -31,9 +32,13 @@ function fake(...answers: Answer[]) {
       t += ms;
     },
     random: () => 1,
+    timeout: (ms) => {
+      limits.push(ms);
+      return new AbortController().signal;
+    },
     log: () => {},
   };
-  return { deps, sleeps, sent, waited: () => t - 1_000_000 };
+  return { deps, sleeps, limits, sent, pass: (ms: number) => void (t += ms), waited: () => t - 1_000_000 };
 }
 const get = (deps: GetDeps) => download(URL_, 'tok', deps).then((b) => b.toString());
 
@@ -62,13 +67,34 @@ describe('a download from GitHub', () => {
   it('waits what Retry-After asks, and not at all when that is too long', async () => {
     const f = fake(status(429, { 'retry-after': '17' }), status(503, { 'retry-after': '0' }), body('x'));
     assert.equal(await get(f.deps), 'x');
-    assert.deepEqual(f.sleeps, [17_000, 0]);
+    // A second at least, and up to a second more
+    assert.deepEqual(f.sleeps, [18_000, 2_000]);
+    const low = fake(status(503, { 'retry-after': '0' }), status(429, { 'retry-after': '17' }), body('x'));
+    low.deps.random = () => 0;
+    await get(low.deps);
+    assert.deepEqual(low.sleeps, [1_000, 17_000]);
     const long = fake(status(429, { 'retry-after': '3600' }), body('x'));
     await assert.rejects(get(long.deps), /answered 429; gave up after 1 try in 0 s \(Retry-After 3600 s\)/);
     assert.deepEqual([long.sleeps, long.sent.length], [[], 1]);
     assert.equal(retryAfterMs('Wed, 25 Nov 2026 12:00:30 GMT', Date.parse('2026-11-25T12:00:00Z')), 30_000);
     assert.equal(retryAfterMs('Wed, 25 Nov 2026 11:00:00 GMT', Date.parse('2026-11-25T12:00:00Z')), 0);
     for (const none of [null, '', ' ', 'soon']) assert.equal(retryAfterMs(none, 0), null);
+  });
+
+  it('a try ends with the time there is: the last one hangs no longer than what is left', async () => {
+    const f = fake(body('x'));
+    await get(f.deps);
+    assert.deepEqual(f.limits, [TRY_MS]);
+    // Every try hangs until it is stopped
+    const hang = fake();
+    let n = 0;
+    hang.deps.fetch = (async () => {
+      hang.pass(hang.limits[n++]);
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    }) as typeof fetch;
+    await assert.rejects(get(hang.deps), /aborted due to timeout; gave up after 2 tries in 180 s/);
+    assert.deepEqual(hang.limits, [TRY_MS, RETRY_MS - TRY_MS - 2_000]);
+    assert.equal(hang.waited(), RETRY_MS);
   });
 
   it('any other status fails at once, also between tries', async () => {
