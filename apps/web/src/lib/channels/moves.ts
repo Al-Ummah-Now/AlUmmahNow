@@ -57,6 +57,12 @@ export function moveErrorMessage(error: unknown, lang: 'en' | 'ar'): string {
   return apiErrorMessage(code, error instanceof MoveApiError ? error.status : 500, lang);
 }
 
+/** A failed read: the refusal's own reason, else `generic` (nothing the person did; Retry may help). */
+export function loadFailedText(error: unknown, lang: 'en' | 'ar', generic: string): string {
+  const known = error instanceof MoveApiError && error.status >= 400 && error.status < 500 && error.code in API_ERROR_CATALOGUE;
+  return known ? moveErrorMessage(error, lang) : generic;
+}
+
 export const isMoveError = (error: unknown, ...codes: string[]): boolean => error instanceof MoveApiError && codes.includes(error.code);
 
 async function moveRequest<T>(action: string, path: string, init: { method: string; body?: unknown; signal?: AbortSignal } = { method: 'GET' }): Promise<T> {

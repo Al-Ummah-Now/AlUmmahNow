@@ -203,7 +203,7 @@ export const CHANNEL_MOVES_AR: ChannelMovesTranslations = {
     channel: 'قناة',
   },
   receivedText: 'وصلك عرض من {person} لنقل هذه القناة إليك.',
-  sentText: 'عرضتَ هذه القناة على {person}.',
+  sentText: 'قدّمت عرضًا لنقل هذه القناة إلى {person}.',
   becomes: 'إذا قبلت، انتقلت إليك ملكية القناة ومرئياتها وقوائم تشغيلها ومنشوراتها.',
   keepsEmail: 'يبقى بريد التواصل العام كما هو.',
   expiresIn: { one: 'ينتهي بعد يوم', two: 'ينتهي بعد يومين', few: 'ينتهي بعد {count} أيام', many: 'ينتهي بعد {count} يومًا', other: 'ينتهي بعد {count} يوم' },

@@ -90,6 +90,13 @@ test.describe('Release: channel moves by owners', () => {
       await expect(ownerPage.getByTestId('channel-settings-move')).toHaveCount(0);
       expect(((await (await apiFetch(owner, '/api/move-offers')).json()) as { code?: string }).code).toBe('feature_off');
 
+      const visitor = await open();
+      for (const path of ['/en/channel-moves', '/en/channel-moves/none', `/en/settings/channel/${channelId}/move`]) {
+        await gotoSettled(visitor, `${target().web}${path}`);
+        await expect(visitor.getByTestId('not-found-page'), path).toBeVisible();
+      }
+      await visitor.context().close();
+
       // On: from channel settings
       await setMoves(true);
       await expect(async () => {
