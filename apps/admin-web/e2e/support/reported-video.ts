@@ -4,7 +4,8 @@
  */
 import { expect } from '@playwright/test';
 import { adminApi, readTokens } from './api';
-import { RUN_ID, VIDEOS_API_URL } from './env';
+import { RUN_ID, VIDEOS_API_URL, accounts } from './env';
+import { createVideosProfile } from './profiles';
 
 const token = () => readTokens().superadmin;
 
@@ -26,7 +27,13 @@ export interface ReportedVideo {
 
 export async function createReportedVideo(): Promise<ReportedVideo> {
   const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
-  const channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: `E2E report ${tag}`, description: '[e2e-admin] reported video', isMain: false }) });
+  const createChannel = () => videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: `E2E report ${tag}`, description: '[e2e-admin] reported video', isMain: false }) });
+  let channel = await createChannel();
+  // On a fresh stack the super admin has no videos profile until a spec makes one (as 17-live-streaming)
+  if (channel.status === 404) {
+    await createVideosProfile(token(), accounts.superadmin.email, 'E2E super admin');
+    channel = await createChannel();
+  }
   const channelId = String(channel.result?.channel?.id ?? '');
   expect(channelId, `channel create -> ${channel.status}`).toBeTruthy();
   let id = '';
