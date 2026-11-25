@@ -40,6 +40,16 @@ describe('validateContactInput', () => {
     assert.equal(r.value.email, 'ab@example.com');
   });
 
+  it('refuses an address with unseen characters, and keeps the marks and joiners a name may have', () => {
+    for (const ch of ['\u061c', '\u200b', '\u200e', '\u200f', '\u2060', '\ufeff', '\u0085']) {
+      const r = validateContactInput({ ...valid, email: `a${ch}b@example.com` });
+      assert.equal(r.ok, false, escape(ch));
+      assert.deepEqual((r as { errors: unknown }).errors, { email: 'invalid' });
+    }
+    const named = validateContactInput({ ...valid, name: 'می\u200cرا' }) as { ok: true; value: { name: string } };
+    assert.equal(named.value.name, 'می\u200cرا');
+  });
+
   it('accepts a good message and normalises it', () => {
     const r = validateContactInput({ ...valid, name: '  Amina \n Y ', message: 'line one\r\nline two is here' });
     assert.equal(r.ok, true);
