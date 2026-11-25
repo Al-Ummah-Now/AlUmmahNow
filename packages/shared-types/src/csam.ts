@@ -253,6 +253,35 @@ export function csamUrlPart(url: URL): { commentId?: string } | null {
 }
 
 
+/** Query keys of our pages that change how a page is shown or say where the visitor came from, never what it is about. */
+const PLAIN_KEYS = new Set(['t', 'start', 'end', 'list', 'index', 'lang', 'locale', 'autoplay', 'loop', 'mute', 'muted', 'controls', 'quality', 'w', 'h', 'width', 'height', 'maxwidth', 'maxheight', 'sort', 'fbclid', 'gclid', 'dclid', 'msclkid', 'igshid', 'mc_cid', 'mc_eid', 'si', 'feature', 'ref', '_rsc']);
+const PLAIN_TABS = new Set(['home', 'videos', 'shorts', 'live', 'playlists', 'community', 'posts', 'about']);
+const PLAIN_HASH = /^(?:|top|main-content|t=\d{1,6}s?)$/;
+
+/**
+ * Whether the query and the fragment of one of our pages say nothing but what we know they say: a part of the page
+ * (csamUrlPart), its own id, or how it is shown. Anything else may name a comment or another item, so the URL maps
+ * to nothing and a person looks at it.
+ */
+function onlyKnown(url: URL): boolean {
+  let posts: string[] = [];
+  for (const [name, value] of url.searchParams) {
+    const key = name.toLowerCase();
+    if (key === 'post') posts = [...posts, value];
+    if (key === 'vid' || key === 'post' || PART_KEYS.includes(key) || PLAIN_KEYS.has(key) || key.startsWith('utm_')) continue;
+    if (key === 'tab' && PLAIN_TABS.has(value.toLowerCase())) continue;
+    return false;
+  }
+  let hash = url.hash.replace(/^#/, '');
+  try {
+    hash = decodeURIComponent(hash);
+  } catch {
+    return false;
+  }
+  // #post-<id> scrolls to the post the page is about
+  return PART_HASH.test(hash) || PLAIN_HASH.test(hash) || posts.some((id) => hash === `post-${id}`);
+}
+
 const ok = (id: string | null | undefined): id is string => !!id && UUID_ISH.test(id);
 const isLocale = (segment: string | undefined) => /^(?:en|ar)$/i.test(segment ?? '');
 const withoutLocale = (parts: string[]) => (isLocale(parts[0]) ? parts.slice(1) : parts);
@@ -410,7 +439,7 @@ export function parseCsamUrl(input: string | URL): CsamUrlTarget | null {
   if (part || aboutComments) {
     if (!part?.commentId) return other;
     const id = page[2];
-    if (aboutComments) return page.length === 3 && ok(id) && !namesAnother(url, id) ? { kind: 'comment', on: 'video', parentId: id, commentId: part.commentId } : other;
+    if (aboutComments) return page.length === 3 && onlyKnown(url) && ok(id) && !namesAnother(url, id) ? { kind: 'comment', on: 'video', parentId: id, commentId: part.commentId } : other;
     return commentOf(parseItem(url, host, parts), part.commentId) ?? other;
   }
   return parseItem(url, host, parts) ?? other;
@@ -440,10 +469,12 @@ function parseItem(url: URL, host: string, parts: string[]): CsamUrlTarget | nul
     return parts.length ? { kind: 'image', path } : null;
   }
   if (LIVE_HOST.test(host)) return parts[0] === 'hls' && ok(parts[1]) ? { kind: 'live_session', sessionId: parts[1] } : null;
+  // Files carry what their delivery adds to their query; a page's says what it is about
+  if ((SHORT_LINK_HOST.test(host) || SITE_HOST.test(host)) && !onlyKnown(url)) return null;
   if (SHORT_LINK_HOST.test(host)) return parseShortLink(url, parts);
   if (SITE_HOST.test(host)) return parseSitePage(url, parts);
   if (SCHOLAR_HOST.test(host) || SCHOLAR_TEST_HOST.test(host)) {
-    const page = sitePageOf(url, parts);
+    const page = onlyKnown(url) ? sitePageOf(url, parts) : null;
     return { kind: 'site', host, ours: true, item: page?.item ?? null, id: page?.id ?? null };
   }
   return null;
@@ -456,6 +487,7 @@ function parseOwnDomain(url: URL): CsamUrlTarget | null {
   if (!page || url.port || !/^https?:$/.test(url.protocol)) return null;
   const target = { kind: 'site', host: hostOf(url), ours: false, ...page } as const;
   const part = csamUrlPart(url);
+  if (!onlyKnown(url)) return { ...target, item: null, id: null };
   if (!part) return target;
   return part.commentId ? { ...target, commentId: part.commentId } : { ...target, item: null, id: null };
 }

@@ -80,6 +80,8 @@ export interface CopyState {
 export const STEP_CHUNKS = 12;
 /** Reads of one delivery at most (a Worker's subrequest limit is 1000; the rest of the step needs some too). */
 export const STEP_READS = 600;
+/** A delivery starts no further chunk after this long; the next one goes on. */
+export const STEP_MS = 60_000;
 export const caseKey = (caseId: string, name: string) => `cases/${caseId}/${name}.bin`;
 export const manifestKey = (caseId: string) => `cases/${caseId}/manifest.bin`;
 
@@ -340,7 +342,8 @@ export type CopyStep =
 const label = (s: EvidenceSource) => (s.type === 'r2' ? `${s.bucket}/${s.key}` : s.type === 'original' ? `MEDIA_ORIGINALS/${originalPrefix(s.videoId)}${s.uploadId}/` : s.type === 'image' ? `images${s.path}` : s.type === 'live' ? `LIVE_MEDIA/live/${s.sessionId}/${s.rendition}/` : s.type === 'bunny_live' ? `bunny/${s.guid}` : `bunny/${s.videoId}`);
 
 /** Copies up to STEP_CHUNKS chunks of one planned file. Call again with the returned state until file_done. */
-export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, planned: PlannedFile, state: CopyState): Promise<CopyStep> {
+export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, planned: PlannedFile, state: CopyState, clock: () => number = Date.now): Promise<CopyStep> {
+	const until = clock() + STEP_MS;
 	const bucket = store(env);
 	const source = await openSource(env, planned.source, state);
 	if (!source) {
@@ -365,7 +368,7 @@ export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: str
 			const needs = source.reads?.(offset, length) ?? 1;
 			// No step could ever read it: a person has to (the caller says what to do)
 			if (needs > STEP_READS) throw new Error(`${planned.name}: one part of it is in ${needs} objects, too many to read at once. Nobody can reach it; keep a copy by hand, delete it there, then retry`);
-			if (n > 0 && reads + needs > STEP_READS) break;
+			if (n > 0 && (reads + needs > STEP_READS || clock() >= until)) break;
 			reads += needs;
 			const plain = source.size === 0 ? new Uint8Array(0) : await source.read(offset, length);
 			const sealed = await sealChunk(keys.current.key, plain, { caseId, name: planned.name, index: next.chunk });
