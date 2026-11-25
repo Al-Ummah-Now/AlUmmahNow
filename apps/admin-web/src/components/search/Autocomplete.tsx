@@ -217,10 +217,11 @@ export function Autocomplete({
   );
   useEffect(() => () => initialAbort.current?.abort(), []);
 
-  const openInitial = useCallback(() => {
+  /** `reload`: a list whose first page failed is asked for again. */
+  const openInitial = useCallback((reload = true) => {
     if (!initialOn) return;
     setState((s) => reopened(s, initialRef.current));
-    if (!initialRef.current || (initialRef.current.status === 'error' && initialRef.current.items.length === 0)) loadInitial(null);
+    if (!initialRef.current || (initialRef.current.status === 'error' && initialRef.current.items.length === 0 && reload)) loadInitial(null);
   }, [initialOn, loadInitial]);
 
   const loadMore = useCallback(() => {
@@ -427,7 +428,8 @@ export function Autocomplete({
             placeholder={placeholder ?? t(mode === 'search' ? 'autocomplete.searchPlaceholder' : 'autocomplete.pickPlaceholder')}
             onChange={(e) => setState((s) => (initialOn ? typed(s, e.target.value, initialRef.current) : typed(s, e.target.value)))}
             onKeyDown={onKeyDown}
-            onFocus={() => (initialOn ? openInitial() : setState((s) => (s.options.length > 0 && s.query.trim().length >= MIN_QUERY ? { ...s, open: true } : s)))}
+            // Back from Retry (Shift+Tab) is not asking for it
+            onFocus={(e) => (initialOn ? openInitial(!popupRef.current?.contains(e.relatedTarget)) : setState((s) => (s.options.length > 0 && s.query.trim().length >= MIN_QUERY ? { ...s, open: true } : s)))}
             onClick={() => {
               if (initialOn && !state.open) openInitial();
             }}
@@ -437,6 +439,8 @@ export function Autocomplete({
           <div
             ref={popupRef}
             hidden={!expanded}
+            // Scrolling, it would be a tab stop before Retry
+            tabIndex={-1}
             className={`aun-glass-panel ${popup === 'inline' ? 'relative' : 'absolute start-0 top-full z-30 min-w-72'} mt-1 w-full overflow-y-auto !rounded-[var(--aun-radius-menu)]`}
             data-testid={testId ? `${testId}-popup` : undefined}
             // A press on the list (its scrollbar too) must not blur the input and close it
@@ -535,6 +539,7 @@ export function Autocomplete({
       <p
         role="status"
         aria-live="polite"
+        aria-atomic="true"
         className={showStatus ? 'min-h-4 text-xs text-fg-muted' : 'sr-only'}
         data-testid={testId ? `${testId}-status` : undefined}
         data-status={phase}

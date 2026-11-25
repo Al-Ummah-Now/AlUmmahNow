@@ -112,6 +112,23 @@ describe('a failed opening list', () => {
     await r.unmount();
   });
 
+  it('Shift+Tab back from Retry keeps the failure and asks for nothing; a new visit asks again', async () => {
+    const r = await mount([new Error('down'), { items: [item('usr_1')], next: null }]);
+    await r.focus(r.q('input')!);
+    for (const id of ['popup', 'list']) assert.equal(r.q(id)!.getAttribute('tabindex'), '-1', `${id}: not a tab stop`);
+    assert.equal(r.q('status')!.getAttribute('aria-atomic'), 'true');
+    await r.tab();
+    await r.tab(true);
+    assert.equal(document.activeElement, r.q('input'));
+    assert.ok(r.open() && r.q('retry'));
+    assert.deepEqual(r.cursors, [null]);
+    await r.focus(document.querySelector<HTMLElement>('#after')!);
+    await r.focus(r.q('input')!);
+    assert.deepEqual(r.cursors, [null, null]);
+    assert.ok(r.q('option'));
+    await r.unmount();
+  });
+
   it('a later page that fails is announced, and again when its retry fails; the items stay', async () => {
     const r = await mount([{ items: [item('usr_1')], next: 'p2' }, new Error('down'), new Error('down'), { items: [item('usr_2')], next: null }]);
     await r.focus(r.q('input')!);
