@@ -68,6 +68,12 @@ describe('rendering', () => {
     for (const line of prose) assert.doesNotMatch(line, /[0-9]/, line);
   });
 
+  it('Arabic: the person who acted is never the subject of a verb (their gender is not known)', () => {
+    const intro = (event: 'proposed' | 'approved' | 'rejected' | 'withdrawn') => renderWorkflowEmail({ to: 'b@example.org', locale: 'ar', event, request, actorName: 'أمينة', names: new Map() }).text;
+    assert.match(intro('proposed'), /هذا التغيير بطلب من أمينة\./);
+    for (const event of ['approved', 'rejected', 'withdrawn'] as const) assert.match(intro(event), /بواسطة أمينة\./);
+  });
+
   it('rejections quote the reason; secrets never show a value', () => {
     const rejected = { ...request, status: 'rejected' as const, steps: [{ seq: 2, actor: 'fin2', kind: 'reject' as const, note: 'Wrong currency', stepUp: true, at: '' }] };
     const e = renderWorkflowEmail({ to: 'a@example.org', locale: 'en', event: 'rejected', request: rejected, actorName: 'Bilal', names: new Map() });
