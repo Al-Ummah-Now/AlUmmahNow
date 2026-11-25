@@ -50,6 +50,27 @@ export interface Leftovers {
 }
 
 /** Resources recorded while the run made them (builders.ts: "<kind> <id>" per line). */
+/**
+ * A call to the probe Worker. A workers.dev URL deployed seconds ago answers 404 (or 5xx from an edge
+ * that has not got it yet) until it propagates, and the routes do not all arrive at once: /bunny worked
+ * and /r2 right after it answered 404 (the "Upload formats on QA" run 45531275468). Every call
+ * retries those answers for a minute (12 tries, 5 s apart) before the answer counts.
+ */
+export const PROBE_RETRIES = 12;
+export const PROBE_RETRY_STATUSES = new Set([404, 502, 503, 504]);
+export async function probeFetch(
+	url: string,
+	init: RequestInit,
+	deps: { fetch: typeof fetch; sleep: (ms: number) => Promise<void> } = { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
+): Promise<Response> {
+	let res = await deps.fetch(url, init);
+	for (let attempt = 0; PROBE_RETRY_STATUSES.has(res.status) && attempt < PROBE_RETRIES; attempt++) {
+		await deps.sleep(5000);
+		res = await deps.fetch(url, init);
+	}
+	return res;
+}
+
 export function readResources(text: string): { videos: string[]; channels: string[] } {
   const videos = new Set<string>();
   const channels = new Set<string>();
@@ -155,19 +176,14 @@ async function main(): Promise<void> {
   const token = process.env.LEFTOVERS_PROBE_TOKEN;
   if (probe && token && env === 'qa') {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    // A workers.dev URL deployed seconds ago can answer 404 until it propagates: retry for a minute
-    let bunny = await fetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
-    for (let attempt = 0; bunny.status === 404 && attempt < 12; attempt++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      bunny = await fetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
-    }
+    const bunny = await probeFetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
     if (!bunny.ok) throw new Error(`probe /bunny answered ${bunny.status}`);
     const found = (await bunny.json()) as { videos: Leftovers['bunnyVideos']; collections: Leftovers['bunnyCollections'] };
     leftovers.bunnyVideos = found.videos;
     leftovers.bunnyCollections = found.collections;
     const videoIds = [...new Set([...resources.videos, ...found.videos.map((v) => v.guid)])];
     if (videoIds.length) {
-      const objects = await fetch(`${probe}/r2`, { method: 'POST', headers, body: JSON.stringify({ videoIds }) });
+      const objects = await probeFetch(`${probe}/r2`, { method: 'POST', headers, body: JSON.stringify({ videoIds }) });
       if (!objects.ok) throw new Error(`probe /r2 answered ${objects.status}`);
       leftovers.r2Objects = ((await objects.json()) as { objects: Leftovers['r2Objects'] }).objects;
       // Grace: the purge of a deleted video removes its Bunny video and media in the background
