@@ -213,10 +213,10 @@ describe('the colours viewers get (real ffmpeg)', { skip: !have && 'ffmpeg is no
 	});
 
 	it('odd sizes encode, with their stills and review frames', () => {
-		const tags = { convert: ['smpte170m', 'smpte170m', 'smpte170m', 'tv'], hlg: ['bt2020', 'arib-std-b67', 'bt2020nc', 'tv'], as_is: ['bt709', 'bt709', 'bt709', 'tv'] };
-		for (const [kind, size, format] of [['convert', '321x241', 'yuv444p'], ['convert', '853x481', 'yuv422p'], ['convert', '641x361', 'yuv420p'], ['hlg', '321x241', 'yuv444p10le'], ['hlg', '1083x611', 'yuv420p10le'], ['as_is', '321x241', 'yuv444p'], ['convert', '321x241', 'gbrp']] as const) {
+		const tags = { ycgco: ['bt709', 'bt709', 'ycgco', 'tv'], convert: ['smpte170m', 'smpte170m', 'smpte170m', 'tv'], hlg: ['bt2020', 'arib-std-b67', 'bt2020nc', 'tv'], as_is: ['bt709', 'bt709', 'bt709', 'tv'] };
+		for (const [kind, size, format] of [['convert', '321x241', 'yuv444p'], ['convert', '853x481', 'yuv422p'], ['convert', '641x361', 'yuv420p'], ['hlg', '321x241', 'yuv444p10le'], ['hlg', '1083x611', 'yuv420p10le'], ['as_is', '321x241', 'yuv444p'], ['convert', '321x241', 'gbrp'], ['ycgco', '321x241', 'yuv444p'], ['ycgco', '640x360', 'yuv420p']] as const) {
 			const { file, v, plan } = textured(`odd-${kind}-${size}-${format}`, size, format, format === 'gbrp' ? ['bt709', 'bt709', 'gbr', 'pc'] : tags[kind]);
-			assert.equal(plan.kind, kind);
+			assert.equal(plan.kind, kind === 'ycgco' ? 'convert' : kind);
 			const cube = join(dir, 'hlg.cube');
 			const out = join(dir, `odd-${kind}-${size}-${format}-out`);
 			const rungs = ladderFor({ width: v.width, height: v.height });

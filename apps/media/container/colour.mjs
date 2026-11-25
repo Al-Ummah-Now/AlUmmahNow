@@ -212,6 +212,8 @@ export function colourPlan(c) {
 
 /** 4:2:0 and the colorspace filter need even sizes. */
 const EVEN = 'w=trunc(iw/2)*2:h=trunc(ih/2)*2';
+/** An odd last row or column dropped, whatever the pixel format. */
+const CROP_EVEN = 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0';
 const FINE = 'flags=bicubic+accurate_rnd+full_chroma_int';
 /** Every frame says what it is; the encoder writes it (H.264 VUI) and the muxer too (colr). */
 export const SDR_TAGS = 'setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709';
@@ -247,8 +249,8 @@ export function toSdrFilters(plan, o = {}) {
 		const colorspace = (from, full) => `colorspace=ispace=${from}:iprimaries=${plan.primaries}:itrc=bt709:irange=${full ? 'pc' : 'tv'}:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p`;
 		if (plan.rgb && WIDE.includes(plan.primaries)) return [`scale=${EVEN}:${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv444p', colorspace('bt709', false), SDR_TAGS].join(',');
 		if (plan.rgb) return [`scale=${EVEN}:${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv420p', SDR_TAGS].join(',');
-		// The colorspace filter takes even sizes only (this scale is a no-op for them)
-		return [`scale=${EVEN}:${FINE}`, colorspace(plan.matrix, plan.full), SDR_TAGS].join(',');
+		// The colorspace filter takes even sizes only. A crop, not a scale: swscale reads no YCgCo (a no-op at even sizes)
+		return [CROP_EVEN, colorspace(plan.matrix, plan.full), SDR_TAGS].join(',');
 	}
 	return '';
 }
