@@ -1316,7 +1316,7 @@ describe('a try that stops half-way', () => {
 			globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 				const url = String(input);
 				if (url.includes('/community-posts/ch-me/')) folder = true;
-				if (folder && when === 'the CDN' && url.includes('api.cloudflare.com')) return new Response('no', { status: 500 });
+				if (folder && when === 'the CDN' && url.startsWith('https://api.cloudflare.com/')) return new Response('no', { status: 500 });
 				if (when === 'a file' && init?.method === 'DELETE' && url.includes('f3.webp')) return new Response('down', { status: 500 });
 				return fetchNow(input as never, init);
 			}) as typeof fetch;
