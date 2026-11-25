@@ -223,7 +223,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
         <ul className="space-y-3" data-testid="troubleshoot-jobs" aria-label={t('transcodeTroubleshoot.jobsCaption')}>
           {orderJobs(jobs.items, focusVideo).map((job) => {
             const actions = jobActions(job);
-            const source = job.source ? sourceLines(job.source, t, locale) : null;
+            const source = job.source ? sourceLines(job.source, job.reason, t, locale) : null;
             const name = job.title ?? t('transcodeTroubleshoot.untitled');
             const times = [
               job.queuedAt && t('transcodeTroubleshoot.queuedAt', { time: when(job.queuedAt, locale) ?? '' }),
@@ -292,10 +292,10 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                   <div className="min-w-0">
                     <dt className="text-xs text-fg-muted">{t('transcodeTroubleshoot.colWhy')}</dt>
                     <dd className="mt-1">
-                      <p className="text-fg" data-testid="troubleshoot-job-reason" data-reason={job.reason ?? ''}>{job.reason ? t(REASON_LABEL[job.reason]) : t('transcodeTroubleshoot.noReason')}</p>
+                      <p className="text-fg" data-testid="troubleshoot-job-reason" data-reason={job.reason ?? ''}>{source?.isReason ? source.verdict : job.reason ? t(REASON_LABEL[job.reason]) : t('transcodeTroubleshoot.noReason')}</p>
                       {source && (
                         <div className="mt-1" data-testid="troubleshoot-job-source">
-                          <p className="text-sm text-fg">{source.verdict}</p>
+                          {!source.isReason && <p className="text-sm text-fg">{source.verdict}</p>}
                           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">{source.details.map((line) => <li key={line}>{line}</li>)}</ul>
                         </div>
                       )}
@@ -318,7 +318,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                     <dd className="mt-1 text-xs">
                       {job.instance ? (
                         <>
-                          <div className="font-mono break-all text-fg-muted" dir="ltr">{job.instance.name}</div>
+                          <div className="font-mono break-all text-fg-muted"><bdi dir="ltr">{job.instance.name}</bdi></div>
                           <div className="mt-1 text-fg" data-testid="troubleshoot-job-instance-state">
                             {job.instance.state ? t('transcodeTroubleshoot.instanceState', { state: translateDynamic(t, 'transcodeTroubleshoot.instanceStates', job.instance.state) }) : t('transcodeTroubleshoot.instanceNoState')}
                           </div>

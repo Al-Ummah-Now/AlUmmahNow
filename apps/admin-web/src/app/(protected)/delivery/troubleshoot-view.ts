@@ -69,17 +69,22 @@ const STREAM_LABEL: Record<NonNullable<TroubleshootSource['streams']>[number]['k
   other: 'transcodeTroubleshoot.source.kinds.other',
 };
 
-/** What a failed job's file is, in words: the verdict, then its size, length, streams and empty bytes. */
-export function sourceLines(source: TroubleshootSource, t: Translator, locale: string): { verdict: string; details: string[] } {
+/**
+ * What a failed job's file is, in words: the verdict, then its size, length, streams and any empty
+ * bytes. `isReason`: the verdict says why there is no video, so it stands in for the reason's own line.
+ */
+export function sourceLines(source: TroubleshootSource, reason: TroubleshootJob['reason'], t: Translator, locale: string): { verdict: string; isReason: boolean; details: string[] } {
+  const verdict = sourceVerdict(source);
   const percent = numberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
   return {
-    verdict: t(SOURCE_VERDICT_LABEL[sourceVerdict(source)]),
+    verdict: t(SOURCE_VERDICT_LABEL[verdict]),
+    isReason: reason === 'no_video_stream' && verdict !== 'has_video',
     details: [
       formatBytes(locale as never, source.bytes),
       ...(source.durationSeconds ? [formatDuration(locale as never)(source.durationSeconds)] : []),
       // The codec names stay left to right inside Arabic text
       ...(source.streams ?? []).map((s) => t('transcodeTroubleshoot.source.stream', { kind: t(STREAM_LABEL[s.kind]), codec: `\u2068${s.codec}\u2069` })),
-      t('transcodeTroubleshoot.source.zeros', { start: percent.format(source.zeroStartPercent / 100), end: percent.format(source.zeroEndPercent / 100) }),
+      ...(source.zeroStartPercent || source.zeroEndPercent ? [t('transcodeTroubleshoot.source.zeros', { start: percent.format(source.zeroStartPercent / 100), end: percent.format(source.zeroEndPercent / 100) })] : []),
     ],
   };
 }
