@@ -19,7 +19,7 @@ import type { Duplex } from 'node:stream';
 import { TLSSocket } from 'node:tls';
 import { join } from 'node:path';
 import { fakeFor } from './outbound.ts';
-import { PORTS, STATE_DIR } from './stack.ts';
+import { IDLE_CONNECTION_MS, PORTS, STATE_DIR } from './stack.ts';
 
 const LOCAL = new Set(['localhost', '127.0.0.1']);
 /**
@@ -226,6 +226,10 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
     socket.on('error', close);
   });
   proxy.on('clientError', (_e, socket) => socket.destroy());
+  for (const server of [fakeServer, proxy]) {
+    server.keepAliveTimeout = IDLE_CONNECTION_MS;
+    server.headersTimeout = IDLE_CONNECTION_MS + 1000;
+  }
 
   return new Promise((resolve) => {
     proxy.listen(PORTS['browser-proxy'], '127.0.0.1', () =>

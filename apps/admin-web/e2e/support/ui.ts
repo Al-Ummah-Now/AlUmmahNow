@@ -15,9 +15,30 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
     await page.locator('input[name="email"]').fill(account.email);
     // Seed password: never through fill(), whose step title the HTML report keeps
     await fillSecret(page.locator('input[name="password"]'), account.password);
-    await page.locator('button[data-component="button"]:not([type="button"])').click();
+    // The click must not wait for the navigation it starts: that is the whole sign-in (the issuer's
+    // POST, its redirect to /authorize, the callback's token exchange, then the first page), and
+    // Playwright holds a click to its 15 s action timeout while it waits ("waiting for scheduled
+    // navigations to finish"). On a loaded stack (WebKit job: 4 browsers beside the stack) that chain
+    // took over 15 s with every step answering, and AUTH-03 failed with the click "done" (#1941). The wait
+    // below is on the real outcome, with its own longer budget.
+    await page.locator('button[data-component="button"]:not([type="button"])').click({ noWaitAfter: true });
   }
-  await page.waitForURL((url) => expectedPath.test(url.pathname), { timeout: 45_000 });
+  await waitForSignedIn(page, expectedPath);
+}
+
+/**
+ * Until the browser is on the page it signs in to, or the issuer's form comes back with its error
+ * (a wrong password re-renders the form with a `form-alert`): that fails at once with the message,
+ * instead of after the 45 s the redirect chain may legitimately take.
+ */
+async function waitForSignedIn(page: Page, expectedPath: RegExp) {
+  const refused = page.locator('[data-component="form-alert"]').filter({ hasText: /\S/ }).first();
+  await Promise.race([
+    page.waitForURL((url) => expectedPath.test(url.pathname), { timeout: 45_000 }),
+    refused.waitFor({ state: 'visible', timeout: 45_000 }).then(async () => {
+      throw new Error(`the sign-in form refused the login: ${(await refused.innerText()).trim()}`);
+    }),
+  ]);
 }
 
 /**

@@ -28,7 +28,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { FAKES } from './outbound.ts';
-import { LOCAL_SECRETS, PORTS, ROOT, url as stackUrl } from './stack.ts';
+import { IDLE_CONNECTION_MS, LOCAL_SECRETS, PORTS, ROOT, url as stackUrl } from './stack.ts';
 import { googleAccounts, googleControl, googleOAuth, youtubeApi, ytimg } from './fake-google.ts';
 
 /** The CDN hostname api-videos signs and the browser loads (Playwright routes it to the fake CDN). */
@@ -687,6 +687,8 @@ export function startFakeCdn(): Promise<() => Promise<void>> {
     res.writeHead(response.status, Object.fromEntries(response.headers));
     res.end(Buffer.from(await response.arrayBuffer()));
   });
+  server.keepAliveTimeout = IDLE_CONNECTION_MS;
+  server.headersTimeout = IDLE_CONNECTION_MS + 1000;
   return new Promise((resolve) => {
     server.listen(PORTS['fake-cdn'], '127.0.0.1', () => resolve(() => new Promise((done) => server.close(() => done()))));
   });
