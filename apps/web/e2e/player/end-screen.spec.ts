@@ -250,8 +250,14 @@ test.describe('end screen behaviour', () => {
 
   test('counts down, then the next video loads and plays on its own', async ({ page }) => {
     const player = await openHarness(page, { src: 'dark' });
+    let nextAsked = false;
+    page.on('request', (request) => {
+      if (/src=bright/.test(request.url())) nextAsked = true;
+    });
     await reachEnd(page, player, { hold: false });
-    await expect(page).toHaveURL(/src=bright/, { timeout: 8_000 });
+    await expect.poll(() => nextAsked, { message: 'the countdown did not ask for the next video', timeout: 8_000 }).toBe(true);
+    // Its address shows once it has loaded: 1.0 to 14.5 s on the CI dev server (measured below)
+    await expect(page).toHaveURL(/src=bright/, { timeout: 20_000 });
     // The advance asked the next page to play: its media time moves without a press
     await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0), { timeout: 30_000 }).toBeGreaterThan(0.5);
   });
