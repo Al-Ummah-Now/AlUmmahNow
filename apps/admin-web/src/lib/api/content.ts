@@ -8,7 +8,7 @@
  */
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
-import type { AdminUsersPage } from '@al-ummah/shared-types';
+import type { AdminChannelMoveOffer, AdminUsersPage } from '@al-ummah/shared-types';
 import type {
   AdminChannelRow,
   AdminCommentRow,
@@ -106,6 +106,16 @@ export async function takeOfficialHandle(id: string, handle: string, reason: str
 
 export async function releaseChannelHandle(id: string, reason: string): Promise<ActionResult<{ handle: string; previousHandle: string | null }>> {
   return toResult(() => fetchAdmin<{ handle: string; previousHandle: string | null }>(`${BASE}/channels/${enc(id)}/handle/release`, json('POST', { reason })));
+}
+
+/** The owner's open offer to hand the channel to one of its admins (wiki AUN-CHANNEL-CLAIM §5); super admins only. */
+export async function getChannelMoveOffers(id: string): Promise<AdminChannelMoveOffer[]> {
+  return (await fetchAdmin<{ offers: AdminChannelMoveOffer[] }>(`${BASE}/channels/${enc(id)}/move-offers`)).offers;
+}
+
+/** Stops the offer; both people are told, the reason goes to the audit log. */
+export async function stopChannelMoveOffer(id: string, offerId: string, reason: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/channels/${enc(id)}/move-offers/${enc(offerId)}/stop`, json('POST', { reason })));
 }
 
 /** Verification reuses the existing channel verification endpoint (its own audit log). */

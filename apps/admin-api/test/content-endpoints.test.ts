@@ -252,6 +252,18 @@ describe('content endpoints: permissions', () => {
     assert.equal(log.length, 1, 'a refused stop leaves no audit row');
   });
 
+  it('a channel\'s open offer is read by super admins only (CC-7b)', async () => {
+    const { db } = fakeDb();
+    const offers = [{ id: 'off_1', status: 'offered' }];
+    const { fetcher, calls } = fakeVideos({ 'GET /channels/ch_1/move-offers': () => ({ body: { success: true, result: { offers } } }) });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    for (const roles of ['admin', 'moderator']) assert.equal((await call('/api/content/channels/ch_1/move-offers', { roles })).status, 403, roles);
+    assert.equal(calls.length, 0);
+    const res = await call('/api/content/channels/ch_1/move-offers', { roles: 'super_admin' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(((await res.json()) as { result: unknown }).result, { offers });
+  });
+
   it('handle tools are super admin only, need a reason and are audited (AUN-CHANNEL-CLAIM CC-4)', async () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos();

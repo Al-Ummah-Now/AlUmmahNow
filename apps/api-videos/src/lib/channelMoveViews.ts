@@ -73,7 +73,7 @@ function statusOf(o: MoveOfferRow, now: number): string {
 	return o.status;
 }
 
-function keepsContactEmail(o: MoveOfferRow): boolean {
+export function keepsContactEmail(o: MoveOfferRow): boolean {
 	try {
 		return (JSON.parse(o.options_json || '{}') as { keepContactEmail?: unknown }).keepContactEmail === true;
 	} catch {

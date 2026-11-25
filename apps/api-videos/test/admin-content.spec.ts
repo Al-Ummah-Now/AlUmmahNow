@@ -2687,6 +2687,37 @@ describe('channel actions', () => {
 		assert.equal((plan.match(/to_user_id=\? AND status=\? AND rowid<\?/g) ?? []).length, 2, plan);
 	});
 
+	it('the admin channel page reads the open offer with both people, and a stop takes it away (CC-7b)', async () => {
+		const { raw, env, db, call } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const read = async () => (await call('GET', '/channels/ch1/move-offers')).body.result.offers;
+		assert.deepEqual(await read(), []);
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000), keepContactEmail: true });
+		const [seen] = await read();
+		assert.deepEqual([seen.id, seen.status, seen.from.id, seen.from.displayName, seen.to.id, seen.to.email, seen.keepContactEmail, seen.createdAt, seen.expiresAt], [offer.id, 'offered', OWNER, `Name ${OWNER}`, OTHER, `${OTHER}@example.com`, true, offer.created_at, offer.expires_at]);
+		const set = (sql: string, ...args: string[]) => db.db.prepare(`UPDATE channel_move_offers SET ${sql} WHERE id = ?`).run(...args, offer.id);
+		set(`status = 'accepting', updated_at = ?`, new Date().toISOString());
+		assert.equal((await read())[0].status, 'accepting');
+		assert.equal((await call('POST', `/channels/ch1/move-offers/${offer.id}/stop`)).body.code, 'offer_not_found', 'too late to stop');
+		set(`updated_at = ?`, '2026');
+		assert.deepEqual(await read(), [], 'an accept that never finished');
+		set(`status = 'offered', expires_at = ?`, '2026');
+		assert.deepEqual(await read(), [], 'expired');
+		set(`expires_at = ?`, offer.expires_at);
+		// Who is banned is marked, and a person who is gone still has a row, by id
+		db.db.prepare(`INSERT INTO videos_bans (user_id, reason, banned_by, banned_at) VALUES (?, 'x', 'usr_super', 'now')`).run(OTHER);
+		raw.profiles.store.delete(OWNER);
+		const [marked] = await read();
+		assert.deepEqual([marked.from.id, marked.from.isBanned, marked.to.id, marked.to.isBanned], [OWNER, false, OTHER, true]);
+		const { status } = await call('POST', `/channels/other/move-offers/${offer.id}/stop`);
+		assert.equal(status, 404, 'another channel’s offer');
+		assert.equal((await read()).length, 1);
+		assert.equal((await call('POST', `/channels/ch1/move-offers/${offer.id}/stop`)).status, 200);
+		assert.deepEqual(await read(), []);
+	});
+
 	it('a person without a name is never shown by id, handle or email; receivers are found by name in any language (CC-7)', async () => {
 		const { raw, env } = await setup({
 			profiles: {
