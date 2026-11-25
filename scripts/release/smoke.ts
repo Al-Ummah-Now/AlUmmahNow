@@ -193,7 +193,11 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 			return `not answering yet (${(error as Error).message}); a newly attached custom domain can take minutes`;
 		}
 		assert(res.status === 200, `HTTP ${res.status}`);
-		const body = (await res.json().catch(() => null)) as { now?: unknown } | null;
+		const body = (await res.json().catch((error: unknown) => {
+			// Headers, then a stalled body: say so instead of "no clock"
+			if (isTimeout(error)) throw error;
+			return null;
+		})) as { now?: unknown } | null;
 		assert(typeof body?.now === 'number', 'no edge clock in the answer (is the host on the videos worker?)');
 		return 'HTTP 200 edge clock';
 	});
