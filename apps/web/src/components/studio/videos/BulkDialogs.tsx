@@ -42,8 +42,13 @@ export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: Dia
     else await onDone(summary);
   };
 
+  const change = (next: boolean) => {
+    if (!next) terms.clear();
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={change}>
       <DialogContent>
         <DialogHeader><DialogTitle>{text.title}</DialogTitle></DialogHeader>
         <div className="space-y-3">
@@ -65,7 +70,7 @@ export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: Dia
         </div>
         {terms.dialog}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{text.cancel}</Button>
+          <Button variant="outline" onClick={() => change(false)}>{text.cancel}</Button>
           <Button disabled={!start || busy} onClick={() => void submit()} data-testid="studio-bulk-schedule-submit">{text.submit}</Button>
         </DialogFooter>
       </DialogContent>

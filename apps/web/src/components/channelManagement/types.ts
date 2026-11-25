@@ -30,6 +30,8 @@ export interface CreateChannelDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Returns false when submission was paused (e.g. terms_required) so the form stays open with its typed values. */
   onSubmit: (data: CreateChannelFormData) => Promise<boolean | void>;
+  /** A field changed: what was refused before is not what the form says now. */
+  onEdit?: () => void;
   isLoading?: boolean;
   lang?: 'en' | 'ar';
   /** Said above the buttons (what keeps the last try from finishing). */

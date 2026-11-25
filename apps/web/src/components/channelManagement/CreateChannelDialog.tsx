@@ -24,6 +24,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
   open,
   onOpenChange,
   onSubmit,
+  onEdit,
   isLoading,
   lang = 'en',
   notice,
@@ -141,7 +142,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} onChange={onEdit}>
           <DialogHeader>
             <DialogTitle>{t.title}</DialogTitle>
             <DialogDescription>

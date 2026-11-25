@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChannelManagementSection } from '../index';
+import { ChannelManagementSection as ChannelManagementSectionRTL } from '../rtl';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => mockRouter, useSearchParams: () => new URLSearchParams() }));
@@ -96,5 +97,23 @@ describe('ChannelManagementSection, hidden when off', () => {
     // Form stays mounted with typed value intact, and no generic error toast is shown
     expect((screen.getByLabelText(/channel name/i) as HTMLInputElement).value).toBe('Preserved Draft Channel');
     expect(screen.queryByTestId('channel-toast')).toBeNull();
+  });
+
+  it.each([['English', ChannelManagementSection, /create channel/i, /channel name/i], ['Arabic', ChannelManagementSectionRTL, /قناة جديدة/, /اسم القناة/]] as const)('%s: what was refused is not offered again once the draft is edited', async (_name, Section, create, label) => {
+    mockChannels = [{ id: 'c1', name: 'Noor', userId: 'u1' }];
+    mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false, termsAccepted: true };
+    mockCreateChannel.mockImplementation(async () => {
+      capturedOnTermsRequired?.();
+      return false;
+    });
+    render(<Section initialChannels={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: create }));
+    const name = screen.getByLabelText(label) as HTMLInputElement;
+    fireEvent.change(name, { target: { value: 'First name' } });
+    fireEvent.submit(name.closest('form')!);
+    fireEvent.click(await screen.findByTestId('creator-terms-cancel'));
+    expect(await screen.findByTestId('create-channel-terms')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(label), { target: { value: 'Second name' } });
+    expect(screen.queryByTestId('create-channel-terms')).toBeNull();
   });
 });

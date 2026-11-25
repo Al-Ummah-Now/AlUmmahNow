@@ -258,37 +258,37 @@ export function BatchUploadQueue({
       ">
         {stats.uploading > 0 && (
           <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-blue-700 dark:text-blue-300">{stats.uploading}</div>
+            <div className="font-semibold text-blue-700 dark:text-blue-300">{formatNumber(lang, stats.uploading)}</div>
             <div className="text-blue-600 dark:text-blue-400">{t.batch.uploading}</div>
           </div>
         )}
         {stats.pending > 0 && (
           <div className="bg-gray-50 dark:bg-gray-700 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-gray-700 dark:text-gray-300">{stats.pending}</div>
+            <div className="font-semibold text-gray-700 dark:text-gray-300">{formatNumber(lang, stats.pending)}</div>
             <div className="text-gray-600 dark:text-gray-400">{t.batch.pending}</div>
           </div>
         )}
         {stats.paused > 0 && (
           <div className="bg-brand-soft dark:bg-brand-soft px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-brand-ink dark:text-brand-ink">{stats.paused}</div>
+            <div className="font-semibold text-brand-ink dark:text-brand-ink">{formatNumber(lang, stats.paused)}</div>
             <div className="text-brand-ink dark:text-brand-ink">{t.batch.paused}</div>
           </div>
         )}
         {stats.completed > 0 && (
           <div className="bg-green-50 dark:bg-green-900/20 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-green-700 dark:text-green-300">{stats.completed}</div>
+            <div className="font-semibold text-green-700 dark:text-green-300">{formatNumber(lang, stats.completed)}</div>
             <div className="text-green-600 dark:text-green-400">{t.uploadStatus.uploadedLabel}</div>
           </div>
         )}
         {stats.failed > 0 && (
           <div className="bg-red-50 dark:bg-red-900/20 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-red-700 dark:text-red-300">{stats.failed}</div>
+            <div className="font-semibold text-red-700 dark:text-red-300">{formatNumber(lang, stats.failed)}</div>
             <div className="text-red-600 dark:text-red-400">{t.upload.failed}</div>
           </div>
         )}
         {stats.cancelled > 0 && (
           <div className="bg-gray-50 dark:bg-gray-700 px-2 py-1.5 rounded text-center">
-            <div className="font-semibold text-gray-700 dark:text-gray-300">{stats.cancelled}</div>
+            <div className="font-semibold text-gray-700 dark:text-gray-300">{formatNumber(lang, stats.cancelled)}</div>
             <div className="text-gray-600 dark:text-gray-400">{t.batch.cancelled}</div>
           </div>
         )}

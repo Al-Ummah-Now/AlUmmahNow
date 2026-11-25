@@ -324,6 +324,7 @@ const UploadPage: React.FC = () => {
     setRowCategories,
     reorderQueue,
     disabled: isInitiating,
+    onReviewTerms: termsNeeded ? () => setTermsReviewing(true) : undefined,
   });
   const renderRowCategory = (file: UploadQueueItem) => {
     const row = file.videoId ? categoryRows[file.videoId] : undefined;

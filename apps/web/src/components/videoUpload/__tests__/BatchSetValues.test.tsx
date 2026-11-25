@@ -48,6 +48,7 @@ function row(id: string, name: string, overrides: Partial<UploadQueueItem> = {})
 const setRowCategories = jest.fn(() => 0);
 const setBatchCategory = jest.fn();
 const reorderQueue = jest.fn();
+const mockReview = jest.fn();
 
 function Harness({ files }: { files: UploadQueueItem[] }) {
   const seed = useSetValuesSeed();
@@ -60,6 +61,7 @@ function Harness({ files }: { files: UploadQueueItem[] }) {
     setBatchCategory,
     setRowCategories,
     reorderQueue,
+    onReviewTerms: mockReview,
   });
   return (
     <div>
@@ -247,6 +249,8 @@ describe('upload queue "Set values"', () => {
       await wait(800);
       expect(state()).toHaveAttribute('data-state', 'terms');
       expect(state()).toHaveTextContent(jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS.creator.termsRequired);
+      fireEvent.click(screen.getByTestId('batch-file-review-terms'));
+      expect(mockReview).toHaveBeenCalledTimes(1);
       expect(mockMark).toHaveBeenCalledTimes(1);
       await wait(60_000);
       expect(mockUpdate).toHaveBeenCalledTimes(1);

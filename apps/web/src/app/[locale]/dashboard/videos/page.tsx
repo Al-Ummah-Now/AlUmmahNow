@@ -762,7 +762,7 @@ export default function VideoDashboardPage() {
           videos={playlistTarget?.videos ?? []}
         />
 
-        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={(open) => { if (!open) terms.clear(); setBulkEditOpen(open); }} onApply={(changes) => applyBulkEdit(changes)}
+        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={(open) => { if (!open) terms.clear(); setBulkEditOpen(open); }} onApply={(changes) => applyBulkEdit(changes)} onEdit={terms.clear}
           selectedTags={collectTags(videos.filter((v) => selectedVideos.has(v.id)))} knownTags={collectTags(videos)}
           notice={terms.needed && (
             <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="bulk-edit-terms">

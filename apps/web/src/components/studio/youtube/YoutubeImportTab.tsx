@@ -271,6 +271,7 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
 
   // The dialog opens at the first pause only; later ones show the banner (a rollout with older servers may refuse again)
   const promptedRef = useRef(false);
+  const autoResumedRef = useRef(false);
   const handleTermsRequired = useCallback(() => {
     termsRefused('queue', { quiet: promptedRef.current });
     promptedRef.current = true;
@@ -282,6 +283,14 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     termsClear();
     uploaderRef.current?.resume();
   }, [termsClear]);
+
+  /** Another import asks, and goes on by itself, as the first did. */
+  const forgetTerms = () => {
+    setTermsPaused(false);
+    termsClear();
+    promptedRef.current = false;
+    autoResumedRef.current = false;
+  };
 
   const uploader = useCallback(() => {
     if (!current) return null;
@@ -304,7 +313,6 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
 
   // Accepted in another tab, or the switch was turned off: goes on by itself, once (servers that disagree
   // during a rollout would otherwise resume and refuse in turn); after that Review Terms resumes it
-  const autoResumedRef = useRef(false);
   useEffect(() => {
     if (!termsPaused || autoResumedRef.current) return;
     if (creator.status === 'ready' && creator.access.termsAccepted !== false) {
@@ -436,8 +444,7 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     try {
       await uploaderRef.current?.stop();
       uploaderRef.current = null;
-      setTermsPaused(false);
-      terms.clear();
+      forgetTerms();
       await cancelImport(current.id);
       setCurrent(null);
       setItems([]);
@@ -474,8 +481,7 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   const newImport = () => {
     void uploaderRef.current?.stop();
     uploaderRef.current = null;
-    setTermsPaused(false);
-    terms.clear();
+    forgetTerms();
     setCurrent(null);
     setItems([]);
     setPlaylists([]);
