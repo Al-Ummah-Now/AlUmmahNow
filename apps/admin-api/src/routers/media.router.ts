@@ -48,6 +48,7 @@ type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: 
 type C = Context<Env>;
 
 export const MEDIA_VIDEO_AUDIT_PREFIX = 'media:video:';
+export const MEDIA_HDR_CHECK_AUDIT_KEY = 'media:hdr-check';
 export const MEDIA_SETTINGS_AUDIT_KEY = 'media:delivery';
 const MAX_IDS = 50;
 const JOB_STATUSES = ['queued', 'transcoding', 'ready', 'failed', 'cancelled'];
@@ -191,6 +192,22 @@ app.post('/retry', async (c) => {
     () => callVideosInternal(c.env, '/internal/media/retry', { method: 'POST', json: { ids: unique } }),
   );
   logger.info('[Media] Transcode again', { count: unique.length, actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+// ---------------------------------------------------------------------------
+// HDR check: which published renditions still carry HDR colors (read only; re-encoding is /retry)
+// ---------------------------------------------------------------------------
+
+app.get('/hdr-check', async (c) => {
+  const result = await callVideosInternal(c.env, '/internal/media/hdr-check');
+  return c.json({ success: true, result });
+});
+
+app.post('/hdr-check', async (c) => {
+  const result = await audited(c, [{ key: MEDIA_HDR_CHECK_AUDIT_KEY, oldValue: undefined, newValue: { action: 'hdr_check' } }], () =>
+    callVideosInternal(c.env, '/internal/media/hdr-check', { method: 'POST', json: { actorId: actorOf(c) } }),
+  );
   return c.json({ success: true, result });
 });
 

@@ -126,6 +126,7 @@ import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFoo
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { handlePublishedAtBackfillMessage, isPublishedAtBackfillMessage } from "./lib/publishedAtBackfill";
 import { handleMp4BackfillMessage, isMp4BackfillMessage } from "./lib/media/mp4-backfill";
+import { handleHdrCheckMessage, isHdrCheckMessage } from "./lib/media/hdr-check";
 import { handleBackfillMessage, restartQuietRuns } from "./lib/media/backfill/run";
 import { isBackfillMessage } from "./lib/media/backfill/types";
 import { queueDueRemovals, removeFromBunny } from "./lib/media/backfill/removal";
@@ -1093,7 +1094,7 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  *   owner delete (kind "bunny-delete"), the QA/stage test-library purge
  *   (kind "test-library-purge") and the channel collection backfill (kind
  *   "bunny-collection-backfill") and the privacy footprint backfill (kind
- *   "privacy-footprint-backfill") and the public MP4 backfill (kind "mp4-backfill")
+ *   "privacy-footprint-backfill"), the public MP4 backfill (kind "mp4-backfill") and the HDR check (kind "hdr-check")
  *   and Studio comments' index rebuilds and removed-comment purge (kind "channel-comments").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
@@ -1145,6 +1146,8 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		for (const msg of batch.messages.filter((m) => isArchivePrivacyMessage(m.body))) await handleArchivePrivacyMessage(env as never, msg);
 		// Public MP4 backfill (lib/media/mp4-backfill.ts, #1182), one media_jobs page per message, dry run by default
 		for (const msg of batch.messages.filter((m) => isMp4BackfillMessage(m.body))) await handleMp4BackfillMessage(env as never, msg);
+		// HDR check (lib/media/hdr-check.ts), one media_jobs page per message, read only
+		for (const msg of batch.messages.filter((m) => isHdrCheckMessage(m.body))) await handleHdrCheckMessage(env as never, msg);
 		// R2 backfill of existing videos and Bunny removals (lib/media/backfill/, docs/media-delivery/BACKFILL.md)
 		for (const msg of batch.messages.filter((m) => isBackfillMessage(m.body))) {
 			await handleBackfillMessage(synced, ctx, msg, { removal: (e, c, videoId, last) => removeFromBunny(e, c, videoId, last) });
@@ -1154,7 +1157,7 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		// Studio comments: per-channel index rebuilds and the daily removed-comment purge (lib/channelComments/jobs.ts)
 		const channelComments = batch.messages.filter((m) => isChannelCommentsMessage(m.body));
 		if (channelComments.length) await handleChannelCommentsBatch({ messages: channelComments as never }, synced, ctx);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body) && !isChannelCommentsMessage(m.body) && !isBackfillMessage(m.body));
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body) && !isHdrCheckMessage(m.body) && !isChannelCommentsMessage(m.body) && !isBackfillMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));
