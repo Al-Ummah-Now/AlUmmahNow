@@ -11,50 +11,1023 @@
 @font-face{font-family:'Source Serif 4';font-weight:600;font-display:swap;src:url('/theme-kit/fonts/source-serif-4-latin-600-normal.woff2') format('woff2')}
 @font-face{font-family:'Source Serif 4';font-weight:700;font-display:swap;src:url('/theme-kit/fonts/source-serif-4-latin-700-normal.woff2') format('woff2')}
 
+/*
+ * Al Ummah Now navigation contract (docs/design/NAV.md): the header account button, the account
+ * menu and every menu that opens from the header, in every app (videos web, videos admin, www,
+ * CMS, profile, auth admin). Framework-free: plain class names, any markup that follows NAV.md.
+ *
+ * Fanous tokens only. Every app vendors this file at a pinned commit (each repo's sync script);
+ * fallbacks equal the token values so an app that vendors only the colour tokens still renders the
+ * same sizes. Logical properties only, so it mirrors in RTL with no extra rules.
+ *
+ * The header is dark in every theme and mode: header controls use the nav tokens. A menu is not
+ * part of the header: in light mode it is the page background with the page's text, in dark mode
+ * the theme's menu tokens; it resets text colours, so it never inherits the header's light text.
+ */
+
+/* ---------- header controls (on the dark header) ---------- */
+.aun-acct-btn,
+.aun-icon-btn,
+.aun-lang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: var(--fanous-spacing-sm, 8px);
+  border: 1px solid var(--fanous-c-nav-search-border);
+  border-radius: var(--fanous-radius-full, 999px);
+  background: transparent;
+  color: var(--fanous-c-nav-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.aun-icon-btn {
+  padding-inline: 0;
+}
+.aun-acct-btn {
+  max-width: 15rem;
+  padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-sm, 8px);
+  /* no ring around the avatar (owner, 2026-11-13): the border stays for size, never drawn */
+  border-color: transparent;
+}
+.aun-acct-btn:hover,
+.aun-icon-btn:hover,
+.aun-lang:hover,
+.aun-acct-btn[aria-expanded='true'],
+.aun-icon-btn[aria-expanded='true'] {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-acct-btn:focus-visible,
+.aun-icon-btn:focus-visible,
+.aun-lang:focus-visible,
+.aun-brand:focus-visible,
+.aun-signin:focus-visible {
+  outline: 2px solid var(--fanous-c-nav-active-text);
+  outline-offset: 2px;
+}
+.aun-acct-btn svg,
+.aun-icon-btn svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+}
+.aun-acct-btn .aun-caret {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--fanous-c-nav-icon);
+}
+.aun-acct-name {
+  min-width: 0;
+  /* One width whatever the name: switching who you act as ("Community Corner" and "Amina Yusuf")
+     never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px); a longer name ends
+     in an ellipsis, and never pushes the header apart */
+  max-inline-size: 9rem;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The pill keeps one width (avatar, the longest name slot, caret) and its content sits at the start:
+   the caret follows the name, and the spare room after it is drawn only on hover or when the menu is
+   open (AUDIT-2 2026-11-22: the caret floated 70px from a short name in a fixed name slot) */
+@media (min-width: 48rem) {
+  .aun-acct-btn {
+    justify-content: flex-start;
+    min-inline-size: calc(var(--fanous-spacing-xs, 4px) + 1.75rem + 9rem + 0.875rem + 3 * var(--fanous-spacing-sm, 8px) + 2px);
+  }
+}
+/* below 768px the button is the avatar and the caret; the name is still its accessible name */
+@media (max-width: 47.99rem) {
+  .aun-acct-btn .aun-acct-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* ---------- the header bar (docs/design/NAV.md "Header") ----------
+   One frame in every app. Markup: nav/header.js. Reading order, mirrored in Arabic:
+   [menu] brand [env] [.aun-header-primary: the app's links / search] .aun-header-tools:
+   [app actions] .aun-lang .aun-mode [.aun-acct-btn | .aun-signin]
+   No links to other sites in the bar (owner, 2026-11-15): the logo is the app's home.
+   Breakpoints: 1024px, 768px (account name hidden),
+   640px (phone: 56px bar), 400px (the wordmark is hidden, the logo stays). */
+.aun-header {
+  --aun-header-height: 4rem;
+  --aun-header-gap: var(--fanous-spacing-lg, 16px);
+  --aun-header-pad: var(--fanous-spacing-lg, 16px);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex;
+  /* one line at every width: the wordmark shrinks (ellipsis) before anything wraps */
+  flex-wrap: nowrap;
+  align-items: center;
+  column-gap: var(--aun-header-gap);
+  row-gap: 0;
+  min-height: var(--aun-header-height);
+  padding-inline: var(--aun-header-pad);
+  background: var(--aun-header-bg, var(--fanous-c-nav-bg));
+  border-block-end: 1px solid var(--fanous-c-nav-border);
+  color: var(--fanous-c-nav-text);
+  /* one typeface in every app's header, whatever the page uses */
+  font-family: var(--aun-header-font, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+}
+.aun-header:lang(ar) {
+  /* Latin inside an Arabic header (emails, names) falls to system-ui, as in English: Noto Naskh has no
+     Latin, and Tahoma became Liberation Sans on Linux, thin enough to drop the menu's muted email below
+     4.5:1 (lantern dark, the theme sweep) */
+  font-family: var(--aun-header-font-ar, 'Noto Naskh Arabic', 'Geeza Pro', system-ui, 'Segoe UI', Tahoma, sans-serif);
+}
+/* the row inside, for apps whose markup wraps the groups in one element; the bar is full width in
+   every app (the brand always 16px from the edge, 12px on phones), never centred in a max width */
+.aun-header-row {
+  box-sizing: border-box;
+  display: flex;
+  /* one line at every width: the wordmark shrinks (ellipsis) before anything wraps */
+  flex-wrap: nowrap;
+  align-items: center;
+  column-gap: var(--aun-header-gap);
+  row-gap: 0;
+  width: 100%;
+  /* the bar's 1px bottom border is inside its height: the bar is 64px (56px) with or without a row */
+  min-height: calc(var(--aun-header-height) - 1px);
+}
+.aun-header-primary {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  /* only the room the other groups leave: a long primary area never pushes the tools to a new line */
+  flex: 1 1 0%;
+  min-width: 0;
+}
+.aun-header-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  flex: none;
+  margin-inline-start: auto;
+}
+@media (max-width: 63.99rem) {
+  .aun-header {
+    --aun-header-gap: var(--fanous-spacing-md, 12px);
+  }
+  /* a site's own links and search leave the bar for the menu panel below 1024px */
+  .aun-header-primary.aun-collapse {
+    display: none;
+  }
+}
+/* the menu button of a site with a panel (menuButtonHtml): only where the links have left the bar */
+@media (min-width: 64rem) {
+  .aun-menu-collapse {
+    display: none;
+  }
+}
+/* the menu panel: a popover right under the bar, full width, the header's material */
+.aun-header-panel {
+  position: fixed;
+  inset-block-start: var(--aun-header-height, 4rem);
+  inset-inline: 0;
+  inset-block-end: auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(100dvh - var(--aun-header-height, 4rem));
+  margin: 0;
+  overflow-y: auto;
+  padding: var(--fanous-spacing-md, 12px) var(--aun-header-pad, 16px) var(--fanous-spacing-lg, 16px);
+  border: 0;
+  border-block-end: 1px solid var(--fanous-c-nav-border);
+  background: var(--aun-header-bg, var(--fanous-c-nav-bg));
+  color: var(--fanous-c-nav-text);
+  font-family: inherit;
+}
+.aun-header-panel:not(:popover-open) {
+  display: none;
+}
+.aun-header-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fanous-spacing-sm, 8px);
+}
+.aun-header-panel a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: var(--fanous-spacing-md, 12px);
+  border-radius: var(--fanous-radius-md, 8px);
+  color: var(--fanous-c-nav-text);
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.aun-header-panel a:hover {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-header-panel a:focus-visible {
+  outline: 2px solid var(--fanous-c-nav-active-text);
+  outline-offset: -2px;
+}
+@media (min-width: 64rem) {
+  .aun-header-panel {
+    display: none !important;
+  }
+}
+@media (max-width: 39.99rem) {
+  .aun-header {
+    --aun-header-height: 3.5rem;
+    --aun-header-gap: var(--fanous-spacing-sm, 8px);
+    --aun-header-pad: var(--fanous-spacing-md, 12px);
+  }
+  .aun-header-tools {
+    gap: var(--fanous-spacing-xs, 4px);
+  }
+}
+
+/* brand: the owner's logo (round) and the wordmark; tool apps add a second line with their name */
+.aun-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  /* the only group that shrinks: a long (scholar) site name truncates instead of pushing the tools */
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding-block: var(--fanous-spacing-xs, 4px);
+  padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-sm, 8px);
+  margin-inline-start: calc(-1 * var(--fanous-spacing-xs, 4px));
+  border-radius: 10px;
+  color: var(--fanous-c-nav-text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.aun-brand:hover {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-brand-mark {
+  display: block;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--fanous-radius-full, 999px);
+  object-fit: cover;
+}
+.aun-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.15;
+}
+.aun-brand-name {
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aun-brand-name:lang(ar) {
+  font-size: 1.125rem;
+}
+.aun-brand-app {
+  color: var(--fanous-c-nav-icon);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+@media (max-width: 39.99rem) {
+  .aun-brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+@media (max-width: 24.99rem) {
+  .aun-brand-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* below 400px the bar is at its tightest: 4px between groups, the account button is the avatar alone
+   (the caret goes; the name stays its accessible name) and the environment badge sits on the logo's
+   corner instead of beside it, so language, light/dark and the account still fit on a 320px phone */
+@media (max-width: 24.99rem) {
+  .aun-header {
+    --aun-header-gap: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-acct-btn .aun-caret {
+    display: none;
+  }
+  .aun-acct-btn {
+    padding-inline: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-env {
+    align-self: flex-end;
+    margin-block-end: 0.625rem;
+    margin-inline-start: -1.375rem;
+    box-shadow: 0 0 0 2px var(--fanous-c-nav-bg);
+    position: relative;
+  }
+}
+
+/* QA / STAGE badge, right after the brand; never in production */
+.aun-env {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 1.25rem;
+  padding-inline: 6px;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: var(--fanous-c-nav-active-text);
+  color: var(--fanous-c-nav-bg);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* Sign in when signed out: solid, the same height as every header control */
+.aun-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-height: 2.5rem;
+  padding-inline: var(--fanous-spacing-lg, 16px);
+  border: 1px solid transparent;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: var(--fanous-c-nav-active-text);
+  color: var(--fanous-c-nav-bg);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.aun-signin:hover {
+  background: color-mix(in srgb, var(--fanous-c-nav-active-text) 85%, var(--fanous-c-nav-text));
+}
+/* below 400px, signed out: the language button and Sign in are 4px narrower a side, so a search
+   button, the badge, language, light/dark and the Arabic «تسجيل الدخول» still fit one line at 320px
+   (after the rules above: same specificity) */
+@media (max-width: 24.99rem) {
+  .aun-lang {
+    padding-inline: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-signin {
+    padding-inline: var(--fanous-spacing-md, 12px);
+  }
+}
+
+/* text for screen readers only (the language button's action) */
+.aun-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- avatar (image, else the name's first letter) ---------- */
+.aun-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--fanous-radius-full, 999px);
+  overflow: hidden;
+  background: var(--fanous-color-primary);
+  color: var(--fanous-color-on-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  object-fit: cover;
+  text-transform: uppercase;
+}
+.aun-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.aun-avatar--sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+}
+.aun-avatar--lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+}
+
+/* ---------- menu surface ---------- */
+.aun-menu {
+  /* Never the dark header's colours (owner review, 2026-11-12, revision 3):
+     - light mode: the page background (--fanous-color-background) with the page's text, a clear
+       outline border and a soft shadow, so it lifts off the page and the cards; hover and the
+       current row are a light tint (the theme's menu hover half-mixed into the background);
+     - dark mode: the theme's own menu tokens, as before.
+     light-dark() follows the page's color-scheme, which every app sets per mode. */
+  --aun-menu-bg: light-dark(var(--fanous-color-background), var(--fanous-c-menu-bg));
+  --aun-menu-text: light-dark(var(--fanous-color-text-primary), var(--fanous-c-menu-text));
+  --aun-menu-muted: light-dark(var(--fanous-color-text-secondary), var(--fanous-c-menu-muted));
+  --aun-menu-hover-light: color-mix(in srgb, var(--fanous-c-menu-hover) 50%, var(--fanous-color-background));
+  --aun-menu-hover: light-dark(var(--aun-menu-hover-light), var(--fanous-c-menu-hover));
+  /* Row states over the one menu surface: a tint of the text colour, never an opaque band */
+  --aun-menu-row-tint: color-mix(in srgb, var(--aun-menu-text) 8%, transparent);
+  --aun-menu-row-press: color-mix(in srgb, var(--aun-menu-text) 12%, transparent);
+  /* Separators, one rule in both modes and every app: the menu's text mixed 45% into the menu's
+     surface (light 2.47–2.73:1, dark 2.60–3.81:1 across the four themes). The theme's divider token
+     is 1.0–1.8:1 there, too faint (owner reviews: "in dark you can't see the lines between rows",
+     then the CMS menu, then www and profile: "the dividers are too faint") */
+  /* Each mode's line is mixed on its own and light-dark() only picks between two plain values: a
+     color-mix() nested inside light-dark() came out invalid in the owner's browser on production
+     and the lines vanished (2026-11-13, profile and videos admin) */
+  --aun-menu-line-light: color-mix(in srgb, var(--fanous-color-text-primary) 45%, var(--fanous-color-background));
+  --aun-menu-line-dark: color-mix(in srgb, var(--fanous-c-menu-text) 45%, var(--fanous-c-menu-bg));
+  --aun-menu-line: light-dark(var(--aun-menu-line-light), var(--aun-menu-line-dark));
+  /* Every row starts with one leading column (icon, app tile or avatar), so the labels line up */
+  --aun-menu-lead: 2rem;
+  --aun-menu-edge: light-dark(var(--fanous-color-outline), var(--fanous-c-menu-border));
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--fanous-spacing-sm, 8px));
+  z-index: 60;
+  box-sizing: border-box;
+  /* one width for every view and app (the channel switcher no longer narrows it) */
+  width: min(21rem, calc(100vw - 2 * var(--fanous-spacing-sm, 8px)));
+  max-height: calc(100dvh - 5rem);
+  overflow-y: auto;
+  margin: 0;
+  /* rows run edge to edge (their highlight spans the menu's full width); only the ends are padded */
+  padding: 0 0 var(--fanous-spacing-xs, 4px);
+  list-style: none;
+  /* A solid surface with the golden glow (owner, 2026-11-22: surfaces are solid, the page never shows
+     through; this replaces the 2026-11-16 frosted glass, and AUDIT-2 read page text through the
+     Acting-as menu). Two layers, longhands only, so one bad value never resets the others: the
+     browser's own Canvas always resolves, and the menu colour covers it. If --aun-menu-bg ever fails to
+     resolve, only that layer drops and the Canvas layer keeps the rows readable (production report
+     2026-11-13, videos admin: a menu must never go see-through). */
+  background-color: Canvas;
+  background-image: linear-gradient(var(--aun-menu-bg), var(--aun-menu-bg));
+  color: var(--aun-menu-text);
+  border-width: 1px;
+  border-style: solid;
+  /* The edge stays the menu's own outline (3:1 or more against the page in every theme and mode; owner
+     review rev 4). The glass gold edge measured 1.36–2.42:1 in light mode; the golden glow carries the glass. */
+  border-color: var(--aun-menu-edge);
+  border-radius: var(--aun-radius-menu, 12px);
+  box-shadow: var(--aun-glass-glow, 0 0 32px -2px color-mix(in srgb, var(--fanous-color-primary) 26%, transparent)), var(--aun-float-shadow, 0 8px 24px -12px rgb(0 0 0 / 0.35));
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: start;
+}
+.aun-menu[hidden] {
+  display: none;
+}
+.aun-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aun-menu li {
+  margin: 0;
+}
+/* phone: a sheet under the header, the full width less a small gutter */
+@media (max-width: 30rem) {
+  .aun-menu {
+    position: fixed;
+    inset-inline: var(--fanous-spacing-sm, 8px);
+    inset-block-start: calc(var(--aun-header-height, 3.5rem) + var(--fanous-spacing-xs, 4px));
+    width: auto;
+    max-height: calc(100dvh - var(--aun-header-height, 3.5rem) - var(--fanous-spacing-lg, 16px));
+  }
+}
+
+/* who is signed in: the current account at the top, on the menu's own background like every row
+   (owner review: no tinted panel); the divider under it separates it
+   (.aun-menu scope: it outranks .aun-menu-item when the panel is also a link to the profile) */
+.aun-menu .aun-menu-who {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-md, 12px);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4.25rem;
+  margin: 0;
+  padding: var(--fanous-spacing-md, 12px) var(--fanous-spacing-lg, 16px);
+  border-radius: 0;
+  background: transparent;
+  color: var(--aun-menu-text);
+}
+.aun-menu .aun-menu-who .aun-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+}
+.aun-menu-who-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.aun-menu-who-name {
+  font-size: 1rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An email that does not fit keeps its domain: the local part shrinks with an ellipsis, the
+   "@domain" stays whole (markup: .aun-email > .aun-email-local + .aun-email-domain, full address
+   in title) */
+.aun-email {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+[dir='rtl'] .aun-email {
+  justify-content: flex-end;
+}
+.aun-email-local {
+  min-width: 1.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aun-email-domain {
+  flex: none;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aun-menu-who-sub,
+.aun-acct-email,
+.aun-acct-current {
+  color: var(--aun-menu-muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* section header: names the group under it (never upper-cased or letter-spaced: Arabic) */
+.aun-menu-label {
+  display: block;
+  margin: 0;
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px) var(--fanous-spacing-xs, 4px);
+  color: var(--aun-menu-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* separator: full width, the same space above and below */
+.aun-menu-sep {
+  height: 0;
+  margin: var(--fanous-spacing-xs, 4px) 0;
+  padding: 0;
+  border: 0;
+  /* Longhands: a shorthand with a var() that fails resets to no border at all, and the line
+     vanished on production; a failing colour longhand falls back to the text colour instead */
+  border-block-start-width: 1px;
+  border-block-start-style: solid;
+  border-block-start-color: var(--aun-menu-line);
+}
+
+
+/* item: a link or a button */
+.aun-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-md, 12px);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-lg, 16px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--aun-menu-text);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* Flat rows on the one menu surface (owner review 2026-11-16, Surfaces O36): a row never paints a
+   fill of its own. Hover, focus and press are a light tint of the text colour over the panel, so the
+   menu stays one surface (the frosted panel in #1523) instead of bands of different fills. */
+.aun-menu-item:hover,
+.aun-menu-item:focus-visible {
+  background: var(--aun-menu-row-tint);
+  color: var(--aun-menu-text);
+  text-decoration: none;
+}
+.aun-menu-item:focus-visible,
+.aun-acct-signout:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -2px;
+}
+.aun-menu-item:active {
+  background: var(--aun-menu-row-press);
+}
+.aun-menu-item[disabled],
+.aun-menu-item[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.6;
+}
+/* the current account, a context line and the identity you act as are not actions: no busy look */
+.aun-menu-item[disabled][aria-current='true'],
+.aun-menu-item[aria-disabled='true'].aun-menu-who-sub,
+.aun-menu-item[aria-disabled='true'].aun-menu-context-current {
+  cursor: default;
+  opacity: 1;
+}
+/* leading icons sit centred in the leading column; trailing ones (a chevron) at the end */
+.aun-menu-item > svg,
+.aun-menu-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  margin-inline: calc((var(--aun-menu-lead) - 1.25rem) / 2);
+  color: var(--aun-menu-muted);
+}
+.aun-menu-item > .aun-menu-text ~ svg {
+  margin-inline: auto 0;
+}
+.aun-menu-item > .aun-avatar,
+.aun-menu-item > .aun-avatar-slot > .aun-avatar {
+  width: var(--aun-menu-lead);
+  height: var(--aun-menu-lead);
+}
+/* a channel's picture with the owner's crown on it: the slot is the picture's size, so its name lines
+   up with the other rows (AUDIT-2 2026-11-22: 4px off) */
+.aun-avatar-slot {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+.aun-menu-item > .aun-menu-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the current page / app / choice: bold, and its check mark; no fill (flat rows on one surface) */
+.aun-menu-item[aria-current]:not([aria-current='false']):not(.aun-menu-who),
+.aun-menu-item[aria-checked='true'],
+.aun-menu-item[aria-pressed='true'] {
+  font-weight: 600;
+}
+.aun-menu-check {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--fanous-color-link);
+}
+/* sign out of every account */
+.aun-menu-item--danger,
+.aun-menu-item--danger > svg {
+  color: var(--fanous-color-error-text);
+}
+
+/* ---------- more accounts: the other accounts in this browser ---------- */
+/* One row per account, edge to edge: the switch button and its sign-out icon button highlight as
+   one row */
+.aun-acct-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-inline-end: var(--fanous-spacing-xs, 4px);
+}
+.aun-acct-row:hover,
+.aun-acct-row:focus-within {
+  background: var(--aun-menu-row-tint);
+}
+.aun-menu .aun-acct-row > .aun-menu-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding-inline-end: var(--fanous-spacing-xs, 4px);
+  background: transparent;
+}
+.aun-menu .aun-acct-row > .aun-menu-item:focus-visible {
+  outline: 0;
+}
+.aun-acct-row:has(> .aun-menu-item:focus-visible) {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -2px;
+}
+.aun-acct-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.aun-acct-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A name in the other script (a Latin name in Arabic) keeps its own direction (dir="auto") but
+   lines up with the menu's start, like its email. Physical sides from the page's dir: Chrome's
+   text-align: match-parent acts as inherit and would align it by its own direction */
+[dir='rtl'] .aun-acct-label,
+[dir='rtl'] .aun-menu-who-name,
+[dir='rtl'] .aun-menu-text {
+  text-align: right;
+}
+[dir='ltr'] .aun-acct-label,
+[dir='ltr'] .aun-menu-who-name,
+[dir='ltr'] .aun-menu-text {
+  text-align: left;
+}
+.aun-acct-row [aria-current='true'] .aun-acct-label {
+  font-weight: 600;
+}
+/* "Sign out of {name}": an icon button at the row's end (the name is its aria-label) */
+.aun-acct-signout {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: transparent;
+  color: var(--aun-menu-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.aun-acct-signout:hover {
+  background: color-mix(in srgb, var(--aun-menu-text) 10%, transparent);
+}
+.aun-acct-signout svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.aun-acct-signout:hover {
+  color: var(--fanous-color-error-text);
+}
+
+/* ---------- Al Ummah Now apps: each app's own favicon ---------- */
+/* The owner's art as is and whole: each app's highest-resolution favicon (the icon-512.png crop),
+   downscaled only to a 96 px lossless WebP by packages/app-icons src/nav-icons.ts. The images are
+   separate files every app serves at /aun-nav/icons/<id>.webp, never inlined here: menus use
+   <img class="aun-app-icon" src="/aun-nav/icons/<id>.webp" width="32" height="32" alt=""
+   loading="lazy" decoding="async">. The whole square is shown inside a circle the size of the
+   account avatars (2rem); the profile app's "Your apps" cards use 3rem. */
+.aun-app-icon {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--aun-menu-lead);
+  height: var(--aun-menu-lead);
+  border-radius: var(--fanous-radius-full, 999px);
+  object-fit: cover;
+}
+.aun-app-icon--card {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* ---------- the context slot (NAV.md "Slots"): one app's own layer, e.g. the videos channel layer ---------- */
+.aun-menu-context {
+  display: flex;
+  flex-direction: column;
+}
+/* the current context (the active channel): avatar + name, like an account row */
+.aun-menu-context-current .aun-avatar {
+  width: 2rem;
+  height: 2rem;
+}
+/* a small role chip ("Channel admin") */
+.aun-badge {
+  flex: none;
+  margin-inline-start: auto;
+  padding: var(--fanous-spacing-xxs, 2px) var(--fanous-spacing-sm, 8px);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--aun-menu-line);
+  border-radius: var(--fanous-radius-full, 999px);
+  color: var(--aun-menu-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* the kind of an identity under its name in an "Acting as" picker: "Personal" (you) or "Channel" */
+.aun-identity-tag {
+  align-self: flex-start;
+  margin-block-start: 2px;
+  /* room under the line for Arabic descenders (the ي of «حساب شخصي») */
+  padding: 1px var(--fanous-spacing-xs, 4px) 3px;
+  border-radius: var(--fanous-radius-sm, 4px);
+  background: color-mix(in srgb, var(--aun-menu-text) 8%, transparent);
+  /* the menu's text colour, not muted: muted text on the tint is under 4.5:1 in some themes */
+  color: var(--aun-menu-text);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+/* a line that explains why an action is missing (a limit reached) */
+.aun-menu-note {
+  margin: 0;
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px);
+  color: var(--aun-menu-muted);
+  font-size: 0.8125rem;
+}
+/* an inline form (create a channel) */
+.aun-menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fanous-spacing-sm, 8px);
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px);
+}
+.aun-menu-form .aun-menu-label {
+  padding: 0;
+}
+.aun-menu-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--fanous-spacing-md, 12px);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--aun-menu-line);
+  border-radius: var(--fanous-radius-sm, 4px);
+  background: transparent;
+  color: var(--aun-menu-text);
+  font: inherit;
+}
+.aun-menu-input:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -1px;
+}
+.aun-menu-form-actions {
+  display: flex;
+  gap: var(--fanous-spacing-sm, 8px);
+}
+.aun-menu-form-actions > * {
+  flex: 1 1 0;
+}
+
+/* directional icons (back, chevron, sign out) point the reading direction */
+[dir='rtl'] .aun-flip {
+  transform: scaleX(-1);
+}
+
+/* An identity or account switch in progress (#1673): the pill keeps who you are, dims its name and
+   draws a loading ring round the avatar. The ring overlays the avatar, so the pill never changes
+   width, and it shows on the avatar-only phone pill too. Both wait 0.3s: a quick switch shows no
+   flash of the loading state (AUDIT-2 2026-11-21). */
+.aun-acct-btn[aria-busy='true'] {
+  position: relative;
+  cursor: progress;
+}
+.aun-acct-btn[aria-busy='true'] .aun-acct-name,
+.aun-acct-btn[aria-busy='true'] .aun-caret {
+  animation: aun-busy-dim 0s linear 0.3s both;
+}
+.aun-acct-btn[aria-busy='true']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--fanous-spacing-xs, 4px) - 3px);
+  top: 50%;
+  width: calc(1.75rem + 6px);
+  height: calc(1.75rem + 6px);
+  margin-top: calc(-0.875rem - 3px);
+  border: 2px solid var(--fanous-c-nav-active-text);
+  border-inline-end-color: transparent;
+  border-radius: var(--fanous-radius-full, 999px);
+  pointer-events: none;
+  animation: aun-busy-in 0s linear 0.3s both;
+}
+@keyframes aun-busy-dim {
+  from { opacity: 1; }
+  to { opacity: 0.6; }
+}
+@keyframes aun-busy-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aun-acct-btn[aria-busy='true']::before {
+    animation: aun-busy-in 0s linear 0.3s both, aun-busy-spin 0.9s linear infinite;
+  }
+  .aun-acct-btn,
+  .aun-icon-btn,
+  .aun-lang,
+  .aun-menu-item,
+  .aun-acct-signout {
+    transition: background-color var(--fanous-duration-fast, 120ms) ease;
+  }
+}
+
+@keyframes aun-busy-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
 /* Prototype only: the component system. Depth comes from each theme's materials. */
+/* Flat Material with frosted-glass cards (owner, 2026-11-16; packages/fanous-tokens/surfaces/aun-surfaces.css):
+   every theme's gradient materials become solid fills, no inner sheen, no heavy shadow. Cards and panels are the
+   shared glass (translucent surface, blur, golden edge and glow). Image-valued tokens stay images (a plain
+   gradient of one colour) because rules layer them as `var(--m-card) padding-box, var(--m-border) border-box`.
+   (0,4,0) beats every html[data-theme=…] block in materials.css, light and dark. */
+:root:root:root[data-theme]{--m-primary:linear-gradient(var(--aun-btn-filled-bg),var(--aun-btn-filled-bg));--m-primary-hover:linear-gradient(color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg)),color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg)));--m-primary-press:linear-gradient(color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-press),var(--aun-btn-filled-bg)),color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-press),var(--aun-btn-filled-bg)));--m-primary-edge:0 0 0 0 transparent;--m-card:linear-gradient(var(--aun-glass-surface),var(--aun-glass-surface));--m-border:linear-gradient(transparent,transparent);--m-rail:var(--aun-glass-surface);--m-rail-edge:inset -1px 0 0 var(--aun-glass-edge);--m-card-edge:var(--aun-glass-glow);--m-raised:linear-gradient(var(--aun-glass-panel-surface),var(--aun-glass-panel-surface));--m-raised-edge:var(--aun-glass-glow),var(--aun-float-shadow);--m-dialog-shadow:var(--aun-glass-glow),var(--aun-float-shadow);--m-dialog-line:var(--aun-glass-edge);--m-blur:var(--aun-glass-blur);--m-control-edge:0 0 0 0 transparent;--m-active-edge:none;--m-sel-edge:none}
 html{--to-end:to right;--from:0%;--rail:76px}html[dir=rtl]{--to-end:to left;--from:100%}
 html body{background:var(--m-page)!important;background-attachment:fixed!important;color:var(--fanous-color-text-primary)}
 .demo-layer,.min-h-screen{background:transparent!important}
 :focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h3{letter-spacing:0}
+/* A name in the other script keeps its own tracking: Latin inside an Arabic page's heading keeps the Latin -.01em (so it wraps as on the English page: the channel tile's "Seerah Notes for / Young Muslims"), and Arabic is never tracked, on any page (it breaks the joins) */
+html[lang=ar] :is(h1,h2,h3) [dir=auto]:dir(ltr){letter-spacing:-.01em}:is(h1,h2,h3) [dir=auto]:dir(rtl){letter-spacing:0}
 #page-content h1:not(.watch-title){font-weight:700;line-height:1.2}
 .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;transition:background-color 140ms,color 140ms}.ic svg{width:22px;height:22px;stroke-width:1.75}@media(hover:hover){.ic:hover{background:var(--fanous-c-nav-hover)}}
 /* Header */
-.ah{position:sticky;top:0;z-index:50;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px) minmax(0,1fr);gap:var(--fanous-spacing-lg);align-items:center;height:64px;padding-inline:var(--fanous-spacing-md);background:var(--m-header);box-shadow:var(--m-header-edge);color:var(--fanous-c-nav-text);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
-.ah-start,.ah-end{display:flex;align-items:center;gap:var(--fanous-spacing-sm);min-width:0}.ah-end{justify-content:flex-end}
-.ah-brand{display:flex;align-items:center;gap:var(--fanous-spacing-sm);font-weight:700;font-size:17px;white-space:nowrap;color:var(--fanous-c-nav-text)!important;border-radius:var(--r-md);padding:4px}.ah-logo{border-radius:50%;box-shadow:0 0 0 1.5px var(--fanous-c-nav-indicator)}
-.ah-search{display:flex;align-items:stretch;height:44px;border-radius:var(--r-pill);background:var(--fanous-c-nav-search-bg);box-shadow:inset 0 0 0 1px var(--fanous-c-nav-search-border);overflow:hidden;transition:box-shadow 140ms}.ah-search:focus-within{box-shadow:inset 0 0 0 2px var(--fanous-c-upload-focus)}
+/* The bar is the shared header (packages/fanous-tokens/nav/aun-nav.css .aun-header, docs/design/NAV.md "Header"); here only the theme material, and it stays above the rail */
+.ah.aun-header{z-index:50;--aun-header-bg:var(--m-header);box-shadow:var(--m-header-edge);background:none}
+/* The header's frost sits on a layer behind its content, not on the header: an element with backdrop-filter
+   is a backdrop root, so the account and notification menus inside it could not blur the page (a large
+   title behind the account menu read through it sharp). The header's colour is painted on the same layer, over its
+   blurred backdrop, so the filter (blur + saturate) only touches the page behind, never the header's own colour */
+.ah.aun-header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:var(--aun-header-bg,var(--fanous-c-nav-bg));-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+.ah-primary{justify-content:center}
+.ah-search{display:flex;align-items:stretch;height:40px;border-radius:var(--r-pill);background:var(--fanous-c-nav-search-bg);box-shadow:inset 0 0 0 1px var(--fanous-c-nav-search-border);overflow:hidden;transition:box-shadow 140ms}.ah-search:focus-within{box-shadow:inset 0 0 0 2px var(--fanous-c-upload-focus)}
 .ah-search input{flex:1;min-width:0;padding-inline:var(--fanous-spacing-lg);border:0!important;outline:0!important;background:transparent!important;color:var(--fanous-c-nav-search-text)!important;box-shadow:none!important}.ah-search input::placeholder{color:var(--fanous-c-nav-search-placeholder)!important}
 .ah-search button{width:56px;display:grid;place-items:center;border:0;background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;border-inline-start:1px solid var(--fanous-c-nav-search-border)}@media(hover:hover){.ah-search button:hover{background:var(--fanous-c-nav-hover)}}.ah-search svg{width:20px;height:20px}
 .ah-search-phone{display:none}
-.ah button{color:var(--fanous-c-nav-icon)}.ah-end button{min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:hover{background:var(--fanous-c-nav-hover)}}.ah-end *{color:var(--fanous-c-nav-text)}
+.ah button:not([class*=aun-]){color:var(--fanous-c-nav-icon)}.ah-end button:not([class*=aun-]){min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:not([class*=aun-]):hover{background:var(--fanous-c-nav-hover)}}.ah-end *:not(.aun-menu,.aun-menu *,.aun-avatar,.aun-signin){color:var(--fanous-c-nav-text)}
 /* Popovers opened from the header (notifications, menus, listboxes) sit on the dialog/menu surface, not the night bar:
    the nav colours above must not reach inside them. revert-layer hands colour back to the component's own classes
    (or inheritance from the popover's token colour). */
-.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button){color:revert-layer}
-@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:hover{background:revert-layer}}
+.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button):not(.aun-menu *){color:revert-layer}
+@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:not(.aun-menu *):hover{background:revert-layer}}
 /* Navigation */
-.nv-panel{position:fixed;z-index:45;inset-block:0;inset-inline-start:0;width:var(--rail);padding-block-start:64px;display:flex;flex-direction:column;background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);transition:width 220ms cubic-bezier(.2,0,0,1)}
+.nv-panel{position:fixed;z-index:45;inset-block:0;inset-inline-start:0;width:var(--rail);padding-block-start:64px;display:flex;flex-direction:column;background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}html[data-rail-moving] .nv-panel{transition:width 220ms cubic-bezier(.2,0,0,1)}
 .demo-banner~* .nv-panel{padding-block-start:92px}.nv-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:var(--fanous-spacing-sm)}
 .nv-group+.nv-group{margin-block-start:var(--fanous-spacing-sm);padding-block-start:var(--fanous-spacing-sm);border-block-start:1px solid var(--fanous-c-drawer-divider)}.nv-heading{display:none;padding:var(--fanous-spacing-sm) var(--fanous-spacing-md);font-size:12px;font-weight:600;color:var(--fanous-color-text-muted)}
 .nv{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 2px;border-radius:var(--r-lg);color:var(--fanous-c-drawer-text)!important;text-decoration:none;font-size:11px;line-height:1.2;text-align:center;transition:background-color 140ms}.nv svg{width:22px;height:22px;stroke-width:1.75;color:var(--fanous-c-drawer-icon);flex:none}.nv span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(hover:hover){.nv:hover{background:var(--m-hover)}}.nv:active{background:var(--m-active)}.nv[aria-current=page]{background:var(--m-active);box-shadow:var(--m-active-edge);font-weight:600;color:var(--fanous-c-drawer-active-text)!important}.nv[aria-current=page] svg{color:var(--fanous-c-drawer-active-text);stroke-width:2.1}
 .nv[aria-current=page]::before{content:"";position:absolute;inset-inline-start:0;top:50%;width:var(--m-ind-w);height:var(--m-ind-h);margin-block-start:calc(var(--m-ind-h)/-2);background:var(--m-ind);clip-path:var(--m-ind-shape)}
+/* The active item's label keeps clear of its indicator bar on both sides (centred icon; Arabic labels reached the bar, AUDIT-2 2026-11-22) */
+/* Collapsed rail: the indicator centres on the icon row (10px padding + half the 22px icon), so it never meets a
+   two-line label below the icon and the label keeps the full item width */
+@media(min-width:1024px){html:not([data-rail=open]) .nv-panel .nv[aria-current=page]::before,html:not([data-rail=open]) .nv-panel .nv[aria-current=page]::after{top:21px}}
+/* The collapsed rail keeps no scrollbar or gutter (the edge strip's chevron says more is below; wheel, touch and keyboard still scroll it), and its items fill the list's box rather than a fixed width. With a classic scrollbar (Windows, Linux, CI Chrome: an 11px thin gutter) the 80px items overflowed a 69px box: in Arabic Chrome opened the list scrolled sideways, so the current item's gold bar sat past the window's edge as a 1-2px sliver, and in English the item's end was cut under the gutter (AUDIT-2 re-audit 8, #1656). */
+/* Collapsed rail labels: the items take the rail's width less 4px a side, the label keeps 4px inside its pill, and the
+   active label keeps the regular weight (the pill, icon and indicator mark it), so a label wraps the same active or
+   not. Zujaj's Noto Kufi runs wide: at 10px «المشاهدة لاحقًا» (69px) fits one line like the other themes */
+@media(min-width:1024px){html:not([data-rail=open]) .nv-panel .nv-scroll{padding-inline:4px;scrollbar-width:none;scrollbar-gutter:auto}html:not([data-rail=open]) .nv-panel .nv-scroll::-webkit-scrollbar{display:none}html:not([data-rail=open]) .nv-panel .nv{padding-inline:4px;inline-size:100%}html:not([data-rail=open]) .nv-panel .nv[aria-current=page] span{font-weight:400}html[lang=ar][data-theme=zujaj]:not([data-rail=open]) .nv-panel .nv span{font-size:10px}}
 .nv[aria-current=page]::after{content:"";position:absolute;inset-inline-start:-14px;top:50%;width:44px;height:44px;margin-block-start:-22px;background:radial-gradient(closest-side,var(--m-glow),transparent);pointer-events:none}
 .nv-foot{display:flex;flex-direction:column;align-items:center;gap:2px;padding:var(--fanous-spacing-sm);border-block-start:1px solid var(--fanous-c-drawer-divider)}.ic-sm{width:44px;height:44px;color:var(--fanous-c-drawer-icon)}.ic-sm svg{width:18px;height:18px}@media(hover:hover){.ic-sm:hover{background:var(--m-hover)}}.nv-lang span{display:none}.nv-close{display:none}
 html[data-rail=open] .nv-panel{width:264px}html[data-rail=open] .nv{flex-direction:row;gap:var(--fanous-spacing-md);padding:0 var(--fanous-spacing-md);height:44px;font-size:14px;text-align:start}html[data-rail=open] .nv-heading{display:block}html[data-rail=open] .nv-foot{flex-direction:row;justify-content:flex-start;padding-inline:var(--fanous-spacing-md)}html[data-rail=open] .nv-lang{width:auto;padding-inline:var(--fanous-spacing-sm);gap:6px;font-size:13px}html[data-rail=open] .nv-lang span{display:inline}
 .nv-scrim{display:none}.tabbar{display:none}
-@media(min-width:1024px){#page-content{padding-inline-start:var(--rail);transition:padding 220ms cubic-bezier(.2,0,0,1)}html[data-rail=open] #page-content{padding-inline-start:264px}}
-/* No panel/padding transition while the layout crosses the breakpoint (rail-breakpoint.ts) */
-html[data-rail-still] .nv-panel,html[data-rail-still] #page-content{transition:none!important}
-@media(max-width:1023px){.ah{grid-template-columns:auto minmax(0,1fr) auto}.nv-panel{width:300px;max-width:86vw;transform:translateX(-100%);transition:transform 240ms cubic-bezier(.2,0,0,1);padding-block-start:0;z-index:70}[dir=rtl] .nv-panel,html[dir=rtl] .nv-panel{transform:translateX(100%)}.nv-panel[data-open=true]{transform:none}.nv-panel .nv{flex-direction:row;gap:var(--fanous-spacing-md);padding:0 var(--fanous-spacing-md);height:48px;font-size:15px;text-align:start}.nv-panel .nv-heading{display:block}.nv-foot{flex-direction:row}.nv-panel .nv-lang{width:auto;padding-inline:var(--fanous-spacing-sm);gap:6px;font-size:13px}.nv-panel .nv-lang span{display:inline}.nv-close{display:inline-flex;margin-inline-start:auto}.nv-scrim{display:block;position:fixed;inset:0;z-index:65;border:0;background:rgb(9 21 30/.55)}.nv-scroll{padding-block-start:var(--fanous-spacing-lg)}.tabbar{position:fixed;z-index:44;inset-block-end:0;inset-inline:0;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--m-header);box-shadow:0 -1px 0 color-mix(in srgb,var(--fanous-color-primary) 30%,transparent);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);padding-block-end:env(safe-area-inset-bottom)}.tb{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;color:var(--fanous-c-nav-text)!important}.tb svg{width:22px;height:22px;stroke-width:1.75;color:var(--fanous-c-nav-icon)}.tb[aria-current=page]{color:var(--fanous-c-nav-active-text)!important;font-weight:600}.tb[aria-current=page] svg{color:var(--fanous-c-nav-active-text)}.tb[aria-current=page]::before{content:"";position:absolute;inset-block-start:0;inset-inline:28%;height:2px;background:var(--fanous-c-nav-indicator);box-shadow:0 0 10px var(--m-glow)}#page-content{padding-block-end:72px}}
-@media(max-width:639px){.ah{gap:var(--fanous-spacing-xs);padding-inline:var(--fanous-spacing-xs);height:56px}.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-brand span{font-size:15px}.ah-end{gap:0}.ah-brand .ah-logo{width:28px;height:28px}}
+@media(min-width:1024px){#page-content{padding-inline-start:var(--rail)}html[data-rail-moving] #page-content{transition:padding 220ms cubic-bezier(.2,0,0,1)}html[data-rail=open] #page-content{padding-inline-start:264px}}
+/* The rail, the drawer and the page padding animate only while the menu is toggled (html[data-rail-moving], rail-breakpoint.ts): never when the layout crosses the breakpoint (a rotation, a foldable unfolding), whatever order the browser reports the change in */
+@media(max-width:1023px){.nv-panel{width:300px;max-width:86vw;transform:translateX(-100%);padding-block-start:0;z-index:70}html[data-rail-moving] .nv-panel{transition:transform 240ms cubic-bezier(.2,0,0,1)}[dir=rtl] .nv-panel,html[dir=rtl] .nv-panel{transform:translateX(100%)}.nv-panel[data-open=true]{transform:none}.nv-panel .nv{flex-direction:row;gap:var(--fanous-spacing-md);padding:0 var(--fanous-spacing-md);height:48px;font-size:15px;text-align:start}.nv-panel .nv-heading{display:block}.nv-foot{flex-direction:row}.nv-panel .nv-lang{width:auto;padding-inline:var(--fanous-spacing-sm);gap:6px;font-size:13px}.nv-panel .nv-lang span{display:inline}.nv-close{display:inline-flex;margin-inline-start:auto}.nv-scrim{display:block;position:fixed;inset:0;z-index:65;border:0;background:rgb(9 21 30/.55)}.nv-scroll{padding-block-start:var(--fanous-spacing-lg)}.tabbar{position:fixed;z-index:44;inset-block-end:0;inset-inline:0;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--m-header);box-shadow:0 -1px 0 color-mix(in srgb,var(--fanous-color-primary) 30%,transparent);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);padding-block-end:env(safe-area-inset-bottom)}.tb{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;color:var(--fanous-c-nav-text)!important}.tb svg{width:22px;height:22px;stroke-width:1.75;color:var(--fanous-c-nav-icon)}.tb[aria-current=page]{color:var(--fanous-c-nav-active-text)!important;font-weight:600}.tb[aria-current=page] svg{color:var(--fanous-c-nav-active-text)}.tb[aria-current=page]::before{content:"";position:absolute;inset-block-start:0;inset-inline:28%;height:2px;background:var(--fanous-c-nav-indicator);box-shadow:0 0 10px var(--m-glow)}#page-content{padding-block-end:72px}}
+@media(max-width:1023px){.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-primary{justify-content:flex-end}}
 /* Buttons */
 .b{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:var(--fanous-spacing-sm);min-height:44px;padding-inline:var(--fanous-spacing-xl);border:1px solid transparent;border-radius:var(--r-pill);font:inherit;font-weight:600;cursor:pointer;transition:background 140ms,transform 120ms,box-shadow 140ms}.b svg{width:18px;height:18px}.b-sm{min-height:36px;padding-inline:var(--fanous-spacing-lg);font-size:14px}.b-lg{min-height:52px;padding-inline:var(--fanous-spacing-xxl);font-size:17px}.b-icon{width:44px;padding:0}
-.b-primary,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]),button:is([class^="bg-blue-"],[class*=" bg-blue-"]),a:is([class^="bg-blue-"],[class*=" bg-blue-"]),button:is([class^="bg-gray-7"],[class*=" bg-gray-7"]),button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]),button:is([class^="bg-gray-9"],[class*=" bg-gray-9"]),button:is([class^="bg-slate-"],[class*=" bg-slate-"]),button:is([class^="bg-black"],[class*=" bg-black"]),button:is([class^="bg-purple-"],[class*=" bg-purple-"]),button:is([class^="bg-indigo-"],[class*=" bg-indigo-"]){background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border:1px solid var(--fanous-c-button-primary-border)!important;box-shadow:var(--m-primary-edge);border-radius:var(--r-pill)}.b-primary.is-hover{background:var(--m-primary-hover)!important}@media(hover:hover){.b-primary:hover,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):hover,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,a:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]):hover{background:var(--m-primary-hover)!important}}.b-primary:active,.b-primary.is-press,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):active,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):active{background:var(--m-primary-press)!important;transform:translateY(1px)}
+.b-primary,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]),button:is([class^="bg-blue-"],[class*=" bg-blue-"]),a:is([class^="bg-blue-"],[class*=" bg-blue-"]),button:is([class^="bg-gray-7"],[class*=" bg-gray-7"]),button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]),button:is([class^="bg-gray-9"],[class*=" bg-gray-9"]),button:is([class^="bg-slate-"],[class*=" bg-slate-"]),button:is([class^="bg-black"],[class*=" bg-black"]),button:is([class^="bg-purple-"],[class*=" bg-purple-"]),button:is([class^="bg-indigo-"],[class*=" bg-indigo-"]){background:var(--aun-btn-filled-bg)!important;color:var(--aun-btn-filled-fg)!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:var(--aun-radius-button)}.b-primary.is-hover{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg))!important}@media(hover:hover){.b-primary:hover,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):hover,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,a:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]):hover{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg))!important}}.b-primary:active,.b-primary.is-press,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):active,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):active{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-press),var(--aun-btn-filled-bg))!important}
 .b-primary:disabled,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):disabled,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):disabled,button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]):disabled,button:is([class^="bg-black"],[class*=" bg-black"]):disabled{background:var(--fanous-c-button-primary-disabled-bg)!important;color:var(--fanous-c-button-primary-disabled-text)!important;border-color:transparent!important;box-shadow:none;opacity:1;cursor:not-allowed}
-.b-secondary,[data-slot=button][class*="border bg-background"]{background:var(--m-card)!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid var(--fanous-c-button-secondary-border)!important;box-shadow:var(--m-card-edge);border-radius:var(--r-pill)}.b-secondary.is-hover{background:var(--m-hover)!important}@media(hover:hover){.b-secondary:hover,[data-slot=button][class*="border bg-background"]:hover{background:var(--m-hover)!important}}.b-secondary.is-press{background:var(--m-active)!important}
+.b-secondary,[data-slot=button][class*="border bg-background"]{background:transparent!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid var(--aun-btn-outline)!important;box-shadow:none!important;border-radius:var(--aun-radius-button)}.b-secondary.is-hover{background:color-mix(in srgb,currentColor var(--aun-state-hover),transparent)!important}@media(hover:hover){.b-secondary:hover,[data-slot=button][class*="border bg-background"]:hover{background:color-mix(in srgb,currentColor var(--aun-state-hover),transparent)!important}}.b-secondary.is-press{background:color-mix(in srgb,currentColor var(--aun-state-press),transparent)!important}
 .b-ghost,[data-slot=button][class*="hover:bg-accent"]:not([class*="border"]){background:transparent;color:var(--fanous-c-button-ghost-text)!important}.b-ghost.is-hover{background:var(--m-hover)}@media(hover:hover){.b-ghost:hover{background:var(--m-hover)}}.b-ghost.is-press{background:var(--m-active)}
-.b-danger,[data-slot=button]:is([class^="bg-destructive"],[class*=" bg-destructive"]),button:is([class^="bg-red-"],[class*=" bg-red-"]){background:linear-gradient(180deg,color-mix(in srgb,var(--fanous-c-button-destructive-bg) 88%,white),var(--fanous-c-button-destructive-bg))!important;color:var(--fanous-c-button-destructive-text)!important;border:1px solid var(--fanous-c-button-destructive-border)!important;border-radius:var(--r-pill)}.b-danger.is-hover{background:var(--fanous-c-button-destructive-hover)!important}@media(hover:hover){.b-danger:hover{background:var(--fanous-c-button-destructive-hover)!important}}
+.b-danger,[data-slot=button]:is([class^="bg-destructive"],[class*=" bg-destructive"]),button:is([class^="bg-red-"],[class*=" bg-red-"]){background:var(--aun-btn-danger-bg)!important;color:var(--aun-btn-danger-fg)!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:var(--aun-radius-button)}.b-danger.is-hover{background:var(--fanous-c-button-destructive-hover)!important}@media(hover:hover){.b-danger:hover{background:var(--fanous-c-button-destructive-hover)!important}}
 .b:disabled{cursor:not-allowed}.b.is-focus{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}.b-secondary:disabled,.b-ghost:disabled,.b-danger:disabled{background:var(--fanous-c-button-secondary-disabled-bg)!important;color:var(--fanous-c-button-secondary-disabled-text)!important;border-color:transparent!important;box-shadow:none}
 /* Forms */
 .f-input,input:not([type=checkbox]):not([type=radio]):not([type=range]):not(.ah-search input),textarea,select,[data-slot=select-trigger]{background:var(--m-control)!important;box-shadow:var(--m-control-edge);border:1px solid var(--fanous-c-form-input-border)!important;border-radius:var(--r-md)!important;color:var(--fanous-c-form-input-text)!important;min-height:44px}.f-input{width:100%;padding-inline:var(--fanous-spacing-md);font:inherit}.f-input.is-focus{outline:2px solid var(--fanous-c-form-focus-ring);outline-offset:1px}.f-input.is-error{border-color:var(--fanous-c-form-error)!important}
@@ -64,21 +1037,25 @@ html[data-rail-still] .nv-panel,html[data-rail-still] #page-content{transition:n
 /* Switch: button.sw > .sw-track > .sw-thumb (components/common/Switch.tsx). The button is the hit area, the track is the visual. */
 .sw{all:unset;box-sizing:border-box;position:relative;display:inline-flex;flex:none;align-items:center;justify-content:center;min-width:44px;min-height:26px;padding:0;border:0;background:transparent!important;box-shadow:none!important;cursor:pointer;-webkit-tap-highlight-color:transparent}.sw:focus-visible{outline:none}.sw:focus-visible .sw-track{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}.sw:disabled{cursor:default;opacity:.6}.sw-track{position:relative;display:block;flex:none;box-sizing:border-box;width:44px;height:26px;border-radius:999px;background:var(--fanous-c-form-switch-off);box-shadow:inset 0 1px 3px rgb(9 21 30/.3);transition:background-color 140ms}.sw[aria-checked=true] .sw-track{background:var(--fanous-c-form-switch-on)}.sw-thumb{position:absolute;inset-block-start:3px;inset-inline-start:3px;display:block;width:20px;height:20px;border-radius:50%;background:var(--fanous-c-form-switch-thumb);box-shadow:0 1px 3px rgb(9 21 30/.4);transition:inset-inline-start 140ms}.sw[aria-checked=true] .sw-thumb{inset-inline-start:21px}@media(max-width:640px),(pointer:coarse){.sw{min-width:44px;min-height:44px}}@media(prefers-reduced-motion:reduce){.sw-track,.sw-thumb{transition:none}}.sw-row{display:flex;align-items:center;justify-content:space-between;gap:var(--fanous-spacing-md,16px)}.sw-row>:first-child{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}.sw-row>.sw{flex:none}
 /* Settings breadcrumb (components/settings/SettingsBreadcrumb.tsx) */
-.sb{display:flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0;color:var(--fanous-color-text-secondary)}.sb-page{max-width:72rem;margin-inline:auto;padding:var(--fanous-spacing-sm,8px) var(--fanous-spacing-md,16px) 0}.sb-text{color:var(--fanous-color-text-secondary)}.sb-back{display:inline-flex;flex:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill,999px);color:var(--fanous-color-text-primary);transition:background-color 140ms}.sb-arrow{width:20px;height:20px}[dir=rtl] .sb-arrow{transform:scaleX(-1)}.sb-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--fanous-spacing-xs,4px);min-width:0;margin:0;padding:0;list-style:none;font-size:14px;line-height:1.4}.sb-item{display:inline-flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0}.sb-link{display:inline-flex;align-items:center;min-height:44px;color:var(--fanous-color-link,var(--fanous-color-accent));text-decoration:none;border-radius:4px}.sb-current{color:var(--fanous-color-text-primary);font-weight:600;overflow-wrap:anywhere}.sb-sep{width:16px;height:16px;flex:none;color:var(--fanous-color-text-muted)}[dir=rtl] .sb-sep{transform:scaleX(-1)}@media(hover:hover){.sb-back:hover{background:var(--m-hover)}.sb-link:hover{text-decoration:underline}}
+.sb{display:flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0;color:var(--fanous-color-text-secondary)}.sb-page{max-width:72rem;margin-inline:auto;padding:var(--fanous-spacing-sm,8px) var(--fanous-spacing-md,16px) 0}.sb-text{color:var(--fanous-color-text-secondary)}.sb-back{display:inline-flex;flex:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill,999px);color:var(--fanous-color-text-primary);transition:background-color 140ms}.sb-arrow{width:20px;height:20px}[dir=rtl] .sb-arrow{transform:scaleX(-1)}.sb-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--fanous-spacing-xs,4px);min-width:0;margin:0;padding:0;list-style:none;font-size:14px;line-height:1.4}.sb-item{display:inline-flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0}.sb-link{display:inline-flex;align-items:center;min-height:44px;color:var(--fanous-color-link,var(--fanous-color-accent));text-decoration:none;border-radius:4px}.sb-current{color:var(--fanous-color-text-primary);font-weight:600;overflow-wrap:anywhere}.sb-sep{width:16px;height:16px;flex:none;color:var(--fanous-color-text-muted)}@media(hover:hover){.sb-back:hover{background:var(--m-hover)}.sb-link:hover{text-decoration:underline}}
 .ck{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:var(--r-sm);box-shadow:var(--m-control-edge);background:var(--m-control);border:1px solid var(--fanous-c-form-input-border)}.ck[data-on]{background:var(--m-primary);border-color:var(--fanous-c-button-primary-border)}.ck svg{width:14px;height:14px;color:var(--fanous-c-button-primary-text)}.rd{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--m-control);border:1px solid var(--fanous-c-form-input-border);box-shadow:var(--m-control-edge)}.rd[data-on]{border:7px solid var(--fanous-c-form-check-on)}
 /* Surfaces */
-.c,[data-slot=card],:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid transparent!important;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+.c,[data-slot=card],:is([class^="bg-card"],[class*=" bg-card"],[class^="bg-[var(--fanous-color-surface"],[class*=" bg-[var(--fanous-color-surface"])[class*="rounded"]:not(button):not(a):not(.sw):not(:is([role=menu],[role=listbox],[data-popover])),:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid var(--aun-glass-edge)!important;background:var(--aun-glass-surface)!important;box-shadow:var(--aun-glass-glow)!important;border-radius:var(--aun-radius-card)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
 .c{padding:var(--fanous-spacing-xl)}
+/* Popovers and hand-made dropdowns (data-popover): the panel glass, more opaque than a card, so their text never fights the page behind */
+[data-popover]{background:var(--aun-glass-panel-surface)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-menu)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
+/* Rows of long lists and post/media cards: the same glass without the blur (a blur per row costs a compositor layer each) */
+[data-slot=card][data-glass=lite],.aun-row-glass,.community-card{background:var(--aun-glass-lite-surface)!important;box-shadow:var(--aun-glass-glow-lite)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-card)!important}
 .hero{background:var(--m-hero);border-radius:var(--r-xl);box-shadow:var(--m-card-edge)}
-.menu,[role=menu]:not(.vjs-fanous-layer):not(.vjs-menu-content),[data-slot=dropdown-menu-content],[data-slot=select-content],[data-radix-popper-content-wrapper]>[role=dialog]{background:var(--m-raised)!important;box-shadow:var(--m-raised-edge)!important;border:0!important;border-radius:var(--r-lg)!important;color:var(--fanous-c-menu-text)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}.menu{padding:6px;width:240px}.mi,[data-slot=dropdown-menu-item]{display:flex;align-items:center;gap:var(--fanous-spacing-sm);min-height:40px;padding-inline:var(--fanous-spacing-md);border-radius:var(--r-md);font-size:14px}.mi.is-hover,[data-slot=dropdown-menu-item][data-highlighted]{background:var(--m-hover)!important}@media(hover:hover){.mi:hover,[data-slot=dropdown-menu-item]:hover{background:var(--m-hover)!important}}.mi svg{width:16px;height:16px;color:var(--fanous-c-menu-muted)}.mi small{margin-inline-start:auto;color:var(--fanous-c-menu-muted)}
-.dl,[data-slot=dialog-content],[data-slot=alert-dialog-content]{background:var(--m-raised)!important;box-shadow:var(--m-dialog-shadow,var(--m-raised-edge))!important;border:1px solid var(--m-dialog-line,transparent)!important;border-radius:var(--r-xl)!important;color:var(--fanous-c-dialog-text)!important}.dl{padding:var(--fanous-spacing-xl);max-width:420px}.dl h3{font-size:19px;font-weight:700;margin:0}.dl p{color:var(--fanous-c-dialog-muted);margin:6px 0 0}.dl-a{display:flex;gap:8px;justify-content:flex-end;margin-block-start:20px}
+.menu,[role=menu]:not(.vjs-fanous-layer):not(.vjs-menu-content):not(.aun-menu),[data-slot=dropdown-menu-content],[data-slot=select-content],[data-radix-popper-content-wrapper]>[role=dialog]{background:var(--aun-glass-panel-surface)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-menu)!important;color:var(--aun-menu-fg)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}.menu{padding:6px;width:240px}.mi,[data-slot=dropdown-menu-item]{display:flex;align-items:center;gap:12px;min-height:var(--aun-menu-item-h);padding-inline:12px;border-radius:var(--aun-radius-item);font-size:14px;font-weight:500;text-align:start}.mi.is-hover,[data-slot=dropdown-menu-item][data-highlighted]{background:var(--aun-state-layer)!important}@media(hover:hover){.mi:hover,[data-slot=dropdown-menu-item]:hover{background:var(--aun-state-layer)!important}}.mi>svg,[data-slot=dropdown-menu-item]>svg{order:-1;flex:none}.mi[data-danger],.mi[data-danger] svg,[data-slot=dropdown-menu-item][data-variant=destructive],[data-slot=dropdown-menu-item][data-variant=destructive] svg{color:var(--aun-menu-danger)!important}.mi svg{width:16px;height:16px;color:var(--fanous-c-menu-muted)}.mi small{margin-inline-start:auto;color:var(--fanous-c-menu-muted)}
+.dl,[data-slot=dialog-content],[data-slot=alert-dialog-content]{background:var(--aun-glass-panel-surface)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-panel)!important;color:var(--fanous-c-dialog-text)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}.dl{padding:var(--fanous-spacing-xl);max-width:420px}.dl h3{font-size:19px;font-weight:700;margin:0}.dl p{color:var(--fanous-c-dialog-muted);margin:6px 0 0}.dl-a{display:flex;gap:8px;justify-content:flex-end;margin-block-start:20px}
 .toast{display:flex;align-items:center;gap:10px;padding:12px var(--fanous-spacing-lg);background:var(--m-raised);box-shadow:var(--m-raised-edge);border-radius:var(--r-lg);color:var(--fanous-c-toast-text);max-width:380px}.toast svg{width:20px;height:20px;flex:none}.toast.ok svg{color:var(--fanous-c-toast-success)}.toast.err svg{color:var(--fanous-c-toast-error)}
 /* Tabs and chips */
 .tabs{display:flex;gap:var(--fanous-spacing-xs);border-block-end:1px solid var(--fanous-c-tabs-border);overflow-x:auto}
-.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding-inline:14px;border-radius:var(--r-pill);border:1px solid var(--fanous-c-button-secondary-border);background:var(--m-control);color:var(--fanous-color-text-primary);font-size:14px;cursor:pointer;font-weight:500}.chip.is-hover{background:var(--m-hover)}@media(hover:hover){.chip:hover{background:var(--m-hover)}}.chip[aria-pressed=true]{background:var(--m-primary);box-shadow:var(--m-primary-edge);border-color:var(--fanous-c-button-primary-border);color:var(--fanous-c-button-primary-text)}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding-inline:14px;border-radius:var(--r-pill);border:1px solid var(--fanous-c-button-secondary-border);background:var(--m-control);color:var(--fanous-color-text-primary);font-size:14px;cursor:pointer;font-weight:500}.chip.is-hover{background:var(--m-hover)}@media(hover:hover){.chip:hover{background:var(--m-hover)}}.chip[aria-pressed=true]{background:var(--aun-btn-filled-bg);box-shadow:none;border-color:transparent;color:var(--aun-btn-filled-fg)}
 .bdg{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-sm);font-size:12px;font-weight:600}.bdg-live{background:var(--fanous-c-badge-live-bg);color:var(--fanous-c-badge-live-text)}.bdg-dur{background:rgb(9 21 30/.84);color:#fff}.bdg-ok{background:var(--fanous-c-badge-status-bg);color:var(--fanous-c-badge-status-text)}
-/* Video cards: the thumbnail is the card */
-.video-card{background:transparent!important;box-shadow:none!important;border:0!important;border-radius:0!important;transition:transform 180ms cubic-bezier(.2,0,0,1)}.video-card>:first-child{border-radius:var(--r-lg);overflow:hidden;box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 60%,transparent);transition:box-shadow 180ms}@media(hover:hover){.video-card:hover{transform:translateY(-2px)}}.video-card:focus-visible>:first-child{box-shadow:var(--m-thumb-edge)}@media(hover:hover){.video-card:hover>:first-child{box-shadow:var(--m-thumb-edge)}}.video-card h3{font-size:15px;font-weight:600;font-family:inherit;line-height:1.35}.video-card p{font-size:13px;color:var(--fanous-c-card-video-meta)!important}.video-card>div:last-child{padding:10px 40px 4px 2px}html[dir=rtl] .video-card>div:last-child{padding:10px 2px 4px 40px}
+/* Video cards: the lite glass (no blur: they fill long, scrolling grids), the thumbnail inset in it */
+.video-card{background:var(--aun-glass-lite-surface)!important;box-shadow:var(--aun-glass-glow-lite)!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-card)!important;padding:8px;transition:transform 180ms cubic-bezier(.2,0,0,1)}.video-card>:first-child{border-radius:var(--r-lg);overflow:hidden;box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 60%,transparent);transition:box-shadow 180ms}@media(hover:hover){.video-card:hover{transform:translateY(-2px)}}.video-card:focus-visible>:first-child{box-shadow:var(--m-thumb-edge)}@media(hover:hover){.video-card:hover>:first-child{box-shadow:var(--m-thumb-edge)}}.video-card h3{font-size:15px;font-weight:600;font-family:inherit;line-height:1.35;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:start}.video-card p{font-size:13px;color:var(--fanous-c-card-video-meta)!important}.video-card>div:last-child{padding:10px 40px 4px 2px}html[dir=rtl] .video-card>div:last-child{padding:10px 2px 4px 40px}
 .vc{display:grid;gap:8px}.vc-t{position:relative;aspect-ratio:16/9;border-radius:var(--r-lg);background:var(--m-hero);overflow:hidden;box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 60%,transparent);transition:box-shadow 180ms}.vc.is-hover .vc-t{box-shadow:var(--m-thumb-edge)}@media(hover:hover){.vc:hover .vc-t{box-shadow:var(--m-thumb-edge)}}.vc-t .bdg{position:absolute;inset-block-end:6px;inset-inline-end:6px}.vc b{font-weight:600;font-size:15px}.vc small{color:var(--fanous-c-card-video-meta);font-size:13px}
 .empty{display:grid;justify-items:center;gap:8px;text-align:center;padding:var(--fanous-spacing-xxxl) var(--fanous-spacing-xl)}.empty>svg{color:var(--fanous-c-empty-icon);stroke-width:1.5}.empty h4{font-size:18px;font-weight:700;color:var(--fanous-c-empty-title);margin:0}.empty p{color:var(--fanous-c-empty-body);margin:0}
 .sk{position:relative;overflow:hidden;background:var(--fanous-c-skeleton-bg);border-radius:var(--r-md)}.sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--fanous-c-skeleton-shine),transparent);transform:translateX(-100%);animation:skel 1.6s linear infinite}html[dir=rtl] .sk::after{transform:translateX(100%);animation-name:skel-r}@keyframes skel{to{transform:translateX(100%)}}@keyframes skel-r{to{transform:translateX(-100%)}}
@@ -149,10 +1126,10 @@ main [class*="justify-between"]{flex-wrap:wrap}
 @media(max-width:639px){[data-testid=consent-banner]{padding:8px;inset-block-end:64px}[data-testid=consent-banner]>div{padding:var(--fanous-spacing-lg)}}
 
 /* Interaction fixes from the pointer check */
-@media(hover:hover){.ah-brand:hover{background:var(--fanous-c-nav-hover)}.home-hero-t:hover{filter:brightness(1.06)}a[class*="text-blue-"]:hover{text-decoration:underline}}
+@media(hover:hover){.home-hero-t:hover{filter:brightness(1.06)}a[class*="text-blue-"]:hover{text-decoration:underline}}
 .ah-end :is([class^="bg-red-"],[class*=" bg-red-"]),.ah-end :is([class^="bg-red-"],[class*=" bg-red-"]) *{color:var(--fanous-c-button-destructive-text)!important}
 button[class*="rounded-full"][class*="border"][class*="h-9"]{background:var(--m-control)!important;color:var(--fanous-color-text-primary)!important;border-color:var(--fanous-c-button-secondary-border)!important}
-button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border-color:var(--fanous-c-button-primary-border)!important}
+button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{background:var(--aun-btn-filled-bg)!important;color:var(--aun-btn-filled-fg)!important;border-color:transparent!important;box-shadow:none!important}
 @media(hover:hover){button[class*="rounded-full"][class*="border"][class*="h-9"]:not([aria-pressed=true]):hover{background:var(--m-hover)!important}}
 .home-hero-tag{color:var(--fanous-color-text-secondary)}
 
@@ -176,18 +1153,12 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 
 
 
-/* Header layout: content-sized ends, and search takes only the space left between them. */
-.ah,.ah:is(*){grid-template-columns:auto minmax(0,1fr) auto}
-.ah-start,.ah-end{flex:none;width:max-content;min-width:0}.ah-start>*,.ah-end>*{flex:none}.ah .ic,.ah-brand,.ah-logo{flex:none}.ah-brand{gap:8px}.ah-brand span{white-space:nowrap;overflow:visible}
-.ah-search{justify-self:center;width:100%;max-width:640px;min-width:0}
+/* Header search: it takes the space the tools leave, at most 640px, centred in it */
+.ah-search{width:100%;max-width:640px;min-width:0}
 .ah-search input{padding-inline:16px 8px;font-size:15px}.ah-search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-inline-start:6px;cursor:pointer;background:var(--fanous-c-nav-icon);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}
 .ah-search button{flex:none;width:52px}
-@media(max-width:1439px){.ah-end [class*="max-w-[150px]"]{display:none}}
 
-@media(max-width:1023px){.ah{gap:var(--fanous-spacing-sm)}.ah-search{min-width:200px}}
-@media(max-width:767px){.ah-search{min-width:0}}
-@media(max-width:639px){.ah{gap:4px;padding-inline:4px}.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-start,.ah-end{gap:0}.ah-brand{padding:2px;gap:6px}.ah-brand span{font-size:14px}.ah-brand .ah-logo{width:28px;height:28px}.ah-end svg[class*="chevron"],.ah-end [class*="lucide-chevron"]{display:none}}
-@media(max-width:375px){.ah-brand span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
+
 /* Nothing square behind a rounded corner: wrappers around the player and thumbnails stay unpainted. */
 
 
@@ -198,13 +1169,14 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 
 
 
-.nv-scroll{scrollbar-width:none}.nv-scroll::-webkit-scrollbar{display:none}
+/* The rail's list (#1620): a thin scrollbar whose gutter is always kept (no shift when it shows) and whose thumb shows only on hover or keyboard focus. Below the list, outside its scroll box, a 14px edge strip carries a line, a soft inset shadow and a small down chevron while more items are below (data-more-below, rail-scroll.ts): it never sits over an item, so nothing loses contrast; an item the edge would cut is hidden whole (clip by --nv-tail from rail-scroll.ts), so the strip always sits under a complete item. Vertical only, so the same in RTL; the shadow uses the rail's icon colour, so it shows in light and dark. */.nv-scroll{scrollbar-width:thin;scrollbar-color:transparent transparent;scrollbar-gutter:stable}.nv-scroll::-webkit-scrollbar{width:6px}.nv-scroll::-webkit-scrollbar-track{background:transparent}.nv-scroll::-webkit-scrollbar-thumb{background:transparent;border-radius:3px}.nv-scroll:hover,.nv-scroll:focus-within{scrollbar-color:var(--fanous-c-drawer-icon) transparent}.nv-scroll:hover::-webkit-scrollbar-thumb,.nv-scroll:focus-within::-webkit-scrollbar-thumb{background:var(--fanous-c-drawer-icon)}.nv-edge{position:relative;flex:none;height:14px;pointer-events:none;border-block-start:1px solid transparent}.nv-scroll[data-more-below]{clip-path:inset(0 0 var(--nv-tail,0px) 0)}.nv-scroll[data-more-below]+.nv-edge{border-block-start-color:color-mix(in srgb,var(--fanous-c-drawer-icon) 55%,transparent);box-shadow:inset 0 10px 8px -6px color-mix(in srgb,var(--fanous-c-drawer-icon) 35%,transparent)}.nv-scroll[data-more-below]+.nv-edge::after{content:"";position:absolute;inset-block-start:3px;inset-inline-start:50%;width:12px;height:7px;transform:translateX(-50%);background:var(--fanous-c-drawer-icon);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}[dir=rtl] .nv-scroll[data-more-below]+.nv-edge::after{transform:translateX(50%)}
+/* The same rail items in both languages (#1723 ruling): up to «إرشادات المجتمع» main's Arabic labels take one line more than English («المرئيات التي أعجبتك» 2 lines vs "Liked videos" 1 and «الخصوصية وملفات تعريف الارتباط» 3 vs 2, while «إرشادات المجتمع» is 1 vs 2), so at 1280×800 that item ended 13px lower, past the edge, and was hidden whole (AUDIT-2). The collapsed Arabic items give those 13px back across the 11 items up to it (0.6px a side, 10px → 9.4px), so it ends where its English one does and the edge cuts the same item in both languages. :lang, so it follows the page's language. */@media(min-width:1024px){html:not([data-rail=open]) .nv-panel .nv:lang(ar){padding-block:9.4px}}
 
 
 
 @media(hover:hover){.b-secondary:active{background:var(--m-active)!important}}
 :is([class^="bg-black/"],[class*=" bg-black/"]):not(button):not(.fixed){background:rgb(9 21 30/.94)!important;color:#fff!important}
-[data-testid=channel-header] button[class*="rounded-lg"][class*="font-semibold"]{background:var(--m-primary)!important;color:var(--fanous-c-button-primary-text)!important;border:1px solid var(--fanous-c-button-primary-border)!important;box-shadow:var(--m-primary-edge);border-radius:var(--r-pill)!important;min-height:40px}
+[data-testid=channel-header] button[class*="rounded-lg"][class*="font-semibold"]{background:var(--aun-btn-filled-bg)!important;color:var(--aun-btn-filled-fg)!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:var(--aun-radius-button)!important;min-height:40px}
 html:has(video) .ti-left,html:has(video) .ti-right{display:none}
 [data-testid=channel-header] button[aria-pressed=true][class*="font-semibold"]{background:var(--m-card) padding-box,var(--m-border) border-box!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid transparent!important;box-shadow:var(--m-card-edge)}
 
@@ -275,14 +1247,17 @@ main [data-slot=button]{max-width:100%;white-space:normal;height:auto;min-height
 /* Below lg the normal layout already stacks, so theatre is the edge-to-edge player: square, no page gutter (owner, foldables: theatre off looked the same as on) */
 @media(max-width:1023px){[data-testid=watch-layout][data-theatre]{padding-inline:0}[data-testid=watch-layout][data-theatre]>*{padding-inline:16px}[data-testid=watch-layout][data-theatre] #video-player{margin-inline:-16px;width:calc(100% + 32px);max-width:none}}
 
-/* Consent: opaque compact card in the corner, never over the title or actions */
+/* Consent: opaque compact card in the corner, never over the title or actions. On phones the whole notice
+   is readable (never clamped, #1587): the card grows up to the space between header and tab bar, then scrolls. */
 [data-testid=consent-banner]{left:auto!important;right:0!important;width:min(420px,100vw);padding:16px!important}
 html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important}
 [data-testid=consent-banner]>div{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;-webkit-backdrop-filter:none;backdrop-filter:none;max-width:none;padding:16px}
 [data-testid=consent-banner] h2{font-size:15px;line-height:20px}[data-testid=consent-banner] p{font-size:13px;line-height:18px}
+/* Arabic faces (Amiri, Noto Kufi) are taller than 18px lines allow: a roomier size and line so dots never touch (#1587) */
+[dir=rtl][data-testid=consent-banner] p{font-size:14px;line-height:24px}
 [data-testid=consent-banner] .mt-4.flex{margin-top:12px;gap:8px;flex-direction:row;flex-wrap:nowrap;justify-content:flex-end}
 [data-testid=consent-banner] .mt-4.flex button{flex:0 1 auto;min-height:36px;padding-block:0;padding-inline:12px;font-size:14px;border-radius:var(--r-pill);white-space:nowrap}
-@media(max-width:639px){[data-testid=consent-banner]{left:0!important;right:0!important;width:100%;padding:8px!important}[data-testid=consent-banner] p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}[data-testid=consent-banner]>div{padding:12px}[data-testid=consent-banner] .mt-4.flex button{flex:1 1 0;padding-inline:8px}}
+@media(max-width:639px){[data-testid=consent-banner]{left:0!important;right:0!important;width:100%;padding:8px!important}[data-testid=consent-banner]>div{padding:12px;max-height:calc(100dvh - 64px - 56px - 16px);overflow-y:auto;overscroll-behavior:contain}[data-testid=consent-banner] .mt-4.flex{flex-wrap:wrap}[data-testid=consent-banner] .mt-4.flex button{flex:1 1 auto;min-height:44px;padding-inline:12px}}
 
 
 /* Themed select field */
@@ -301,6 +1276,9 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 /* Watch page: title, channel row, single action row, description */
 .watch-details{width:100%;margin-block-start:12px}
 .watch-title{margin:0 0 10px;font-size:20px;line-height:28px;font-weight:600;color:var(--fanous-color-text-primary)}
+/* A viewer's machine-translated title (AUN-CAPTIONS §5.9): labelled, with Show original/translation */
+.watch-mt{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:-4px 0 10px;font-size:13px;line-height:20px;color:var(--fanous-color-text-secondary)}.watch-mt>span{display:inline-flex;align-items:center;gap:6px}.watch-mt>span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--fanous-color-primary)}
+.watch-mt-toggle{min-height:24px;padding:0 4px;border:0;background:transparent;color:var(--fanous-color-link);font:inherit;font-weight:600;cursor:pointer;border-radius:var(--r-sm,4px)}.watch-mt-toggle:focus-visible{outline:2px solid var(--fanous-color-focus,currentColor);outline-offset:2px}@media(hover:hover){.watch-mt-toggle:hover{text-decoration:underline}}
 .watch-channel{display:flex;align-items:center;gap:12px;min-width:0;min-height:42px}
 .watch-avatar{position:relative;display:block;width:40px;height:40px;flex:none;border-radius:50%;overflow:hidden;box-shadow:0 0 0 1px color-mix(in srgb,var(--fanous-color-divider) 70%,transparent)}
 .watch-channel-meta{display:flex;flex-direction:column;justify-content:center;min-width:0}
@@ -333,7 +1311,11 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-actions[data-fit=tight]{gap:6px}.watch-actions[data-fit=tight] .wa-comments:not(#_){display:none}
 .watch-actions[data-fit=tight] [data-testid=video-like-button]:not(#_){padding-inline:10px}
 .watch-desc{width:100%;margin-block-start:12px;padding:10px 12px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--fanous-color-text-primary) 7%,transparent);font-size:14px;line-height:20px;color:var(--fanous-color-text-primary)}
-.watch-desc summary{cursor:pointer;font-weight:600;display:flex;gap:10px}.watch-desc p{margin:8px 0 0;white-space:pre-line}
+.watch-desc summary{cursor:pointer;font-weight:600;display:flex;flex-wrap:wrap;column-gap:6px;position:relative}.watch-desc summary>.watch-meta-part{display:inline-flex;align-items:baseline;column-gap:6px;white-space:nowrap}details.watch-desc[open]>summary .watch-origin,details.watch-desc[open]>summary .watch-origin-sep{display:none}.watch-desc-date{color:var(--fanous-color-text-secondary)}
+/* Imported from YouTube (AUN-YT-IMPORT): a quiet origin label in the summary, the full sentence when expanded */
+.watch-desc .watch-origin{font-weight:500;color:var(--fanous-color-text-secondary)}.watch-desc .watch-desc-origin{margin-block-start:2px;color:var(--fanous-color-text-secondary);font-size:13px}
+/* The exact count and what the date is, while the summary has keyboard focus (hover shows its title) */
+.watch-desc summary[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;inset-block-end:calc(100% + 6px);inset-inline-start:0;z-index:5;padding:4px 8px;border-radius:var(--r-md);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 0 0 1px var(--fanous-color-divider);font-weight:400;white-space:nowrap}.watch-desc p{margin:8px 0 0;white-space:pre-line}
 [data-slot=button]{min-height:36px;gap:8px;font-size:14px;line-height:20px}[data-slot=button] svg{width:18px;height:18px}
 [data-testid=comments-section] button[class*="px-"]:not(.ts-trigger){min-height:36px;padding-block:0;font-size:14px;border-radius:var(--r-pill)}
 
@@ -356,17 +1338,7 @@ html[data-rail=open] .nv{font-size:14px;line-height:20px}html[data-rail=open] .n
 /* Settings row chevrons centred */
 a.group svg.lucide-chevron-right{align-self:center}
 
-/* Header account menu: anchored below the header, quiet opaque rows */
 /* Menus, dialogs and listboxes are popovers, never cards: the card material (glass in Zujaj) left the phone account menu see-through (#898) */
-.ah-end [class*="absolute"][class*="w-80"]{top:calc(100% + 8px);margin-top:0;background:var(--fanous-c-dialog-bg)!important;-webkit-backdrop-filter:none;backdrop-filter:none}
-.ah-end [class*="absolute"][class*="w-80"] :is(button,a){background:transparent!important;color:var(--fanous-color-text-primary)!important;border:0!important;box-shadow:none!important;border-radius:var(--r-md)!important;min-height:40px}
-.ah-end [class*="absolute"][class*="w-80"] :is(button,a) :not([class^="bg-blue-5"]):not([class*=" bg-blue-5"]):not(svg){color:inherit}
-.ah-end [class*="absolute"][class*="w-80"] [class*="text-gray-"]{color:var(--fanous-color-text-secondary)!important}
-@media(hover:hover){.ah-end [class*="absolute"][class*="w-80"] :is(button,a):hover{background:var(--m-hover)!important}}
-.ah-end [class*="max-w-[150px]"]{display:none}
-/* Account trigger: avatar and chevron read as one control (the hidden name block must not leave a gap between them) */
-.ah-end .nav-trigger-name{display:none}
-.ah-end [data-testid=nav-menu-trigger]{gap:2px;padding-inline:6px}
 .ah-end :is([class^="bg-red-"],[class*=" bg-red-"]){transform:scale(.82);transform-origin:center}
 
 /* Phone chrome */
@@ -378,23 +1350,22 @@ a.group svg.lucide-chevron-right{align-self:center}
 /* End screen on narrow players */
 @container (max-width:479px){.pc .pc-next{grid-template-columns:104px minmax(0,1fr);row-gap:6px;column-gap:10px}.pc .pc-next-b{display:contents}.pc .pc-next-t{width:auto}.pc .pc-next-a{grid-column:1/-1}.pc .pc-next-m strong{font-size:14px;line-height:18px}.pc .pc-end-b{flex:1 1 0;padding:0 8px;font-size:13px}}
 
-/* Shelves line up with the page grid */
-[data-testid=continue-watching] ul{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;overflow:visible;padding:0}[data-testid=continue-watching] li{width:auto}
 .home-hero{background:linear-gradient(var(--fanous-color-surface-raised),var(--fanous-color-surface-raised)) padding-box,var(--m-border) border-box}.home-hero-b{background:transparent}
 .video-card button{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){.video-card button:hover{background:var(--m-hover)!important}}
 
-/* Search */
-[data-testid=search-input-clear]{position:absolute!important;inset-inline-end:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;min-width:0;min-height:0;display:grid;place-items:center;padding:0}
+/* Search. The clear button is centred with `translate` only: Tailwind's -translate-y-1/2 also sets `translate`,
+   and a `transform` here would add a second -50%, lifting the × to the box's top edge */
+[data-testid=search-input-clear]{position:absolute!important;inset-inline-end:8px;top:50%;translate:0 -50%;transform:none;width:28px;height:28px;min-width:0;min-height:0;display:grid;place-items:center;padding:0}
 
 /* Sign-in */
 main:has(.demo-gfx){min-height:calc(100dvh - 140px)}
 html:not(.dark) main:has(.demo-gfx) input{background:color-mix(in srgb,#fff 86%,var(--m-control,#fff))!important}
 
 /* Upload */
-main:has(input[type=file]) button[aria-pressed=false]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-text-primary) 24%,transparent)!important}
-main:has(input[type=file]) :has(>button[aria-pressed]){gap:8px}
-main:has(input[type=file]) [class*="rounded"]:has(>[class*="border-dashed"]){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) button[aria-pressed=false]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-text-primary) 24%,transparent)!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>button[aria-pressed]){gap:8px}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) [class*="rounded"]:has(>[class*="border-dashed"]){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
 
 /* Comments */
 :has(>[data-testid=comments-count]){justify-content:flex-start;gap:16px}
@@ -411,9 +1382,6 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
 
 /* Round two */
 
-.ah-end [class*="absolute"][class*="w-80"]{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important}
-.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"]{background:transparent!important}
-.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"] :is(div,span){color:var(--fanous-color-text-primary)!important}
 
 .nv{padding-inline:2px}.nv span{overflow-wrap:normal;word-break:normal;font-size:10.5px;line-height:13px}html[data-rail=open] .nv span{font-size:14px;line-height:20px}
 .video-card [data-testid=video-card-menu],.video-card [data-testid=video-card-menu] button,button[data-testid=video-card-menu]{background:transparent!important;background-image:none!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
@@ -432,8 +1400,8 @@ main li:has(>a[href*="/video"]),main li:has(a[href*="vid="]):has(h2){background:
 main li h2[class*="group-hover"]{color:var(--fanous-color-text-primary)!important;font-weight:600}
 @media(hover:hover){main li:has(h2[class*="group-hover"]):hover{background:var(--m-hover)!important}}
 /* Upload: one frame */
-main:has(input[type=file]) [class*="border-dashed"]{border-radius:var(--r-lg)}
-main:has(input[type=file]) :has(>*>[class*="border-dashed"]),main:has(input[type=file]) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) [class*="border-dashed"]{border-radius:var(--r-lg)}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>*>[class*="border-dashed"]),main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
 /* Channel cards: slim identity band, quiet actions */
 main [class*="h-32"]:is([class^="bg-gradient-to-br"],[class*=" bg-gradient-to-br"]){height:72px!important;background:linear-gradient(135deg,color-mix(in srgb,var(--fanous-color-primary) 28%,var(--fanous-color-surface-raised)),var(--fanous-color-surface-raised))!important}
 main [class*="h-32"]:is([class^="bg-gradient-to-br"],[class*=" bg-gradient-to-br"])>:not(img){width:44px!important;height:44px!important;font-size:18px!important}
@@ -466,7 +1434,7 @@ body>[role=dialog],body>[role=alertdialog],body>[data-state].fixed.inset-0{z-ind
 
 /* Header popovers open below the header; the row's flex centring must not place them */
 .ah-end [class*="absolute"][class*="z-50"]{top:calc(100% + 8px);margin-top:0;bottom:auto}
-@media(max-width:639px){.ah-end [class*="absolute"][class*="z-50"]{position:fixed;top:64px;inset-inline:8px;width:auto;max-height:calc(100dvh - 140px);overflow-y:auto}
+@media(max-width:639px){.ah-end [class*="absolute"][class*="z-50"]{position:fixed;top:calc(var(--aun-header-height,3.5rem) + 4px);inset-inline:8px;width:auto;max-height:calc(100dvh - 140px);overflow-y:auto}
 }
 
 /* Player must not be scrolled sideways inside its clipped ancestors */
@@ -480,28 +1448,31 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 
 
 /* Header search: shared box, themed dropdown */
-.ah-search-wrap{justify-self:center;width:100%;max-width:640px;min-width:0}
+.ah-search-wrap{margin-inline:auto;width:100%;max-width:640px;min-width:0}
 .ah-search-wrap>div{width:100%}
-.ah .ah-search{height:44px}.ah .ah-search>div{min-width:0}.ah .ah-search input{height:100%}
+.ah .ah-search{height:40px}.ah .ah-search>div{min-width:0}.ah .ah-search input{height:100%}
 .ah .ah-search [data-testid=header-search-clear]{width:28px;height:28px;border:0;inset-inline-end:6px}
-.search-dd{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important;box-shadow:var(--m-raised-edge)!important;border-radius:var(--r-lg)!important;color:var(--fanous-color-text-primary)}
+.search-dd{background:var(--aun-glass-panel-surface)!important;border:1px solid var(--aun-glass-edge)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border-radius:var(--aun-radius-menu)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur);color:var(--fanous-color-text-primary)}
 .search-dd [role=option]{min-height:40px}.search-dd [role=option][aria-selected=true],.search-dd [role=option]:hover{background:var(--m-hover)!important}
 .search-dd :is(span,p,button){color:var(--fanous-color-text-primary)}.search-dd p,.search-dd .text-xs{color:var(--fanous-color-text-secondary)}
 /* Autocomplete (components/ui/Autocomplete): matched text is bold, not a yellow highlighter, in every theme */
 .ac-mark{background:transparent;color:inherit;font-weight:700}
 .ac-option[data-active]{background:var(--m-hover)}
-.ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:56px}.ah-search-sheet>div{flex:1 1 auto}
-@media(max-width:639px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-grid;justify-self:end}
+.ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:var(--aun-header-height,56px)!important}.ah-search-sheet>div{flex:1 1 auto}
+@media(max-width:1023px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-flex}
 /* The phone header hides the inline search form; the sheet the search icon opens shows its own copy */
 .ah-search-sheet .ah-search{display:flex}}
 
 /* Watch page skeleton: same boxes as the final layout */
 .wsk-b{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent)!important}
 .wsk-player{border-radius:var(--r-lg);max-height:calc(100dvh - 148px);background-color:#000}
+/* A vertical video's skeleton is the player's portrait frame (player-skin.css .custom-video-player[data-portrait]), so nothing moves when the player replaces it (#1208) */
+.wsk-player[data-portrait]{width:min(100%,calc(80vh * 9 / 16));aspect-ratio:9/16;max-height:none;margin-inline:auto}
 .wsk-details{margin-top:12px}.wsk-title{margin:0 0 10px;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.01em;color:var(--fanous-color-text-primary)}html[lang=ar] .wsk-title{letter-spacing:0}.wsk-title-b{height:28px;margin-bottom:10px}
 .wsk-channel{min-height:42px;gap:12px}.wsk-avatar{width:40px!important;height:40px!important}.wsk-subscribe{display:block!important;height:36px}
 .wsk-metrics{display:none!important}.wsk-actions{margin-top:12px;padding:0;max-width:none;gap:8px}.wsk-actions>*{height:36px!important;border-radius:var(--r-pill)!important}
 .wsk-desc{display:block!important;margin-top:12px;height:40px;border-radius:var(--r-lg)}
+.wsk-desc-text{height:40px;margin-top:12px}
 [data-testid=related-videos-skeleton]{display:grid;gap:4px;margin-inline:0!important}[data-testid=related-videos-skeleton]>*{display:grid;grid-template-columns:42% minmax(0,1fr);gap:10px;margin:0!important;padding:6px}[data-testid=related-videos-skeleton]>*>:first-child{width:auto;height:auto;aspect-ratio:16/9;border-radius:var(--r-md)}
 @media(max-width:1023px){[data-testid=related-videos-skeleton]{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}[data-testid=related-videos-skeleton]>*{grid-template-columns:1fr;padding:0 0 8px}}
 
@@ -514,6 +1485,21 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 /* Tailwind's grey buttons (bg-gray-100/200) are secondary buttons: the secondary part, not the primary gold. On hover their own hover: class (mapped to tokens above) shows. */
 button:is([class~="bg-gray-100"],[class~="bg-gray-200"]):not([role=switch]):not(:disabled):not(:hover){background:var(--fanous-c-button-secondary-bg)!important;color:var(--fanous-c-button-secondary-text)!important;box-shadow:inset 0 0 0 1px var(--fanous-c-button-secondary-border)}
 
+/* Cards that layered `var(--m-card) padding-box, var(--m-border) border-box` (Settings link tiles, community
+   cards, the playlist tray, the upload card): with a translucent card the border-box layer showed through
+   as a gold-olive fill (owner, 2026-11-16: "this is frosted glass?"). --m-border is now transparent; the
+   edge is a real border, with the blur and the golden glow at rest. */
+a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-section=community] .community-card,.pl-tray,.ups-card{border:1px solid var(--aun-glass-edge)!important;box-shadow:var(--aun-glass-glow)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
+[dir=rtl] .nv-panel{box-shadow:inset 1px 0 0 var(--aun-glass-edge)}
+/* Studio's own nav column: the same rail glass as the site rail (no glass on any ancestor of a fixed element) */
+.studio-rail{background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+/* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
+   (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
+:where(article) [dir=auto]:not(input,textarea){text-align:start}
+/* Studio's video editor (components/videoEdit), every theme: its cards and fields keep the theme's glow, but a
+   short one. The full 30px glow is wider than the 24px gap between the editor's sections, so each section's
+   glow ran into the next (AUDIT-2 2026-11-22). Set on the panel, it reaches every card and field inside it */
+html[data-theme] .video-edit-form{--aun-glass-glow:0 0 10px -2px color-mix(in srgb,var(--aun-glass-c) 48%,transparent);--aun-glass-glow-lite:0 0 8px -3px color-mix(in srgb,var(--aun-glass-c) 40%,transparent)}
 /* Option cards: pick-one choices in a dialog (Add channel section). A raised card on the dialog
    surface: dialog text and muted text on a fill lifted from dialog.bg; the icon lights up as the
    primary button on hover. Groups have small headings; an odd last card spans the row. */
@@ -562,6 +1548,48 @@ html[lang=ar] .opt-heading,[dir=rtl] .opt-heading{font-size:13px;letter-spacing:
 .ocard-help{display:block;margin-block-start:2px;font-size:12px;line-height:1.45;color:var(--fanous-color-text-secondary)}
 @media(prefers-reduced-motion:reduce){.ocard{transition:none}}
 @media(forced-colors:active){.ocard{border:1px solid ButtonText}.ocard[data-checked]{outline:2px solid Highlight}.ocard[data-checked] .ocard-mark{background:Highlight;color:HighlightText}}
+/* Drawer and rail in light mode (docs/design/NAV.md): the page background like the account menu, a divider edge, and a soft shadow when it opens over the page; dark mode keeps the material */
+html:not(.dark) .nv-panel{border-inline-end:1px solid var(--fanous-color-divider)}
+html:not(.dark) [data-testid=side-nav],html:not(.dark) [data-testid=side-nav] ul{background:var(--fanous-color-background)!important}
+html:not(.dark) .nv-panel[data-open=true]{box-shadow:var(--fanous-elevation-medium)}
+/* "You" (AppShell `hub` item, owner 2026-11-13): an icon item in the collapsed rail; in the open rail and the
+   drawer it reads as the heading link "You ›" over History, Watch later and Liked videos. */
+.nv-hub .nv-chev{display:none}
+html[data-rail=open] .nv-hub,.nv-panel[data-open=true] .nv-hub{font-weight:600;font-size:16px}
+html[data-rail=open] .nv-hub>svg:first-child,.nv-panel[data-open=true] .nv-hub>svg:first-child{display:none}
+html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev{display:block;width:18px;height:18px;margin-inline-start:-8px}
+
+/* The drawer's foot keeps only its close button (language and light/dark are in the header, docs/design/NAV.md);
+   the rail (from 1024px) has no foot. The Website entry is for phones, where the header's app links leave the bar. */
+@media(min-width:1024px){.nv-foot{display:none}}
+/* Below 1024px the videos bar (the search, Upload and the bell besides the shared tools) makes room: the logo alone
+   (the wordmark stays the link's name), the search an icon that opens a sheet, Upload its icon (the label stays its
+   name), so a long account name never pushes the tools onto a second line (docs/design/NAV.md "Phone") */
+@media(max-width:1023px){.ah .aun-brand-text,.ah .upload-action-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.ah .upload-action{width:2.5rem;padding:0}}
+/* Phones (below 640px): Upload and the drawer's menu button are tab bar items (AppShell), so the header keeps the
+   logo, search, the bell, language, light/dark and the account on one line (docs/design/NAV.md "Phone") */
+.tabbar .tb-phone{display:none}
+.tabbar button.tb{border:0;background:transparent;font-family:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;cursor:pointer;padding:0;width:100%}
+/* Every tab label the same size and on one line, so every icon sits on the same row ("Request tier" wrapped to two
+   lines and lifted its icon out of line). Columns are sized to their label and share the free space equally, so the
+   gap between any two labels is the same: equal 1fr columns left "Request tier" filling its column edge to edge,
+   touching "Subscriptions" */
+.tabbar{grid-auto-columns:auto}.tabbar .tb{padding-inline:2px}.tabbar .tb>span{text-align:center;line-height:1.2;white-space:nowrap}
+.tabbar .tb[aria-disabled=true]{opacity:.6;cursor:not-allowed}
+@media(max-width:639px){.ah .ah-menu,.ah-end .upload-action{display:none}.tabbar .tb-phone{display:flex}}
+/* Video titles on cards and in lists (grid, history, library, playlist-style cards, Up next) never leave one word
+   alone on their last line, in every theme (AUDIT-2 2026-11-22). Balanced, not "pretty": Chrome's pretty leaves a
+   two-line title's last word alone ("The migration to / Madinah"); balance evens the lines out */
+.video-card :is(h2,h3,strong),[data-testid=watch-history-page] a.line-clamp-2,[data-testid=library-list-item] p.line-clamp-2,.lbl-row-title,.hlib-next-title,.plc-title{text-wrap:balance}
+/* The home empty state's line (#1631): balanced, so the Arabic phone card doesn't end line 1 on «وإلى» and leave
+   «في «استكشف».» short on line 3 (AUDIT-2 review), and held to a reading measure, so on a 1280 desktop it isn't one
+   1,180px line across the card */
+[data-testid=home-empty] p{text-wrap:balance;max-inline-size:60ch}
+/* Text that takes its own direction (dir=auto: a post body, a link card's text, a description) still starts at
+   the page's start edge: English on an Arabic page sits at the right, Arabic on an English page at the left
+   (AUDIT-2 2026-11-22). Physical sides from <html dir>: start/match-parent would follow the dir=auto element
+   (or its dir=auto parent) instead, and this wins over the article-wide [dir=auto]{text-align:start} */
+html[dir=rtl] .aun-start-text [dir=auto]:not(input,textarea){text-align:right}html[dir=ltr] .aun-start-text [dir=auto]:not(input,textarea){text-align:left}
 
 /* Prototype only: page layouts. */
 main[class*="md:pl-"],main[class*="md:pr-"]{padding-inline:clamp(16px,2.4vw,36px)!important}
@@ -569,14 +1597,16 @@ main[class*="md:pl-"],main[class*="md:pr-"]{padding-inline:clamp(16px,2.4vw,36px
 [data-testid=video-grid],[data-testid=video-grid-loading]{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))!important;gap:30px 18px!important}
 .home-h{font-size:20px!important;margin-block-start:var(--fanous-spacing-xl)}
 /* Home hero */
-.home-hero{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);border:1px solid transparent;background:var(--m-hero) padding-box,var(--m-border) border-box;border-radius:var(--r-xl);box-shadow:var(--m-card-edge);overflow:hidden;margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg)}.home-hero-t{display:block;aspect-ratio:16/9;align-self:center;background-color:var(--fanous-color-surface-raised);position:relative;overflow:hidden;isolation:isolate}.home-hero-img,.home-hero-bd{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.home-hero-t[data-fit=contain] .home-hero-img{object-fit:contain}.home-hero-bd{z-index:0;transform:scale(1.25);filter:blur(28px)}.home-hero-t[data-fit=contain]::before{content:"";position:absolute;inset:0;z-index:1;background:color-mix(in srgb,var(--fanous-color-background) 55%,transparent)}.home-hero-img{z-index:2}.home-hero-t::after{z-index:3;content:"";position:absolute;inset:0;background:linear-gradient(var(--to-end),transparent 60%,color-mix(in srgb,var(--fanous-color-surface-raised) 90%,transparent))}
+.home-hero{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);border:1px solid transparent;background:var(--m-hero) padding-box,var(--m-border) border-box;border-radius:var(--r-xl);box-shadow:var(--m-card-edge);overflow:hidden;margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg)}.home-hero-t{display:block;aspect-ratio:16/9;align-self:center;background-color:var(--fanous-color-surface-raised);position:relative;overflow:hidden;isolation:isolate}.home-hero-img,.home-hero-bd{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.home-hero-t[data-fit=contain] .home-hero-img{object-fit:contain}.home-hero-bd{z-index:0;transform:scale(1.25);filter:blur(28px)}.home-hero-t[data-fit=contain]::before{content:"";position:absolute;inset:0;z-index:1;background:color-mix(in srgb,var(--fanous-color-background) 55%,transparent)}.home-hero-img{z-index:2}.home-hero-ph{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;color:var(--fanous-color-text-secondary)}.home-hero-ph svg{width:3rem;height:3rem}.home-hero-t::after{z-index:3;content:"";position:absolute;inset:0;background:linear-gradient(var(--to-end),transparent 60%,color-mix(in srgb,var(--fanous-color-surface-raised) 90%,transparent))}
 .home-hero-b{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:var(--fanous-spacing-sm);padding:clamp(20px,3vw,44px)}.home-hero-tag{font-size:13px;font-weight:600;color:var(--fanous-color-link)}.home-hero-b h2{margin:0;font-size:clamp(22px,2.6vw,36px);font-weight:700;line-height:1.2;color:var(--fanous-color-text-primary);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}html[lang=ar] .home-hero-b h2{line-height:1.5}.home-hero-b p{margin:0 0 var(--fanous-spacing-sm);color:var(--fanous-color-text-secondary)}
 @media(max-width:767px){.home-hero{grid-template-columns:minmax(0,1fr)}.home-hero-t::after{background:linear-gradient(0deg,color-mix(in srgb,var(--fanous-color-surface-raised) 80%,transparent),transparent 40%)}.home-hero-b{padding:var(--fanous-spacing-lg)}}
+/* Light mode: no fade over the featured art. On a near-white panel it washed the art out (#1556); dark keeps the blend. Titles wrap in balanced lines, never one word alone on the last line. */
+html:not(.dark) .home-hero-t::after{content:none}.home-hero-b h2{text-wrap:balance}
 /* Watch */
 #video-player,section[id*=player]{width:100%}main .max-w-4xl{max-width:none!important}
 main .max-w-4xl h1,main .max-w-4xl h2:first-child{font-size:clamp(19px,1.7vw,24px);font-weight:700}
-main .max-w-4xl.flex-wrap button,main .max-w-4xl.flex-wrap a{background:var(--m-card) padding-box,var(--m-border) border-box!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid transparent!important;box-shadow:var(--m-card-edge)!important;border-radius:var(--r-pill)!important;min-height:40px}@media(hover:hover){main .max-w-4xl.flex-wrap button:hover,main .max-w-4xl.flex-wrap a:hover{background:var(--m-hover)!important}}
-[id*=comments]{border-block-start:1px solid var(--fanous-c-divider-line);padding-block-start:var(--fanous-spacing-xl)}
+main .max-w-4xl.flex-wrap button,main .max-w-4xl.flex-wrap a{background:transparent!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid var(--aun-btn-outline)!important;box-shadow:none!important;border-radius:var(--aun-radius-button)!important;min-height:40px}@media(hover:hover){main .max-w-4xl.flex-wrap button:hover,main .max-w-4xl.flex-wrap a:hover{background:var(--m-hover)!important}}
+[id*=comments]:not(.pb-heading){border-block-start:1px solid var(--fanous-c-divider-line);padding-block-start:var(--fanous-spacing-xl)}
 .related-videos a{border-radius:var(--r-md);transition:background-color 140ms}@media(hover:hover){.related-videos a:hover{background:var(--m-hover)}}.related-videos img{border-radius:var(--r-md)}.related-videos :is(h3,h4,p){color:var(--fanous-color-text-primary)}
 /* Channel */
 [data-testid=channel-header]{background:var(--m-hero)!important;border:0!important;box-shadow:var(--m-card-edge)}[data-testid=channel-header]>div:first-child img{-webkit-mask:linear-gradient(#000 60%,transparent);mask:linear-gradient(#000 60%,transparent)}[data-testid=channel-header] .aspect-square{box-shadow:var(--m-thumb-edge)}[data-testid=channel-header] h1{color:var(--fanous-color-text-primary)!important}
@@ -608,3 +1638,119 @@ section[data-section=shorts] .flex.gap-4>*{width:178px}section[data-section=shor
 .space-y-8>section[data-section=spotlight]:first-child{margin-block-start:0}section[data-section=spotlight] .home-hero-b h2{font-size:clamp(22px,2.4vw,32px)}section[data-section=spotlight] .spotlight-desc{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-width:60ch;margin:0 0 var(--fanous-spacing-sm);color:var(--fanous-color-text-secondary)}section[data-section=spotlight] .home-hero-t{display:grid;place-items:center}.spotlight-play{position:relative;z-index:4;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:color-mix(in srgb,var(--fanous-color-surface-raised) 72%,transparent);color:var(--fanous-color-text-primary);box-shadow:var(--m-card-edge);backdrop-filter:blur(6px);transition:transform .2s}.spotlight-play svg{width:26px;height:26px;margin-left:3px}.home-hero-t:hover .spotlight-play{transform:scale(1.06)}@media(prefers-reduced-motion:reduce){.spotlight-play{transition:none}}
 /* Community posts on the Home tab: compact cards on the theme's card material */
 section[data-section=community] .community-card{background:var(--m-card) padding-box,var(--m-border) border-box;border-color:transparent;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)}section[data-section=community] .community-card:hover{border-color:transparent;filter:brightness(1.03)}section[data-section=community] .community-card img{border-radius:var(--r-lg) var(--r-lg) 0 0}
+/* Shorts: the ↑/↓ buttons sit inside the player box at its inline-end edge (#1513) */
+.shorts-viewer #video-player{position:relative}
+
+/* Home page sign-in banner (components/home/SignInBanner.tsx), signed-out visitors only.
+   Depth comes from each theme's materials (materials.css): the gradient border, the card fill and its edge,
+   the glow. The art is the active theme's own: its package's header graphic, compiled per mode into
+   --fanous-header-graphic (theme-art.css), so nothing here draws a picture. Per-theme accents follow. */
+
+/* A dismissed banner is hidden before the first paint (SIGN_IN_BANNER_SCRIPT marks <html>): never a flash, CLS 0 */
+html[data-signin-banner=hidden] .sib{display:none}
+
+.sib{
+  --sib-glow:var(--m-glow,color-mix(in srgb,var(--fanous-color-primary) 40%,transparent));
+  position:relative;isolation:isolate;overflow:hidden;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"art body actions";align-items:center;
+  gap:clamp(16px,2.4vw,36px);
+  margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg);
+  padding:clamp(20px,2.6vw,36px) clamp(20px,3vw,44px);
+  padding-inline-end:clamp(56px,5vw,72px);
+  border:1px solid transparent;border-radius:var(--r-xl,20px);
+  background:
+    radial-gradient(60% 140% at var(--sib-art-x,8%) 50%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 70%) padding-box,
+    linear-gradient(var(--to-end,90deg),color-mix(in srgb,var(--fanous-color-hero-start) 70%,transparent),transparent 65%) padding-box,
+    var(--m-card,var(--fanous-color-surface-raised)) padding-box,
+    var(--m-border,linear-gradient(var(--fanous-color-divider),var(--fanous-color-divider))) border-box;
+  box-shadow:var(--m-card-edge,none),0 24px 60px -36px var(--sib-glow);
+  color:var(--fanous-color-text-primary);
+}
+[dir=rtl].sib{--sib-art-x:92%}
+/* The theme's art: a fixed box (no shift when the file arrives), painted only while the banner is shown.
+   How it sits is the theme's (imagery.headerGraphicFrame, compiled into theme-art.css): inset by default;
+   a "band" (Lantern, and any copy of it) meets the banner's top edge as on Auth's sign-in card, wider,
+   its filled bottom and its ends fading into the banner. */
+.sib-art{grid-area:art;position:relative;--sib-bleed:var(--fanous-header-graphic-bleed,0);
+  align-self:var(--fanous-header-graphic-align,center);
+  width:calc(clamp(200px,17vw,260px) + var(--sib-bleed) * clamp(40px,7vw,100px));aspect-ratio:var(--fanous-header-graphic-ratio,8/3);
+  margin-block-start:calc(var(--sib-bleed) * -1 * clamp(20px,2.6vw,36px));
+  background:var(--fanous-header-graphic,none) var(--fanous-header-graphic-position,center)/var(--fanous-header-graphic-fit,var(--fanous-header-graphic-size,contain)) var(--fanous-header-graphic-repeat,no-repeat);
+  -webkit-mask-image:var(--fanous-header-graphic-mask,none);-webkit-mask-composite:source-in;
+  mask-image:var(--fanous-header-graphic-mask,none);mask-composite:intersect}
+/* The theme's glow behind its art (a band carries its own light) */
+.sib-art::before{content:"";position:absolute;inset:-20% -10%;z-index:-1;border-radius:50%;opacity:calc(1 - var(--sib-bleed));background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent)}
+
+/* Copy */
+.sib-body{grid-area:body;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.sib-eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fanous-color-link)}
+html[lang=ar] .sib-eyebrow{letter-spacing:0;font-size:13px}
+.sib-title{margin:0;font-size:clamp(20px,2.1vw,28px);font-weight:700;line-height:1.25;color:var(--fanous-color-text-primary);text-wrap:balance}
+html[lang=ar] .sib-title{line-height:1.5}
+.sib-text{margin:0;max-width:62ch;color:var(--fanous-color-text-secondary);font-size:15px;line-height:1.55}
+.sib-perks{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.sib-perk{display:inline-flex;align-items:center;gap:6px;height:30px;padding-inline:10px 12px;border-radius:var(--r-pill,999px);font-size:13px;font-weight:600;color:var(--fanous-color-text-primary);
+  background:color-mix(in srgb,var(--fanous-color-primary) 10%,var(--fanous-color-surface));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 30%,transparent)}
+.sib-perk svg{width:15px;height:15px;color:var(--fanous-color-primary);flex:none}
+
+/* Actions */
+.sib-actions{grid-area:actions;margin:0;display:flex}
+.sib-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding-inline:22px;font-size:15px;font-weight:700;white-space:nowrap;cursor:pointer}
+.sib-cta-arrow{width:18px;height:18px;transition:transform .2s}
+[dir=rtl] .sib-cta-arrow{transform:scaleX(-1)}
+@media(hover:hover){.sib-cta:hover .sib-cta-arrow{transform:translateX(3px)}[dir=rtl] .sib-cta:hover .sib-cta-arrow{transform:scaleX(-1) translateX(3px)}}
+.sib-x{position:absolute;inset-block-start:10px;inset-inline-end:10px;display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:var(--fanous-color-text-secondary);cursor:pointer;transition:background-color .15s,color .15s}
+.sib-x svg{width:18px;height:18px}
+@media(hover:hover){.sib-x:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent);color:var(--fanous-color-text-primary)}}
+.sib-x:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+
+/* Tablet: the button goes under the copy, the art beside both */
+@media(max-width:1023px){
+  .sib{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art body" "art actions";row-gap:16px}
+  .sib-art{width:calc(180px + var(--sib-bleed) * 60px)}
+  .sib-actions{justify-self:start}
+}
+/* Phone: one column; the art is a band across the top, as the theme's header graphic is drawn to be */
+@media(max-width:639px){
+  .sib{grid-template-columns:minmax(0,1fr);grid-template-areas:"art" "body" "actions";row-gap:12px;padding:14px 20px 20px;padding-inline-end:20px;--sib-art-x:50%}
+  [dir=rtl].sib{--sib-art-x:50%}
+  /* Inset: a 72px strip. A band runs the banner's full width, edge to edge under its rounded top, at its
+     own proportions, its bottom fading in */
+  .sib-art{width:auto;justify-self:stretch;height:auto;min-height:calc(72px * (1 - var(--sib-bleed)));aspect-ratio:var(--fanous-header-graphic-ratio,auto);
+    margin:calc(var(--sib-bleed) * -14px) calc(28px - var(--sib-bleed) * 48px) 0;
+    -webkit-mask-image:var(--fanous-header-graphic-fade,none);mask-image:var(--fanous-header-graphic-fade,none)}
+  .sib-title{font-size:20px}
+  /* The chips say what the paragraph says: one screen keeps room for the featured video */
+  .sib-text{display:none}
+  .sib-perks{margin-block-start:6px;gap:6px}
+  .sib-perk{height:28px;font-size:12.5px;padding-inline:8px 10px}
+  .sib-actions,.sib-cta{width:100%;justify-self:stretch}
+  .sib-x{inset-block-start:8px;inset-inline-end:8px}
+}
+@media(prefers-reduced-motion:reduce){.sib-cta-arrow,.sib-x{transition:none}}
+
+/* Fawanees: gold on night */
+html[data-theme=fawanees].dark .sib{box-shadow:var(--m-card-edge,none),0 30px 70px -34px var(--sib-glow),inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 22%,transparent)}
+html[data-theme=fawanees]:not(.dark) .sib{
+  background:
+    radial-gradient(55% 140% at var(--sib-art-x,8%) 50%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 70%) padding-box,
+    linear-gradient(var(--to-end,90deg),var(--fanous-color-hero-start),var(--fanous-color-surface) 70%) padding-box,
+    linear-gradient(120deg,var(--fanous-color-primary),color-mix(in srgb,var(--fanous-color-primary) 22%,var(--fanous-color-divider)) 45%,var(--fanous-color-divider)) border-box}
+
+/* Lantern: night water */
+html[data-theme=lantern].dark .sib{box-shadow:var(--m-card-edge,none),0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),0 28px 60px -30px var(--sib-glow)}
+
+/* Nahas: copper, an engraved edge */
+html[data-theme=nahas] .sib{box-shadow:var(--m-card-edge,none),inset 0 0 0 1px color-mix(in srgb,black 18%,transparent),0 22px 44px -28px var(--sib-glow)}
+html[data-theme=nahas] .sib-perk{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 40%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-motif) 50%,transparent)}
+
+/* Zujaj: frosted glass over coloured light */
+html[data-theme=zujaj] .sib{-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);
+  background:
+    radial-gradient(50% 120% at var(--sib-art-x,8%) 40%,color-mix(in srgb,var(--fanous-color-motif) 34%,transparent),transparent 70%) padding-box,
+    radial-gradient(40% 90% at 100% 100%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 70%) padding-box,
+    var(--m-card) padding-box,linear-gradient(transparent,transparent) border-box}
+html[dir=rtl][data-theme=zujaj] .sib,html[data-theme=zujaj] [dir=rtl].sib{--sib-art-x:92%}
+html[data-theme=zujaj] .sib-perk{background:color-mix(in srgb,white 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,white 28%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent)}
+html[data-theme=zujaj] .sib-art::before{background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-motif) 40%,transparent),transparent)}
