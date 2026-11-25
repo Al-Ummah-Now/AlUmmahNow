@@ -226,6 +226,22 @@ describe('bilingual admin forms in a DOM', () => {
       assert.equal(error(), null, 'an optional description may go as a whole');
       await m.unmount();
     });
+
+    it(`the theme builder words a problem beside its own section too (${locale})`, async () => {
+      const { ThemeEditor } = await import('../src/app/(protected)/site-theme/builder/ThemeEditor');
+      const theme = JSON.parse(readFileSync(path.resolve(__dirname, '../../../packages/theme-packages/themes/zujaj/theme.json'), 'utf8'));
+      theme.typography.latin = [];
+      theme.tokens.elevation[Object.keys(theme.tokens.elevation)[0]] = 5;
+      const m = await mount(React.createElement(ThemeEditor, { initial: { ...theme, id: 'ramadan-nights' }, assets: [], latestVersion: null, activeVersion: null, canEdit: true }), locale);
+      const typography = locale === 'ar' ? 'الخطوط' : 'Typography';
+      for (const [section, words] of [['typography', typography], ['materials', locale === 'ar' ? 'نوع هذه القيمة غير صحيح.' : 'This is the wrong kind of value.']] as const) {
+        await click(m.q(`section-${section}`));
+        const said = [...m.container.querySelectorAll('[data-testid="field-error"]')].map((e) => e.textContent ?? '').join('\n');
+        assert.ok(said.includes(words), `${section}: ${said}`);
+        assert.doesNotMatch(said, /must be|needs at least|typography\.|tokens\./);
+      }
+      await m.unmount();
+    });
   }
 
   // The two forms that edit a user's own text

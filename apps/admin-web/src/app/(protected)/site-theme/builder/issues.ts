@@ -1,7 +1,7 @@
 // A theme package's problems in the admin's words. The validator gives a code and its numbers with
 // its own English message; the list, the field errors and the "Publishing is blocked" line are worded here.
 import type { Issue, IssueCode } from '@al-ummah/theme-packages';
-import { formatFixed } from '@al-ummah/shared-types';
+import { formatFixed, formatList } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import type { MessageKey, Translator } from '@/i18n/translate';
 
@@ -45,6 +45,12 @@ export function issueWhere(t: Translator, path: string): { label: string; name: 
   return { label: t('themeBuilder.issuesAt.other'), name: path === '(root)' ? '' : path };
 }
 
+/** A problem on one line: where, the value's name, what. */
+export function issueLine(t: Translator, locale: Locale, issue: Issue): string {
+  const at = issueWhere(t, issue.path);
+  return `${at.label}${at.name ? ` ${isolate(at.name)}` : ''}: ${issueText(t, locale, issue)}`;
+}
+
 export type BlockReason = 'texts' | 'contrast' | 'files' | 'values';
 const FILES = new Set<IssueCode>(['fileMissing', 'fileName', 'fileSize', 'fileType', 'fileUnsafe', 'totalSize']);
 
@@ -64,5 +70,5 @@ export function blockReasons(issues: Issue[]): BlockReason[] {
 /** "Publishing is blocked: …" with the real reasons. */
 export function blockedText(t: Translator, locale: Locale, issues: Issue[]): string {
   const reasons = blockReasons(issues).map((r) => t(`themeBuilder.blockedBy.${r}` as MessageKey));
-  return t('themeBuilder.publishBlocked', { reasons: new Intl.ListFormat(locale, { type: 'conjunction' }).format(reasons) });
+  return t('themeBuilder.publishBlocked', { reasons: formatList(locale, reasons) });
 }
