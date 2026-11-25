@@ -8,7 +8,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { syncSearchDocument, VideoCategory } from '@al-ummah/shared-types';
-import { runDiscoveryRank, readLastRun, isTestOwnerEmail } from '../src/lib/ranking/job';
+import { readFileSync } from 'node:fs';
+import { SEED_ACCOUNTS } from '../../web/e2e/seed/seed-config';
+import { runDiscoveryRank, readLastRun, isTestOwnerEmail, seedOwners } from '../src/lib/ranking/job';
 import { railPage } from '../src/lib/ranking/serve';
 import { dedupeHome, DiscoveryHome, MIN_HOME_ITEMS } from '../src/endpoints/discovery/home';
 import { TrendingVideosSection } from '../src/endpoints/sections/trending';
@@ -112,6 +114,42 @@ describe('discovery ranking job', () => {
 		const ids = (search.db.prepare('SELECT DISTINCT video_id FROM discovery_rail_items').all() as Array<{ video_id: string }>).map((r) => r.video_id);
 		assert.ok(ids.length > 0);
 		assert.ok(ids.every((id) => Number(id.slice(1)) % 6 !== 1), 'a run account video is on a rail');
+	});
+
+	it('outside production the listed seed owner ranks; another test account, and production, never', async () => {
+		const SEED = 'qa-creator@delivered.resend.dev';
+		const run = async (vars: Record<string, string>) => {
+			const { search, env } = await library(24);
+			// Everything on QA is the seed's: owner1 is the listed seed account, owner2 an unlisted test account
+			for (const [owner, email] of [['owner1', SEED.toUpperCase()], ['owner2', 'qa-viewer@delivered.resend.dev']]) {
+				search.db.prepare("INSERT INTO content_ownership (kind, id, email) VALUES ('profile', ?, ?) ON CONFLICT (kind, id) DO UPDATE SET email = excluded.email").run(owner, email);
+			}
+			for (let i = 0; i < 24; i++) search.db.prepare("INSERT OR REPLACE INTO content_ownership (kind, id, owner_id) VALUES ('video', ?, ?)").run(`v${String(i).padStart(3, '0')}`, i % 2 ? 'owner1' : 'owner2');
+			const summary = await runDiscoveryRank({ ...env, ...vars }, NOW);
+			const ids = (search.db.prepare('SELECT DISTINCT video_id FROM discovery_rail_items').all() as Array<{ video_id: string }>).map((r) => Number(r.video_id.slice(1)));
+			return { summary, ids, items: rails(search).reduce((n, r) => n + r.items, 0) };
+		};
+		for (const vars of [{ RANK_SEED_OWNERS: SEED }, { ENVIRONMENT: 'stage', RANK_SEED_OWNERS: `someone@e2e.alummahnow.net, ${SEED}` }] as Array<Record<string, string>>) {
+			const { summary, ids, items } = await run(vars);
+			assert.equal(summary.eligible, 12);
+			assert.ok(items > 0);
+			assert.ok(ids.length > 0 && ids.every((i) => i % 2 === 1), 'only the listed owner ranks');
+		}
+		// Production drops them even when the list is set by mistake; unset and patterns list nobody
+		for (const vars of [{ ENVIRONMENT: 'production', RANK_SEED_OWNERS: SEED }, {}, { RANK_SEED_OWNERS: '@delivered.resend.dev,*@delivered.resend.dev,delivered.resend.dev' }] as Array<Record<string, string>>) {
+			const { summary, ids, items } = await run(vars);
+			assert.equal(summary.eligible, 0);
+			assert.equal(summary.excluded, 24);
+			assert.deepEqual([ids, items], [[], 0]);
+		}
+	});
+
+	it('the configs list exactly the seed’s creator on QA and stage, and nobody in production', () => {
+		const at = (file: string) => [...readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').matchAll(/"RANK_SEED_OWNERS": "([^"]*)"/g)].map((m) => m[1]);
+		const creator = SEED_ACCOUNTS.find((a) => a.key === 'creator')!.email.split('@')[0];
+		assert.deepEqual(at('wrangler.jsonc'), ['', `${creator}@e2e.alummahnow.net`]);
+		assert.deepEqual(at('wrangler.qa.jsonc'), [`${creator}@delivered.resend.dev`]);
+		assert.deepEqual([...seedOwners({ RANK_SEED_OWNERS: at('wrangler.qa.jsonc')[0] })], [`${creator}@delivered.resend.dev`]);
 	});
 
 	it('an admin exclusion keeps a channel off every rail', async () => {
