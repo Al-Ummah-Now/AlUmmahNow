@@ -421,6 +421,9 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
               </table>
             </div>
           )}
+          {data.moreVideos && (
+            <p className="mt-2 text-sm text-fg-muted" data-testid="errors-videos-more">{t('errorsPage.videosMore')} <Link href="/processing?status=stuck" className={linkClass}>{t('errorsPage.openProcessing')}</Link></p>
+          )}
         </section>
       )}
 

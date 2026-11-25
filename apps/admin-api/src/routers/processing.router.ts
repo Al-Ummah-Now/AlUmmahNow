@@ -19,6 +19,7 @@
 import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callProcessing, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
+import { withoutHiddenVideos } from '../lib/moderation/takedown';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
@@ -95,16 +96,19 @@ const badIds = (c: C) => c.json({ success: false, code: 'bad_request', error: `i
 
 /** Stuck videos with Bunny's state next to ours, and the reconciler's last run. */
 app.get('/videos', async (c) => {
-  const result = await callProcessing(c.env, '/videos', {
-    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), bunny: c.req.query('bunny') ?? '1' },
+  const result = await callProcessing<{ items?: { id: string }[] }>(c.env, '/videos', {
+    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), offset: c.req.query('offset'), bunny: c.req.query('bunny') ?? '1' },
   });
-  return c.json({ success: true, result });
+  const items = await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, result.items ?? [], (v) => v.id);
+  return c.json({ success: true, result: { ...result, items } });
 });
 
 /** Failures that need an admin: failed / flagged videos and dead-lettered checks. */
 app.get('/errors', async (c) => {
-  const result = await callProcessing(c.env, '/errors', { query: { limit: c.req.query('limit') } });
-  return c.json({ success: true, result });
+  const result = await callProcessing<{ videos?: { id: string }[]; thumbnailFlagged?: { items: { videoId: string }[]; total?: number } | null }>(c.env, '/errors', { query: { limit: c.req.query('limit') } });
+  const shown = <T>(rows: T[], id: (row: T) => string) => withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, rows, id);
+  const [videos, flagged] = await Promise.all([shown(result.videos ?? [], (v) => v.id), shown(result.thumbnailFlagged?.items ?? [], (v) => v.videoId)]);
+  return c.json({ success: true, result: { ...result, videos, ...(result.thumbnailFlagged ? { thumbnailFlagged: { ...result.thumbnailFlagged, items: flagged, total: flagged.length } } : {}) } });
 });
 
 /** Recent processing actions (audit), newest first. */

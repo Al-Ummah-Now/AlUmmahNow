@@ -594,10 +594,11 @@ export async function applyJobEvent(
 						const bunny = v.media?.providers.bunny;
 						if (bunny) Object.assign(bunny, { status: 'failed', error: SOURCE_CHANGED });
 					}
-				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
+				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && (v.uploadStatus !== 'failed' || v.processingIssue?.kind === 'encode_failed')) {
+					// A retry that failed again: why it failed now (the uploader was told already)
+					if (v.uploadStatus !== 'failed') transition = 'failed';
 					v.uploadStatus = 'failed';
 					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at, ...issueCodeOf(ev) };
-					transition = 'failed';
 				}
 			}
 		}

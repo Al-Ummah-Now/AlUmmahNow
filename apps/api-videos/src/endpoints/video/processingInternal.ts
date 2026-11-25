@@ -4,7 +4,8 @@
  * `videos:processing` permission and writes the audit row (apps/admin-api,
  * endpoints/processing). Not part of the public contract.
  *
- *   GET  /internal/processing/videos?status=stuck|processing|failed|r2_failed|stalled|needs_reupload|all&bunny=1&limit=
+ *   GET  /internal/processing/videos?status=stuck|processing|failed|r2_failed|stalled|needs_reupload|all&bunny=1&limit=&offset=
+ *                                          one page in date order; nextOffset: where the next starts (null after the last)
  *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs + index drift
  *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
  *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
@@ -17,8 +18,7 @@
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
  */
 
-import { readMany } from '../../lib/admin/directory';
-import { unfinishedVideoIds } from '../../lib/media/failures';
+import { pageOfVideos, type VideoStates } from '../../lib/media/failures';
 import { bunnyRef } from '../../lib/media/providers';
 import { Hono } from 'hono';
 import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
@@ -42,9 +42,35 @@ import { readIndexRepairs, repairJobs, retryIndexRepairs, type RepairJobEnv } fr
 import { ALL_OWNERSHIP_KINDS, INDEX_REPAIR_ENTITIES, SEARCH_ENTITY_TYPES, type AdminJob, type IndexRepair, type IndexRepairEntity, type OwnershipDrift, type SearchDrift } from '@al-ummah/shared-types';
 
 const MAX_IDS = 100;
-/** Most unfinished or failed videos one page looks through (newest first), and how many records are read at once */
-const MAX_UNFINISHED = 1000;
-const READ_AT_ONCE = 50;
+
+/** The videos each filter is of (the record then decides, matches()): a filter never reads other states' rows. */
+const LISTED: Record<string, VideoStates> = {
+	stuck: { states: ['initiated', 'uploading', 'processing', 'failed'], r2Failed: true },
+	processing: { states: ['initiated', 'uploading', 'processing'] },
+	failed: { states: ['failed'], r2Failed: true },
+	r2_failed: { states: [], r2Failed: true },
+	stalled: { states: ['initiated', 'uploading', 'processing'], oldest: true },
+	needs_reupload: { states: ['initiated', 'uploading', 'processing', 'failed'] },
+	all: { states: [], all: true },
+};
+
+const pageStart = (value: string | undefined) => Math.min(Math.max(parseInt(value || '0', 10) || 0, 0), 100_000);
+
+/** Every wanted record in the bucket, for a run without an index (local). */
+async function scanVideos(bucket: R2Bucket, wanted: (video: HealthVideo) => boolean): Promise<HealthVideo[]> {
+	const out: HealthVideo[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await bucket.list({ cursor, limit: 500 });
+		cursor = page.truncated ? page.cursor : undefined;
+		for (const object of page.objects) {
+			if (object.key.includes('/') || object.key.includes(':')) continue;
+			const video = (await (await bucket.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
+			if (video && wanted(video)) out.push(video);
+		}
+	} while (cursor);
+	return out;
+}
 
 interface HealthVideo {
 	id: string;
@@ -55,6 +81,7 @@ interface HealthVideo {
 	dateModified?: string;
 	uploadStatus?: string;
 	isPublic?: boolean;
+	isDeleted?: boolean;
 	availableResolutions?: string[];
 	thumbnailUrl?: string;
 	playUrl?: string;
@@ -195,32 +222,11 @@ export function createProcessingInternalRouter() {
 		const withBunny = c.req.query('bunny') === '1';
 		const channelId = c.req.query('channelId');
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
-		const items: HealthVideo[] = [];
-		let scanned = 0;
-		const wanted = (video: HealthVideo | null): video is HealthVideo => !!video?.id && matches(video, status) && (!channelId || video.channelId === channelId);
-		// From the index: only unfinished and failed videos are read. Every video ('all'), or an index that cannot answer: the bucket
-		const ids = status === 'all' ? null : await unfinishedVideoIds(c.env as never, MAX_UNFINISHED);
-		if (ids) {
-			for (let i = 0; i < ids.length && items.length < limit; i += READ_AT_ONCE) {
-				const read = await readMany<HealthVideo>(c.env.videos, ids.slice(i, i + READ_AT_ONCE));
-				scanned += read.size;
-				for (const video of read.values()) if (wanted(video)) items.push(video);
-			}
-		} else {
-			let cursor: string | undefined;
-			do {
-				const page = await c.env.videos.list({ cursor, limit: 500 });
-				cursor = page.truncated ? page.cursor : undefined;
-				for (const object of page.objects) {
-					if (object.key.includes('/') || object.key.includes(':')) continue;
-					scanned++;
-					const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-					if (wanted(video)) items.push(video);
-				}
-			} while (cursor && items.length < limit);
-		}
-		items.sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || ''));
-		const page = items.slice(0, limit);
+		const from = pageStart(c.req.query('offset'));
+		const wanted = (video: HealthVideo): boolean => !!video.id && !video.isDeleted && matches(video, status) && (!channelId || video.channelId === channelId);
+		// From the index: the rows in those states only. Without one (a local run): the bucket
+		const found = await pageOfVideos<HealthVideo>(c.env as never, LISTED[status] ?? LISTED.stuck, { from, limit, wanted });
+		const page = found?.items ?? (await scanVideos(c.env.videos, wanted)).sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || '')).slice(from, from + limit);
 		const rows = await Promise.all(
 			page.map(async (video) => {
 				let bunny: unknown = undefined;
@@ -254,7 +260,7 @@ export function createProcessingInternalRouter() {
 				};
 			}),
 		);
-		return c.json({ success: true, result: { items: rows, scanned, reconciler: await readSweepStats(c.env) } });
+		return c.json({ success: true, result: { items: rows, scanned: found?.read ?? page.length, nextOffset: found?.next ?? null, reconciler: await readSweepStats(c.env) } });
 	});
 
 	// Dry run (default): Bunny is read and the plan returned, nothing written.
@@ -282,25 +288,15 @@ export function createProcessingInternalRouter() {
 	// processing checks (stored by the processor's DLQ consumer in NOTIFICATIONS_DB).
 	app.get('/errors', async (c) => {
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
-		const videos: HealthVideo[] = [];
-		const failed = (video: HealthVideo | null): video is HealthVideo => !!video?.id && (video.uploadStatus === 'failed' || !!video.processingIssue || video.r2?.status === 'failed');
-		const ids = await unfinishedVideoIds(c.env as never, MAX_UNFINISHED);
-		if (ids) {
-			for (let i = 0; i < ids.length && videos.length < limit; i += READ_AT_ONCE) {
-				for (const video of (await readMany<HealthVideo>(c.env.videos, ids.slice(i, i + READ_AT_ONCE))).values()) if (failed(video)) videos.push(video);
-			}
-		} else {
-			let cursor: string | undefined;
-			do {
-				const page = await c.env.videos.list({ cursor, limit: 500 });
-				cursor = page.truncated ? page.cursor : undefined;
-				for (const object of page.objects) {
-					if (object.key.includes('/') || object.key.includes(':')) continue;
-					const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-					if (failed(video)) videos.push(video);
-				}
-			} while (cursor && videos.length < limit);
-		}
+		const wanted = (video: HealthVideo): boolean => !!video.id && !video.isDeleted && !video.abandoned && (video.uploadStatus === 'failed' || !!video.processingIssue || video.r2?.status === 'failed');
+		// The newest failures first, so nothing still uploading can push one out; then the flagged ones, the oldest first
+		const failed = await pageOfVideos<HealthVideo>(c.env as never, LISTED.failed, { from: 0, limit, wanted });
+		const flagged = failed && failed.items.length < limit
+			? await pageOfVideos<HealthVideo>(c.env as never, LISTED.stalled, { from: 0, limit: limit - failed.items.length, wanted })
+			: null;
+		const videos = failed ? [...new Map([...failed.items, ...(flagged?.items ?? [])].map((v) => [v.id, v])).values()] : (await scanVideos(c.env.videos, wanted)).slice(0, limit);
+		// More than this page: the Processing page has them all
+		const moreVideos = !!failed && (failed.next !== null || failed.items.length >= limit || (flagged?.next ?? null) !== null);
 		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
 		let deadLetters: unknown[] = [];
 		const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;
@@ -338,7 +334,7 @@ export function createProcessingInternalRouter() {
 		return c.json({
 			success: true,
 			result: {
-				videos: videos.slice(0, limit).map((v) => ({
+				videos: videos.map((v) => ({
 					id: v.id,
 					title: v.title,
 					channelId: v.channelId,
@@ -348,6 +344,7 @@ export function createProcessingInternalRouter() {
 					dateCreated: v.dateCreated,
 					dateModified: v.dateModified,
 				})),
+				moreVideos,
 				deadLetters,
 				erasureDeadLetters,
 				thumbnailRuns: await failedThumbnailRuns(c.env as unknown as JobEnv),

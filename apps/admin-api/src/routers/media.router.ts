@@ -35,9 +35,10 @@
  * api-videos and removes it again if the call fails, so no change goes unaudited.
  */
 import { Hono, type Context } from 'hono';
-import { normaliseMediaSettings, settingsProblems, TRANSCODE_LIMIT_AUDIT_KEY, transcodeRangeProblem, VIDEO_FAILURES_MAX, type VideoFailure } from '@al-ummah/shared-types';
+import { baseName, normaliseMediaSettings, settingsProblems, TRANSCODE_LIMIT_AUDIT_KEY, transcodeRangeProblem, VIDEO_FAILURES_MAX, type VideoFailure } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
+import { withoutHiddenVideos } from '../lib/moderation/takedown';
 import { logger } from '../lib/logger';
 import troubleshootRouter from './mediaTroubleshoot.router';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -134,8 +135,9 @@ app.get('/qoe-live', async (c) => {
 app.get('/jobs', async (c) => {
   const status = c.req.query('status');
   if (status && !JOB_STATUSES.includes(status)) return bad(c, `status must be one of ${JOB_STATUSES.join(', ')}`);
-  const result = await callVideosInternal(c.env, '/internal/media/jobs', { query: { status, limit: c.req.query('limit') } });
-  return c.json({ success: true, result });
+  const result = await callVideosInternal<{ items?: { video_id: string }[] }>(c.env, '/internal/media/jobs', { query: { status, limit: c.req.query('limit') } });
+  const items = await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, result.items ?? [], (j) => j.video_id);
+  return c.json({ success: true, result: { ...result, items } });
 });
 
 /**
@@ -145,14 +147,16 @@ app.get('/jobs', async (c) => {
 app.get('/failures', async (c) => {
   const ids = [...new Set((c.req.query('ids') ?? '').split(',').filter(Boolean))];
   if (!ids.length || ids.length > VIDEO_FAILURES_MAX || !ids.every((id) => /^[A-Za-z0-9-]{8,64}$/.test(id))) return bad(c, `ids must be 1-${VIDEO_FAILURES_MAX} video ids`);
-  const { items } = await callVideosInternal<{ items: VideoFailure[] }>(c.env, '/internal/media/failures', { query: { ids: ids.join(',') } });
+  // Only of the videos the reader's lists show
+  const shown = await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, ids, (id) => id);
+  const { items } = shown.length ? await callVideosInternal<{ items: VideoFailure[] }>(c.env, '/internal/media/failures', { query: { ids: shown.join(',') } }) : { items: [] };
   const files = items.length ? await importedFiles(c, items.map((f) => f.videoId)) : new Map<string, { file_name: string; batch_id: string }>();
   return c.json({
     success: true,
     result: {
       items: items.map((f) => {
         const file = files.get(f.videoId);
-        return file ? { ...f, fileName: file.file_name, importBatchId: file.batch_id } : f;
+        return file ? { ...f, fileName: baseName(file.file_name), importBatchId: file.batch_id } : f;
       }),
     },
   });

@@ -47,7 +47,7 @@ function useRepair(onDone: () => void) {
   return { run, busy, error, notice };
 }
 
-function RepairControls({ ids, failures, onDone, testId }: { ids: string[]; failures: Readonly<Record<string, VideoFailure>>; onDone: () => void; testId: string }) {
+function RepairControls({ ids, failures, r2Failed, onDone, testId }: { ids: string[]; failures: Readonly<Record<string, VideoFailure>>; /** Those whose row says so, when why they failed could not be read */ r2Failed?: ReadonlySet<string>; onDone: () => void; testId: string }) {
   const { t } = useLanguage();
   const { run, busy, error, notice } = useRepair(onDone);
   const [reason, setReason] = useState('');
@@ -59,7 +59,7 @@ function RepairControls({ ids, failures, onDone, testId }: { ids: string[]; fail
       <button type="button" className={smallButtonClass} disabled={disabled} onClick={() => run('sync', () => syncProcessing(ids, false), t('processing.queued', { count }))} data-testid={`${testId}-sync`}>
         {busy === 'sync' ? t('content.working') : t('processing.sync')}
       </button>
-      <button type="button" className={smallButtonClass} disabled={disabled} onClick={async () => (await mayRetry(ids)) && run('retry', () => retryFailed(ids, failures), t('processing.retried', { count }))} data-testid={`${testId}-retry`}>
+      <button type="button" className={smallButtonClass} disabled={disabled} onClick={async () => (await mayRetry(ids)) && run('retry', () => retryFailed(ids, failures, r2Failed), t('processing.retried', { count }))} data-testid={`${testId}-retry`}>
         {busy === 'retry' ? t('content.working') : t('processing.retry')}
       </button>
       <label className="flex flex-col gap-1 text-xs text-fg-muted">
@@ -89,13 +89,14 @@ export interface VideoBulkSlotProps {
   /** Why the listed videos failed, by id (the failed ones only) */
   failures: Readonly<Record<string, VideoFailure>>;
   permissions: AdminContentPermission[];
+  r2Failed?: ReadonlySet<string>;
   onDone: () => void;
 }
 
 /** In the /videos bulk bar (`data-slot="video-bulk-actions-extensions"`). */
-export function VideoBulkActionsSlot({ selectedIds, failures, permissions, onDone }: VideoBulkSlotProps): React.ReactNode {
+export function VideoBulkActionsSlot({ selectedIds, failures, r2Failed, permissions, onDone }: VideoBulkSlotProps): React.ReactNode {
   if (!permissions.includes('videos:manage')) return null;
-  return <RepairControls ids={selectedIds} failures={failures} onDone={onDone} testId="video-bulk-repair" />;
+  return <RepairControls ids={selectedIds} failures={failures} r2Failed={r2Failed} onDone={onDone} testId="video-bulk-repair" />;
 }
 
 export interface VideoActionsSlotProps {

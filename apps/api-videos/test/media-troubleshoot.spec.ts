@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { STALL_QUEUED_MS, STALL_RUNNING_MS, transcodeErrorReason, transcodeStall, troubleshootState, scrubOpsText, type TranscoderJobView } from '@al-ummah/shared-types';
+import { syncOwnership, STALL_QUEUED_MS, STALL_RUNNING_MS, transcodeErrorReason, transcodeStall, troubleshootState, scrubOpsText, type TranscoderJobView } from '@al-ummah/shared-types';
 import { cancelTranscode, flagStalledTranscodes, readTroubleshootJobs, retryTranscodeNow, stallIsNew, stallNotice, toTroubleshootJob, actionFailedNotice } from '../src/lib/media/troubleshoot';
 import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -176,6 +176,7 @@ describe('readTroubleshootJobs', () => {
 		const calls: string[] = [];
 		const { env, db } = setup({ status: 'transcoding' }, mediaWorker({ view: view({ status: 'waiting_retry', nextRetryAt: iso(T + 60_000), error: 'container_stopped', attempt: 2 }) }, calls));
 		db.db.prepare('INSERT INTO media_jobs (video_id, job_id, status, access, attempts, queued_at, error, updated_at) VALUES (?, ?, ?, ?, 3, ?, ?, ?)').run('a1b2c3d4-0000-4000-8000-000000000001', 'job-failed-0001', 'failed', 'pub', iso(T - 3600_000), 'source_missing', iso(T - 600_000));
+		await syncOwnership(db as never, 'video', 'a1b2c3d4-0000-4000-8000-000000000001', videoFixture({ id: 'a1b2c3d4-0000-4000-8000-000000000001' }) as never);
 		const out = await readTroubleshootJobs(env, T);
 		assert.equal(out.transcoder, 'ok');
 		assert.deepEqual(calls, [`GET /internal/jobs/${ID}`]);

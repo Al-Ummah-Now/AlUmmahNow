@@ -10,8 +10,8 @@ import { splitRetry } from './video-failure';
 /** admin-api takes this many ids per transcode retry */
 const MEDIA_IDS = 50;
 
-export async function retryFailed(ids: readonly string[], failures: Readonly<Record<string, VideoFailure>>): Promise<ActionResult<unknown>> {
-  const { r2, bunny } = splitRetry(ids, failures);
+export async function retryFailed(ids: readonly string[], failures: Readonly<Record<string, VideoFailure>>, r2Failed?: ReadonlySet<string>): Promise<ActionResult<unknown>> {
+  const { r2, bunny } = splitRetry(ids, failures, r2Failed);
   let result: ActionResult<unknown> = { ok: true, data: null };
   if (bunny.length) result = await retryProcessing(bunny);
   for (let i = 0; i < r2.length && result.ok; i += MEDIA_IDS) result = await retryMediaJobs(r2.slice(i, i + MEDIA_IDS));

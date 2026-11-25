@@ -597,6 +597,17 @@ describe('failure details', () => {
 		}
 	});
 
+	it('a retry of the only copy that fails again says why it failed now', async () => {
+		const { env, raw, videos } = setup({ uploadStatus: 'processing', media: { providers: { r2: { ref: ID, status: 'pending' } } } });
+		const fail = (sourceFacts: unknown, at: string) => applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages.at(-1) as TranscodeJobMessage, { type: 'failed', error: 'no_video_stream', final: true, sourceFacts, at } as never));
+		await enqueueTranscode(env, ID, 'upload');
+		await fail(AUDIO, '2026-11-25T01:00:00.000Z');
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		await fail({ ...AUDIO, zeroEndPercent: 80 }, '2026-11-25T02:00:00.000Z');
+		const { uploadStatus, processingIssue } = videos.read(ID);
+		assert.deepEqual([uploadStatus, processingIssue.code, processingIssue.at], ['failed', 'half_written', '2026-11-25T02:00:00.000Z']);
+	});
+
 	it('a failed video says what its file is, as a code its creator\'s app words', async () => {
 		const { uploaderProcessingIssue } = await import('../src/lib/transformations');
 		const codeOf = async (sourceFacts: unknown, error = 'no_video_stream') => {

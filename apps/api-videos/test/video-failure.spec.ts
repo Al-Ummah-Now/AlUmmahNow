@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { explainTranscodeFailure, explainVideoFailure, ownershipCompleteKey, syncOwnership, TRANSCODE_REASONS, VIDEO_FAILURE_REASONS, VIDEO_FAILURES_MAX, type TranscodeReason } from '@al-ummah/shared-types';
-import { FAILED_VIDEO_IDS_SQL, readVideoFailures, UNFINISHED_VIDEO_IDS_SQL, unfinishedVideoIds } from '../src/lib/media/failures';
+import { pageOfVideos, readVideoFailures, videoStatesSql } from '../src/lib/media/failures';
 import { listVideos } from '../src/lib/admin/directory';
 import { readTroubleshootJobs } from '../src/lib/media/troubleshoot';
 import { createProcessingInternalRouter } from '../src/endpoints/video/processingInternal';
@@ -61,6 +61,16 @@ describe('why a video failed', () => {
 		assert.deepEqual(why({ uploadStatus: 'failed', issue: { kind: 'needs_reupload', code: 'source_changed' } }), ['upload', 'source_changed', 'send_original']);
 		assert.deepEqual(why({ uploadStatus: 'failed' }), ['upload', 'unknown', 'retry_then_send']);
 		assert.deepEqual(why({ uploadStatus: 'failed', issue: { kind: 'encode_failed', code: 'not-ours' } }), ['bunny', 'bunny_failed', 'retry_then_send']);
+	});
+
+	it('R2’s own failure is never Bunny’s: nothing while it is transcoded again, R2’s when that was cancelled', () => {
+		const v = (status: string, issue: object = { kind: 'encode_failed', code: 'audio_only' }) => explainVideoFailure({ uploadStatus: 'failed', issue: issue as never, r2: { status }, r2Decides: true });
+		for (const status of ['queued', 'transcoding']) assert.equal(v(status), null, status);
+		assert.deepEqual([v('cancelled')!.where, v('cancelled')!.reason], ['r2', 'audio_only']);
+		assert.deepEqual([v('cancelled', { kind: 'encode_failed' })!.where, v('cancelled', { kind: 'encode_failed' })!.reason], ['r2', 'encode_failed']);
+		assert.equal(v('queued', { kind: 'needs_reupload', code: 'source_changed' })!.reason, 'source_changed');
+		// Bunny decides: its failure stays Bunny's
+		assert.equal(explainVideoFailure({ uploadStatus: 'failed', issue: { kind: 'encode_failed' }, r2: { status: 'queued' } })!.where, 'bunny');
 	});
 });
 
@@ -144,23 +154,96 @@ describe('the lists of failed videos include R2-only failures, from the index', 
 		assert.equal(lists, 0);
 	});
 
-	it('an index that is not complete falls back to the bucket', async () => {
-		const { env, db } = await setup();
+	it('an index that is not complete answers too: a list never reads the bucket', async () => {
+		const { env, db, bucket } = await setup();
 		db.db.prepare('DELETE FROM search_meta').run();
-		assert.equal(await unfinishedVideoIds(env, 10), null);
-		const app = createProcessingInternalRouter();
-		const res = (await (await app.request('/videos?status=r2_failed', {}, env)).json()) as any;
+		(bucket as any).list = async () => { throw new Error('listed'); };
+		const res = (await (await createProcessingInternalRouter().request('/videos?status=r2_failed', {}, env)).json()) as any;
 		assert.deepEqual(res.result.items.map((v: any) => v.id), [id(2)]);
 	});
 
-	it('by index seeks', async () => {
-		const { db } = await setup();
-		for (const sql of [FAILED_VIDEO_IDS_SQL, UNFINISHED_VIDEO_IDS_SQL]) {
-			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
-			assert.match(plan, /idx_content_ownership_upload \(kind=\? AND upload_status=\?\)/, plan);
-			assert.match(plan, /idx_media_jobs_status \(status=\?\)/, plan);
-			assert.doesNotMatch(plan, /SCAN/, plan);
+	it('the whole queries read the rows in those states only', async () => {
+		const { env, db } = await setup();
+		const plans = async (run: () => Promise<unknown>) => {
+			const sqls: string[] = [];
+			const prepare = db.prepare.bind(db);
+			(db as any).prepare = (sql: string) => { sqls.push(sql); return prepare(sql); };
+			try { await run(); } finally { (db as any).prepare = prepare; }
+			const own = sqls.filter((q) => /content_ownership/.test(q) && /upload_status|media_jobs/.test(q));
+			assert.ok(own.length > 0, sqls.join('; '));
+			return own.map((q) => (db.db.prepare(`EXPLAIN QUERY PLAN ${q}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | '));
+		};
+		const app = createProcessingInternalRouter();
+		for (const plan of [
+			...(await plans(() => listVideos(env, { status: 'failed' } as never))),
+			...(await plans(() => listVideos(env, { status: 'failed', noTotal: true, page: 3 } as never))),
+			...(await plans(() => listVideos(env, { status: 'processing' } as never))),
+			...(await plans(() => listVideos(env, { status: 'initiated' } as never))),
+			...(await plans(async () => { for (const s of ['stuck', 'processing', 'failed', 'r2_failed', 'stalled', 'needs_reupload']) await app.request(`/videos?status=${s}`, {}, env); })),
+			...(await plans(async () => app.request('/errors', {}, env))),
+		]) {
+			assert.doesNotMatch(plan, /SCAN (content_ownership|media_jobs|v|j)\b|idx_content_ownership_created/, plan);
+			assert.match(plan, /idx_content_ownership_unfinished \(upload_status=\?\)|idx_media_jobs_status \(status=\?\)/, plan);
 		}
+		// Every video: a page of the newest, in the index's order
+		const all = (db.db.prepare(`EXPLAIN QUERY PLAN ${videoStatesSql({ states: [], all: true })}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.doesNotMatch(all, /SCAN|TEMP B-TREE/, all);
+	});
+
+	it('pages: nothing dropped, nothing twice, and uploads never push a failure out', async () => {
+		const { env, db, bucket } = await setup();
+		const vid = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+		for (let n = 0; n < 400; n++) {
+			const failed = n % 2 === 0;
+			const record = videoFixture({ id: vid(n), title: `U ${n}`, channelId: 'c1', userId: 'u1', uploadStatus: failed ? 'failed' : 'initiated', dateCreated: new Date(Date.UTC(2026, 6, 1) + (failed ? 0 : 86400_000) + n * 1000).toISOString() });
+			await (bucket as any).put(vid(n), JSON.stringify(record));
+			await syncOwnership(db as never, 'video', vid(n), record as never);
+		}
+		const app = createProcessingInternalRouter();
+		const walk = async (status: string, limit: number) => {
+			const ids: string[] = [];
+			let at: number | null = 0;
+			let pages = 0;
+			while (at !== null && pages++ < 60) {
+				const r: any = ((await (await app.request(`/videos?status=${status}&limit=${limit}&offset=${at}`, {}, env)).json()) as any).result;
+				assert.ok(r.items.length <= limit);
+				ids.push(...r.items.map((v: any) => v.id));
+				at = r.nextOffset;
+			}
+			assert.equal(at, null);
+			assert.equal(new Set(ids).size, ids.length, 'once each');
+			return ids;
+		};
+		const failed = await walk('failed', 70);
+		assert.equal(failed.length, 202);
+		assert.equal(failed[0], vid(398), 'newest first');
+		assert.equal((await walk('stuck', 100)).length, 403);
+		assert.equal((await walk('r2_failed', 1)).length, 1);
+		// One page looks through so many records and no more; the next goes on from there
+		const stuck = { states: ['initiated', 'uploading', 'processing', 'failed'] as const, r2Failed: true };
+		const none = await pageOfVideos<any>(env, stuck as never, { from: 0, limit: 10, wanted: () => false });
+		assert.deepEqual([none!.items, none!.next], [[], 300]);
+		const rest = await pageOfVideos<any>(env, stuck as never, { from: 300, limit: 10, wanted: () => false });
+		assert.deepEqual([rest!.items, rest!.next], [[], null]);
+		const errors = ((await (await app.request('/errors?limit=50', {}, env)).json()) as any).result;
+		assert.deepEqual([errors.videos.length, errors.moreVideos, errors.videos.every((v: any) => v.uploadStatus === 'failed')], [50, true, true]);
+	});
+
+	it('file names are names, not paths', async () => {
+		const { env, bucket } = await setup();
+		for (const path of ['C:\\Users\\someone\\Talks\\talk.mov', '/home/someone/talk.mov']) {
+			const record = JSON.parse(await (await (bucket as any).get(id(2))).text());
+			await (bucket as any).put(id(2), JSON.stringify({ ...record, originalFilename: path }));
+			assert.equal((await readVideoFailures(env, [id(2)]))[0].fileName, 'talk.mov');
+		}
+	});
+
+	it('the troubleshooting panel leaves deleted videos out, their names and jobs', async () => {
+		const { env, db } = await setup();
+		const now = Date.parse('2026-05-10T00:00:00.000Z');
+		assert.equal((await readTroubleshootJobs(env, now, id(2))).items.length, 1);
+		db.db.prepare("UPDATE content_ownership SET is_deleted = 1 WHERE kind = 'video' AND id = ?").run(id(2));
+		assert.deepEqual((await readTroubleshootJobs(env, now, id(2))).items, []);
 	});
 
 	it('the troubleshooting link finds its video’s job however old', async () => {

@@ -79,6 +79,7 @@
 --   apps/api-videos/migrations/search/0125_creator_terms_acceptance.sql
 --   apps/api-videos/migrations/search/0126_content_ownership_category.sql
 --   apps/api-videos/migrations/search/0127_media_source_facts.sql
+--   apps/api-videos/migrations/search/0128_unfinished_videos.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -335,6 +336,7 @@ CREATE INDEX idx_content_ownership_kind_created ON content_ownership (kind, COAL
 CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
+CREATE INDEX idx_content_ownership_unfinished ON content_ownership (upload_status, created_at DESC, id) WHERE kind = 'video' AND is_deleted = 0 AND upload_status <> 'ready';
 CREATE INDEX idx_content_ownership_upload ON content_ownership (kind, upload_status, id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);

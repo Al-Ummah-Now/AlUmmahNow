@@ -19,7 +19,9 @@ function setup(roles = ['Admin'], reports: unknown = undefined) {
       fetch: async (input: string | Request) => {
         const url = new URL(typeof input === 'string' ? input : input.url);
         asked.push(url.pathname + url.search);
-        return Response.json({ success: true, result: { items: url.searchParams.get('ids')!.split(',').filter((id) => id !== 'not-failed').map(failure) } });
+        if (url.pathname === '/internal/media/troubleshoot') return Response.json({ success: true, result: { items: [V1, V2].map((videoId) => ({ videoId, title: 'Talk', state: 'failed' })), at: 'x', transcoder: 'ok' } });
+        if (url.pathname === '/internal/media/jobs') return Response.json({ success: true, result: { items: [V1, V2].map((video_id) => ({ video_id })) } });
+        return Response.json({ success: true, result: { items: (url.searchParams.get('ids') ?? '').split(',').filter((id) => id !== 'not-failed').map(failure) } });
       },
     },
   };
@@ -57,9 +59,30 @@ describe('GET /api/media/failures', () => {
   });
 
   it('without the names the failures still say why', async () => {
-    const { get } = setup(['Admin'], { prepare: () => { throw new Error('D1 down'); } });
-    const { status, body } = await get(`/failures?ids=${V1}`);
+    const down = { prepare: () => { throw new Error('D1 down'); } };
+    const { status, body } = await setup(['super_admin'], down).get(`/failures?ids=${V1}`);
     assert.deepEqual([status, body.result.items[0].fileName], [200, 'picked.mov']);
+    // An admin who may not see everything gets nothing when what they may see cannot be read
+    assert.equal((await setup(['Admin'], down).get(`/failures?ids=${V1}`)).status, 500);
+    assert.equal((await setup(['Admin'], down).get('/jobs')).status, 500);
+  });
+
+  it('a file’s name, not its path', async () => {
+    const { db, get } = setup();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, video_id, state, created_by, created_at, updated_at) VALUES ('i1', 'b', 'c', 's', 'C:\\Users\\someone\\talk.mp4', 1, ?, 'uploaded', 'u', 'x', 'x')").bind(V1).run();
+    assert.equal((await get(`/failures?ids=${V1}`)).body.result.items[0].fileName, 'talk.mp4');
+  });
+
+  it('only of the videos the reader’s lists show', async () => {
+    for (const [roles, shown] of [[['Admin'], [V2]], [['super_admin'], [V1, V2]]] as const) {
+      const { db, get, asked } = setup([...roles]);
+      await db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)").bind(V1).run();
+      assert.deepEqual((await get(`/failures?ids=${V1},${V2}`)).body.result.items.map((f: any) => f.videoId), shown);
+      assert.deepEqual(asked, [`/internal/media/failures?ids=${encodeURIComponent(shown.join(','))}`]);
+      assert.deepEqual((await get(`/failures?ids=${V1}`)).body.result.items.length, shown.length - 1);
+      assert.deepEqual((await get(`/troubleshoot?video=${V1}`)).body.result.jobs.items.map((j: any) => j.videoId), shown);
+      assert.deepEqual((await get('/jobs')).body.result.items.map((j: any) => j.video_id), shown);
+    }
   });
 
   it('needs media:manage, and 1 to 100 video ids', async () => {

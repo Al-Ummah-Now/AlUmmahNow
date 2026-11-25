@@ -24,6 +24,7 @@ import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { mediaNames, readContainers, readLogs, readQueues, testToken, type CfContext } from '../lib/media-troubleshoot/cloudflare';
 import { readToken, removeToken, saveToken, storeTest, tokenProblem, TokenError } from '../lib/media-troubleshoot/token';
+import { withoutHiddenVideos } from '../lib/moderation/takedown';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
@@ -93,7 +94,8 @@ app.get('/', async (c) => {
   // The video a link names: its finished job too, however old
   const video = VIDEO_ID.test(c.req.query('video') ?? '') ? c.req.query('video') : undefined;
   const [jobsResult, liveResult, cf] = await Promise.allSettled([
-    callVideosInternal<TroubleshootJobs>(c.env, '/internal/media/troubleshoot', { query: { video } }),
+    // Only of the videos the reader's lists show
+    callVideosInternal<TroubleshootJobs>(c.env, '/internal/media/troubleshoot', { query: { video } }).then(async (jobs) => ({ ...jobs, items: await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, jobs.items ?? [], (j) => j.videoId) })),
     callVideosInternal<{ live: { queued: number; oldestQueuedAt: string | null; oldestQueuedSeconds: number | null } }>(c.env, '/internal/media/summary', { query: { only: 'live' } }),
     cfContext(c),
   ]);

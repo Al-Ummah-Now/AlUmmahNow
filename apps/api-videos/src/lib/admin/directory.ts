@@ -30,6 +30,7 @@ import {
 	type OwnershipKind,
 	type SearchDb,
 } from '@al-ummah/shared-types';
+import { FAILED_VIDEO_IDS_SQL } from '../media/failures';
 import { isOwnershipComplete, type OwnershipEnv, byKey } from '../search/ownership';
 import { startOwnershipRebuild } from '../search/ownershipRebuild';
 import type { JobQueue } from './jobs';
@@ -324,6 +325,7 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 	const where: string[] = ["v.kind = 'video'", 'v.is_deleted = 0'];
 	const binds: unknown[] = [];
 	const n = () => `?${binds.length}`;
+	let source = `${OWNERSHIP_TABLE} v`;
 	if (query.q?.trim()) {
 		binds.push(likeTerm(query.q));
 		const like = n();
@@ -339,17 +341,17 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 		binds.push(query.ownerId);
 		where.push(`v.owner_id = ${n()}`);
 	}
-	if (query.status) {
+	// Failed on R2 counts too, while Bunny's copy plays
+	if (query.status === 'failed') source = `(${FAILED_VIDEO_IDS_SQL}) f CROSS JOIN ${OWNERSHIP_TABLE} v ON v.kind = 'video' AND v.id = f.id`;
+	else if (query.status) {
 		binds.push(query.status);
 		// Videos without an upload status are legacy uploads that play: treat them as ready
-		where.push(
-			query.status === 'ready'
-				? `(v.upload_status = ${n()} OR v.upload_status IS NULL)`
-				: // Failed on R2 counts too, while Bunny's copy plays
-					query.status === 'failed'
-					? `(v.id IN (SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND upload_status = ${n()} UNION SELECT video_id FROM media_jobs WHERE status = 'failed'))`
-					: `v.upload_status = ${n()}`,
-		);
+		if (query.status === 'ready') where.push(`(v.upload_status = ${n()} OR v.upload_status IS NULL)`);
+		else {
+			// The rows in that state only (the index's own terms are here, so it always applies)
+			where.push("v.upload_status <> 'ready'", `v.upload_status = ${n()}`);
+			source = `${OWNERSHIP_TABLE} v INDEXED BY idx_content_ownership_unfinished`;
+		}
 	}
 	if (query.visibility) where.push(`v.is_public = ${query.visibility === 'public' ? 1 : 0}`);
 	if (query.hidden) where.push(`v.is_hidden = ${query.hidden === 'yes' ? 1 : 0}`);
@@ -368,10 +370,10 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 		where.push(`v.created_at <= ${n()}`);
 	}
 	const whereSql = where.join(' AND ');
-	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} v WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
+	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${source} WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
-			`SELECT v.*, ch.admin_title AS channel_name, ow.admin_title AS owner_name, ow.email AS owner_email FROM ${OWNERSHIP_TABLE} v
+			`SELECT v.*, ch.admin_title AS channel_name, ow.admin_title AS owner_name, ow.email AS owner_email FROM ${source}
 			 LEFT JOIN ${OWNERSHIP_TABLE} ch ON ch.kind = 'channel' AND ch.id = v.channel_id
 			 LEFT JOIN ${OWNERSHIP_TABLE} ow ON ow.kind = 'profile' AND ow.id = v.owner_id
 			 WHERE ${whereSql} ORDER BY ${VIDEO_SORT[query.sort ?? 'newest'] ?? VIDEO_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`,
