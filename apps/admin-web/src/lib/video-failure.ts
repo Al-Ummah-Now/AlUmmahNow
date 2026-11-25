@@ -19,6 +19,7 @@ const STEP_LABEL: Record<VideoFailureStep, { own: MessageKey; imported: MessageK
   send_with_picture: { own: 'videoFailure.steps.send_with_picture', imported: 'videoFailure.steps.send_with_picture_imported' },
   send_original: { own: 'videoFailure.steps.send_original', imported: 'videoFailure.steps.send_original_imported' },
   send_again: { own: 'videoFailure.steps.send_again', imported: 'videoFailure.steps.send_again_imported' },
+  send_sdr: { own: 'videoFailure.steps.send_sdr', imported: 'videoFailure.steps.send_sdr_imported' },
   retry: { own: 'videoFailure.steps.retry', imported: 'videoFailure.steps.retry' },
   retry_to_learn: { own: 'videoFailure.steps.retry_to_learn', imported: 'videoFailure.steps.retry_to_learn' },
   retry_then_send: { own: 'videoFailure.steps.retry_then_send', imported: 'videoFailure.steps.retry_then_send_imported' },

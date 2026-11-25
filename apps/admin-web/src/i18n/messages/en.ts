@@ -4209,6 +4209,8 @@ const en = {
       send_original_imported: 'Import the original file again. Retrying can’t help.',
       send_again: 'Its uploader needs to upload the file again: it did not arrive whole. Retrying can’t help.',
       send_again_imported: 'Import the file again: it did not arrive whole. Retrying can’t help.',
+      send_sdr: 'Its uploader needs to export it as standard video (SDR) and upload it again. Retrying can’t help.',
+      send_sdr_imported: 'Export the original as standard video (SDR) and import it again. Retrying can’t help.',
       retry: 'Retry. Our side failed, not the file.',
       retry_to_learn: 'Retry once. This is an older failure that did not record what the file is; the retry will.',
       retry_then_send: 'Retry once. If it fails again, its uploader needs to upload the file again.',
