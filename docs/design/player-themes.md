@@ -15,6 +15,7 @@ currently deploy, from `apps/web/src/theme/player-themes.css`.
 - **Volume** always reserves its slider space. Expanding it on hover moved the neighbouring controls out from under the pointer.
 - **Specificity.** Video.js ships `.video-js button { background: none }`, which beats a single-class rule. That is why the big play looked like a faint outline in the real player.
 - **Firefox.** Style `::-moz-range-track`, `::-moz-range-progress` and `::-moz-range-thumb`, and clear `::-moz-focus-inner` and `:-moz-focusring`.
+- **Nothing lights or tints the picture.** A bar that fades into the picture is neutral black and only as tall as reading the controls needs. No glow from the bar, the played line, the handle or the big play button falls on the picture. A bar that is a panel of its own (Zujaj's pane, Nahas's band) keeps its colour inside its edge.
 - **Modes.** The chrome sits over video, so each theme has one chrome for both page modes. Colours must stay readable over bright and dark frames.
 - **RTL.** Playback controls and the progress bar stay left-to-right. Menus and labels follow the language.
 
@@ -22,10 +23,10 @@ currently deploy, from `apps/web/src/theme/player-themes.css`.
 
 | Theme | Control bar | Played bar | Big play |
 |---|---|---|---|
-| Lantern | Amber scrim, light falling off from the start side | Gold gradient with a glow | Glowing gold orb |
+| Lantern | Dark neutral gradient, as low as the controls | Gold gradient | Gold orb |
 | Zujaj | Floating frosted pane, inset 10px, with a glass highlight | Teal to pale glass | Frosted glass disc |
 | Nahas | Solid brass band with engraved edges, no scrim | Metallic copper in a dark engraved groove | Banded brass disc with a rim |
-| Fawanees | Deep night with a pool of gold light | Rich gold with a strong glow | Gold orb with a wide halo |
+| Fawanees | Dark neutral gradient, as low as the controls | Rich gold | Gold orb |
 
 ## Token values
 
@@ -33,10 +34,10 @@ currently deploy, from `apps/web/src/theme/player-themes.css`.
 
 | Theme | Value |
 |---|---|
-| Lantern | `radial-gradient(70% 150% at 12% 100%,rgb(232 180 119/.26),transparent 70%),linear-gradient(0deg,rgb(26 15 5/.96),rgb(38 23 8/.86) 62%,rgb(38 23 8/.42) 82%,transparent)` |
+| Lantern | `linear-gradient(0deg,rgb(0 0 0/.82),rgb(0 0 0/.72) 70%,rgb(0 0 0/.62) 82%,transparent)` |
 | Zujaj | `linear-gradient(135deg,rgb(255 255 255/.16),transparent 42%),rgb(8 58 69/.78)` |
 | Nahas | `linear-gradient(180deg,#6a3d1a,#3d210d 42%,#2a1508)` |
-| Fawanees | `radial-gradient(45% 170% at 50% 118%,rgb(244 174 58/.32),transparent 72%),linear-gradient(0deg,rgb(5 12 20/.97),rgb(9 21 30/.88) 62%,rgb(9 21 30/.44) 82%,transparent)` |
+| Fawanees | `linear-gradient(0deg,rgb(0 0 0/.82),rgb(0 0 0/.72) 70%,rgb(0 0 0/.62) 82%,transparent)` |
 
 ### Control bar edge (`--p-bar-edge`)
 
@@ -51,10 +52,10 @@ currently deploy, from `apps/web/src/theme/player-themes.css`.
 
 | Theme | Value |
 |---|---|
-| Lantern | `44px 12px 6px` |
+| Lantern | `20px 12px 6px` |
 | Zujaj | `6px 10px 2px` |
 | Nahas | `8px 12px 2px` |
-| Fawanees | `44px 12px 6px` |
+| Fawanees | `20px 12px 6px` |
 
 ### Compact control bar padding (`--p-bar-pad-compact`)
 
@@ -144,10 +145,10 @@ padding would cover half of a 16:9 frame, so the bar uses this instead.
 
 | Theme | Value |
 |---|---|
-| Lantern | `0 0 12px rgb(245 207 146/.75)` |
-| Zujaj | `0 0 10px rgb(92 196 212/.8)` |
+| Lantern | `none` |
+| Zujaj | `none` |
 | Nahas | `none` |
-| Fawanees | `0 0 14px rgb(244 174 58/.9)` |
+| Fawanees | `none` |
 
 ### Scrub and volume handle (`--p-handle`)
 
@@ -162,10 +163,10 @@ padding would cover half of a 16:9 frame, so the bar uses this instead.
 
 | Theme | Value |
 |---|---|
-| Lantern | `0 0 0 2px rgb(38 23 8/.9),0 0 12px rgb(245 207 146/.8)` |
+| Lantern | `0 0 0 2px rgb(38 23 8/.9)` |
 | Zujaj | `0 0 0 1px rgb(8 58 69/.7),0 2px 6px rgb(3 30 36/.5)` |
 | Nahas | `0 0 0 1px #2a1508,inset 0 -1px 1px rgb(0 0 0/.3)` |
-| Fawanees | `0 0 0 2px #09151e,0 0 14px rgb(244 174 58/.9)` |
+| Fawanees | `0 0 0 2px #09151e` |
 
 ### Control hover fill (`--p-hover`)
 
@@ -270,10 +271,10 @@ padding would cover half of a 16:9 frame, so the bar uses this instead.
 
 | Theme | Value |
 |---|---|
-| Lantern | `0 0 0 6px rgb(232 180 119/.26),0 0 34px rgb(245 207 146/.6),0 8px 22px rgb(26 15 5/.5)` |
+| Lantern | `0 0 0 6px rgb(0 0 0/.28),0 8px 22px rgb(26 15 5/.5)` |
 | Zujaj | `inset 0 1px 0 rgb(255 255 255/.5),inset 0 0 0 1px rgb(255 255 255/.26),0 10px 26px rgb(3 30 36/.45)` |
 | Nahas | `inset 0 1px 0 rgb(255 255 255/.6),inset 0 -2px 0 rgb(90 44 8/.5),0 0 0 3px #4a290f,0 0 0 4px rgb(255 211 154/.55),0 8px 22px rgb(26 10 2/.55)` |
-| Fawanees | `0 0 0 7px rgb(244 174 58/.24),0 0 44px rgb(244 174 58/.72),0 8px 24px rgb(5 12 20/.55)` |
+| Fawanees | `0 0 0 7px rgb(0 0 0/.28),0 8px 24px rgb(5 12 20/.55)` |
 
 ### Loading indicator (`--p-spin`)
 
