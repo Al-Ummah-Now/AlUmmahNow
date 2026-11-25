@@ -12,6 +12,8 @@
  * Prints `<name>_sha=<sha>` and `<name>_ref=<ref>` lines (append to $GITHUB_OUTPUT in CI).
  * Uses GITHUB_TOKEN / GH_TOKEN when set (public repos: also works without, at a lower rate limit).
  */
+import { githubGet, type GetDeps } from './github-get.ts';
+
 export const SIBLINGS = {
   auth: { repo: 'Al-Ummah-Now/AlUmmahNowAuth', workflow: 'release.yml', released: 'main' },
   cms: { repo: 'Al-Ummah-Now/AlUmmahNowCMS', workflow: 'release.yml', released: 'tag' },
@@ -35,16 +37,17 @@ export function releasedRun(runs: WorkflowRun[], released: 'main' | 'tag'): Work
   );
 }
 
-/** Released commits of a sibling, newest first (successful Release runs). */
-export async function releasedRefs(name: Sibling): Promise<{ sha: string; ref: string }[]> {
-  const { repo, workflow, released } = SIBLINGS[name];
+async function releaseRuns(repo: string, workflow: string, released: 'main' | 'tag', deps?: Partial<GetDeps>): Promise<WorkflowRun[]> {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   const query = released === 'main' ? 'branch=main&' : '';
-  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?${query}status=success&event=push&per_page=50`, {
-    headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!res.ok) throw new Error(`${repo}: GitHub answered ${res.status} for its ${workflow} runs`);
-  const { workflow_runs: runs } = (await res.json()) as { workflow_runs: WorkflowRun[] };
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?${query}status=success&event=push&per_page=50`;
+  return (await githubGet(url, { accept: 'application/vnd.github+json', token, read: (res) => res.json() as Promise<{ workflow_runs: WorkflowRun[] }> }, deps)).workflow_runs;
+}
+
+/** Released commits of a sibling, newest first (successful Release runs). */
+export async function releasedRefs(name: Sibling, deps?: Partial<GetDeps>): Promise<{ sha: string; ref: string }[]> {
+  const { repo, workflow, released } = SIBLINGS[name];
+  const runs = await releaseRuns(repo, workflow, released, deps);
   const out: { sha: string; ref: string }[] = [];
   for (let rest = runs; ; ) {
     const run = releasedRun(rest, released);
@@ -55,15 +58,9 @@ export async function releasedRefs(name: Sibling): Promise<{ sha: string; ref: s
   return out;
 }
 
-export async function resolveSibling(name: Sibling): Promise<{ sha: string; ref: string }> {
+export async function resolveSibling(name: Sibling, deps?: Partial<GetDeps>): Promise<{ sha: string; ref: string }> {
   const { repo, workflow, released } = SIBLINGS[name];
-  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-  const query = released === 'main' ? 'branch=main&' : '';
-  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?${query}status=success&event=push&per_page=50`, {
-    headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!res.ok) throw new Error(`${repo}: GitHub answered ${res.status} for its ${workflow} runs`);
-  const { workflow_runs: runs } = (await res.json()) as { workflow_runs: WorkflowRun[] };
+  const runs = await releaseRuns(repo, workflow, released, deps);
   const run = releasedRun(runs, released);
   if (!run) throw new Error(`${repo}: no successful release in the last 50 Release runs`);
   return { sha: run.head_sha, ref: run.head_branch ?? run.head_sha };
