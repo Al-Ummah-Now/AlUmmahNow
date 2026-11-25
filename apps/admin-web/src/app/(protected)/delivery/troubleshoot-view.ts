@@ -83,7 +83,7 @@ export function sourceLines(source: TroubleshootSource, reason: TroubleshootJob[
       formatBytes(locale as never, source.bytes),
       ...(source.durationSeconds ? [formatDuration(locale as never)(source.durationSeconds)] : []),
       // The codec names stay left to right inside Arabic text
-      ...(source.streams ?? []).map((s) => t('transcodeTroubleshoot.source.stream', { kind: t(STREAM_LABEL[s.kind]), codec: `\u2068${s.codec}\u2069` })),
+      ...(source.streams ?? []).map((s) => t('transcodeTroubleshoot.source.stream', { kind: t(STREAM_LABEL[s.kind] ?? STREAM_LABEL.other), codec: `\u2068${s.codec}\u2069` })),
       ...(source.zeroStartPercent || source.zeroEndPercent ? [t('transcodeTroubleshoot.source.zeros', { start: percent.format(source.zeroStartPercent / 100), end: percent.format(source.zeroEndPercent / 100) })] : []),
     ],
   };

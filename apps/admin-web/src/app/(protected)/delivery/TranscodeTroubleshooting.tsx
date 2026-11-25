@@ -296,7 +296,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                       {source && (
                         <div className="mt-1" data-testid="troubleshoot-job-source">
                           {!source.isReason && <p className="text-sm text-fg">{source.verdict}</p>}
-                          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">{source.details.map((line) => <li key={line}>{line}</li>)}</ul>
+                          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">{source.details.map((line, i) => <li key={`${i}:${line}`}>{line}</li>)}</ul>
                         </div>
                       )}
                       {job.error && (

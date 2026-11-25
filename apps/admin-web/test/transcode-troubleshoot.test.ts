@@ -66,6 +66,11 @@ describe('what the file is', () => {
     assert.deepEqual(out.details.slice(2), ['Sound: \u2068aac\u2069', 'Cover image: \u2068mjpeg\u2069', 'Empty bytes: 1.2% of the first MB, 0% of the last MB']);
   });
 
+  it('a stream kind this build does not know is named as another one', () => {
+    const out = sourceLines({ ...source, streams: [{ kind: 'new' as never, codec: 'x' }] }, null, words(en), 'en');
+    assert.ok(out.details.includes(`${en.transcodeTroubleshoot.source.kinds.other}: \u2068x\u2069`), out.details.join('|'));
+  });
+
   it('in Arabic with Arabic digits and words', () => {
     const out = sourceLines({ ...source, streams: [], zeroEndPercent: 100 }, 'no_video_stream', words(ar), 'ar');
     assert.equal(out.verdict, ar.transcodeTroubleshoot.source.halfWritten);

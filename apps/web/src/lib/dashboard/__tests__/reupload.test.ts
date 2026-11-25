@@ -27,6 +27,8 @@ describe('studio re-upload action', () => {
       }
       expect(uploadIssueText(video({ processingIssue: { kind: 'needs_reupload', reason: 'raw' } }), issue)).toBe(issue.needs_reupload);
       expect(uploadIssueText(video({ processingIssue: { kind: 'encode_failed', code: 'new' as never } }), issue)).toBe(issue.encode_failed);
+      expect(uploadIssueText(video({ processingIssue: { kind: 'needs_reupload', code: 'stalled' as never } }), issue)).toBe(issue.needs_reupload);
+      expect(uploadIssueText(video({ processingIssue: { kind: 'new' as never } }), issue)).toBeNull();
       expect(uploadIssueText(video({ processingIssue: { kind: 'stalled' } }), issue)).toBeNull();
       expect(uploadIssueText(video({}), issue)).toBeNull();
     }
