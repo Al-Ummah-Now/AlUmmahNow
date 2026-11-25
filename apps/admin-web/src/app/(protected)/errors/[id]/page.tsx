@@ -5,13 +5,16 @@ import { getErrorGroup } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import type { ErrorActivity, ErrorEvent, ErrorGroupDetail } from '@/lib/api/error-groups-types';
 import { getAdminSession } from '@/lib/auth';
-import { canManageErrors, canReadErrors } from '@/lib/roles';
+import { canManageErrors, canManageMedia, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import { pageStart, type Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { BackLink } from '@/components/content/parts';
 import { logger } from '@/lib/logger';
+import { videoFailuresById } from '@/lib/api/failures';
+import { causedByFile, failureIds } from '@/lib/video-failure';
+import { FailureWhy } from '@/components/content/failure';
 import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName, platformName } from '../ui';
 import { countryName, sourceLabel } from '../origin';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
@@ -61,6 +64,8 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
   const viewerId = session?.user.id;
   const role = session?.user.role;
   const groupActions = groupActionsFor(role, group, viewerId);
+  // Videos that failed: the same reason and what to do as on every other page
+  const failures = canManageMedia(role) ? await videoFailuresById(failureIds(actions.map((a) => ({ id: a.item_id ?? '', failed: a.item_type === 'video' && a.source === 'processing' && !!a.item_id && a.status === 'open' })))) : {};
   const latest = events[0];
   const stack = latest?.symbolicated_stack || latest?.stack || null;
   const start = pageStart(locale);
@@ -124,13 +129,23 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           <ul className="divide-y divide-border">
             {actions.map((item) => {
               const href = itemHref(item, WEB_ORIGIN, locale);
-              const buttons = itemActionsFor(role, item);
+              const failure = item.item_id ? failures[item.item_id] : undefined;
+              // The same file fails again: Retry is not offered
+              const buttons = itemActionsFor(role, item).filter((b) => b !== 'retry' || !causedByFile(failure));
               return (
                 <li key={item.id} className="py-4 first:pt-0 last:pb-0" data-testid="error-item" data-item-id={item.id} data-status={item.status}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-fg" dir="auto">{item.title}</p>
-                      {item.detail && <p className="text-sm text-fg-muted mt-1 break-words" dir="auto">{item.detail}</p>}
+                      <p className="font-medium text-fg" dir="auto" style={failure ? { textAlign: start } : undefined}>{failure?.title ?? item.title}</p>
+                      {failure ? (
+                        <>
+                          <FailureWhy failure={failure} t={t} className="mt-1" />
+                          {/* The stored (English) words of the report, for a search in the logs */}
+                          {item.detail && <p className="mt-1 text-xs text-fg-muted break-words" style={{ textAlign: start }}><bdi dir="ltr">{item.detail}</bdi></p>}
+                        </>
+                      ) : (
+                        item.detail && <p className="text-sm text-fg-muted mt-1 break-words" dir="auto">{item.detail}</p>
+                      )}
                     </div>
                     <ErrorStatusChip status={item.status} label={translateDynamic(t, 'itemStatus', item.status)} testId="error-item-status" />
                   </div>
@@ -146,7 +161,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                         {t('errorsPage.openItem')}
                       </a>
                     )}
-                    {buttons.length > 0 && <NeedsActionItemButtons id={item.id} actions={buttons} retryLabel={item.retry_label} />}
+                    {buttons.length > 0 && <NeedsActionItemButtons id={item.id} actions={buttons} retryLabel={failure ? t('mediaDelivery.retry') : item.retry_label} />}
                   </div>
                 </li>
               );

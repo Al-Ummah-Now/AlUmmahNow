@@ -16,7 +16,6 @@
 import {
 	reportNeedsAction,
 	resolveNeedsAction,
-	sanitizeSourceFacts,
 	scrubOpsText,
 	STALL_QUEUED_MS,
 	STALL_RETRY_LATE_MS,
@@ -32,10 +31,10 @@ import {
 	type TranscoderJobView,
 	type TroubleshootJob,
 	type TroubleshootJobs,
-	type TroubleshootSource,
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
+import { sourceOf } from './failures';
 import { enqueueTranscode, pushMediaLive, recordJob, transcodeSlotsFull, type MediaEnv, type MediaVideo } from './r2-delivery';
 
 type SecretLike = string | { get(): Promise<string> };
@@ -105,20 +104,6 @@ interface JobRow {
 
 const clip = (text: string | null | undefined) => (text ? scrubOpsText(text).slice(0, 300) : null);
 
-/** The stored source facts without the hash. */
-function sourceOf(json: string | null | undefined): TroubleshootSource | null {
-	if (!json) return null;
-	try {
-		const facts = sanitizeSourceFacts(JSON.parse(json));
-		if (!facts) return null;
-		const rest: TroubleshootSource & { sha256?: string } = facts;
-		delete rest.sha256;
-		return rest;
-	} catch {
-		return null;
-	}
-}
-
 /** One row of the panel from media_jobs and the Transcoder's answer. Pure (tested). */
 export function toTroubleshootJob(row: JobRow, title: string | null, answer: TranscoderAnswer | null, asked: boolean): TroubleshootJob {
 	const view = answer?.view && answer.view.jobId === row.job_id ? answer.view : null;
@@ -175,21 +160,28 @@ async function activeRows(env: TroubleshootEnv): Promise<JobRow[]> {
 	return results ?? [];
 }
 
-/** The panel's job list: active jobs first (oldest wait first), then failed and cancelled ones, newest first. */
-export async function readTroubleshootJobs(env: TroubleshootEnv, now = Date.now()): Promise<TroubleshootJobs> {
+const FINISHED_COLUMNS = 'video_id, job_id, status, attempts, queued_at, started_at, failed_at, error, updated_at, source_facts';
+
+/**
+ * The panel's job list: active jobs first (oldest wait first), then failed and cancelled ones, newest first.
+ * `focus`: that video's finished job too, however old (the links to this panel name a video).
+ */
+export async function readTroubleshootJobs(env: TroubleshootEnv, now = Date.now(), focus?: string): Promise<TroubleshootJobs> {
 	const at = new Date(now).toISOString();
 	if (!env.SEARCH_DB) return { items: [], at, transcoder: env.MEDIA_WORKER ? 'ok' : 'unbound' };
 	const since = new Date(now - FINISHED_DAYS * 86400_000).toISOString();
-	const [active, finished] = await Promise.all([
+	const [active, recent, focused] = await Promise.all([
 		activeRows(env),
 		env.SEARCH_DB.prepare(
-			`SELECT video_id, job_id, status, attempts, queued_at, started_at, failed_at, error, updated_at, source_facts FROM media_jobs
+			`SELECT ${FINISHED_COLUMNS} FROM media_jobs
 			 WHERE status IN ('failed', 'cancelled') AND updated_at >= ? ORDER BY updated_at DESC LIMIT ?`,
 		)
 			.bind(since, FINISHED_LIMIT)
 			.all<JobRow>()
 			.then((r) => r.results ?? []),
+		focus ? env.SEARCH_DB.prepare(`SELECT ${FINISHED_COLUMNS} FROM media_jobs WHERE video_id = ? AND status IN ('failed', 'cancelled')`).bind(focus).first<JobRow>() : null,
 	]);
+	const finished = focused && !recent.some((r) => r.video_id === focused.video_id) ? [focused, ...recent] : recent;
 	const names = await titles(env, [...active, ...finished].map((r) => r.video_id));
 	const asked = !!env.MEDIA_WORKER;
 	const answers = await Promise.all(active.map((r) => askTranscoder(env, r.video_id)));

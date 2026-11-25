@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * Media repair on the Videos pages: Sync from Bunny, Retry processing and Mark
+ * Media repair on the Videos pages: Sync from Bunny, Retry processing (an R2 failure transcodes again) and Mark
  * failed, for the selected videos (bulk bar on /videos) or one video
  * (/videos/[id]). They use the Processing health actions (admin-api
  * /api/processing, audited there), so the same repair is available wherever
  * an admin finds the video. Admins and super admins only (videos:manage).
  */
 import { useState } from 'react';
-import { markProcessingFailed, retryProcessing, syncProcessing } from '@/lib/api/admin';
+import type { VideoFailure } from '@al-ummah/shared-types';
+import { markProcessingFailed, syncProcessing } from '@/lib/api/admin';
+import { retryFailed } from '@/lib/retry-failed';
+import { useRetryConfirm } from '@/components/content/failure-retry';
 import type { ActionResult } from '@/lib/api/errors';
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -44,10 +47,11 @@ function useRepair(onDone: () => void) {
   return { run, busy, error, notice };
 }
 
-function RepairControls({ ids, onDone, testId }: { ids: string[]; onDone: () => void; testId: string }) {
+function RepairControls({ ids, failures, onDone, testId }: { ids: string[]; failures: Readonly<Record<string, VideoFailure>>; onDone: () => void; testId: string }) {
   const { t } = useLanguage();
   const { run, busy, error, notice } = useRepair(onDone);
   const [reason, setReason] = useState('');
+  const { mayRetry, dialog } = useRetryConfirm(failures);
   const count = ids.length;
   const disabled = count === 0 || !!busy;
   return (
@@ -55,7 +59,7 @@ function RepairControls({ ids, onDone, testId }: { ids: string[]; onDone: () => 
       <button type="button" className={smallButtonClass} disabled={disabled} onClick={() => run('sync', () => syncProcessing(ids, false), t('processing.queued', { count }))} data-testid={`${testId}-sync`}>
         {busy === 'sync' ? t('content.working') : t('processing.sync')}
       </button>
-      <button type="button" className={smallButtonClass} disabled={disabled} onClick={() => run('retry', () => retryProcessing(ids), t('processing.retried', { count }))} data-testid={`${testId}-retry`}>
+      <button type="button" className={smallButtonClass} disabled={disabled} onClick={async () => (await mayRetry(ids)) && run('retry', () => retryFailed(ids, failures), t('processing.retried', { count }))} data-testid={`${testId}-retry`}>
         {busy === 'retry' ? t('content.working') : t('processing.retry')}
       </button>
       <label className="flex flex-col gap-1 text-xs text-fg-muted">
@@ -75,24 +79,28 @@ function RepairControls({ ids, onDone, testId }: { ids: string[]; onDone: () => 
         {error && <span role="alert" className="text-danger-fg">{error}</span>}
         {notice && <span className="text-success-fg">{notice}</span>}
       </span>
+      {dialog}
     </div>
   );
 }
 
 export interface VideoBulkSlotProps {
   selectedIds: string[];
+  /** Why the listed videos failed, by id (the failed ones only) */
+  failures: Readonly<Record<string, VideoFailure>>;
   permissions: AdminContentPermission[];
   onDone: () => void;
 }
 
 /** In the /videos bulk bar (`data-slot="video-bulk-actions-extensions"`). */
-export function VideoBulkActionsSlot({ selectedIds, permissions, onDone }: VideoBulkSlotProps): React.ReactNode {
+export function VideoBulkActionsSlot({ selectedIds, failures, permissions, onDone }: VideoBulkSlotProps): React.ReactNode {
   if (!permissions.includes('videos:manage')) return null;
-  return <RepairControls ids={selectedIds} onDone={onDone} testId="video-bulk-repair" />;
+  return <RepairControls ids={selectedIds} failures={failures} onDone={onDone} testId="video-bulk-repair" />;
 }
 
 export interface VideoActionsSlotProps {
   videoId: string;
+  failure: VideoFailure | null;
   status: string | null;
   processing: { status: string; encodeProgress: number | null; resolutions: string[] } | null;
   permissions: AdminContentPermission[];
@@ -100,7 +108,7 @@ export interface VideoActionsSlotProps {
 }
 
 /** On /videos/[id] (`data-slot="video-actions-extensions"`). */
-export function VideoActionsSlot({ videoId, permissions, onDone }: VideoActionsSlotProps): React.ReactNode {
+export function VideoActionsSlot({ videoId, failure, permissions, onDone }: VideoActionsSlotProps): React.ReactNode {
   if (!permissions.includes('videos:manage')) return null;
-  return <RepairControls ids={[videoId]} onDone={onDone} testId="video-repair" />;
+  return <RepairControls ids={[videoId]} failures={failure ? { [videoId]: failure } : {}} onDone={onDone} testId="video-repair" />;
 }

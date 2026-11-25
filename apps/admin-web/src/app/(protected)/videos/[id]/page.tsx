@@ -12,6 +12,8 @@ import { JobsPanel } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
+import { videoFailuresById } from '@/lib/api/failures';
+import { FailureWhy } from '@/components/content/failure';
 import { VideoActions } from './VideoActions';
 import { VideoPlayer } from './VideoPlayer';
 import { ProcessingCard } from './ProcessingCard';
@@ -91,6 +93,8 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
   }
 
   const v = video;
+  const mayHaveFailed = v.status === 'failed' || v.r2?.status === 'failed' || !!v.processingIssue;
+  const failure = mayHaveFailed && canManageMedia(session?.user.role) ? ((await videoFailuresById([v.id]))[v.id] ?? null) : null;
   const statusLabel = v.status ? t(`videos.statusLabels.${v.status}` as MessageKey) : t('content.none');
   const holds = v.suspensionHolds.map((h) => HOLD_LABEL[h.split(':')[0]]).filter(Boolean);
   const unpublished = v.suspensionHolds.includes('admin:unpublished');
@@ -133,12 +137,20 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
               <span className="text-fg-muted">{t('videos.status')}:</span>
               <Chip tone={statusTone(v.status)}>{statusLabel}</Chip>
             </p>
+            {failure && (
+              <div className="mb-4 rounded border border-danger-border bg-danger-bg/40 p-3" data-testid="video-failure">
+                <h3 className="mb-1 text-base font-semibold text-fg">{t('videoFailure.title')}</h3>
+                <FailureWhy failure={failure} t={t} />
+              </div>
+            )}
             <ProcessingCard
               videoId={v.id}
               processing={v.processing}
-              processingIssue={v.processingIssue ?? null}
+              // The words above say why; the stored reason is English, for the logs
+              processingIssue={v.processingIssue && failure ? { kind: v.processingIssue.kind, at: v.processingIssue.at } : (v.processingIssue ?? null)}
               fallbackResolutions={v.availableResolutions}
               r2={v.r2}
+              failure={failure}
               canManage={canManageMedia(session?.user.role)}
             />
           </SectionCard>
@@ -207,6 +219,7 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
               height: v.height,
             }}
             permissions={permissions}
+            failure={failure}
           />
         </div>
 

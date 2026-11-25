@@ -8,10 +8,11 @@
  * a soft delete restorable for 30 days), keyboard support, cards on a phone.
  */
 import { R2Badge } from '@/components/content/r2';
+import { FailureWhy } from '@/components/content/failure';
 import Link from '@/components/AppLink';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdminContentPermission, AdminVideoRow } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
@@ -19,7 +20,9 @@ import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
 import { Chip, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
 import { adminVideoTitle } from '@/lib/video-title';
-import { formatClock } from '@al-ummah/shared-types';
+import { formatClock, type VideoFailure } from '@al-ummah/shared-types';
+import { getVideoFailures } from '@/lib/api/admin';
+import { failureIds } from '@/lib/video-failure';
 import { BulkBar } from '@/components/list/BulkBar';
 import { DataTable, type DataColumn } from '@/components/list/DataTable';
 import { FiltersBar, type FilterField } from '@/components/list/FiltersBar';
@@ -114,7 +117,7 @@ export function VideosList() {
   const views: SavedViewTab[] = [
     { id: 'all', label: t('list.views.all'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, {})) },
     { id: 'processing', label: t('videos.statusLabels.processing'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'processing' })), countTestId: 'processing-count' },
-    { id: 'failed', label: t('videos.statusLabels.failed'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'failed' })), alertWhenNonZero: true, countTestId: 'failed-count' },
+    { id: 'failed', label: t('videos.processingFailed'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'failed' })), alertWhenNonZero: true, countTestId: 'failed-count' },
     { id: 'reported', label: t('list.views.reported'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { reported: 'yes' })) },
     { id: 'private', label: t('videos.private'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { visibility: 'private' })) },
   ];
@@ -123,6 +126,20 @@ export function VideosList() {
   const detailHref = useCallback((id: string) => `/videos/${enc(id)}${params.query ? `?${LIST_RETURN_PARAM}=${enc(params.query)}` : ''}`, [params.query]);
 
   const rows = list.rows;
+  // Why the failed ones of this page failed (Bunny or R2) and what to do: one read, only when there is one
+  const failedIds = useMemo(() => failureIds(rows.map((r) => ({ id: r.id, failed: r.status === 'failed' || r.r2?.status === 'failed' }))), [rows]);
+  const failuresQuery = useQuery({
+    queryKey: ['video-failures', failedIds],
+    enabled: canManage && failedIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const result = await getVideoFailures(failedIds);
+      if (!result.ok) throw new Error(`failures ${result.status}`);
+      return Object.fromEntries(result.data.items.map((f) => [f.videoId, f])) as Record<string, VideoFailure>;
+    },
+    retry: 1,
+  });
+  const failures = failuresQuery.data ?? {};
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const chosen = rows.filter((r) => selected.has(r.id)).map((r) => r.id);
 
@@ -223,31 +240,35 @@ export function VideosList() {
       cell: (v) => {
         const time = duration(v.duration, locale);
         return (
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="relative shrink-0">
-              {v.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- remote thumbnails from the images CDN
-                <img src={v.thumbnailUrl} alt="" className="h-12 w-20 sm:h-14 sm:w-24 rounded object-cover bg-surface-2" loading="lazy" />
-              ) : (
-                <span aria-hidden="true" className="block h-12 w-20 sm:h-14 sm:w-24 rounded bg-surface-2" />
-              )}
-              {time && <span className="absolute bottom-1 end-1 rounded bg-fg/80 px-1 text-[10px] text-surface tabular-nums" dir="ltr">{time}</span>}
-            </div>
-            <div className="min-w-0 flex-1">
-              <Link href={detailHref(v.id)} className={`${linkClass} block font-medium`} data-testid="video-link" data-row-primary title={titleOf(v)}>
-                <span className={`clamp-fade-2 ${adminVideoTitle(v, locale) ? '' : 'italic text-fg-muted'}`} data-testid="video-title">
-                  {/* The block keeps the page's direction (a title in the other script lines up with the lines below); <bdi> isolates the title */}
-                  <bdi>{titleOf(v)}</bdi>
+          <div className="min-w-0">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="relative shrink-0">
+                {v.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- remote thumbnails from the images CDN
+                  <img src={v.thumbnailUrl} alt="" className="h-12 w-20 sm:h-14 sm:w-24 rounded object-cover bg-surface-2" loading="lazy" />
+                ) : (
+                  <span aria-hidden="true" className="block h-12 w-20 sm:h-14 sm:w-24 rounded bg-surface-2" />
+                )}
+                {time && <span className="absolute bottom-1 end-1 rounded bg-fg/80 px-1 text-[10px] text-surface tabular-nums" dir="ltr">{time}</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <Link href={detailHref(v.id)} className={`${linkClass} block font-medium`} data-testid="video-link" data-row-primary title={titleOf(v)}>
+                  <span className={`clamp-fade-2 ${adminVideoTitle(v, locale) ? '' : 'italic text-fg-muted'}`} data-testid="video-title">
+                    {/* The block keeps the page's direction (a title in the other script lines up with the lines below); <bdi> isolates the title */}
+                    <bdi>{titleOf(v)}</bdi>
+                  </span>
+                </Link>
+                {/* The channel and views, while their columns are hidden (phone, or a narrow table beside the sidebar) */}
+                {/* The channel and the views on their own lines while their columns are hidden: no separator
+                    left dangling when a long channel name wraps, and each isolated from the other's direction */}
+                <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words">
+                  <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
                 </span>
-              </Link>
-              {/* The channel and views, while their columns are hidden (phone, or a narrow table beside the sidebar) */}
-              {/* The channel and the views on their own lines while their columns are hidden: no separator
-                  left dangling when a long channel name wraps, and each isolated from the other's direction */}
-              <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words">
-                <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
-              </span>
-              <span className="block @6xl:hidden text-xs text-fg-muted">{formatCount(v.views, 'view', locale, { compact: true })}</span>
+                <span className="block @6xl:hidden text-xs text-fg-muted">{formatCount(v.views, 'view', locale, { compact: true })}</span>
+              </div>
             </div>
+            {/* Under the thumbnail too: the whole width of the cell */}
+            {failures[v.id] && <FailureWhy failure={failures[v.id]} t={t} className="mt-2" />}
           </div>
         );
       },
@@ -422,6 +443,7 @@ export function VideosList() {
             <div data-slot="video-bulk-actions-extensions">
               <VideoBulkActionsSlot
                 selectedIds={chosen}
+                failures={failures}
                 permissions={permissions}
                 onDone={() => {
                   setSelected(new Set());

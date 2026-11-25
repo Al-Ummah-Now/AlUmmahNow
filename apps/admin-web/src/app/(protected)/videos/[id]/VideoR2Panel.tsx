@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { retryMediaJobs } from '@/lib/api/admin';
 import type { AdminVideoR2 } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import type { VideoFailure } from '@al-ummah/shared-types';
 import { useConfirm } from '@/components/content/actions';
+import { useRetryConfirm } from '@/components/content/failure-retry';
 import { ErrorAlert, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { R2Status } from '@/components/content/r2';
 import { logger } from '@/lib/logger-client';
@@ -17,14 +19,16 @@ interface RetryResult {
 /**
  * The R2 side of the video page (epic #687): the badge, progress, error and
  * failure details, and "Transcode again" (admin-api POST /api/media/retry,
- * media:manage, audited per video). A failed video retries at once; a ready
+ * media:manage, audited per video). A failed video retries at once, unless its
+ * own file is the cause (asks first: it cannot help); a ready
  * one, or one never transcoded, asks first in the in-app dialog because it
  * uses container time.
  */
-export function VideoR2Panel({ videoId, r2, canManage }: { videoId: string; r2: AdminVideoR2 | null; canManage: boolean }) {
+export function VideoR2Panel({ videoId, r2, failure = null, canManage }: { videoId: string; r2: AdminVideoR2 | null; failure?: VideoFailure | null; canManage: boolean }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
+  const { mayRetry, dialog: retryDialog } = useRetryConfirm(failure ? { [videoId]: failure } : {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -40,7 +44,7 @@ export function VideoR2Panel({ videoId, r2, canManage }: { videoId: string; r2: 
         testId: 'video-r2-confirm',
       });
       if (!ok) return;
-    }
+    } else if (!(await mayRetry([videoId]))) return;
     setBusy(true);
     try {
       const result = await retryMediaJobs([videoId]);
@@ -86,6 +90,7 @@ export function VideoR2Panel({ videoId, r2, canManage }: { videoId: string; r2: 
         </div>
       )}
       {dialog}
+      {retryDialog}
     </div>
   );
 }

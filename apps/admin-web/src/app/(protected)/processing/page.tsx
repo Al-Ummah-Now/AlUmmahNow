@@ -6,6 +6,8 @@ import { canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
+import { videoFailuresById } from '@/lib/api/failures';
+import { failureIds } from '@/lib/video-failure';
 import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
 import { ProcessingTable } from './ProcessingTable';
 import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
@@ -21,7 +23,7 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-/** Upload processing health: stuck uploads next to Bunny's state, with Sync / Retry / Mark failed, and the thumbnail shape check. */
+/** Upload processing health: stuck and failed uploads (on Bunny or on R2) with why and what to do, next to Bunny's and R2's state, with Sync / Retry / Mark failed, and the thumbnail shape check. */
 export default async function ProcessingHealthPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filter = parseFilter(params.status);
@@ -41,6 +43,8 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
     logger.error('[processing] Failed to load thumbnail runs', { error: thumbs.reason instanceof Error ? thumbs.reason.message : String(thumbs.reason) });
   }
   const r = data?.reconciler;
+
+  const failures = await videoFailuresById(failureIds((data?.items ?? []).map((v) => ({ id: v.id, failed: v.uploadStatus === 'failed' || v.r2Status === 'failed' || !!v.processingIssue }))));
 
   return (
     <div>
@@ -84,7 +88,7 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
       {data && data.items.length === 0 && (
         <div className={`${cardClass} text-center text-fg-muted`} data-testid="processing-empty">{t('processing.empty')}</div>
       )}
-      {data && data.items.length > 0 && <ProcessingTable rows={data.items} locale={locale} />}
+      {data && data.items.length > 0 && <ProcessingTable rows={data.items} failures={failures} locale={locale} />}
     </div>
   );
 }

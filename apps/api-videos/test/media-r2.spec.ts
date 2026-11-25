@@ -580,15 +580,17 @@ describe('failure details', () => {
 			return new Response('{}');
 		}) as typeof fetch;
 		try {
-			for (const error of ['source_changed', 'no_video_stream']) {
+			for (const [error, sourceFacts] of [['source_changed', undefined], ['no_video_stream', undefined], ['no_video_stream', AUDIO]] as const) {
 				const { env, raw } = setup();
 				Object.assign(env, { ERRORS_INGEST_URL: 'https://errors.example.com/ingest', INTERNAL_API_KEY: 'k' });
 				await enqueueTranscode(env, ID, 'upload');
 				const waits: Promise<unknown>[] = [];
-				await applyJobEvent(env, { waitUntil: (p: Promise<unknown>) => void waits.push(p) } as never, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error, final: true }));
+				await applyJobEvent(env, { waitUntil: (p: Promise<unknown>) => void waits.push(p) } as never, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error, final: true, ...(sourceFacts ? { sourceFacts } : {}) } as never));
 				await Promise.all(waits);
 				const text = JSON.stringify(bodies.splice(0));
-				assert.equal(text.includes('Transcode again'), error !== 'source_changed', text);
+				// Nor for a file that is the cause itself
+				assert.equal(text.includes('Transcode again'), error !== 'source_changed' && !sourceFacts, text);
+				assert.ok(text.includes(`/delivery?video=${ID}#transcode-troubleshooting`), 'the one place that says why');
 			}
 		} finally {
 			globalThis.fetch = real;

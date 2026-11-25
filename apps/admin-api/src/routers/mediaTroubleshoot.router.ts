@@ -3,7 +3,7 @@
  * 2026-11-14: "why the logs are not on admin to troubleshoot?". Mounted inside media.router, so
  * every route needs media:manage; setting, testing or removing the token needs a super admin.
  *
- *   GET    /                      { jobs, status, token }: api-videos' per-job view, merged with the
+ *   GET    /?video=               { jobs, status, token }: api-videos' per-job view, merged with the
  *                                 container instances, and the live container / queue status
  *   GET    /logs?q=&hours=&source=   recent media Worker warn/error and transcoder container lines
  *   POST   /jobs/:videoId/retry-now  queued admin job (audited, key media:video:<id>)
@@ -90,8 +90,10 @@ export function mergeInstances(jobs: TroubleshootJobs, containers: TroubleshootS
 }
 
 app.get('/', async (c) => {
+  // The video a link names: its finished job too, however old
+  const video = VIDEO_ID.test(c.req.query('video') ?? '') ? c.req.query('video') : undefined;
   const [jobsResult, liveResult, cf] = await Promise.allSettled([
-    callVideosInternal<TroubleshootJobs>(c.env, '/internal/media/troubleshoot'),
+    callVideosInternal<TroubleshootJobs>(c.env, '/internal/media/troubleshoot', { query: { video } }),
     callVideosInternal<{ live: { queued: number; oldestQueuedAt: string | null; oldestQueuedSeconds: number | null } }>(c.env, '/internal/media/summary', { query: { only: 'live' } }),
     cfContext(c),
   ]);

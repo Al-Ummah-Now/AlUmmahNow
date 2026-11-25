@@ -3,13 +3,14 @@ import type { BunnyState, ProcessingCheckState, ProcessingIssueKind, ThumbnailOu
 
 type T = (key: MessageKey, params?: Record<string, string | number>) => string;
 
-export const PROCESSING_FILTERS = ['stuck', 'processing', 'failed', 'stalled', 'needs_reupload', 'all'] as const;
+export const PROCESSING_FILTERS = ['stuck', 'processing', 'failed', 'r2_failed', 'stalled', 'needs_reupload', 'all'] as const;
 export type ProcessingFilter = (typeof PROCESSING_FILTERS)[number];
 
 export const FILTER_LABEL: Record<ProcessingFilter, MessageKey> = {
   stuck: 'processing.filterStuck',
   processing: 'processing.filterProcessing',
   failed: 'processing.filterFailed',
+  r2_failed: 'processing.filterR2Failed',
   stalled: 'processing.filterStalled',
   needs_reupload: 'processing.filterNeedsReupload',
   all: 'processing.filterAll',

@@ -8,6 +8,8 @@ import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
+import { videoFailuresById } from '@/lib/api/failures';
+import { failureIds } from '@/lib/video-failure';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
@@ -63,22 +65,30 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     );
   }
 
+  const videoParam = Array.isArray(params.video) ? params.video[0] : params.video;
+  const focusVideo = typeof videoParam === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(videoParam) ? videoParam : null;
   const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult, budgetResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
     getMediaQoeLive(),
-    getTranscodeTroubleshoot(),
+    getTranscodeTroubleshoot(focusVideo),
     getMonthlyBudget(),
   ]);
   const troubleshoot = troubleshootResult.status === 'fulfilled' && troubleshootResult.value.ok ? troubleshootResult.value.data : null;
   if (troubleshootResult.status === 'fulfilled' && !troubleshootResult.value.ok) logger.warn('[delivery] Troubleshoot view unavailable', { status: troubleshootResult.value.status });
-  const videoParam = Array.isArray(params.video) ? params.video[0] : params.video;
-  const focusVideo = typeof videoParam === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(videoParam) ? videoParam : null;
   // The one admin-set budget (Costs → Alert settings); null while unset or unavailable
   const budgetUsd = settled(budgetResult, 'budget');
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
+  // Why the failed ones failed: the linked video first, the panel's jobs, the recent transcodes
+  const failures = await videoFailuresById(
+    failureIds([
+      ...(focusVideo ? [{ id: focusVideo, failed: true }] : []),
+      ...(troubleshoot?.jobs?.items ?? []).map((j) => ({ id: j.videoId, failed: j.state === 'failed' })),
+      ...(jobs ?? []).map((j) => ({ id: j.video_id, failed: j.status === 'failed' })),
+    ]),
+  );
   const query = (next: Record<string, string>) => `?${new URLSearchParams({ days: String(days), ...(filter === 'all' ? {} : { status: filter }), ...next })}`;
 
   return (
@@ -101,7 +111,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         </>
       )}
 
-      <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} />
+      <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} failures={failures} />
 
       {/* The period filters only the sections under it, so its buttons sit right above them */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
@@ -153,7 +163,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         </div>
         {!jobs && <ErrorAlert testId="delivery-jobs-error">{t('mediaDelivery.jobsLoadFailed')}</ErrorAlert>}
         {jobs && jobs.length === 0 && <div className={`${cardClass} text-center text-fg-muted`} data-testid="delivery-jobs-empty">{t('mediaDelivery.jobsEmpty')}</div>}
-        {jobs && jobs.length > 0 && <JobsTable jobs={jobs} />}
+        {jobs && jobs.length > 0 && <JobsTable jobs={jobs} failures={failures} />}
       </section>
     </div>
   );

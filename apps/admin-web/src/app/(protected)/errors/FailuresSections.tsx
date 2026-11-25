@@ -11,6 +11,10 @@ import { getContentPermissions, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
+import type { VideoFailure } from '@al-ummah/shared-types';
+import { videoFailuresById } from '@/lib/api/failures';
+import { failureIds } from '@/lib/video-failure';
+import { FailureWhy } from '@/components/content/failure';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
 import { jobProgress, repairHref, thumbnailFixHref } from './filters';
 import { IndexRebuildButton } from './IndexRebuildButton';
@@ -72,6 +76,8 @@ export interface Failures {
   canProcess: boolean;
   /** Failed or flagged uploads and dead-lettered processing checks (videos:processing); null when it could not load */
   data: ProcessingErrorsResponse | null;
+  /** Why those videos failed and what to do, by id */
+  videoFailures: Readonly<Record<string, VideoFailure>>;
   /** Contact us emails that failed after the mail queue's retries (contact inbox roles) */
   contactFailed: ContactListResponse | null;
   /** Videos Bunny cannot describe (no length or size): a Short/video decision is needed (videos:format, admins) */
@@ -92,6 +98,7 @@ export async function loadFailures(role: string | undefined): Promise<Failures> 
       logger.error('[errors] Failed to load processing failures', { error: e instanceof Error ? e.message : String(e) });
     }
   }
+  const videoFailures = data ? await videoFailuresById(failureIds(data.videos.map((v) => ({ id: v.id, failed: true })))) : {};
   let contactFailed: ContactListResponse | null = null;
   if (canUseContactInbox(role)) {
     try {
@@ -117,7 +124,7 @@ export async function loadFailures(role: string | undefined): Promise<Failures> 
       logger.error('[errors] Failed to load failed admin jobs', { error: e instanceof Error ? e.message : String(e) });
     }
   }
-  return { canProcess, data, contactFailed, formatFlagged, failedJobs, jobPermissions };
+  return { canProcess, data, videoFailures, contactFailed, formatFlagged, failedJobs, jobPermissions };
 }
 
 /** True when any section has something for an admin to do. */
@@ -153,7 +160,7 @@ export function hasFailures(f: Failures): boolean {
  * (heavy content actions) that failed after their retries, with Retry.
  */
 export function FailuresSections({ failures, t, locale }: { failures: Failures; t: Awaited<ReturnType<typeof getI18n>>['t']; locale: Awaited<ReturnType<typeof getI18n>>['locale'] }) {
-  const { canProcess, data, contactFailed, formatFlagged, failedJobs, jobPermissions } = failures;
+  const { canProcess, data, videoFailures, contactFailed, formatFlagged, failedJobs, jobPermissions } = failures;
   return (
     <>
       {canProcess && !data && <ErrorAlert testId="errors-processing-error">{t('errorsPage.processingLoadFailed')}</ErrorAlert>}
@@ -388,10 +395,9 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <caption className="sr-only">{t('errorsPage.videosTitle')}</caption>
                 <thead className="border-b border-border">
                   <tr>
+                    <th className={thClass} scope="col">{t('processing.colVideoWhy')}</th>
                     <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
                     <th className={thClass} scope="col">{t('processing.colOurs')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,15 +405,15 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     const when = v.processingIssue?.at || v.dateModified;
                     return (
                       <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                        <td className={tdClass}>{when ? <LocalTime value={when} withTime /> : '—'}</td>
-                        <td className={tdClass}>
-                          <div className="font-medium text-fg">{v.title || v.id}</div>
-                          <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
+                        <td className={`${tdClass} min-w-[17rem]`}>
+                          <div className="font-medium text-fg"><bdi>{v.title || v.id}</bdi></div>
+                          <div className="text-fg-muted text-xs"><bdi dir="ltr">{v.id}</bdi></div>
+                          {videoFailures[v.id] ? <FailureWhy failure={videoFailures[v.id]} t={t} className="mt-2" /> : <div className="mt-1 text-fg-muted">{t('errorsPage.noReason')}</div>}
                         </td>
+                        <td className={tdClass}>{when ? <LocalTime value={when} withTime /> : '—'}</td>
                         <td className={tdClass}>
                           {v.processingIssue ? t(ISSUE_LABEL[v.processingIssue.kind]) : ourStatusLabel(t, v.uploadStatus)}
                         </td>
-                        <td className={tdClass}>{v.processingIssue?.reason || t('errorsPage.noReason')}</td>
                       </tr>
                     );
                   })}

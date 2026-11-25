@@ -2,7 +2,12 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { markProcessingFailed, retryProcessing, syncProcessing } from '@/lib/api/admin';
+import type { VideoFailure } from '@al-ummah/shared-types';
+import { markProcessingFailed, syncProcessing } from '@/lib/api/admin';
+import { retryFailed } from '@/lib/retry-failed';
+import { FailureWhy } from '@/components/content/failure';
+import { useRetryConfirm } from '@/components/content/failure-retry';
+import { R2Badge } from '@/components/content/r2';
 import type { ActionResult } from '@/lib/api/errors';
 import type { ProcessingVideoRow, SyncPreview } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
@@ -18,11 +23,11 @@ const thClass = 'text-start px-3 py-3 text-fg-muted font-medium whitespace-nowra
 const tdClass = 'px-3 py-3 align-top text-sm';
 
 /**
- * Stuck uploads with Bunny's state next to ours. Sync from Bunny always
+ * Stuck and failed uploads with Bunny's and R2's state next to ours, why and what to do. Sync from Bunny always
  * shows a dry-run preview first; applying, Retry and Mark failed go through
  * admin-api (permission + audit) and queue the work in api-videos.
  */
-export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: Locale }) {
+export function ProcessingTable({ rows, failures }: { rows: ProcessingVideoRow[]; /** Why the failed ones failed, by id */ failures: Readonly<Record<string, VideoFailure>>; locale: Locale }) {
   const router = useRouter();
   const { t } = useLanguage();
   const ids = useId();
@@ -33,6 +38,7 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
   const [preview, setPreview] = useState<SyncPreview[] | null>(null);
   const [reason, setReason] = useState('');
 
+  const { mayRetry, dialog } = useRetryConfirm(failures);
   const chosen = [...selected];
   const allSelected = rows.length > 0 && selected.size === rows.length;
   const titleOf = (id: string) => rows.find((r) => r.id === id)?.title || id;
@@ -77,8 +83,9 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
       router.refresh();
     });
 
-  const retry = () =>
-    run('retry', () => retryProcessing(chosen), () => {
+  const retry = async () =>
+    (await mayRetry(chosen)) &&
+    run('retry', () => retryFailed(chosen, failures), () => {
       setNotice(t('processing.retried', { count: chosen.length }));
       setSelected(new Set());
       router.refresh();
@@ -103,6 +110,7 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
 
   return (
     <div className="space-y-4">
+      {dialog}
       {error && <ErrorAlert testId="processing-action-error">{error}</ErrorAlert>}
       {notice && (
         <p role="status" className="rounded border border-border bg-surface-2 px-4 py-3 text-fg" data-testid="processing-notice">
@@ -166,11 +174,11 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
                   onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                 />
               </th>
-              <th className={thClass} scope="col">{t('processing.colVideo')}</th>
+              <th className={thClass} scope="col">{t('processing.colVideoWhy')}</th>
               <th className={thClass} scope="col">{t('processing.colOurs')}</th>
               <th className={thClass} scope="col">{t('processing.colBunny')}</th>
+              <th className={thClass} scope="col">{t('processing.colR2')}</th>
               <th className={thClass} scope="col">{t('processing.colCheck')}</th>
-              <th className={thClass} scope="col">{t('processing.colIssue')}</th>
             </tr>
           </thead>
           <tbody>
@@ -184,10 +192,15 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
                     onChange={() => toggle(row.id)}
                   />
                 </td>
-                <td className={tdClass}>
-                  <div className="font-medium text-fg">{row.title || row.id}</div>
-                  <div className="text-fg-muted text-xs" dir="ltr">{row.id}</div>
+                <td className={`${tdClass} min-w-[17rem]`}>
+                  <div className="font-medium text-fg"><bdi>{row.title || row.id}</bdi></div>
+                  <div className="text-fg-muted text-xs"><bdi dir="ltr">{row.id}</bdi></div>
                   {row.dateCreated && <div className="text-fg-muted text-xs">{fillNodes(t('processing.created'), { date: <LocalTime value={row.dateCreated} withTime /> })}</div>}
+                  {failures[row.id] ? (
+                    <FailureWhy failure={failures[row.id]} t={t} className="mt-2" />
+                  ) : (
+                    row.processingIssue && <div className="mt-1 text-fg font-medium">{t(ISSUE_LABEL[row.processingIssue.kind])}</div>
+                  )}
                 </td>
                 <td className={tdClass}>
                   <div className="text-fg">{ourStatusLabel(t, row.uploadStatus)}</div>
@@ -199,21 +212,14 @@ export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: 
                     <div className="text-fg-muted text-xs" dir="ltr">{row.bunny.availableResolutions}</div>
                   )}
                 </td>
+                <td className={tdClass} data-r2-status={row.r2Status ?? 'none'}>
+                  {row.r2Status !== undefined && <R2Badge r2={row.r2Status ? { status: row.r2Status as 'failed' } : null} t={t} prefix={false} />}
+                </td>
                 <td className={tdClass}>
                   {/* The next check time goes in as <LocalTime> (local with zone, UTC on hover) */}
                   {fillNodes(checkLabel(t, row.processingCheck, () => '{date}'), {
                     date: row.processingCheck?.nextCheckAt ? <LocalTime value={row.processingCheck.nextCheckAt} withTime /> : '',
                   })}
-                </td>
-                <td className={tdClass}>
-                  {row.processingIssue ? (
-                    <>
-                      <div className="text-fg font-medium">{t(ISSUE_LABEL[row.processingIssue.kind])}</div>
-                      {row.processingIssue.reason && <div className="text-fg-muted text-xs">{row.processingIssue.reason}</div>}
-                    </>
-                  ) : (
-                    <span className="text-fg-muted">—</span>
-                  )}
                 </td>
               </tr>
             ))}

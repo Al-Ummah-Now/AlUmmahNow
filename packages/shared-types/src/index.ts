@@ -176,6 +176,7 @@ export * from './social';
 export * from './import-sources';
 // R2 transcode troubleshooting: reason codes, per-job view, stall rules, log scrubbing (videos admin → Delivery)
 export * from './media-troubleshoot';
+export * from './video-failure';
 export * from './app-config';
 export * from './app-updates';
 export * from './cost-credentials';

@@ -219,6 +219,13 @@ admin to troubleshoot?"). Needs `media:manage`; the token needs a super admin.
   max, queued/started/next try, the last error in words (`transcodeErrorReason` in
   `packages/shared-types/src/media-troubleshoot.ts`; the raw, scrubbed error is one click away) and
   the container instance (named by the video id) with its state from the Containers API.
+- **One reason everywhere.** `explainVideoFailure` (`packages/shared-types/src/video-failure.ts`) turns a
+  failure into its reason, its cause (the file, our side, not known) and what to do. The Videos list, the
+  video page, Processing, Delivery and Errors all show it (`FailureWhy`), with the file's name, and link to
+  this panel (`/delivery?video=<id>`; that video's failed job is listed however old). They read it from
+  `GET /api/media/failures?ids=` (admin-api adds the imported file's name). A video counts as failed when its
+  upload or Bunny did, or when its R2 transcode did while Bunny's copy plays. When the file is the cause,
+  Errors offers no Retry and the other pages ask first.
 - **Start failures are kept.** When a start fails the queue consumer notes it on the video's
   transcoder (`noteStartFailure`), so a job that never started shows "Start failed, retrying", the
   reason and the next try instead of a bare "queued".

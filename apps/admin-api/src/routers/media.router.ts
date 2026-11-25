@@ -35,7 +35,7 @@
  * api-videos and removes it again if the call fails, so no change goes unaudited.
  */
 import { Hono, type Context } from 'hono';
-import { normaliseMediaSettings, settingsProblems, TRANSCODE_LIMIT_AUDIT_KEY, transcodeRangeProblem } from '@al-ummah/shared-types';
+import { normaliseMediaSettings, settingsProblems, TRANSCODE_LIMIT_AUDIT_KEY, transcodeRangeProblem, VIDEO_FAILURES_MAX, type VideoFailure } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
@@ -137,6 +137,41 @@ app.get('/jobs', async (c) => {
   const result = await callVideosInternal(c.env, '/internal/media/jobs', { query: { status, limit: c.req.query('limit') } });
   return c.json({ success: true, result });
 });
+
+/**
+ * Why videos failed (shared-types video-failure.ts): the one answer of every admin page that shows them. api-videos
+ * knows why; the name of an imported file is the import's (import_items, one index seek per id).
+ */
+app.get('/failures', async (c) => {
+  const ids = [...new Set((c.req.query('ids') ?? '').split(',').filter(Boolean))];
+  if (!ids.length || ids.length > VIDEO_FAILURES_MAX || !ids.every((id) => /^[A-Za-z0-9-]{8,64}$/.test(id))) return bad(c, `ids must be 1-${VIDEO_FAILURES_MAX} video ids`);
+  const { items } = await callVideosInternal<{ items: VideoFailure[] }>(c.env, '/internal/media/failures', { query: { ids: ids.join(',') } });
+  const files = items.length ? await importedFiles(c, items.map((f) => f.videoId)) : new Map<string, { file_name: string; batch_id: string }>();
+  return c.json({
+    success: true,
+    result: {
+      items: items.map((f) => {
+        const file = files.get(f.videoId);
+        return file ? { ...f, fileName: file.file_name, importBatchId: file.batch_id } : f;
+      }),
+    },
+  });
+});
+
+/** The newest import item of each video. Without it the failures still say why. */
+async function importedFiles(c: C, ids: string[]): Promise<Map<string, { file_name: string; batch_id: string }>> {
+  try {
+    const { results } = await c.env.REPORTS_DB.prepare(
+      'SELECT i.video_id, i.file_name, i.batch_id FROM json_each(?) j CROSS JOIN import_items i INDEXED BY idx_import_items_video ON i.video_id = j.value WHERE i.video_id IS NOT NULL ORDER BY i.created_at',
+    )
+      .bind(JSON.stringify(ids))
+      .all<{ video_id: string; file_name: string; batch_id: string }>();
+    return new Map((results ?? []).map((r) => [r.video_id, r]));
+  } catch (error) {
+    logger.warn('[Media] Imported file names unavailable', { error: error instanceof Error ? error.message : String(error) });
+    return new Map();
+  }
+}
 
 /** Transcode again (failed jobs, or any video an admin wants re-encoded). */
 app.post('/retry', async (c) => {

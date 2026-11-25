@@ -11,6 +11,7 @@ import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/co
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { hasBoth, hasLanguages, samePair, userTextEdit, userTextErrors, userTextPair, type LocalizedPair } from '@/lib/localized';
+import type { VideoFailure } from '@al-ummah/shared-types';
 import { VideoActionsSlot } from '../extensions';
 import { ThumbnailCropDialog, loadImageFile } from '@/components/content/ThumbnailCropDialog';
 import { shapesMatch, type ThumbnailCropSize } from '@al-ummah/shared-types';
@@ -33,10 +34,12 @@ interface Props {
     height?: number | null;
   };
   permissions: AdminContentPermission[];
+  /** Why it failed, when it did */
+  failure?: VideoFailure | null;
 }
 
 /** Edit, thumbnail, move, publishing, reprocess, media repair and delete for one video; each only for roles that may. */
-export function VideoActions({ video, permissions }: Props) {
+export function VideoActions({ video, permissions, failure = null }: Props) {
   const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -231,7 +234,7 @@ export function VideoActions({ video, permissions }: Props) {
             </button>
           </div>
           <div className="mt-4" data-slot="video-actions-extensions">
-            <VideoActionsSlot videoId={video.id} status={video.status} processing={video.processing} permissions={permissions} onDone={() => router.refresh()} />
+            <VideoActionsSlot videoId={video.id} failure={failure} status={video.status} processing={video.processing} permissions={permissions} onDone={() => router.refresh()} />
           </div>
         </SectionCard>
       )}

@@ -21,6 +21,7 @@
  *   /internal/media/backfill/*            the R2 backfill and Bunny retirement (backfillInternal.ts)
  *   GET  /internal/media/troubleshoot      the troubleshooting panel's jobs (lib/media/troubleshoot.ts): queued,
  *                                          running, waiting and recent failed/cancelled, with the Transcoder's view
+ *   GET  /internal/media/failures?ids=a,b  why these videos failed (lib/media/failures.ts); ids without a failure are left out
  *   POST /internal/media/troubleshoot/actions  { action: retry-now | cancel, videoId, actorId } → 202 { job }
  *                                          (admin-jobs queue: retry with backoff, DLQ, Errors page item when it gives up)
  *   POST /internal/media/troubleshoot/retry-now  { videoId } (the Errors page "Retry now" of a stall) → { job }
@@ -39,13 +40,15 @@ import { MediaSettingsError, readMediaSettings, saveMediaSettings } from '../../
 import { setVideoOverride } from '../../lib/media/video-override';
 import { createBackfillInternalRouter } from './backfillInternal';
 import type { LibraryHints } from '../../lib/bunny/libraries';
+import { apiError } from '../../lib/api-error';
+import { readVideoFailures } from '../../lib/media/failures';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
-import { isInternalVideoKey } from '@al-ummah/shared-types';
+import { isInternalVideoKey, VIDEO_FAILURES_MAX } from '@al-ummah/shared-types';
 
 const MAX_IDS = 50;
 
@@ -176,7 +179,17 @@ export function createMediaInternalRouter() {
 		return c.json({ success: true, result: { items: results ?? [] } });
 	});
 
-	app.get('/troubleshoot', async (c) => c.json({ success: true, result: await readTroubleshootJobs(c.env as TroubleshootEnv) }));
+	app.get('/troubleshoot', async (c) => {
+		const focus = c.req.query('video');
+		return c.json({ success: true, result: await readTroubleshootJobs(c.env as TroubleshootEnv, Date.now(), focus && isMediaVideoId(focus) ? focus : undefined) });
+	});
+
+	// Why videos failed, for every admin page that shows them (lib/media/failures.ts)
+	app.get('/failures', async (c) => {
+		const ids = (c.req.query('ids') ?? '').split(',').filter(Boolean);
+		if (!ids.length || ids.length > VIDEO_FAILURES_MAX || !ids.every(isMediaVideoId)) return apiError(c, 400, 'invalid_request', { error: `ids must be 1-${VIDEO_FAILURES_MAX} video ids` });
+		return c.json({ success: true, result: { items: await readVideoFailures(c.env as never, ids) } });
+	});
 
 	/** Retry now / Cancel run as admin jobs (owner rule: queued, retried, failures flag the admin). */
 	const queueAction = async (env: Env, action: 'retry-now' | 'cancel', videoId: string, actorId: string) =>

@@ -18,8 +18,8 @@ describe('processing health', () => {
       for (const key of Object.keys(en[group])) {
         const value = (ar[group] as unknown as Record<string, string | Record<string, string>>)[key];
         assert.ok(value, `${group}.${key} missing in Arabic`);
-        // colBunny is a brand name; timelineHour is placeholders only; plural forms are a nested object
-        if (/^(colBunny|timelineHour)$/.test(key)) continue;
+        // colBunny and colR2 are brand names; timelineHour is placeholders only; plural forms are a nested object
+        if (/^(colBunny|colR2|timelineHour)$/.test(key)) continue;
         for (const text of typeof value === 'object' ? Object.values(value) : [value]) assert.match(text, ARABIC, `${group}.${key} is not Arabic`);
       }
     }
