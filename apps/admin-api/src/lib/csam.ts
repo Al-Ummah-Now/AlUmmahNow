@@ -338,7 +338,14 @@ function neutralReason(caseId: string): string {
 /** `accountOnly`: the videos profile was erased. Nothing is written about the account on videos, and only Auth is asked. */
 async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, actorId: string, accountOnly = false): Promise<CsamFreezeState> {
   const state: CsamFreezeState = json<CsamFreezeState>(row.freeze) ?? {};
-  if (accountOnly) Object.assign(state, { ban: 'no_uploader', account: uploaderId });
+  if (accountOnly) {
+    Object.assign(state, { ban: 'no_uploader', account: uploaderId });
+    // Kept with the freeze only: the report names the account, the case does not. Asked again while it could not be read
+    if (state.accountEmailSource === undefined || state.accountEmailSource === 'unavailable') {
+      const { email, emailSource } = await uploaderAccount(env, uploaderId);
+      Object.assign(state, { accountEmail: email, accountEmailSource: emailSource });
+    }
+  }
   try {
     if (!state.ban) {
       try {
@@ -530,7 +537,9 @@ export async function caseDetail(env: CsamEnv, id: string, actorId: string): Pro
     }
   }
   const freeze = json<CsamFreezeState>(row.freeze);
-  const facts = json<CsamReportFacts>(row.facts) ?? (await captureFacts(env, row.matched_url, row.detected_at, json<CsamResolution>(row.resolution)));
+  const captured = json<CsamReportFacts>(row.facts) ?? (await captureFacts(env, row.matched_url, row.detected_at, json<CsamResolution>(row.resolution)));
+  // An erased profile's: the account the freeze knows, for the report
+  const facts = freeze?.account && !captured.uploader.userId ? { ...captured, uploader: { ...captured.uploader, userId: freeze.account, email: freeze.accountEmail ?? null, emailSource: freeze.accountEmailSource ?? null } } : captured;
   const files = (manifest?.files ?? []).map((f) => ({ name: f.name, bytes: f.bytes, contentType: f.contentType, source: f.source }));
   await logAccess(env.REPORTS_DB, { caseId: id, actorId, action: 'case.viewed', detail: manifest ? { manifest: true } : undefined });
   return {

@@ -34,7 +34,7 @@ function fakeVideos(account: { email: string; deleted: boolean } | null | 'down'
       const reply = (result: unknown, status = 200) => new Response(JSON.stringify(status < 400 ? { success: true, result } : { success: false, code: result }), { status, headers: { 'content-type': 'application/json' } });
       const p = call.path;
       if (p === '/internal/csam/accounts' && !call.body.ids.includes('usr_uploader')) {
-        const known: Record<string, { email: string; deleted: boolean }> = { usr_same: { email: 'same@example.test', deleted: false }, usr_differs: { email: 'account@example.test', deleted: false }, usr_deleted: { email: 'deleted@example.test', deleted: true } };
+        const known: Record<string, { email: string; deleted: boolean }> = { usr_same: { email: 'same@example.test', deleted: false }, usr_differs: { email: 'account@example.test', deleted: false }, usr_deleted: { email: 'deleted@example.test', deleted: true }, usr_erased: { email: 'erased@example.test', deleted: false } };
         return reply({ accounts: Object.fromEntries(Object.entries(known).filter(([id]) => call.body.ids.includes(id))) });
       }
       if (p === '/internal/csam/accounts') return account === 'down' ? reply('auth_unavailable', 503) : reply({ accounts: account && call.body.ids.includes('usr_uploader') ? { usr_uploader: account } : {} });
@@ -219,6 +219,11 @@ describe('intake', () => {
       assert.ok(!row.resolution.includes('usr_erased'));
       const freeze = JSON.parse(row.freeze);
       assert.deepEqual([freeze.ban, freeze.account, freeze.error], ['no_uploader', 'usr_erased', undefined]);
+      // The report facts carry the account, from the freeze record only
+      const facts = (await t.json(`/api/csam/${avatar.id}`)).body.result.facts.uploader;
+      assert.deepEqual([facts.userId, facts.email, facts.emailSource], ['usr_erased', 'erased@example.test', 'auth']);
+      const columns = (await t.db.prepare('SELECT * FROM csam_cases WHERE id = ?').bind(avatar.id).first<Record<string, unknown>>())!;
+      for (const [name, value] of Object.entries(columns)) if (name !== 'freeze') assert.ok(!/usr_erased|erased@example/.test(String(value)), name);
       // Nothing is written about it on videos
       assert.deepEqual(t.videos.calls.filter((c) => c.path.includes('usr_erased')), []);
     }

@@ -127,7 +127,7 @@ At intake, once the case is mapped, admin-api does three things:
 2. It files two Auth moderation requests through `authModerationQueue`: `revoke_sessions` and `suspend_account`. Auth's admins approve them, as with every Auth moderation request (docs/admin/AUTH_MODERATION_REQUESTS.md).
 3. Until both are approved, the case shows them as pending.
 
-For a profile image whose videos profile was erased, only step 2 is done: the case names no uploader, nothing is written about the account on videos, and the account (from the image's own upload row, told to the intake request) is kept with the case's freeze only. Erasing the profile therefore does not keep anyone from being suspended.
+For a profile image whose videos profile was erased, only step 2 is done: the case names no uploader, nothing is written about the account on videos, and the account (from the image's own upload row, told to the intake request) is kept with the case's freeze only, with its sign-in email at that time. The report facts show it from there (§6). Erasing the profile therefore does not keep anyone from being suspended.
 
 A failed request flags the admin (`csam-freeze:<caseId>`) with a Retry.
 
