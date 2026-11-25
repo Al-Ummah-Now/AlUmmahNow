@@ -58,6 +58,7 @@ import {
 	classifySection,
 	classifyVideo,
 	junkCommentIds,
+	publicItem,
 	scheduleEntryVideoId,
 	staleProfileChannels,
 	QA_TARGET,
@@ -511,11 +512,11 @@ async function main(): Promise<void> {
 		const inv = await buildInventory(env, args.minAgeMs);
 		const summary = summarize(inv.items);
 		const index = await indexRows(proxy.env.SEARCH_DB, inv.items);
-		writeFileSync(args.out, JSON.stringify({ generatedAt: new Date().toISOString(), mode: args.apply ? 'apply' : 'dry-run', summary, indexRowsOfDeletedRecords: index, items: inv.items }, null, 2));
+		writeFileSync(args.out, JSON.stringify({ generatedAt: new Date().toISOString(), mode: args.apply ? 'apply' : 'dry-run', summary, indexRowsOfDeletedRecords: index, items: inv.items.map(publicItem) }, null, 2));
 		say(`[cleanup] inventory: ${args.out}`);
 		for (const [kind, counts] of Object.entries(summary)) say(`  ${kind.padEnd(15)} delete ${counts.delete}  keep ${counts.keep}  unsure ${counts.unsure}`);
 		say(`  index rows of records to delete: ${JSON.stringify(index)}`);
-		for (const u of inv.items.filter((i) => i.action === 'unsure')) say(`  unsure ${u.kind} ${u.id} ${JSON.stringify(u.title ?? '')} (${u.owner ?? ''}): ${u.reason}`);
+		for (const u of inv.items.filter((i) => i.action === 'unsure').map(publicItem)) say(`  unsure ${u.kind} ${u.id} (${u.owner ?? ''}): ${u.reason}`);
 		if (!args.apply) {
 			say('[cleanup] dry run: nothing changed (pass --apply to delete)');
 			return;

@@ -255,6 +255,24 @@ export function classifyTabsConfig(key: string, existing: ReadonlySet<string>, d
 	return { action: 'delete', reason: 'tab config of a deleted channel' };
 }
 
+/**
+ * An inventory item as it may be published: this repo is public, so the inventory artifact and the run
+ * log are too. Only what is marked as test data (action 'delete') keeps its title, name, handle or text;
+ * anything else is its kind, id and verdict, and an account that is not a test account is only that.
+ */
+export function publicItem<T extends { kind: string; id: string; action: Action; reason: string; title?: string; owner?: string; parent?: string; detail?: Record<string, unknown> }>(
+	item: T,
+): T {
+	if (item.action === 'delete') return item;
+	const { title: _title, detail: _detail, owner, ...rest } = item;
+	return {
+		...rest,
+		// A handle's key is the handle itself
+		...(item.kind === 'handle' ? { id: 'channel-handles/(not listed)' } : {}),
+		...(owner ? { owner: owner.startsWith('non-test account') ? 'non-test account' : owner.startsWith('unknown') ? 'unknown' : owner } : {}),
+	} as T;
+}
+
 /** Default for --min-age-hours: E2E jobs run up to ~110 minutes. */
 export const DEFAULT_MIN_AGE_MS = 2 * 60 * 60 * 1000;
 
