@@ -41,8 +41,8 @@ const iso = (s: string) => `⁨${s}⁩`;
 const offer = (over: Record<string, unknown> = {}) => ({
   id: 'o1', status: 'offered', createdAt: '2026-11-24T00:00:00Z', expiresAt: new Date(Date.now() + 5.5 * 86_400_000).toISOString(), respondedAt: null, keepContactEmail: false,
   channel: { id: 'ch1', name: 'Morning Adhkar', nameLocalized: { ar: 'أذكار الصباح' }, handle: 'morning', avatarUrl: null },
-  from: { userId: 'u1', name: 'Bilal Ahmed', nameLocalized: { ar: 'بلال أحمد' }, avatarUrl: null },
-  to: { userId: 'u2', name: 'Omar Haddad', avatarUrl: null },
+  from: { name: 'Bilal Ahmed', nameLocalized: { ar: 'بلال أحمد' }, avatarUrl: null },
+  to: { name: 'Omar Haddad', avatarUrl: null },
   viewerRole: 'to',
   ...over,
 });
@@ -54,7 +54,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   window.sessionStorage.clear();
   api.loadMoveState.mockResolvedValue({ offer: null, movableAt: null });
-  api.searchMoveReceivers.mockResolvedValue([{ userId: 'u2', name: 'Omar Haddad', userName: 'omar', avatarUrl: null }]);
+  api.searchMoveReceivers.mockResolvedValue([{ userId: 'u2', name: 'Omar Haddad', nameLocalized: { ar: 'عمر حداد' }, avatarUrl: null }]);
 });
 
 describe('Move channel', () => {
@@ -240,9 +240,27 @@ describe('Offer page', () => {
 });
 
 describe('My offers', () => {
+  it('shows more offers a page at a time, a failed page keeps what is there, and one being accepted says so', async () => {
+    api.loadMyMoveOffers.mockResolvedValueOnce({ received: [offer({ status: 'accepting' })], sent: [], receivedCursor: '7', sentCursor: null });
+    render(<MoveOffers />);
+    const more = await screen.findByTestId('move-offers-received-more');
+    expect(screen.getByTestId('move-offer-starting')).toHaveTextContent(EN.channelMoves.closed.accepting.to);
+    expect(screen.queryByTestId('move-offers-sent-more')).toBeNull();
+    api.loadMyMoveOffers.mockRejectedValueOnce(new MoveApiError('rate_limited', 429));
+    await userEvent.click(more);
+    expect(await screen.findByTestId('move-message')).toHaveTextContent(moveErrorMessage(new MoveApiError('rate_limited', 429), 'en'));
+    expect(screen.getAllByTestId('move-offer-item')).toHaveLength(1);
+    api.loadMyMoveOffers.mockResolvedValueOnce({ received: [offer(), offer({ id: 'o9' })], sent: [], receivedCursor: null, sentCursor: null });
+    await userEvent.click(more);
+    await waitFor(() => expect(screen.getAllByTestId('move-offer-item').map((e) => e.getAttribute('data-offer'))).toEqual(['o1', 'o9']));
+    expect(api.loadMyMoveOffers).toHaveBeenLastCalledWith({ side: 'received', cursor: '7' });
+    expect(screen.queryByTestId('move-offers-received-more')).toBeNull();
+    expect(screen.queryByTestId('move-message')).toBeNull();
+  });
+
   it('lists received and sent offers with names in the page’s language; empty and off', async () => {
     lang = 'ar';
-    api.loadMyMoveOffers.mockResolvedValue({ received: [offer()], sent: [offer({ id: 'o2', viewerRole: 'from', to: { userId: null, name: null, avatarUrl: null } })] });
+    api.loadMyMoveOffers.mockResolvedValue({ received: [offer()], sent: [offer({ id: 'o2', viewerRole: 'from', to: { name: null, avatarUrl: null } })], receivedCursor: null, sentCursor: null });
     const view = render(<MoveOffers />);
     expect(await screen.findByTestId('move-offers-received')).toHaveTextContent('أذكار الصباح');
     expect(screen.getByTestId('move-offers-received')).toHaveTextContent(`وصلك عرض من ${iso('بلال أحمد')} لنقل هذه القناة إليك.`);
@@ -250,7 +268,7 @@ describe('My offers', () => {
     expect(screen.getAllByTestId('move-offer-view').map((a) => a.getAttribute('href'))).toEqual(['/ar/channel-moves/o1', '/ar/channel-moves/o2']);
     expect(view.container.textContent).not.toMatch(/[0-9]/);
     view.unmount();
-    api.loadMyMoveOffers.mockResolvedValue({ received: [], sent: [] });
+    api.loadMyMoveOffers.mockResolvedValue({ received: [], sent: [], receivedCursor: null, sentCursor: null });
     const empty = render(<MoveOffers />);
     expect(await screen.findByTestId('move-offers-empty')).toBeInTheDocument();
     empty.unmount();

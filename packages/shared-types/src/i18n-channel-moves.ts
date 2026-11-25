@@ -38,7 +38,7 @@ export interface ChannelMovesTranslations {
   withdrawText: string;
   withdrawn: string;
   /** Offer page and list */
-  offers: { title: string; description: string; received: string; sent: string; none: string; view: string; someone: string; channel: string };
+  offers: { title: string; description: string; received: string; sent: string; none: string; view: string; more: string; someone: string; channel: string };
   receivedText: string;
   sentText: string;
   becomes: string;
@@ -84,7 +84,7 @@ export const CHANNEL_MOVES_EN: ChannelMovesTranslations = {
   form: {
     receiver: 'New owner',
     receiverHelp: 'One of this channel’s admins.',
-    receiverPlaceholder: 'Search by name or @username',
+    receiverPlaceholder: 'Search by name',
     noAdmins: 'This channel has no admins yet. Make someone a channel admin on the Team page first.',
     noMatches: 'No admin matches.',
     openTeam: 'Open Team',
@@ -113,6 +113,7 @@ export const CHANNEL_MOVES_EN: ChannelMovesTranslations = {
     sent: 'Your offers',
     none: 'There are no open offers.',
     view: 'View offer',
+    more: 'Show more offers',
     someone: 'Someone',
     channel: 'A channel',
   },
@@ -168,7 +169,7 @@ export const CHANNEL_MOVES_AR: ChannelMovesTranslations = {
   form: {
     receiver: 'المالك الجديد',
     receiverHelp: 'أحد مشرفي هذه القناة.',
-    receiverPlaceholder: 'ابحث بالاسم أو اسم المستخدم',
+    receiverPlaceholder: 'ابحث بالاسم',
     noAdmins: 'ليس لهذه القناة مشرفون بعد. عيّن مشرفًا للقناة من صفحة الفريق أولًا.',
     noMatches: 'لا يوجد مشرف مطابق.',
     openTeam: 'فتح صفحة الفريق',
@@ -197,6 +198,7 @@ export const CHANNEL_MOVES_AR: ChannelMovesTranslations = {
     sent: 'عروضك',
     none: 'لا توجد عروض مفتوحة.',
     view: 'عرض التفاصيل',
+    more: 'عرض مزيد من العروض',
     someone: 'أحد الأشخاص',
     channel: 'قناة',
   },
