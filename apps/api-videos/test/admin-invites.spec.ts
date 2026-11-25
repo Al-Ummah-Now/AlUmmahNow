@@ -161,6 +161,15 @@ describe('invited users in videos', () => {
 		assert.deepEqual(detail.body.result.descriptionLocalized, { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' });
 	});
 
+	it('a plain name is still accepted on purpose: the released Admin Tools app sends only that (#1982)', async () => {
+		const { call } = await setup();
+		await call('POST', '/users/provision', { userId: INVITED, email: 'plain.tools@example.com' });
+		const res = await call('POST', `/users/${INVITED}/channels`, { name: 'Plain Tools', description: 'From the app' });
+		assert.equal(res.status, 200);
+		assert.equal(res.body.result.channel.name, 'Plain Tools');
+		assert.equal(res.body.result.channel.nameLocalized, undefined);
+	});
+
 	it('needs the profile first', async () => {
 		const { call } = await setup();
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'X' })).body.code, 'user_not_found');

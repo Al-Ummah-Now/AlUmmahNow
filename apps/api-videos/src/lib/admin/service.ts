@@ -347,15 +347,30 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 		claimed = claim.handle;
 	}
 	let previousHandle: string | undefined;
-	const saved = await channels.updateObject(id, (fresh) => {
-		previousHandle = fresh.handle;
-		for (const [field, text] of texts) applyUserText(fresh, field, text);
-		if (edit.avatarUrl !== undefined) fresh.avatarUrl = edit.avatarUrl ?? undefined;
-		if (edit.coverUrl !== undefined) fresh.coverUrl = edit.coverUrl ?? undefined;
-		if (claimed) fresh.handle = claimed;
-		fresh.dateModified = now();
-	});
-	if (!saved) throw new AdminError(404, 'channel_not_found');
+	// A write that did not land gives its claim back (a concurrent edit can make a text invalid only then)
+	const giveBack = async () => {
+		if (!claimed || !env.channel_tabs) return;
+		await releaseReplacedHandle(env.channel_tabs, env.channels, claimed, id, false).catch((error) => {
+			logger.warn('[AdminContent] Could not give back a handle claim', { channelId: id, handle: claimed, error: error instanceof Error ? error.message : String(error) });
+		});
+	};
+	const saved = await channels
+		.updateObject(id, (fresh) => {
+			previousHandle = fresh.handle;
+			for (const [field, text] of texts) applyUserText(fresh, field, text);
+			if (edit.avatarUrl !== undefined) fresh.avatarUrl = edit.avatarUrl ?? undefined;
+			if (edit.coverUrl !== undefined) fresh.coverUrl = edit.coverUrl ?? undefined;
+			if (claimed) fresh.handle = claimed;
+			fresh.dateModified = now();
+		})
+		.catch(async (error) => {
+			await giveBack();
+			throw error;
+		});
+	if (!saved) {
+		await giveBack();
+		throw new AdminError(404, 'channel_not_found');
+	}
 	if (claimed && previousHandle && env.channel_tabs && handleKey(previousHandle) !== handleKey(claimed)) {
 		await releaseReplacedHandle(env.channel_tabs, env.channels, previousHandle, id);
 	}

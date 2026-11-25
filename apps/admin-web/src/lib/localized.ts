@@ -120,14 +120,17 @@ export function userTextErrors(before: LocalizedPair, after: LocalizedPair, requ
 }
 
 /**
- * What to send: the languages that have text, with the plain text they show. A text stored without languages
- * stays that way while only its own language has text: nothing is rewritten unasked.
+ * What to send: only the languages that changed (an empty one is taken away), so someone else's edit of the other
+ * language stays. A text stored without languages stays that way while only its own language has text: then its
+ * plain text is sent, and nothing is rewritten unasked.
  */
-export function userTextEdit(before: LocalizedPair, after: LocalizedPair, stored: boolean): { plain: string; map?: Partial<LocalizedPair> } {
+export function userTextEdit(before: LocalizedPair, after: LocalizedPair, stored: boolean): { plain: string } | { map: Partial<LocalizedPair> } {
+  const now = { en: after.en.trim(), ar: after.ar.trim() };
+  if (!stored && !hasBoth(now)) {
+    const only = now.en ? 'en' : now.ar ? 'ar' : null;
+    if (only === null || !filled(before[only === 'en' ? 'ar' : 'en'])) return { plain: now.en || now.ar };
+  }
   const map: Partial<LocalizedPair> = {};
-  for (const lang of ['en', 'ar'] as const) if (filled(after[lang])) map[lang] = after[lang].trim();
-  const plain = map.en ?? map.ar ?? '';
-  const only = Object.keys(map).length === 1 ? (map.en ? 'en' : 'ar') : null;
-  if (!stored && (only === null ? !hasBoth(after) : filled(before[only]) && !hasBoth(before))) return { plain };
-  return { plain, map };
+  for (const lang of ['en', 'ar'] as const) if (now[lang] !== before[lang].trim()) map[lang] = now[lang];
+  return { map };
 }

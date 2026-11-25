@@ -73,14 +73,15 @@ describe('localized helpers', () => {
     assert.deepEqual(userTextErrors(p('A', 'أ'), p('', 'أ'), false), ['en']);
   });
 
-  it('it sends languages only for a text that has them or gets a second one', () => {
+  it('it sends only what changed, and languages only for a text that has them or gets a second one', () => {
     const p = (en: string, ar: string) => ({ en, ar });
     assert.deepEqual(userTextEdit(p('A', ''), p(' B ', ''), false), { plain: 'B' });
-    assert.deepEqual(userTextEdit(p('A', ''), p('B', ''), true), { plain: 'B', map: { en: 'B' } });
-    assert.deepEqual(userTextEdit(p('A', ''), p('', 'ب'), false), { plain: 'ب', map: { ar: 'ب' } });
-    assert.deepEqual(userTextEdit(p('A', ''), p('A', 'ب'), false), { plain: 'A', map: { en: 'A', ar: 'ب' } });
+    assert.deepEqual(userTextEdit(p('A', ''), p('B', ''), true), { map: { en: 'B' } });
+    assert.deepEqual(userTextEdit(p('A', ''), p('', 'ب'), false), { map: { en: '', ar: 'ب' } });
+    assert.deepEqual(userTextEdit(p('A', ''), p('A', 'ب'), false), { map: { ar: 'ب' } });
+    assert.deepEqual(userTextEdit(p('A', 'ب'), p('A', 'ج'), true), { map: { ar: 'ج' } });
     assert.deepEqual(userTextEdit(p('', ''), p('', ''), false), { plain: '' });
-    assert.deepEqual(userTextEdit(p('A', 'ب'), p('', ''), true), { plain: '', map: {} });
+    assert.deepEqual(userTextEdit(p('A', 'ب'), p('', ''), true), { map: { en: '', ar: '' } });
   });
 
   it('the Arabic strings use «مرئي», never «فيديو»', () => {

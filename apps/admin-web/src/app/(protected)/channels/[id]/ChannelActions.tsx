@@ -105,15 +105,15 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
 
               const edit: Parameters<typeof updateChannel>[1] = {};
               if (nameChanged) {
-                const { plain, map } = userTextEdit(initialName, name, hasLanguages(channel.nameLocalized));
-                edit.name = plain;
-                if (map) edit.nameLocalized = map;
+                const sent = userTextEdit(initialName, name, hasLanguages(channel.nameLocalized));
+                if ('map' in sent) edit.nameLocalized = sent.map;
+                else edit.name = sent.plain;
               }
               if (handleChanged) edit.handle = handle.trim().replace(/^@/, '');
               if (descChanged) {
-                const { plain, map } = userTextEdit(initialDescription, description, hasLanguages(channel.descriptionLocalized));
-                edit.description = plain;
-                if (map) edit.descriptionLocalized = map;
+                const sent = userTextEdit(initialDescription, description, hasLanguages(channel.descriptionLocalized));
+                if ('map' in sent) edit.descriptionLocalized = sent.map;
+                else edit.description = sent.plain;
               }
               await run('edit', () => updateChannel(channel.id, edit), { success: t('content.saved') });
             }}
