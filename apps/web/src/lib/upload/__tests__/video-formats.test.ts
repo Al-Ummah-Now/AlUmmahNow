@@ -30,6 +30,9 @@ const REAL: Array<{ name: string; type: string; sent: string }> = [
   { name: 'clip.avi', type: 'video/x-msvideo', sent: 'video/x-msvideo' },
   { name: 'clip.avi', type: 'video/avi', sent: 'video/x-msvideo' },
   { name: 'clip.avi', type: 'video/vnd.avi', sent: 'video/x-msvideo' },
+  { name: 'clip.wmv', type: 'video/x-ms-wmv', sent: 'video/x-ms-wmv' },
+  { name: 'clip.wmv', type: 'video/x-ms-asf', sent: 'video/x-ms-wmv' },
+  { name: 'clip.flv', type: 'video/x-flv', sent: 'video/x-flv' },
 ];
 
 describe('video file check', () => {
@@ -45,6 +48,8 @@ describe('video file check', () => {
     ['clip.webm', 'video/webm'],
     ['clip.mkv', 'video/x-matroska'],
     ['clip.avi', 'video/x-msvideo'],
+    ['clip.wmv', 'video/x-ms-wmv'],
+    ['clip.flv', 'video/x-flv'],
   ])('accepts %s with no type (some systems give none) by its extension and sends %s', (name, sent) => {
     expect(isAcceptedVideoFile(file(name, ''))).toBe(true);
     expect(videoMimeTypeOf(file(name, ''))).toBe(sent);
@@ -64,7 +69,7 @@ describe('video file check', () => {
   });
 
   it('refuses an empty type with an extension that is not on the list', () => {
-    for (const name of ['notes.txt', 'clip.wmv', 'clip.flv', 'clip', 'clip.', '.mp4x', 'mp4']) {
+    for (const name of ['notes.txt', 'clip.ogv', 'clip.3gp', 'clip.mpg', 'clip.ts', 'clip.mts', 'clip', 'clip.', '.mp4x', 'mp4']) {
       expect(isAcceptedVideoFile(file(name, ''))).toBe(false);
     }
   });
@@ -75,7 +80,8 @@ describe('video file check', () => {
       ['clip.mov', 'application/pdf'],
       ['clip.webm', 'image/png'],
       ['clip.mp4', 'audio/mp4'],
-      ['clip.mp4', 'video/x-ms-wmv'],
+      ['clip.mp4', 'video/ogg'],
+      ['clip.mp4', 'video/3gpp'],
       ['clip.mp4', 'video/mp2t'],
     ] as const) {
       expect(isAcceptedVideoFile(file(name, type))).toBe(false);
@@ -93,17 +99,17 @@ describe('video file check', () => {
 
   it('names the same formats in the config, the picker and the help text', () => {
     const labels = VIDEO_FORMATS.map((f) => f.label);
-    expect(labels).toEqual(['MP4', 'M4V', 'MOV', 'WebM', 'MKV', 'AVI']);
+    expect(labels).toEqual(['MP4', 'M4V', 'MOV', 'WebM', 'MKV', 'AVI', 'WMV', 'FLV']);
     expect(VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES).toEqual(VIDEO_FORMATS.map((f) => f.mimeType));
-    expect(videoFormatsText('en')).toBe('MP4, M4V, MOV, WebM, MKV, AVI');
-    expect(videoFormatsText('ar')).toBe('MP4، M4V، MOV، WebM، MKV، AVI');
+    expect(videoFormatsText('en')).toBe('MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV');
+    expect(videoFormatsText('ar')).toBe('MP4، M4V، MOV، WebM، MKV، AVI، WMV، FLV');
     expect(VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY).toBe(videoFormatsText('en'));
   });
 
   it('lists every extension and every type in the picker, so a file with no type still shows', () => {
     const accept = VIDEO_PICKER_ACCEPT.split(',');
-    for (const ext of ['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi']) expect(accept).toContain(ext);
-    for (const type of ['video/mp4', 'video/x-m4v', 'video/quicktime', 'video/webm', 'video/x-matroska', 'video/x-msvideo']) expect(accept).toContain(type);
+    for (const ext of ['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi', '.wmv', '.flv']) expect(accept).toContain(ext);
+    for (const type of ['video/mp4', 'video/x-m4v', 'video/quicktime', 'video/webm', 'video/x-matroska', 'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv']) expect(accept).toContain(type);
     // Not "video/*": that would show files the form refuses
     expect(accept).not.toContain('video/*');
   });

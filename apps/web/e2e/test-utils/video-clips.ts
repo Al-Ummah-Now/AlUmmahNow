@@ -53,6 +53,21 @@ function emptyAvi(): Buffer {
   return Buffer.concat([Buffer.from('RIFF', 'latin1'), le32(body.length), body]);
 }
 
+/** An ASF header object (the start of every WMV): its GUID, size, object count and the two reserved bytes */
+function asfHeader(): Buffer {
+  const head = Buffer.alloc(30);
+  Buffer.from([0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11, 0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c]).copy(head, 0);
+  head.writeBigUInt64LE(30n, 16);
+  head[28] = 0x01;
+  head[29] = 0x02;
+  return head;
+}
+
+/** An FLV header (version 1, audio and video) and the first previous-tag size */
+function flvHeader(): Buffer {
+  return Buffer.from([0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00]);
+}
+
 export interface FormatClip {
   label: string;
   /** File name, with the extension in the case given */
@@ -73,6 +88,8 @@ export function formatClips(stem: string): FormatClip[] {
     { label: 'WebM', name: `${stem}.webm`, reported: ['video/webm'], sent: 'video/webm', buffer: webm() },
     { label: 'MKV', name: `${stem}.mkv`, reported: ['video/x-matroska', ''], sent: 'video/x-matroska', buffer: toMatroska(webm()) },
     { label: 'AVI', name: `${stem}.avi`, reported: ['video/x-msvideo', 'video/avi', 'video/vnd.avi'], sent: 'video/x-msvideo', buffer: emptyAvi() },
+    { label: 'WMV', name: `${stem}.wmv`, reported: ['video/x-ms-wmv'], sent: 'video/x-ms-wmv', buffer: asfHeader() },
+    { label: 'FLV', name: `${stem}.flv`, reported: ['video/x-flv'], sent: 'video/x-flv', buffer: flvHeader() },
   ];
 }
 
@@ -80,8 +97,8 @@ export function formatClips(stem: string): FormatClip[] {
 export function refusedFiles(stem: string): Array<{ name: string; mimeType: string; buffer: Buffer }> {
   return [
     { name: `${stem} notes.txt`, mimeType: 'text/plain', buffer: Buffer.from('not a video\n') },
-    { name: `${stem} clip.wmv`, mimeType: 'video/x-ms-wmv', buffer: Buffer.alloc(2048) },
-    { name: `${stem} no-type.wmv`, mimeType: '', buffer: Buffer.alloc(2048) },
+    { name: `${stem} clip.ogv`, mimeType: 'video/ogg', buffer: Buffer.alloc(2048) },
+    { name: `${stem} no-type.ts`, mimeType: '', buffer: Buffer.alloc(2048) },
     { name: `${stem} song.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.alloc(2048) },
   ];
 }

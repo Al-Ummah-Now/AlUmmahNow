@@ -21,8 +21,8 @@ import { formatClips, refusedFiles, type FormatClip } from './test-utils/video-c
 
 test.use({ storageState: AUTH_STATE.single });
 
-const FORMATS_EN = 'MP4, M4V, MOV, WebM, MKV, AVI';
-const FORMATS_AR = 'MP4، M4V، MOV، WebM، MKV، AVI';
+const FORMATS_EN = 'MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV';
+const FORMATS_AR = 'MP4، M4V، MOV، WebM، MKV، AVI، WMV، FLV';
 
 let prefix = '';
 const prefixes: string[] = [];
@@ -113,7 +113,7 @@ test.describe('Video formats - single upload', () => {
       await expect(page.getByTestId('upload-supported-formats')).toContainText(formats);
       await expect(page.getByTestId('upload-guideline-formats')).toContainText(formats);
       const accept = (await uploadUi(page).fileInput.getAttribute('accept')) ?? '';
-      for (const ext of ['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi']) expect(accept.split(',')).toContain(ext);
+      for (const ext of ['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi', '.wmv', '.flv']) expect(accept.split(',')).toContain(ext);
       for (const type of ['video/quicktime', 'video/x-matroska', 'video/x-msvideo']) expect(accept.split(',')).toContain(type);
     }
   });
@@ -145,18 +145,18 @@ test.describe('Video formats - batch upload', () => {
     // The first type a browser reports for each format; MKV with no type
     await page.getByTestId('batch-file-input').setInputFiles(clips.map((c) => asFile(c, c.reported[0]!)));
     const items = page.getByTestId('batch-file');
-    await expect(items).toHaveCount(6);
+    await expect(items).toHaveCount(8);
     await expect(page.getByTestId('upload-page-error')).toHaveCount(0);
 
     await page.getByTestId('batch-start').click();
-    await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '6', { timeout: 180_000 });
+    await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '8', { timeout: 180_000 });
 
-    expect(tracker.videoIds.size).toBe(6);
+    expect(tracker.videoIds.size).toBe(8);
     const stored = await Promise.all([...tracker.videoIds].map((id) => storedFormat(id)));
     expect(stored.sort()).toEqual(clips.map((c) => c.sent).sort());
   });
 
-  test('FMT-B2 takes the alternative types too: M4V reported as mp4, MKV and an octet-stream MOV with no useful type, both names of AVI', async ({ page }) => {
+  test('FMT-B2 takes the alternative types too: M4V reported as mp4, MKV and an octet-stream MOV with no useful type, both names of AVI, WMV as asf, FLV with no type', async ({ page }) => {
     await openBatch(page);
     const clip = (label: string) => namedClips(prefix).find((c) => c.label === label)!;
     const named = (c: FormatClip, n: number, mimeType: string) => ({ name: c.name.replace(' ' + c.label, ` alt ${n}`), mimeType, buffer: c.buffer });
@@ -166,8 +166,10 @@ test.describe('Video formats - batch upload', () => {
       named(clip('AVI'), 3, 'video/avi'),
       named(clip('AVI'), 4, 'video/vnd.avi'),
       named(clip('MOV'), 5, 'application/octet-stream'),
+      named(clip('WMV'), 6, 'video/x-ms-asf'),
+      named(clip('FLV'), 7, ''),
     ]);
-    await expect(page.getByTestId('batch-file')).toHaveCount(5);
+    await expect(page.getByTestId('batch-file')).toHaveCount(7);
     await expect(page.getByTestId('upload-page-error')).toHaveCount(0);
   });
 

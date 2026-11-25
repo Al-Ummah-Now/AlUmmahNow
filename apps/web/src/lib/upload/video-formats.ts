@@ -9,7 +9,9 @@
  * file whose type names another kind of file is refused whatever its extension.
  *
  * The list is what Desktop Studio takes and what Bunny and the transcoding
- * pipeline (ffmpeg) read: MP4, M4V, MOV, WebM, MKV and AVI. The server
+ * pipeline (ffmpeg) read, checked with real uploads on QA (the "Upload formats on
+ * QA" workflow: Bunny and our transcoder encoded every one): MP4, M4V, MOV, WebM,
+ * MKV, AVI, WMV and FLV. The server
  * (uploadInitiate, uploadBatchInitiate) accepts any `video/*`, so the type sent
  * to it is the format's canonical type, whatever alias the browser used.
  */
@@ -34,6 +36,8 @@ export const VIDEO_FORMATS: readonly VideoFormat[] = [
   { label: 'WebM', extensions: ['webm'], mimeType: 'video/webm', aliases: [] },
   { label: 'MKV', extensions: ['mkv'], mimeType: 'video/x-matroska', aliases: ['video/matroska'] },
   { label: 'AVI', extensions: ['avi'], mimeType: 'video/x-msvideo', aliases: ['video/avi', 'video/msvideo', 'video/vnd.avi'] },
+  { label: 'WMV', extensions: ['wmv'], mimeType: 'video/x-ms-wmv', aliases: ['video/wmv', 'video/x-ms-asf'] },
+  { label: 'FLV', extensions: ['flv'], mimeType: 'video/x-flv', aliases: ['video/flv'] },
 ];
 
 /** Types that say nothing about the file: the extension decides */

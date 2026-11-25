@@ -17,6 +17,21 @@ const VIDEO_SIGNATURES = [
   { offset: 0, signature: [0x1A, 0x45, 0xDF, 0xA3], mimeType: 'video/webm', description: 'WebM/Matroska (EBML)' },
 ] as const;
 
+/** The ASF Header Object GUID (75B22630-668E-11CF-A6D9-00AA0062CE6C), which every WMV and WMA file starts with */
+const ASF_HEADER_GUID = [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C] as const;
+
+/** The ASF stream type "video media" (BC19EFC0-5B4D-11CF-A8FD-00805F5C442B), in the Stream Properties object of a WMV */
+const ASF_VIDEO_STREAM_GUID = [0xC0, 0xEF, 0x19, 0xBC, 0x4D, 0x5B, 0xCF, 0x11, 0xA8, 0xFD, 0x00, 0x80, 0x5F, 0x5C, 0x44, 0x2B] as const;
+
+function indexOfBytes(buffer: Uint8Array, needle: readonly number[]): number {
+  for (let i = 0; i + needle.length <= buffer.length; i++) {
+    let hit = true;
+    for (let j = 0; j < needle.length && hit; j++) hit = buffer[i + j] === needle[j];
+    if (hit) return i;
+  }
+  return -1;
+}
+
 /**
  * ISO base media files (MP4, M4V, MOV, 3GP) and the files that share the box layout but are not
  * video (HEIC and AVIF photos, M4A and M4B audio) all start with an 'ftyp' box: size, 'ftyp', major
@@ -114,6 +129,9 @@ const VIDEO_TYPE_ALIASES: Record<string, string> = {
   'video/vnd.avi': 'video/x-msvideo',
   'video/m4v': 'video/x-m4v',
   'video/matroska': 'video/x-matroska',
+  'video/wmv': 'video/x-ms-wmv',
+  'video/x-ms-asf': 'video/x-ms-wmv',
+  'video/flv': 'video/x-flv',
 };
 
 /** True when the EBML header (read from `buffer`) declares DocType "matroska"; "webm" or an unreadable one is WebM */
@@ -144,7 +162,7 @@ function isIsoFamily(type: string): boolean {
 /**
  * Validate video file by magic bytes
  *
- * @param fileData - First 64 bytes of the file (12 are enough except to tell Matroska from WebM)
+ * @param fileData - First 1024 bytes of the file (12 are enough except to tell Matroska from WebM, and to find a WMV's video stream)
  * @param providedMimeType - MIME type from Content-Type header (optional)
  * @returns Validation result with detected format
  *
@@ -180,6 +198,15 @@ export function validateVideoMagicBytes(
   if (matchesSignature(buffer, 0, [0x52, 0x49, 0x46, 0x46]) && matchesSignature(buffer, 8, [0x41, 0x56, 0x49, 0x20])) {
     return result('video/x-msvideo', 'AVI', providedMimeType);
   }
+
+  // WMV: an ASF header object (its 16-byte GUID); FLV: 'FLV' and version 1
+  // ASF is also WMA audio: the header lists its streams, and it is video only when one is a video stream
+  if (matchesSignature(buffer, 0, ASF_HEADER_GUID)) {
+    return indexOfBytes(buffer, ASF_VIDEO_STREAM_GUID) >= 0
+      ? result('video/x-ms-wmv', 'WMV (ASF)', providedMimeType)
+      : { isValid: false, error: 'This ASF file has no video stream (audio only, or its header is longer than what was read).', providedMimeType };
+  }
+  if (matchesSignature(buffer, 0, [0x46, 0x4C, 0x56, 0x01])) return result('video/x-flv', 'FLV', providedMimeType);
 
   const iso = detectIsoVideo(buffer);
   if (iso) return result(iso.mimeType, iso.description, providedMimeType);
