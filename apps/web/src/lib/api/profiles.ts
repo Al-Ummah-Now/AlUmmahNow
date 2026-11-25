@@ -98,7 +98,9 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
       method: 'GET',
       // Account details come only from the authenticated self route
       url: buildApiUrl(userId === authContext.userId ? '/api/profile' : `/api/profiles/${userId}`),
-      functionName: fnName
+      functionName: fnName,
+      // One's own: no profile yet, a first sign-in. Another user's missing profile is still an error
+      ...(userId === authContext.userId ? { expectedStatuses: [404] } : {})
     },
     getServerAuthContext,
     true // require auth

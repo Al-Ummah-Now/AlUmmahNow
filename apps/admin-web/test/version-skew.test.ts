@@ -48,6 +48,12 @@ describe('admin version-skew recovery', () => {
     });
   }
 
+  it('a missing file reads no site theme: the same mark as the web app, read by the layout', () => {
+    const read = (f: string) => readFileSync(join(__dirname, '..', f), 'utf8');
+    assert.equal(read('src/lib/http/static-file.ts'), readFileSync(join(__dirname, '../../web/src/lib/http/static-file.ts'), 'utf8'));
+    assert.match(read('src/app/layout.tsx'), /\(await headers\(\)\)\.has\(STATIC_FILE_HEADER\) \? defaultSiteTheme : getSiteTheme\(\)/);
+  });
+
   it('worker.ts is identical to the web one', () => {
     assert.equal(readFileSync(join(__dirname, '../worker.ts'), 'utf8'), readFileSync(join(__dirname, '../../web/worker.ts'), 'utf8'));
   });
