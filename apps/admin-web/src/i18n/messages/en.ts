@@ -4273,7 +4273,7 @@ const en = {
       container_silent: 'The container stopped reporting progress.',
       no_video_stream: 'The file has no video in it.',
       source_changed: 'The uploaded file is not the file the importer read. It needs to be uploaded again.',
-      colour_unsupported: 'The file uses an HDR format we cannot convert (such as Dolby Vision profile 5).',
+      colour_unsupported: 'The file uses an HDR format we cannot convert (such as some Dolby Vision files).',
       encode_failed: 'The file could not be encoded.',
       upload_failed: 'The renditions could not be saved to R2.',
       cancelled: 'Canceled by an admin.',

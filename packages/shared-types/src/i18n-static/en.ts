@@ -967,7 +967,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
       audio_only: 'This file has sound only, with no picture. Upload a video file.',
       half_written: 'Part of this file is empty: it was probably still being copied when it was uploaded. Upload the finished file.',
       unreadable: 'This file could not be read as a video. Upload another copy of it.',
-      colour_unsupported: 'This file uses an HDR format that cannot be shown correctly (such as Dolby Vision profile 5). Export it as standard video (SDR) and upload it again.',
+      colour_unsupported: 'This file uses an HDR format that cannot be shown correctly (such as some Dolby Vision files). Export it as standard video (SDR) and upload it again.',
       source_changed: 'The file that arrived is not the one that was sent. The team will upload it again.',
       needs_reupload: 'The file did not arrive complete. Upload it again.',
       encode_failed: 'This video could not be processed. Upload the file again.',

@@ -3,7 +3,7 @@
 // Rungs are named by the short side, so a Short (portrait) gets 360x640 …
 // 1080x1920 and a landscape video 640x360 … 1920x1080. Never above the source.
 
-import { SDR_TAGS, toJpegFilters, toSdrFilters, toWebpFilters } from './colour.mjs';
+import { SDR_END, toJpegFilters, toSdrFilters, toWebpFilters } from './colour.mjs';
 
 /** @typedef {import('./colour.mjs').SdrPlan} SdrPlan */
 
@@ -62,7 +62,7 @@ export function ffmpegArgs(o) {
 	const top = o.rungs[n - 1];
 	const sdr = o.plan ? toSdrFilters(o.plan, { cube: o.cube, size: { width: top.width, height: top.height } }) : '';
 	const split = `[0:v]${sdr ? `${sdr},` : ''}split=${n}${o.rungs.map((_, i) => `[v${i}]`).join('')}`;
-	const scales = o.rungs.map((r, i) => `[v${i}]scale=w=${r.width}:h=${r.height}:flags=bicubic,format=yuv420p,${SDR_TAGS}[v${i}o]`);
+	const scales = o.rungs.map((r, i) => `[v${i}]scale=w=${r.width}:h=${r.height}:flags=bicubic,format=yuv420p,${SDR_END}[v${i}o]`);
 	const args = ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-filter_complex', [split, ...scales].join(';')];
 	// Cap at 30 fps above 30 (lectures; halves the work for 60 fps phone video)
 	const fps = o.fps && o.fps > 31 ? 30 : undefined;
@@ -162,12 +162,11 @@ export function posterTime(durationSeconds) {
 export function stillsArgs(o) {
 	const t = posterTime(o.durationSeconds).toFixed(2);
 	const pt = Math.min(posterTime(o.durationSeconds), Math.max(0, o.durationSeconds - 4)).toFixed(2);
-	const sized = (width) => `scale='min(${width},iw)':-2`;
-	// HDR: sized first, then tone mapped (a still costs one small frame); SDR: converted, then sized
+	const sized = (width) => `scale='trunc(min(${width},iw)/2)*2':-2`;
+	// Converted at the source's size, then made small: averaging HDR signals first changes the light
 	const vf = (width, tail) => {
 		const sdr = o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '';
-		const hdr = o.plan && (o.plan.kind === 'hlg' || o.plan.kind === 'pq');
-		return (hdr ? [sized(width), sdr, tail] : [sdr, sized(width), tail]).filter(Boolean).join(',');
+		return [sdr, sized(width), tail].filter(Boolean).join(',');
 	};
 	const frame = (width, quality, file, seek) => {
 		// A seek past the last frame writes no file and would end well: abort_on makes it the failure it is

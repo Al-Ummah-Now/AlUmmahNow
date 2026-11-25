@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { ENCODE_LADDER } from '@al-ummah/shared-types';
-import { colourOf, colourPlan, cubePath, cubeText, hasHdrData, hlgToNits, pqToNits, SDR_TAGS, toneMap, toSdrFilters } from '../container/colour.mjs';
+import { colourOf, colourPlan, cubePath, cubeText, hasHdrData, hlgToNits, pqToNits, SDR_END, SDR_TAGS, toneMap, toSdrFilters } from '../container/colour.mjs';
 import { renditionColour } from '../container/prebuilt.mjs';
 
 const stream = (o: Record<string, unknown>) => ({ codec_name: 'h264', pix_fmt: 'yuv420p', width: 1920, height: 1080, ...o });
@@ -94,16 +94,17 @@ describe('toSdrFilters', () => {
 	it('adds nothing for a source that is BT.709 already', () => assert.equal(toSdrFilters(planOf({})), ''));
 	it('tone maps through the cube, at the top rung, with every tag and no HDR metadata', () => {
 		const f = toSdrFilters(planOf(HLG), { cube: 'hlg.cube', size: { width: 1280, height: 720 } });
-		assert.match(f, /^scale=w=1280:h=720:[^,]*in_color_matrix=bt2020:in_range=tv,format=gbrp16le,lut3d=file=hlg\.cube:interp=tetrahedral,scale=[^,]*out_color_matrix=bt709:out_range=tv,format=yuv420p,sidedata=/);
+		assert.match(f, /^scale=w=1280:h=720:[^,]*in_color_matrix=bt2020:in_range=tv,format=gbrp16le,lut3d=file=hlg\.cube:interp=tetrahedral,scale=[^,]*out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=/);
 		assert.ok(f.endsWith(SDR_TAGS));
-		assert.ok(f.includes(',sidedata=mode=delete,'));
+		for (const t of ['MASTERING_DISPLAY_METADATA', 'CONTENT_LIGHT_LEVEL', 'DYNAMIC_HDR_PLUS']) assert.ok(SDR_END.includes(t));
+		assert.ok(SDR_END.endsWith(SDR_TAGS));
 	});
 	it('never takes an HDR source without its cube, nor a path that would need escaping', () => {
 		assert.throws(() => toSdrFilters(planOf(PQ)));
 		assert.throws(() => cubePath("C:\\a'b.cube"));
 	});
 	it('says the source matrix, primaries and range when it converts', () => {
-		assert.match(toSdrFilters(planOf(tags('bt470bg', 'bt470bg', 'bt470bg', 'pc'))), /^colorspace=ispace=bt470bg:iprimaries=bt470bg:itrc=bt709:irange=pc:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,setparams/);
+		assert.match(toSdrFilters(planOf(tags('bt470bg', 'bt470bg', 'bt470bg', 'pc'))), /^scale=w=trunc\(iw\/2\)\*2:h=trunc\(ih\/2\)\*2:[^,]*,colorspace=ispace=bt470bg:iprimaries=bt470bg:itrc=bt709:irange=pc:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,setparams/);
 	});
 });
 

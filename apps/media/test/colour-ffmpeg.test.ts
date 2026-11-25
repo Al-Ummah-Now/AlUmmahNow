@@ -10,8 +10,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { colourOf, colourPlan, cubeText, hasHdrData, toneMap } from '../container/colour.mjs';
+import { colourOf, colourPlan, cubeText, hasHdrData, toneMap, toSdrFilters } from '../container/colour.mjs';
 import { ffmpegArgs, ladderFor, mp4Args, stillsArgs } from '../container/ladder.mjs';
+import { FRAME_DIFF_MEDIAN_MAX, MATCH_FRAME_SIZE, frameDistance, matchFilters } from '../container/prebuilt.mjs';
+import { framesArgs } from '../container/review.mjs';
 
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const FFPROBE = process.env.FFPROBE || 'ffprobe';
@@ -174,9 +176,74 @@ describe('the colours viewers get (real ffmpeg)', { skip: !have && 'ffmpeg is no
 			if (encoders.includes('libwebp')) {
 				run(FFMPEG, stills.preview);
 				assert.ok(existsSync(join(out, 'preview.webp')));
+				// ffmpeg reads no animated WebP: the same filters' output, read as WebP readers do (BT.601)
+				const chain = stills.preview[stills.preview.indexOf('-vf') + 1]!;
+				assertColours(patches(src, `${chain},${STILL('tv')}`), c.want, 6, `${c.name} preview`);
 			}
 		});
 	}
+
+	/** A moving, detailed clip tagged as asked, lossless, any size and format. */
+	const textured = (name: string, size: string, format: string, [prim, trc, matrix, range]: string[]) => {
+		const file = join(dir, `${name}.mkv`);
+		// The pattern is cropped from a larger one: testsrc2 itself rounds an odd size
+		run(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=25', '-t', '1', '-vf', `format=yuv444p,crop=${size.replace('x', ':')}:0:0:exact=1,scale=${size.replace('x', ':')},format=${format},setparams=color_primaries=${prim}:color_trc=${trc}:colorspace=${matrix}:range=${range}`, '-c:v', 'ffv1', file]);
+		const v = probe(file).streams[0];
+		assert.equal(`${v.width}x${v.height}`, size);
+		return { file, v, plan: colourPlan(colourOf(v)) as any };
+	};
+
+	it('an HDR source compares as the same picture as its own rungs (detailed picture)', () => {
+		const { file, plan } = textured('detail', '1280x720', 'yuv420p10le', ['bt2020', 'arib-std-b67', 'bt2020nc', 'tv']);
+		const out = join(dir, 'detail-out');
+		const rungs = ladderFor({ width: W, height: H });
+		for (const r of rungs) mkdirSync(join(out, r.name), { recursive: true });
+		const cube = join(dir, 'hlg.cube');
+		run(FFMPEG, ffmpegArgs({ input: file, out, rungs, hasAudio: false, fps: 25, plan, cube }));
+		const grey = (input: string, vf: string, seek: string[]) => run(FFMPEG, ['-v', 'error', ...seek, '-i', input, '-frames:v', '1', '-vf', vf, '-f', 'rawvideo', 'pipe:1']);
+		const sdrFilters = toSdrFilters(plan, { cube });
+		const source = grey(file, matchFilters({ sdr: sdrFilters }), ['-ss', '0.48']);
+		assert.equal(source.length, MATCH_FRAME_SIZE.width * MATCH_FRAME_SIZE.height);
+		// Decoded from the start to the same instant: the same frame
+		assert.ok(frameDistance(source, grey(file, matchFilters({ sdr: sdrFilters, from: 0.48 }), [])) < 1);
+		for (const r of rungs) {
+			const d = frameDistance(source, grey(join(out, r.name, 'index.m3u8'), matchFilters({ from: 0.48 }), []));
+			assert.ok(d < FRAME_DIFF_MEDIAN_MAX / 4, `${r.name} differs by ${d}`);
+		}
+	});
+
+	it('odd sizes encode, with their stills and review frames', () => {
+		const tags = { convert: ['smpte170m', 'smpte170m', 'smpte170m', 'tv'], hlg: ['bt2020', 'arib-std-b67', 'bt2020nc', 'tv'], as_is: ['bt709', 'bt709', 'bt709', 'tv'] };
+		for (const [kind, size, format] of [['convert', '321x241', 'yuv444p'], ['convert', '853x481', 'yuv422p'], ['convert', '641x361', 'yuv420p'], ['hlg', '321x241', 'yuv444p10le'], ['hlg', '1083x611', 'yuv420p10le'], ['as_is', '321x241', 'yuv444p'], ['convert', '321x241', 'gbrp']] as const) {
+			const { file, v, plan } = textured(`odd-${kind}-${size}-${format}`, size, format, format === 'gbrp' ? ['bt709', 'bt709', 'gbr', 'pc'] : tags[kind]);
+			assert.equal(plan.kind, kind);
+			const cube = join(dir, 'hlg.cube');
+			const out = join(dir, `odd-${kind}-${size}-${format}-out`);
+			const rungs = ladderFor({ width: v.width, height: v.height });
+			for (const r of rungs) mkdirSync(join(out, r.name), { recursive: true });
+			mkdirSync(join(out, 'frames'));
+			run(FFMPEG, ffmpegArgs({ input: file, out, rungs, hasAudio: false, fps: 25, plan, cube }));
+			const stills = stillsArgs({ input: file, out, durationSeconds: 1, plan, cube });
+			for (const a of [stills.thumb, stills.thumbSmall, ...(encoders.includes('libwebp') ? [stills.preview] : [])]) run(FFMPEG, a);
+			run(FFMPEG, framesArgs({ input: file, out: join(out, 'frames'), interval: 2, plan, cube }));
+			assert.ok(existsSync(join(out, 'thumb.jpg')) && existsSync(join(out, 'thumb_640.jpg')) && existsSync(join(out, 'frames', '000001.jpg')), `${kind} ${size} ${format}`);
+		}
+	});
+
+	it('HDR metadata on an SDR source does not reach its rungs', { skip: !encoders.includes('libx265') && 'no libx265' }, () => {
+		const src = join(dir, 'sdr-with-hdr-data.mp4');
+		run(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25', '-t', '1', ...x265('repeat-headers=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400'), '-vf', 'format=yuv420p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', src]);
+		const before = probe(src, ['-show_frames', '-read_intervals', '%+#1']);
+		assert.ok([before.streams[0], ...before.frames].some((x: unknown) => hasHdrData(x)), 'the source carries it');
+		const plan = colourPlan(colourOf(before.streams[0])) as any;
+		assert.equal(plan.kind, 'as_is');
+		const out = join(dir, 'sdr-with-hdr-data-out');
+		const rungs = ladderFor({ width: 640, height: 360 });
+		mkdirSync(join(out, '360p'), { recursive: true });
+		run(FFMPEG, ffmpegArgs({ input: src, out, rungs, hasAudio: false, fps: 25, plan }));
+		const made = probe(join(out, '360p', 'index.m3u8'), ['-show_frames', '-read_intervals', '%+#1']);
+		assert.ok(![made.streams[0], ...made.frames].some((x: unknown) => hasHdrData(x)), JSON.stringify(made.streams[0].side_data_list));
+	});
 
 	it('never changes a pixel of an SDR BT.709 source', () => {
 		const src = join(dir, 'plain.mp4');

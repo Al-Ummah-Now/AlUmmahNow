@@ -6,6 +6,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ENCODE_LADDER } from '@al-ummah/shared-types';
+import { createHash } from 'node:crypto';
+import { colourPlan, cubeText } from '../container/colour.mjs';
 import { RUNGS, SEGMENT_SECONDS, GOP_SECONDS, ffmpegArgs, ladderFor } from '../container/ladder.mjs';
 
 describe('ENCODE_LADDER matches the container', () => {
@@ -36,6 +38,21 @@ describe('ENCODE_LADDER matches the container', () => {
 		assert.match(args, new RegExp(`-master_pl_name ${h.master}`));
 		assert.ok(args.includes(`%v/${h.segment}`));
 		assert.ok(args.includes(`%v/${h.rungPlaylist}`));
+	});
+
+	it('tags every rung as ENCODE_LADDER.colour says, and tone maps through its tables', () => {
+		const c = ENCODE_LADDER.colour;
+		assert.equal(c.version, 1);
+		for (const kind of ['hlg', 'pq'] as const) assert.equal(createHash('sha256').update(cubeText(kind)).digest('hex'), c.cubes[kind]);
+		const rungs = ladderFor({ width: 1280, height: 720 });
+		const tags = `setparams=range=${c.range}:color_primaries=${c.output}:color_trc=${c.output}:colorspace=${c.output}`;
+		const hlg = colourPlan({ matrix: 'bt2020nc', primaries: 'bt2020', transfer: 'arib-std-b67', full: false, rgb: false, codec: 'hevc', width: 1280, height: 720 }) as never;
+		for (const plan of [undefined, hlg]) {
+			const args: string[] = ffmpegArgs({ input: 'i', out: 'o', rungs, hasAudio: false, plan, cube: 'hlg.cube' });
+			const graph = args[args.indexOf('-filter_complex') + 1]!;
+			for (const i of rungs.keys()) assert.ok(graph.includes(`${tags}[v${i}o]`), graph);
+			assert.equal(graph.includes('lut3d=file=hlg.cube'), plan !== undefined);
+		}
 	});
 
 	it('keeps the 60 fps cap boundary and the short-side tolerance', () => {
