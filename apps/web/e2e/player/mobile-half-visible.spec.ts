@@ -100,7 +100,7 @@ async function tapControl(page: Page, player: Locator, selector: string): Promis
   await settle(page);
   // A tap meant for the player must never land on the top bar or the tab bar
   await expectInTappableArea(player.locator(selector).first(), selector);
-  // Read right before the tap: the half second the fading bar still takes taps (bar-fade.ts) covers the rest
+  // Read right before the tap: the moment the fading bar still takes taps (bar-fade.ts) covers the rest
   let target = await aim(player, selector);
   if (target.barGone) {
     const before = await counts(page);
@@ -236,6 +236,17 @@ test('a finger dragged up on the half-visible bar scrolls the page, never seeks'
   expect((await media(page)).paused).toBe(false);
 });
 
+/** The bar's fade, begun now: whether the play button takes taps as it begins and 700 ms on, and where it is */
+const fade = (player: Locator) => player.evaluate((el) => {
+  (el as unknown as { player: { userActive(active: boolean): void } }).player.userActive(false);
+  const button = el.querySelector('.vjs-play-control')!.getBoundingClientRect();
+  const x = button.x + button.width / 2;
+  const y = button.y + button.height / 2;
+  const takesTaps = () => document.elementFromPoint(x, y)?.closest('.vjs-play-control') != null;
+  const atOnce = takesTaps();
+  return new Promise<{ x: number; y: number; atOnce: boolean; later: boolean }>((resolve) => setTimeout(() => resolve({ x, y, atOnce, later: takesTaps() }), 700));
+});
+
 /**
  * #2024: the bar fades out over a second, and took no tap from its first moment: a finger on its way to
  * a button that was showing only brought the bar back. Whether a tap came in time is read where it
@@ -245,16 +256,7 @@ test('a button still showing while the bar fades takes the tap; on the hidden ba
   const player = await openHarness(page);
   await start(page, player);
   await track(page);
-  const fade = () => player.evaluate((el) => {
-    (el as unknown as { player: { userActive(active: boolean): void } }).player.userActive(false);
-    const button = el.querySelector('.vjs-play-control')!.getBoundingClientRect();
-    const x = button.x + button.width / 2;
-    const y = button.y + button.height / 2;
-    const takesTaps = () => document.elementFromPoint(x, y)?.closest('.vjs-play-control') != null;
-    const atOnce = takesTaps();
-    return new Promise<{ x: number; y: number; atOnce: boolean; later: boolean }>((resolve) => setTimeout(() => resolve({ x, y, atOnce, later: takesTaps() }), 700));
-  });
-  const { x, y, atOnce, later } = await fade();
+  const { x, y, atOnce, later } = await fade(player);
   expect(atOnce, 'the button takes taps when the fade begins').toBe(true);
   expect(later, 'the faded bar takes none').toBe(false);
 
@@ -277,7 +279,20 @@ test('a button still showing while the bar fades takes the tap; on the hidden ba
     landed = await page.evaluate(() => (window as unknown as { tappedWhileFading: boolean }).tappedWhileFading);
     if (!landed) expect((await media(page)).paused, 'a tap after the fade pauses nothing').toBe(false);
   }
-  expect(landed, 'no tap reached the page within the half second').toBe(true);
+  expect(landed, 'no tap reached the page while the button still showed').toBe(true);
   await expect.poll(() => media(page).then((m) => m.paused), { message: 'the tap on the fading button did not pause' }).toBe(true);
   expect(await counts(page)).toMatchObject({ pause: 1, play: 0, seeking: 0 });
+});
+
+test('with reduced motion the bar is gone at once and takes no tap', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const player = await openHarness(page);
+  await start(page, player);
+  await track(page);
+  const { x, y, atOnce, later } = await fade(player);
+  expect(atOnce, 'the bar that has gone takes no tap').toBe(false);
+  expect(later).toBe(false);
+  await page.touchscreen.tap(x, y);
+  await expect(player).toHaveClass(/vjs-user-active/);
+  expect(await counts(page), 'a tap on the hidden bar only shows it').toMatchObject({ pause: 0, play: 0, seeking: 0 });
 });

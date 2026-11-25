@@ -95,9 +95,12 @@
   pointer-events: none;
 }
 
-/* The first half of the fade: what can still be seen can still be tapped (lib/video/bar-fade.ts) */
-.video-js.vjs-fanous.vjs-has-started.vjs-user-inactive.vjs-playing.vjs-fanous-bar-fading:not(.vjs-menu-open) .vjs-control-bar {
-  pointer-events: auto;
+/* The start of the fade: what can still be seen can still be tapped (lib/video/bar-fade.ts). With
+   reduced motion there is no fade, the bar is gone at once */
+@media (prefers-reduced-motion: no-preference) {
+  .video-js.vjs-fanous.vjs-has-started.vjs-user-inactive.vjs-playing.vjs-fanous-bar-fading:not(.vjs-menu-open) .vjs-control-bar {
+    pointer-events: auto;
+  }
 }
 
 .video-js.vjs-fanous.vjs-menu-open .vjs-control-bar {
