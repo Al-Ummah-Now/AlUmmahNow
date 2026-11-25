@@ -147,6 +147,16 @@ describe('LocalizedFieldPair and Translate missing in a DOM', () => {
 
   const ok = (text: string, refused?: string) => ({ ok: true, data: { items: [{ text, cached: false, ...(refused ? { refused, quran: [{ range: '112:1-112:4', label: '112:1–4' }] } : {}) }], provider: 'workers-ai', machineTranslation: true, usage: { used: 1, limit: 500, resetsAt: 'x' } } });
 
+  it('points each Translate arrow at the field it fills, in either direction', async () => {
+    for (const [locale, toAr, toEn] of [['en', '↓→', '↑←'], ['ar', '↓←', '↑→']] as const) {
+      const p = await pair({ en: 'News', ar: 'أخبار' }, () => ok(''), {}, locale);
+      const arrows = (id: string) => [...p.q(id)!.querySelectorAll('[aria-hidden]')].map((e) => e.textContent).join('');
+      assert.equal(arrows('name-translate-en'), toAr, locale);
+      assert.equal(arrows('name-translate-ar'), toEn, locale);
+      await p.unmount();
+    }
+  });
+
   it('labels each language, sets dir/lang, and fills Arabic from English for review', async () => {
     const p = await pair({ en: 'News', ar: '' }, () => ok('أخبار'));
     const enInput = p.q('name-en') as HTMLInputElement;
@@ -159,7 +169,7 @@ describe('LocalizedFieldPair and Translate missing in a DOM', () => {
     assert.equal(p.container.querySelector('label[for="name-ar"]')?.textContent?.replace(/\*/g, '').trim(), 'العربية');
     assert.equal((p.q('name-translate-ar') as HTMLButtonElement).disabled, true, 'nothing to translate from an empty field');
     assert.equal(p.q('name-translate-en')?.getAttribute('aria-label'), null, 'the visible words are the name (no aria-label to drift from them)');
-    assert.equal(p.q('name-translate-en')?.textContent?.replace(/\s+/g, ' ').trim(), '→Translate to Arabic (Name)');
+    assert.equal(p.q('name-translate-en')?.textContent?.replace(/\s+/g, ' ').trim(), '↓→Translate to Arabic (Name)');
     await click(p.q('name-translate-en'));
     assert.deepEqual(p.calls[0], { from: 'en', to: 'ar', texts: ['News'], field: 'categories.label' });
     assert.equal((p.q('name-ar') as HTMLInputElement).value, 'أخبار');

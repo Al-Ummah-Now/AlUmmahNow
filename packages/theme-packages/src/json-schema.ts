@@ -4,7 +4,12 @@
 // No dependencies, so it runs the same in Node, Workers and the browser.
 
 type Schema = Record<string, any>;
-export interface SchemaError { path: string; message: string }
+/** Why a value is refused. `message` is the validator's English; `code` and `params` are for an app to word it. */
+export type IssueCode =
+  | 'empty' | 'tooShort' | 'tooLong' | 'invalid' | 'tooSmall' | 'tooBig' | 'tooFew' | 'tooMany' | 'missing' | 'unknownField' | 'wrongType'
+  | 'unknownReference' | 'brokenColor' | 'contrast' | 'headerContrast' | 'colorLayer' | 'bannerText'
+  | 'fileMissing' | 'fileName' | 'fileSize' | 'fileType' | 'fileUnsafe' | 'totalSize';
+export interface SchemaError { path: string; message: string; code?: IssueCode; params?: Record<string, string | number> }
 
 const typeOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : Number.isInteger(v) ? 'integer' : typeof v);
 const fits = (v: unknown, t: string) => typeOf(v) === t || (t === 'number' && typeOf(v) === 'integer');
@@ -13,43 +18,43 @@ const join = (path: string, key: string | number) => (typeof key === 'number' ? 
 export function checkSchema(value: unknown, schema: Schema, root: Schema = schema, path = ''): SchemaError[] {
   if (schema.$ref) {
     const target = String(schema.$ref).replace(/^#\/\$defs\//, '').split('/').reduce<any>((n, k) => n?.[k], root.$defs);
-    if (!target) return [{ path, message: `schema reference ${schema.$ref} is missing` }];
+    if (!target) return [{ path, message: `schema reference ${schema.$ref} is missing`, code: 'invalid' }];
     return checkSchema(value, target, root, path);
   }
   const errors: SchemaError[] = [];
-  const err = (message: string, at = path) => errors.push({ path: at || '(root)', message });
+  const err = (message: string, code: IssueCode, params?: SchemaError['params'], at = path) => errors.push({ path: at || '(root)', message, code, ...(params ? { params } : {}) });
   if (schema.anyOf) {
     const branches = (schema.anyOf as Schema[]).map((s) => checkSchema(value, s, root, path));
-    if (!branches.some((b) => b.length === 0)) err(describeAnyOf(schema.anyOf, root));
+    if (!branches.some((b) => b.length === 0)) err(describeAnyOf(schema.anyOf, root), 'invalid');
     return errors;
   }
-  if ('const' in schema && value !== schema.const) return [{ path: path || '(root)', message: `must be ${JSON.stringify(schema.const)}` }];
-  if (schema.enum && !(schema.enum as unknown[]).includes(value)) return [{ path: path || '(root)', message: `must be one of ${schema.enum.map((e: unknown) => JSON.stringify(e)).join(', ')}` }];
-  if (schema.type && !fits(value, schema.type)) return [{ path: path || '(root)', message: `must be ${schema.type === 'object' ? 'an object' : schema.type === 'array' ? 'a list' : `a ${schema.type}`}` }];
+  if ('const' in schema && value !== schema.const) return [{ path: path || '(root)', message: `must be ${JSON.stringify(schema.const)}`, code: 'invalid' }];
+  if (schema.enum && !(schema.enum as unknown[]).includes(value)) return [{ path: path || '(root)', message: `must be one of ${schema.enum.map((e: unknown) => JSON.stringify(e)).join(', ')}`, code: 'invalid' }];
+  if (schema.type && !fits(value, schema.type)) return [{ path: path || '(root)', message: `must be ${schema.type === 'object' ? 'an object' : schema.type === 'array' ? 'a list' : `a ${schema.type}`}`, code: 'wrongType' }];
   if (typeof value === 'string') {
-    if (schema.minLength !== undefined && value.length < schema.minLength) err(schema.minLength === 1 ? 'must not be empty' : `must be at least ${schema.minLength} characters`);
-    if (schema.maxLength !== undefined && value.length > schema.maxLength) err(`must be at most ${schema.maxLength} characters`);
-    if (schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) err(schema.description ? `is not valid: ${firstSentence(schema.description)}` : `does not match ${schema.pattern}`);
+    if (schema.minLength !== undefined && value.length < schema.minLength) err(schema.minLength === 1 ? 'must not be empty' : `must be at least ${schema.minLength} characters`, value.length === 0 ? 'empty' : 'tooShort', { min: schema.minLength });
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) err(`must be at most ${schema.maxLength} characters`, 'tooLong', { max: schema.maxLength });
+    if (schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) err(schema.description ? `is not valid: ${firstSentence(schema.description)}` : `does not match ${schema.pattern}`, 'invalid');
   }
   if (typeof value === 'number') {
-    if (schema.minimum !== undefined && value < schema.minimum) err(`must be at least ${schema.minimum}`);
-    if (schema.maximum !== undefined && value > schema.maximum) err(`must be at most ${schema.maximum}`);
+    if (schema.minimum !== undefined && value < schema.minimum) err(`must be at least ${schema.minimum}`, 'tooSmall', { min: schema.minimum });
+    if (schema.maximum !== undefined && value > schema.maximum) err(`must be at most ${schema.maximum}`, 'tooBig', { max: schema.maximum });
   }
   if (Array.isArray(value)) {
-    if (schema.minItems !== undefined && value.length < schema.minItems) err(`needs at least ${schema.minItems} item(s)`);
-    if (schema.maxItems !== undefined && value.length > schema.maxItems) err(`allows at most ${schema.maxItems} items`);
+    if (schema.minItems !== undefined && value.length < schema.minItems) err(`needs at least ${schema.minItems} item(s)`, 'tooFew', { min: schema.minItems });
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) err(`allows at most ${schema.maxItems} items`, 'tooMany', { max: schema.maxItems });
     if (schema.items) value.forEach((item, i) => errors.push(...checkSchema(item, schema.items, root, join(path, i))));
   }
   if (typeOf(value) === 'object') {
     const obj = value as Record<string, unknown>;
-    for (const key of schema.required ?? []) if (!(key in obj)) err(`is missing`, join(path, key));
+    for (const key of schema.required ?? []) if (!(key in obj)) err(`is missing`, 'missing', undefined, join(path, key));
     for (const [key, v] of Object.entries(obj)) {
       const at = join(path, key);
-      if (schema.propertyNames) for (const e of checkSchema(key, schema.propertyNames, root, at)) err(`name ${e.message}`, at);
+      if (schema.propertyNames) for (const e of checkSchema(key, schema.propertyNames, root, at)) err(`name ${e.message}`, 'unknownField', undefined, at);
       if (schema.properties?.[key]) { errors.push(...checkSchema(v, schema.properties[key], root, at)); continue; }
       const pattern = Object.entries<Schema>(schema.patternProperties ?? {}).find(([p]) => new RegExp(p, 'u').test(key));
       if (pattern) { errors.push(...checkSchema(v, pattern[1], root, at)); continue; }
-      if (schema.additionalProperties === false) err('is not a known field', at);
+      if (schema.additionalProperties === false) err('is not a known field', 'unknownField', undefined, at);
       else if (typeof schema.additionalProperties === 'object') errors.push(...checkSchema(v, schema.additionalProperties, root, at));
     }
   }

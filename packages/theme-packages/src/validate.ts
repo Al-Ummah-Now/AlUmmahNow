@@ -4,12 +4,13 @@ import { BASE } from './base.generated.ts';
 import { BRAND_NAMES, COMPONENT_PARTS, MATERIAL_NAMES, get } from './components.ts';
 import { resolveColor, resolvedColors } from './compile.ts';
 import { contrastRatio } from './contrast.ts';
-import { checkSchema } from './json-schema.ts';
+import { checkSchema, type IssueCode, type SchemaError } from './json-schema.ts';
 import { isKnownKind, parseRefs } from './refs.ts';
 import { SCHEMA } from './schema.generated.ts';
 import { MODES, type ThemePackage } from './types.ts';
 
-export interface Issue { path: string; message: string }
+export type { IssueCode };
+export type Issue = SchemaError;
 export interface Validation { ok: boolean; errors: Issue[]; warnings: Issue[] }
 export interface ValidateOptions {
   /** The package's files (assets/...). When given, every referenced file must exist and be safe. */
@@ -63,32 +64,32 @@ function checkAssets(pkg: ThemePackage, assets: Record<string, Uint8Array>, erro
     for (const ref of parseRefs(value)) if (ref.kind === 'asset') used.add(ref.name);
     if (/^assets\//.test(value) || value.includes('{asset:')) {
       for (const file of /^assets\//.test(value) ? [value] : parseRefs(value).filter((r) => r.kind === 'asset').map((r) => r.name)) {
-        if (!assets[file]) errors.push({ path, message: `names ${file}, which is not in the package` });
+        if (!assets[file]) errors.push({ path, message: `names ${file}, which is not in the package`, code: 'fileMissing', params: { file } });
       }
     }
   }
   let total = 0;
   for (const [file, bytes] of Object.entries(assets)) {
     total += bytes.byteLength;
-    if (!/^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*\.(svg|png|jpg|jpeg|webp|ico|woff2)$/.test(file)) { errors.push({ path: file, message: 'is not an allowed asset name (assets/…, .svg .png .jpg .webp .ico .woff2)' }); continue; }
-    if (bytes.byteLength > MAX_ASSET_BYTES) errors.push({ path: file, message: `is ${(bytes.byteLength / 1048576).toFixed(1)} MB; the limit is 2 MB per file` });
+    if (!/^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*\.(svg|png|jpg|jpeg|webp|ico|woff2)$/.test(file)) { errors.push({ path: file, message: 'is not an allowed asset name (assets/…, .svg .png .jpg .webp .ico .woff2)', code: 'fileName' }); continue; }
+    if (bytes.byteLength > MAX_ASSET_BYTES) errors.push({ path: file, message: `is ${(bytes.byteLength / 1048576).toFixed(1)} MB; the limit is 2 MB per file`, code: 'fileSize', params: { max: 2 } });
     const ext = file.split('.').pop()!.toLowerCase();
     const kind = sniff(bytes);
-    if (!EXPECTED[ext]?.includes(kind)) errors.push({ path: file, message: `is not a real .${ext} file` });
+    if (!EXPECTED[ext]?.includes(kind)) errors.push({ path: file, message: `is not a real .${ext} file`, code: 'fileType', params: { type: ext } });
     if (kind === 'svg') {
       const problem = svgProblem(new TextDecoder().decode(bytes));
-      if (problem) errors.push({ path: file, message: problem });
+      if (problem) errors.push({ path: file, message: problem, code: 'fileUnsafe' });
     }
     if (!used.has(file)) warnings.push({ path: file, message: 'is not used by theme.json' });
   }
-  if (total > MAX_PACKAGE_BYTES) errors.push({ path: 'assets', message: `total ${(total / 1048576).toFixed(1)} MB; the limit is 12 MB` });
+  if (total > MAX_PACKAGE_BYTES) errors.push({ path: 'assets', message: `total ${(total / 1048576).toFixed(1)} MB; the limit is 12 MB`, code: 'totalSize', params: { max: 12 } });
 }
 
 function checkRefs(pkg: ThemePackage, errors: Issue[]) {
   for (const [path, value] of strings(pkg, '')) {
     for (const ref of parseRefs(value)) {
-      if (!isKnownKind(ref.kind)) { errors.push({ path, message: `${ref.raw} is not a known reference` }); continue; }
-      const bad = (what: string) => errors.push({ path, message: `${ref.raw} names an unknown ${what}` });
+      if (!isKnownKind(ref.kind)) { errors.push({ path, message: `${ref.raw} is not a known reference`, code: 'unknownReference', params: { ref: ref.raw } }); continue; }
+      const bad = (what: string) => errors.push({ path, message: `${ref.raw} names an unknown ${what}`, code: 'unknownReference', params: { ref: ref.raw } });
       if (ref.kind === 'color' && !ROLE_NAMES.has(ref.name)) bad('colour role');
       if (ref.kind === 'brand' && !BRAND_NAMES.includes(ref.name)) bad('brand colour');
       if (ref.kind === 'component' && !PART_NAMES.has(ref.name)) bad('component colour');
@@ -113,16 +114,16 @@ export function contrastIssues(pkg: ThemePackage, builtIn = false): Issue[] {
         r.role === 'on' && 'on' in r ? [[r.on as string, builtIn && /^onPrimary(Hover|Pressed)?$/.test(r.name) ? 7 : AA_TEXT]] : [];
       for (const [bg, min] of pairs) {
         const ratio = contrastRatio(roles[r.name], roles[bg]);
-        if (ratio < min) issues.push({ path: `tokens.color.${mode}.${r.name}`, message: `${roles[r.name]} on ${bg} ${roles[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)` });
+        if (ratio < min) issues.push({ path: `tokens.color.${mode}.${r.name}`, message: `${roles[r.name]} on ${bg} ${roles[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)`, code: 'contrast', params: { color: r.name, background: bg, ratio, min } });
       }
     }
     // The header is dark in every theme and both modes (owner decision, 2026-11-11), as on the site
     const header = colors[mode].parts['nav.bg'];
     const headerRatio = contrastRatio('#ffffff', header);
-    if (headerRatio < AA_TEXT) issues.push({ path: `components.header.colors.${mode}.bg`, message: `the header is dark in every theme: ${header} is ${headerRatio.toFixed(2)}:1 against white, needs ${AA_TEXT}:1` });
+    if (headerRatio < AA_TEXT) issues.push({ path: `components.header.colors.${mode}.bg`, message: `the header is dark in every theme: ${header} is ${headerRatio.toFixed(2)}:1 against white, needs ${AA_TEXT}:1`, code: 'headerContrast', params: { ratio: headerRatio, min: AA_TEXT } });
     for (const [fg, bg, min] of BASE.componentPairs) {
       const ratio = contrastRatio(colors[mode].parts[fg], colors[mode].parts[bg]);
-      if (ratio < min) issues.push({ path: `components.${sectionOf(fg)}.colors.${mode}.${fg.slice(fg.lastIndexOf('.') + 1)}`, message: `${fg} ${colors[mode].parts[fg]} on ${bg} ${colors[mode].parts[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)` });
+      if (ratio < min) issues.push({ path: `components.${sectionOf(fg)}.colors.${mode}.${fg.slice(fg.lastIndexOf('.') + 1)}`, message: `${fg} ${colors[mode].parts[fg]} on ${bg} ${colors[mode].parts[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)`, code: 'contrast', params: { color: fg, background: bg, ratio, min } });
     }
   }
   return issues;
@@ -159,7 +160,7 @@ function checkLayeredBackgrounds(pkg: ThemePackage, errors: Issue[]) {
     const value = get(pkg, path);
     if (typeof value !== 'string') continue;
     const bad = cssLayers(value).find((layer) => !IMAGE_LAYER.test(layer));
-    if (bad) errors.push({ path, message: `has a colour layer (${bad.slice(0, 60)}); the apps add more layers after it, so write it as linear-gradient(<colour>,<colour>)` });
+    if (bad) errors.push({ path, message: `has a colour layer (${bad.slice(0, 60)}); the apps add more layers after it, so write it as linear-gradient(<colour>,<colour>)`, code: 'colorLayer' });
   }
 }
 
@@ -176,15 +177,15 @@ export function validatePackage(input: unknown, opts: ValidateOptions = {}): Val
   checkRefs(pkg, errors);
   for (const mode of MODES) {
     for (const role of ROLE_NAMES) {
-      try { void resolvedColorsOne(pkg, mode, role); } catch (e) { errors.push({ path: `tokens.color.${mode}.${role}`, message: (e as Error).message }); }
+      try { void resolvedColorsOne(pkg, mode, role); } catch (e) { errors.push({ path: `tokens.color.${mode}.${role}`, message: (e as Error).message, code: 'brokenColor' }); }
     }
   }
   if (opts.assets) checkAssets(pkg, opts.assets, errors, warnings);
   if (!errors.length) {
-    try { errors.push(...contrastIssues(pkg, opts.builtIn)); } catch (e) { errors.push({ path: 'tokens.color', message: (e as Error).message }); }
+    try { errors.push(...contrastIssues(pkg, opts.builtIn)); } catch (e) { errors.push({ path: 'tokens.color', message: (e as Error).message, code: 'brokenColor' }); }
   }
   checkLayeredBackgrounds(pkg, errors);
-  if (get(pkg, 'banner.enabled') && !pkg.banner?.text) errors.push({ path: 'banner.text', message: 'is needed when the banner is on (both languages)' });
+  if (get(pkg, 'banner.enabled') && !pkg.banner?.text) errors.push({ path: 'banner.text', message: 'is needed when the banner is on (both languages)', code: 'bannerText' });
   return { ok: errors.length === 0, errors, warnings };
 }
 

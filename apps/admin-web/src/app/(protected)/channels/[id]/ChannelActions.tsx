@@ -21,6 +21,7 @@ import { hasBoth, hasLanguages, samePair, userTextEdit, userTextErrors, userText
 import { ChannelTransfer } from './ChannelTransfer';
 import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLabelDialog';
 import { ChannelHandleTools } from './ChannelHandleTools';
+import { FileButton } from '@/components/FileButton';
 
 interface Props {
   channel: {
@@ -173,7 +174,7 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
                 <label htmlFor={`${ids}-${kind}`} className="text-sm text-fg-muted">
                   {t(kind === 'avatar' ? 'channels.avatar' : 'channels.cover')}
                 </label>
-                <input id={`${ids}-${kind}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={upload(kind)} disabled={!!busy} className="text-sm text-fg file:me-3 file:rounded file:border file:border-border file:bg-surface-2 file:px-3 file:py-2 file:text-fg" data-testid={`channel-${kind}-input`} />
+                <FileButton id={`${ids}-${kind}`} accept="image/jpeg,image/png,image/webp" onChange={upload(kind)} disabled={!!busy} data-testid={`channel-${kind}-input`}>{t('content.chooseImage')}</FileButton>
                 <span className="text-xs text-fg-subtle">{busy === kind ? t('content.working') : t('content.imageHint')}</span>
               </div>
             ))}
