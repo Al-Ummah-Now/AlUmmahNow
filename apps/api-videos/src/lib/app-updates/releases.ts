@@ -10,8 +10,10 @@
  * Fail closed. A repo whose root-signed key list (`update-keys.json`) has been seen is "keys set
  * up", for good: from then on every manifest must carry a valid signature under its current,
  * non-revoked keys, or it is quarantined (never indexed, never linked) and flags the admin Errors
- * page. Before that, manifests are kept as unsigned, for the admin page only; the API never offers
- * an unsigned release to downloaded builds.
+ * page.
+ *
+ * Before a repo has a root key (wiki §5.5), its published unsigned releases feed a notice only: a version, never a
+ * file, a link or the release's own notes. A tag whose release is a draft has no files yet and is looked at again.
  */
 import {
 	APP_RELEASE_MANIFEST_MAX_BYTES,
@@ -43,6 +45,9 @@ const QUARANTINE_KEPT = 20;
 const FETCH_TIMEOUT_MS = 10_000;
 const KEY_LIST_MAX_BYTES = 16 * 1024;
 const SIG_MAX_BYTES = 4096;
+const SUMS_MAX_BYTES = 64 * 1024;
+/** Bump to look at every tag again (2: tags whose release had no manifest were marked seen before) */
+const INDEX_REV = 2;
 /** Repos whose staff-only admin builds are published to the private bucket */
 export const ADMIN_RELEASE_REPOS: readonly AppReleaseRepo[] = ['AlUmmahNowDesktop', 'AlUmmahNowApple'];
 
@@ -117,6 +122,9 @@ export interface ReleasesDocument {
 	appStore: Record<string, AppStoreStatus>;
 	/** Tags already looked at, newest first, per source (`github:<repo>`, `admin:<repo>`) */
 	seen: Record<string, string[]>;
+	/** Repos a root key was ever configured for: they never go back to the unsigned notice */
+	rooted: AppReleaseRepo[];
+	rev?: number;
 	/** Present once a repo's key list was accepted: the repo is then "keys set up" for good */
 	keys: Partial<Record<AppReleaseRepo, RepoKeys>>;
 	/** Newest first */
@@ -151,7 +159,7 @@ export interface IndexResult {
 export const entryKey = (app: string, platform: string, channel: string) => `${app}/${platform}/${channel}`;
 
 export function emptyReleases(): ReleasesDocument {
-	return { updatedAt: new Date(0).toISOString(), entries: {}, appStore: {}, seen: {}, keys: {}, quarantined: [] };
+	return { updatedAt: new Date(0).toISOString(), entries: {}, appStore: {}, seen: {}, keys: {}, rooted: [], quarantined: [] };
 }
 
 /** Never throws: a bad variable trusts no root key (no repo can then leave "no keys yet"). */
@@ -169,6 +177,30 @@ export function rootKeys(raw: string | undefined): Partial<Record<AppReleaseRepo
 		logger.warn('[AppUpdates] UPDATE_ROOT_KEYS is not valid JSON; no root key trusted');
 		return {};
 	}
+}
+
+/**
+ * Repos with no root key at all: their releases may feed the unsigned notice (wiki §5.5). Fails closed:
+ * a variable that isn't a JSON object, or a repo with any value but an empty list, counts as configured.
+ */
+export function noKeyRepos(doc: Pick<ReleasesDocument, 'keys' | 'rooted'>, raw: string | undefined): Set<AppReleaseRepo> {
+	let configured: Record<string, unknown> = {};
+	if (raw) {
+		try {
+			const parsed: unknown = JSON.parse(raw);
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Set();
+			configured = parsed as Record<string, unknown>;
+		} catch {
+			return new Set();
+		}
+	}
+	return new Set(
+		APP_RELEASE_REPOS.filter((repo) => {
+			const v = configured[repo];
+			const none = v === undefined || (Array.isArray(v) && v.length === 0);
+			return none && !doc.keys[repo] && !doc.rooted.includes(repo);
+		}),
+	);
 }
 
 /** Tags in a GitHub releases Atom feed, newest first. The fixed `update-keys` release is not a tag of an app. */
@@ -203,9 +235,29 @@ interface Source {
 	keyFile(name: string, max: number): Promise<Uint8Array | null | 'too_large'>;
 }
 
+/** Reads at most `max` bytes: a bigger file is never held in memory. */
 async function body(res: Response, max: number): Promise<Uint8Array | 'too_large'> {
-	const buf = new Uint8Array(await res.arrayBuffer());
-	return buf.byteLength > max ? 'too_large' : buf;
+	const reader = res.body?.getReader();
+	if (!reader) return new Uint8Array();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > max) {
+			await reader.cancel();
+			return 'too_large';
+		}
+		chunks.push(value);
+	}
+	const out = new Uint8Array(size);
+	let at = 0;
+	for (const c of chunks) {
+		out.set(c, at);
+		at += c.byteLength;
+	}
+	return out;
 }
 
 function githubSource(fetchImpl: typeof fetch, repo: AppReleaseRepo): Source {
@@ -304,6 +356,18 @@ export async function loadKeyList(source: Source, roots: readonly string[], curr
 	return { accepted: { serial: accepted.serial, list: decode(list), sig: decode(sig), revoked: trust.revoked, yanked: trust.yanked, acceptedAt: now.toISOString() } };
 }
 
+/** Removes a repo's unsigned releases: its root key is configured now. */
+function dropUnsigned(doc: ReleasesDocument, repo: AppReleaseRepo): boolean {
+	let changed = false;
+	for (const [key, e] of Object.entries(doc.entries)) {
+		if (e.repo === repo && !e.signed) {
+			delete doc.entries[key];
+			changed = true;
+		}
+	}
+	return changed;
+}
+
 /** Pairs a manifest releases: every (app, platform) with a file or a store upload. */
 function pairsOf(m: AppReleaseManifest): { app: AppConfigApp; platform: AppConfigPlatform }[] {
 	const seen = new Map<string, { app: AppConfigApp; platform: AppConfigPlatform }>();
@@ -383,6 +447,8 @@ export async function readReleases(kv: KVNamespace | undefined): Promise<Release
 		appStore: raw.appStore ?? {},
 		seen: raw.seen ?? {},
 		keys: raw.keys ?? {},
+		rooted: raw.rooted ?? [],
+		rev: raw.rev,
 		quarantined: raw.quarantined ?? [],
 	};
 }
@@ -413,6 +479,21 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 		const roots = rootKeys(env.UPDATE_ROOT_KEYS);
 		const doc = await readReleases(kv);
 		let changed = false;
+		if (doc.rev !== INDEX_REV) {
+			doc.seen = {};
+			doc.rev = INDEX_REV;
+			changed = true;
+		}
+		const keyless = noKeyRepos(doc, env.UPDATE_ROOT_KEYS);
+		for (const repo of APP_RELEASE_REPOS) {
+			if (keyless.has(repo)) continue;
+			// A root key is configured: for good, and nothing unsigned of this repo is offered any more
+			if (!doc.rooted.includes(repo)) {
+				doc.rooted.push(repo);
+				changed = true;
+			}
+			if (dropUnsigned(doc, repo)) changed = true;
+		}
 		const problem = (p: IndexProblem) => {
 			result.problems.push(p);
 			opts.onProblem?.(p);
@@ -439,7 +520,7 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 			// Fail closed: once a root key is configured for a repo, nothing of it is indexed (and no tag is marked
 			// seen) until a key list signed by that root key has been accepted. Unsigned indexing is only for repos
 			// with no root key at all.
-			if ((roots[repo] ?? []).length && !doc.keys[repo]) {
+			if (!keyless.has(repo) && !doc.keys[repo]) {
 				problem({ source: source.id, repo, tag: 'update-keys', reason: 'key_list_not_accepted' });
 				continue;
 			}
@@ -455,17 +536,22 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 			// Oldest first, so a pair's newest release is applied last
 			for (const tag of tags.filter((t) => !seen.includes(t)).reverse()) {
 				let outcome: ManifestOutcome;
+				let published = true;
 				try {
 					outcome = await loadManifest(source, tag, doc.keys[repo]);
+					if (outcome.kind === 'missing' && !source.private) published = (await source.file(tag, 'SHA256SUMS.txt', SUMS_MAX_BYTES)) !== null;
 				} catch (error) {
 					logger.warn('[AppUpdates] Manifest unreadable; retried next run', { source: source.id, tag, error: error instanceof Error ? error.message : String(error) });
 					continue;
 				}
+				// Neither a manifest nor checksums: a draft, or still being published. Looked at again next run.
+				if (!published) continue;
 				seen.unshift(tag);
 				changed = true;
 				if (outcome.kind === 'missing') continue;
 				if (outcome.kind === 'quarantined') {
-					doc.quarantined = [{ source: source.id, repo, tag, reason: outcome.reason, at: now().toISOString() }, ...doc.quarantined].slice(0, QUARANTINE_KEPT);
+					const reason = outcome.reason;
+					doc.quarantined = [{ source: source.id, repo, tag, reason, at: now().toISOString() }, ...doc.quarantined.filter((q) => q.source !== source.id || q.tag !== tag || q.reason !== reason)].slice(0, QUARANTINE_KEPT);
 					problem({ source: source.id, repo, tag, reason: outcome.reason, detail: outcome.detail });
 					continue;
 				}

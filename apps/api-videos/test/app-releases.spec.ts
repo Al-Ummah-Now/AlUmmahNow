@@ -5,7 +5,7 @@
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { appReleaseKeyId } from '@al-ummah/shared-types';
-import { applyManifest, emptyReleases, entryKey, indexReleases, readReleases, rootKeys, tagsFromAtom, RELEASES_KEY } from '../src/lib/app-updates/releases';
+import { applyManifest, emptyReleases, entryKey, indexReleases, noKeyRepos, readReleases, rootKeys, tagsFromAtom, RELEASES_KEY } from '../src/lib/app-updates/releases';
 
 class MemoryKV {
 	values = new Map<string, string>();
@@ -127,6 +127,7 @@ describe('release index', () => {
 			[feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.23', 'v2026.11.22']) },
 			...(await keyRoutes(1, [release])),
 			...(await signedRoutes('v2026.11.23', '2026.11.23', release)),
+			[dl('v2026.11.22', 'SHA256SUMS.txt')]: { status: 200, body: 'x' },
 			[lookup('net.alummahnow.viewer')]: { status: 200, body: JSON.stringify({ resultCount: 1, results: [{ bundleId: 'net.alummahnow.viewer', version: '1.2.0', trackId: 42, trackViewUrl: 'https://apps.apple.com/app/id42' }] }) },
 			[lookup('net.alummahnow.viewer.mac', true)]: { status: 200, body: JSON.stringify({ resultCount: 0, results: [] }) },
 			[lookup('net.alummahnow.studio')]: { status: 200, body: JSON.stringify({ resultCount: 0, results: [] }) },
@@ -145,7 +146,8 @@ describe('release index', () => {
 		assert.equal(doc.keys[TOOLS]?.serial, 1);
 		assert.equal(doc.appStore['net.alummahnow.viewer'].version, '1.2.0');
 		assert.equal(doc.appStore['net.alummahnow.studio'], undefined);
-		assert.deepEqual(doc.seen[`github:${TOOLS}`], ['v2026.11.23', 'v2026.11.22'], 'a tag without a manifest is seen too');
+		assert.deepEqual(doc.seen[`github:${TOOLS}`], ['v2026.11.23', 'v2026.11.22'], 'a published release without a manifest is seen too');
+		assert.equal(win.history.length, 1, 'and never indexed: this repo has keys');
 		assert.equal(kv.values.has('releases:running'), false, 'the run marker is cleared');
 
 		calls.length = 0;
@@ -193,6 +195,44 @@ describe('release index', () => {
 		assert.deepEqual(r.added, [{ source: `github:${TOOLS}`, repo: TOOLS, tag: 'v2026.11.23', signed: false }]);
 		assert.deepEqual(problems, []);
 		assert.equal((await readReleases(kv as unknown as KVNamespace)).entries[entryKey('tools', 'windows', 'stable')].signed, false);
+	});
+
+	it('a draft’s tag is looked at again until its release is published; an earlier index is looked at once more', async () => {
+		const kv = new MemoryKV();
+		await kv.put(RELEASES_KEY, JSON.stringify({ entries: {}, seen: { [`github:${TOOLS}`]: ['v2026.11.24'] } }));
+		const routes: Routes = { [feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.24']) }, ...(await keyRoutes(1, [release])) };
+		assert.deepEqual((await indexReleases(env(kv), { fetchImpl: fakeFetch(routes) })).added, []);
+		assert.deepEqual((await readReleases(kv as unknown as KVNamespace)).seen[`github:${TOOLS}`], []);
+		const published = { ...routes, ...(await signedRoutes('v2026.11.24', '2026.11.24', release)) };
+		assert.equal((await indexReleases(env(kv), { fetchImpl: fakeFetch(published) })).added.length, 1);
+		assert.equal((await indexReleases(env(kv), { fetchImpl: fakeFetch(published) })).added.length, 0);
+	});
+
+	it('a file above its limit is refused without being read whole', async () => {
+		const kv = new MemoryKV();
+		const r = await indexReleases(keyless(kv), { fetchImpl: fakeFetch({ [feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.24']) }, [dl('v2026.11.24', 'app-release.json')]: { status: 200, body: ' '.repeat(300 * 1024) } }) });
+		assert.deepEqual(r.problems.filter((p) => p.repo === TOOLS).map((p) => p.reason), ['too_large']);
+	});
+
+	it('a root key ends the unsigned notice for good, even if the variable is later removed or broken', async () => {
+		const kv = new MemoryKV();
+		const tag = 'v2026.11.24';
+		const routes: Routes = { [feed()]: { status: 200, body: atom(TOOLS, [tag]) }, [dl(tag, 'app-release.json')]: { status: 200, body: JSON.stringify(manifest(TOOLS, tag, '2026.11.24')) } };
+		const doc = async () => readReleases(kv as unknown as KVNamespace);
+		await indexReleases(keyless(kv), { fetchImpl: fakeFetch(routes) });
+		assert.ok(noKeyRepos(await doc(), undefined).has(TOOLS));
+		assert.equal(noKeyRepos(await doc(), JSON.stringify({ [TOOLS]: [root.pub] })).has(TOOLS), false, 'at once, before any index run');
+		await indexReleases(env(kv), { fetchImpl: fakeFetch(routes) });
+		assert.deepEqual((await doc()).entries, {});
+		assert.equal(noKeyRepos(await doc(), undefined).has(TOOLS), false);
+		await indexReleases(keyless(kv), { fetchImpl: fakeFetch(routes) });
+		assert.deepEqual((await doc()).entries, {}, 'never back to the unsigned path');
+		const fresh = emptyReleases();
+		for (const bad of ['nope', '[]', '"x"']) assert.equal(noKeyRepos(fresh, bad).size, 0, bad);
+		assert.equal(noKeyRepos(fresh, JSON.stringify({ [TOOLS]: ['short'] })).has(TOOLS), false, 'a malformed key counts as configured');
+		assert.equal(noKeyRepos(fresh, JSON.stringify({ [TOOLS]: [] })).has(TOOLS), true);
+		fresh.keys[TOOLS] = { serial: 1, list: '{}', sig: '{}', revoked: [], yanked: [], acceptedAt: '' };
+		assert.equal(noKeyRepos(fresh, undefined).has(TOOLS), false, 'a stored key list');
 	});
 
 	it('no keys yet: an unsigned manifest naming another tag is quarantined', async () => {

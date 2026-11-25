@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from './api-version';
 import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, APP_CONFIG_SEMVER, APP_CONFIG_VERSIONS_KEY, APP_RELEASE_NOTES_MAX, compareAppVersionCores, compareAppVersions } from '@al-ummah/shared-types';
-import type { AppUpdateChannel } from '@al-ummah/shared-types';
+import type { AppReleaseRepo, AppUpdateChannel } from '@al-ummah/shared-types';
 import { emptyReleases, type ReleasesDocument } from './app-updates/releases';
 import { updateAnswer, type AvailabilityDocument, type UpdateInput } from './app-updates/answer';
 import type { AppConfigApp, AppConfigPlatform } from '@al-ummah/shared-types';
@@ -79,6 +79,7 @@ export interface UpdateDocuments {
 	releases?: ReleasesDocument;
 	availability?: AvailabilityDocument;
 	adminAppsUrl?: string;
+	noKeys?: ReadonlySet<AppReleaseRepo>;
 }
 
 export function buildAppConfig(
@@ -100,6 +101,7 @@ export function buildAppConfig(
 				availability: updates.availability ?? {},
 				checkHours: remote.config?.['updates.checkHours'],
 				adminAppsUrl: updates.adminAppsUrl,
+				noKeys: updates.noKeys,
 			},
 		),
 		// Remote config (Epic 9.5, lib/feature-flags.ts)

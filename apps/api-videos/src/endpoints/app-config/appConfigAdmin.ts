@@ -28,7 +28,7 @@ import { logger } from '../../lib/logger';
 import { apiError } from '../../lib/api-error';
 import { AVAILABILITY_KEY, type AvailabilityDocument } from '../../lib/app-updates/answer';
 import { minimumProblems } from '../../lib/app-updates/minimum';
-import { readReleases } from '../../lib/app-updates/releases';
+import { noKeyRepos, readReleases } from '../../lib/app-updates/releases';
 
 export const APP_CONFIG_SCHEMAS: Record<AppConfigKey, z.ZodTypeAny> = {
 	flags: RulesDocumentSchema,
@@ -86,7 +86,7 @@ export class AppConfigDocumentPut extends PublicRoute {
 		if (params.key === 'versions') {
 			// A minimum no install source can give users yet would strand them (AUN-APP-UPDATES §3.4)
 			const [releases, availability] = await Promise.all([readReleases(kv), kv.get(AVAILABILITY_KEY, { type: 'json' })]);
-			const problems = minimumProblems(parsed.data as VersionsDocument, releases, (availability ?? {}) as AvailabilityDocument).map((p) => ({ path: [p.key, p.field], message: p.message }));
+			const problems = minimumProblems(parsed.data as VersionsDocument, releases, (availability ?? {}) as AvailabilityDocument, noKeyRepos(releases, c.env.UPDATE_ROOT_KEYS)).map((p) => ({ path: [p.key, p.field], message: p.message }));
 			if (problems.length) return apiError(c, 400, 'validation_error', { error: 'invalid_document', issues: problems, problems });
 		}
 		await kv.put(params.key, JSON.stringify(parsed.data));
@@ -151,7 +151,7 @@ export class AppConfigEvaluate extends PublicRoute {
 				{ ...ctx, channel: update.channel, source: update.source, arch: update.arch },
 				docs.versions,
 				{ flags: evaluateFlags(docs.flags ?? [], ctx), config: evaluateConfig(docs.config ?? [], ctx) },
-				{ enabled: true, releases, availability: (availability ?? {}) as AvailabilityDocument, adminAppsUrl: c.env.ADMIN_APPS_URL },
+				{ enabled: true, releases, availability: (availability ?? {}) as AvailabilityDocument, adminAppsUrl: c.env.ADMIN_APPS_URL, noKeys: noKeyRepos(releases, c.env.UPDATE_ROOT_KEYS) },
 			),
 		});
 	}

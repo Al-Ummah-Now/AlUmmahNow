@@ -90,6 +90,70 @@ describe('update answer per source', () => {
 		}
 	});
 
+	describe('no root key yet: notice (§4.1.1)', () => {
+		const noKeys = new Set(['AlUmmahNowTools', 'AlUmmahNowDesktop'] as const);
+		const unsigned = { ...tools, signed: false };
+		const c = (over: Partial<UpdateContext> = {}, e: ReleaseEntry = unsigned) => ctx({ releases: releases([e], []), noKeys, ...over });
+		const noUrls = (a: ReturnType<typeof updateAnswer>) => assert.deepEqual([a.url, a.storeUrl, a.manifestUrl, a.tag, a.keys], [null, null, null, null, null]);
+
+		it('a newer release is announced with its version only: no unsigned notes, no URL of any kind', () => {
+			for (const source of ['direct', 'managed'] as const) {
+				const a = updateAnswer(input({ source }), c({ policy: { minimumVersion: '0.0.0', storeUrl: 'https://example.com/x' } }));
+				assert.deepEqual([a.status, a.action, a.latestVersion, a.signed, a.available, a.channel], ['recommended', 'notice', '2026.11.23', false, true, 'stable']);
+				assert.equal(a.notes, null);
+				noUrls(a);
+			}
+		});
+
+		it('an admin’s notes for that version are the only notes', () => {
+			const notesOverrides = { '2026.11.23': { en: 'Faster.', ar: 'أسرع.' } };
+			assert.deepEqual(updateAnswer(input({}), c({ policy: { minimumVersion: '0.0.0', notesOverrides } })).notes, notesOverrides['2026.11.23']);
+		});
+
+		it('up to date', () => {
+			const a = updateAnswer(input({ version: '2026.11.23' }), c());
+			assert.deepEqual([a.status, a.action, a.notes], ['ok', 'notice', null]);
+		});
+
+		it('below the minimum: required, with the message and still no URL', () => {
+			const message = { en: 'Too old.', ar: 'قديم.' };
+			const a = updateAnswer(input({}), c({ policy: { minimumVersion: '2026.11.23', message } }));
+			assert.deepEqual([a.status, a.action, a.available, a.message], ['required', 'notice', true, message]);
+			noUrls(a);
+		});
+
+		it('a release below the minimum would not help: no action, so no forced screen', () => {
+			const a = updateAnswer(input({}), c({ policy: { minimumVersion: '2026.12.01' } }));
+			assert.deepEqual([a.status, a.action, a.available], ['required', 'none', false]);
+			noUrls(a);
+		});
+
+		it('never once a root key is configured, and never for stores or an unknown source', () => {
+			assert.equal(updateAnswer(input({}), c({ noKeys: new Set() })).action, 'none');
+			assert.equal(updateAnswer(input({}), c({ noKeys: undefined })).action, 'none');
+			assert.equal(updateAnswer(input({ source: undefined }), c()).action, 'none');
+			for (const source of ['play', 'msstore', 'appstore', 'testflight', 'amazon', 'samsung'] as const) assert.notEqual(updateAnswer(input({ source }), c()).action, 'notice', source);
+		});
+
+		it('switch off: nothing', () => assert.equal(updateAnswer(input({}), c({ enabled: false })).action, 'none'));
+
+		it('admin: only while the staff Apps page is set, and never with notes', () => {
+			const admin = entry({ app: 'admin', platform: 'windows', repo: 'AlUmmahNowDesktop', version: '1.4.0', signed: false, private: true, url: null, manifestUrl: null });
+			const q = input({ app: 'admin', platform: 'windows', version: '1.3.0', source: 'managed' });
+			const a = updateAnswer(q, c({ adminAppsUrl: 'https://admin.example.com/apps' }, admin));
+			assert.deepEqual([a.action, a.notes], ['notice', null]);
+			noUrls(a);
+			assert.equal(updateAnswer(q, c({}, admin)).action, 'none');
+		});
+
+		it('the minimum counts published releases of a repo without keys, no higher', () => {
+			const doc = releases([unsigned], []);
+			assert.equal(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.23' } }, doc, {}, noKeys).length, 0);
+			assert.match(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.24' } }, doc, {}, noKeys)[0].message, /newest published release/);
+			assert.equal(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.23' } }, doc, {}).length, 1, 'a repo with keys');
+		});
+	});
+
 	it('App Store: the version Apple serves now, not the uploaded one', () => {
 		const viewer = entry({ app: 'viewer', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.3.0.0' });
 		const doc = releases([viewer]);

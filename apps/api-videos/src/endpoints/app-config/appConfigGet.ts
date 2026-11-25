@@ -8,7 +8,7 @@ import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
 import { APPS, PLATFORMS, SEMVER, buildAppConfig, loadVersionsDocument } from '../../lib/app-config';
 import { AVAILABILITY_KEY, type AvailabilityDocument } from '../../lib/app-updates/answer';
-import { emptyReleases, readReleases } from '../../lib/app-updates/releases';
+import { emptyReleases, noKeyRepos, readReleases } from '../../lib/app-updates/releases';
 import { appUpdatesOn } from '../../lib/app-updates/switch';
 import { evaluateConfig, evaluateFlags, loadRules } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
@@ -31,7 +31,7 @@ const AppConfigResponse = z.object({
 		publishedAt: z.string().nullable(),
 		notes: Localized.nullable().describe('Release notes in English and Arabic; the app shows its own UI language'),
 		message: Localized.nullable().describe('Admin text for the forced screen (only when required)'),
-		action: z.enum(['store', 'install', 'download', 'none']).describe('store: open the store; install: self-update from manifestUrl; download: open url'),
+		action: z.enum(['store', 'install', 'download', 'notice', 'none']).describe('store: open the store; install: self-update from manifestUrl; download: open url; notice: no signing keys yet, so say a new version is out and open the app’s own compiled-in page (every URL here is null)'),
 		url: z.string().nullable(),
 		manifestUrl: z.string().nullable().describe('Signed app-release.json; verify it with the key list before installing'),
 		tag: z.string().nullable().describe('The release tag the signed manifest must name'),
@@ -95,7 +95,7 @@ export class AppConfigGet extends PublicRoute {
 				{ ...ctx, channel: query.channel, source: query.source, arch: query.arch },
 				versions.doc,
 				{ flags: evaluateFlags(flagRules.rules, ctx), config: evaluateConfig(configRules.rules, ctx) },
-				{ enabled, releases, availability: (availability ?? {}) as AvailabilityDocument, adminAppsUrl: c.env.ADMIN_APPS_URL },
+				{ enabled, releases, availability: (availability ?? {}) as AvailabilityDocument, adminAppsUrl: c.env.ADMIN_APPS_URL, noKeys: noKeyRepos(releases, c.env.UPDATE_ROOT_KEYS) },
 			),
 		);
 	}
