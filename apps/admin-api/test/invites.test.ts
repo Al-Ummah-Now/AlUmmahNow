@@ -222,6 +222,41 @@ describe('POST /api/invites', () => {
     assert.equal('role' in inv, false);
   });
 
+  it('forwards bilingual nameLocalized for new invite channels and rejects one-sided localized names', async () => {
+    const t = setup();
+    const bad = await t.call('POST', '/api/invites', invite({
+      email: 'one-sided@example.com',
+      channels: { create: [{ nameLocalized: { en: 'Only English', ar: '' } }] },
+    }));
+    assert.equal(bad.status, 400);
+
+    const emptyLoc = await t.call('POST', '/api/invites', invite({
+      email: 'emptyloc@example.com',
+      channels: { create: [{ name: 'A', nameLocalized: { en: '', ar: '' } }] },
+    }));
+    assert.equal(emptyLoc.status, 400);
+
+    const mismatched = await t.call('POST', '/api/invites', invite({
+      email: 'mismatch@example.com',
+      channels: { create: [{ name: 'A', nameLocalized: { en: 'B', ar: 'ب' } }] },
+    }));
+    assert.equal(mismatched.status, 400);
+
+    const tooLong = await t.call('POST', '/api/invites', invite({
+      email: 'long@example.com',
+      channels: { create: [{ nameLocalized: { en: 'Valid', ar: 'أ'.repeat(101) } }] },
+    }));
+    assert.equal(tooLong.status, 400);
+
+    const res = await t.call('POST', '/api/invites', invite({
+      email: 'bilingual@example.com',
+      channels: { create: [{ name: 'Seerah Circle', nameLocalized: { en: 'Seerah Circle', ar: 'حلقة السيرة' }, handle: 'seerah' }] },
+    }));
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const call = t.videos.calls.find((c) => c.path.endsWith('/channels'));
+    assert.deepEqual(call?.body.nameLocalized, { en: 'Seerah Circle', ar: 'حلقة السيرة' });
+  });
+
   it('assigns existing channels (transfer job) to the invited user before sign-in', async () => {
     const t = setup();
     const res = await t.call('POST', '/api/invites', invite({ channels: { transfer: ['ch_old'] } }));

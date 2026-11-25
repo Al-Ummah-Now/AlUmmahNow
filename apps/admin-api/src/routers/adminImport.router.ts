@@ -164,24 +164,83 @@ const USER_ID = /^usr_[0-9a-f]{32}$/;
 const text = (v: unknown, max: number): string | null | undefined =>
   v === undefined || v === null ? undefined : typeof v === 'string' ? v.trim().slice(0, max) || undefined : null;
 
-/** Validates a new channel: a name of 1–100 characters; handle, description and ownerId optional. */
+function parseLocalizedPair(
+  raw: unknown,
+  field: string,
+  max: number,
+  required: boolean,
+): { ok: true; value?: { en: string; ar: string } } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true };
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: `${field} must be an object with en and ar` };
+  const obj = raw as Record<string, unknown>;
+  const enRaw = obj.en;
+  const arRaw = obj.ar;
+  if (enRaw !== undefined && enRaw !== null && typeof enRaw !== 'string') return { ok: false, error: `${field}.en must be text` };
+  if (arRaw !== undefined && arRaw !== null && typeof arRaw !== 'string') return { ok: false, error: `${field}.ar must be text` };
+  const en = typeof enRaw === 'string' ? enRaw.trim() : '';
+  const ar = typeof arRaw === 'string' ? arRaw.trim() : '';
+  if (!en && !ar) return required ? { ok: false, error: `${field} requires both en and ar` } : { ok: true };
+  if (!en || !ar) return { ok: false, error: `${field} requires both en and ar` };
+  if (en.length > max || ar.length > max) return { ok: false, error: `${field} values must be at most ${max} characters` };
+  return { ok: true, value: { en, ar } };
+}
+
+/**
+ * Validates a new channel: a name of 1–100 characters (and when localized, both
+ * en and ar); handle, description and ownerId optional.
+ * Channels are creator/user content (wiki guides/localized-fields.md), so legacy
+ * callers omitting `nameLocalized` remain accepted, while any localized map must
+ * provide both `en` and `ar` and agree with `name`/`description`.
+ */
 export function parseNewChannel(body: unknown):
-  | { ok: true; value: { name: string; handle?: string; description?: string; ownerId?: string } }
+  | {
+      ok: true;
+      value: {
+        name: string;
+        nameLocalized?: { en: string; ar: string };
+        handle?: string;
+        description?: string;
+        descriptionLocalized?: { en: string; ar: string };
+        ownerId?: string;
+      };
+    }
   | { ok: false; error: string } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, error: 'A JSON object is required' };
   const b = body as Record<string, unknown>;
-  const name = typeof b.name === 'string' ? b.name.trim() : '';
+  const nameLoc = parseLocalizedPair(b.nameLocalized, 'nameLocalized', 100, true);
+  if (nameLoc.ok === false) return nameLoc;
+  if (b.name !== undefined && b.name !== null && typeof b.name !== 'string') return { ok: false, error: 'name must be text' };
+  const rawName = typeof b.name === 'string' ? b.name.trim() : '';
+  if (rawName && nameLoc.value && rawName !== nameLoc.value.en) {
+    return { ok: false, error: 'name must match nameLocalized.en' };
+  }
+  const name = nameLoc.value?.en ?? rawName;
   if (!name || name.length > 100) return { ok: false, error: 'name is required (at most 100 characters)' };
-  const handle = text(b.handle, 64);
-  const description = text(b.description, 5000);
+  const handle = text(b.handle, 1000);
+  const descLoc = parseLocalizedPair(b.descriptionLocalized, 'descriptionLocalized', 5000, false);
+  if (descLoc.ok === false) return descLoc;
+  if (b.description !== undefined && b.description !== null && typeof b.description !== 'string') return { ok: false, error: 'description must be text' };
+  const rawDescription = typeof b.description === 'string' && b.description.trim() ? b.description.trim() : undefined;
+  if (rawDescription && rawDescription.length > 5000) return { ok: false, error: 'description must be at most 5000 characters' };
+  if (rawDescription && descLoc.value && rawDescription !== descLoc.value.en) {
+    return { ok: false, error: 'description must match descriptionLocalized.en' };
+  }
   if (handle === null) return { ok: false, error: 'handle must be text' };
-  if (description === null) return { ok: false, error: 'description must be text' };
+  if (handle && handle.length > 60) return { ok: false, error: 'handle must be at most 60 characters' };
+  const description = descLoc.value?.en ?? rawDescription;
   if (b.ownerId !== undefined && b.ownerId !== null && (typeof b.ownerId !== 'string' || !USER_ID.test(b.ownerId))) {
     return { ok: false, error: 'ownerId must be a videos user id (usr_ followed by 32 hex digits)' };
   }
   return {
     ok: true,
-    value: { name, ...(handle ? { handle } : {}), ...(description ? { description } : {}), ...(b.ownerId ? { ownerId: b.ownerId as string } : {}) },
+    value: {
+      name,
+      ...(nameLoc.value ? { nameLocalized: nameLoc.value } : {}),
+      ...(handle ? { handle } : {}),
+      ...(description ? { description } : {}),
+      ...(descLoc.value ? { descriptionLocalized: descLoc.value } : {}),
+      ...(b.ownerId ? { ownerId: b.ownerId as string } : {}),
+    },
   };
 }
 

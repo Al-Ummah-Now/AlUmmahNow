@@ -5,8 +5,9 @@ import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { ThemeListItem } from '@/lib/api/admin';
-import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { ConfirmButton } from '@/components/content/actions';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { trashHref } from '@/lib/trash';
 import { ThemeApiError, duplicate, exportUrl, importZip, removeTheme } from './api';
 import { Sep } from '@/components/Sep';
@@ -91,14 +92,19 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
       </ul>
       {source && (
         <div role="dialog" aria-modal="true" aria-labelledby="dup-title" className="fixed inset-0 z-50 grid place-items-center bg-fg/40 p-4" data-testid="theme-duplicate-dialog">
-          <form className={`${cardClass} w-full max-w-md space-y-3`} onSubmit={(e) => { e.preventDefault(); createCopy(); }}>
+          <form className={`${cardClass} w-full max-w-lg space-y-3`} onSubmit={(e) => { e.preventDefault(); createCopy(); }}>
             <h3 id="dup-title" className="text-lg font-semibold text-fg">{t('themeBuilder.duplicateTitle', { name: source.name[locale] })}</h3>
-            <label className="block text-sm text-fg">{t('themeBuilder.nameEn')}
-              <input dir="ltr" required maxLength={80} className={`${fieldClass} w-full mt-1`} value={form.en} onChange={(e) => setForm({ ...form, en: e.target.value })} data-testid="theme-duplicate-name-en" />
-            </label>
-            <label className="block text-sm text-fg">{t('themeBuilder.nameAr')}
-              <input dir="rtl" required maxLength={80} className={`${fieldClass} w-full mt-1`} value={form.ar} onChange={(e) => setForm({ ...form, ar: e.target.value })} data-testid="theme-duplicate-name-ar" />
-            </label>
+            <LocalizedFieldPair
+              label={t('themeBuilder.name')}
+              field="themes.name"
+              value={form}
+              onChange={setForm}
+              maxLength={80}
+              required
+              disabled={pending}
+              testId="theme-duplicate-name"
+              inputTestIds={{ en: 'theme-duplicate-name-en', ar: 'theme-duplicate-name-ar' }}
+            />
             <div className="flex justify-end gap-2">
               <button type="button" className={secondaryButtonClass} onClick={() => setSource(null)}>{t('themeBuilder.cancel')}</button>
               <button type="submit" className={primaryButtonClass} disabled={pending || !form.en.trim() || !form.ar.trim()} data-testid="theme-duplicate-create">{pending ? t('themeBuilder.working') : t('themeBuilder.create')}</button>

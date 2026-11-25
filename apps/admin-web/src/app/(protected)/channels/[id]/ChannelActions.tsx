@@ -16,6 +16,8 @@ import { formatDate } from '@/i18n/translate';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
+import { hasBoth, hasLanguages, samePair, userTextEdit, userTextErrors, userTextPair, type LocalizedPair } from '@/lib/localized';
 import { ChannelTransfer } from './ChannelTransfer';
 import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLabelDialog';
 import { ChannelHandleTools } from './ChannelHandleTools';
@@ -24,8 +26,10 @@ interface Props {
   channel: {
     id: string;
     name: string;
+    nameLocalized?: Record<string, string>;
     handle: string | null;
     description: string;
+    descriptionLocalized?: Record<string, string>;
     isVerified: boolean;
     verificationKind: LabelKind | null;
     isSuspended: boolean;
@@ -44,10 +48,13 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
   const { t, locale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
-  const [name, setName] = useState(channel.name);
   const [labelMode, setLabelMode] = useState<LabelMode | null>(null);
+  const initialName = userTextPair(channel.name, channel.nameLocalized);
+  const initialDescription = userTextPair(channel.description, channel.descriptionLocalized);
+  const [name, setName] = useState<LocalizedPair>(initialName);
   const [handle, setHandle] = useState(channel.handle ?? '');
-  const [description, setDescription] = useState(channel.description);
+  const [description, setDescription] = useState<LocalizedPair>(initialDescription);
+  const [fieldErrors, setFieldErrors] = useState<{ nameEn?: string; nameAr?: string; descEn?: string; descAr?: string }>({});
 
   const can = (p: AdminContentPermission) => permissions.includes(p);
   const canManage = can('channels:manage');
@@ -56,10 +63,10 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
     return <Notice testId="content-read-only">{t('content.readOnly')}</Notice>;
   }
 
-  const edit: Record<string, string> = {};
-  if (name.trim() !== channel.name) edit.name = name.trim();
-  if (handle.trim().replace(/^@/, '') !== (channel.handle ?? '')) edit.handle = handle.trim().replace(/^@/, '');
-  if (description !== channel.description) edit.description = description;
+  const nameChanged = !samePair(name, initialName);
+  const handleChanged = handle.trim().replace(/^@/, '') !== (channel.handle ?? '');
+  const descChanged = !samePair(description, initialDescription);
+  const hasChanges = nameChanged || handleChanged || descChanged;
 
   const upload = (kind: 'avatar' | 'cover') => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0];
@@ -78,26 +85,80 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
         <SectionCard title={t('channels.editTitle')} id={`${ids}-edit`} testId="channel-edit">
           <form
             className="space-y-4"
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
-              if (Object.keys(edit).length) await run('edit', () => updateChannel(channel.id, edit), { success: t('content.saved') });
+              if (!hasChanges) return;
+              const nextErrors: typeof fieldErrors = {};
+              if (nameChanged) {
+                const missing = userTextErrors(initialName, name, true);
+                if (missing.includes('en')) nextErrors.nameEn = t('localized.required', { lang: t('localized.langEnglish') });
+                if (missing.includes('ar')) nextErrors.nameAr = t('localized.required', { lang: t('localized.langArabic') });
+              }
+              if (descChanged) {
+                const missing = userTextErrors(initialDescription, description, false);
+                if (missing.includes('en')) nextErrors.descEn = t('localized.required', { lang: t('localized.langEnglish') });
+                if (missing.includes('ar')) nextErrors.descAr = t('localized.required', { lang: t('localized.langArabic') });
+              }
+              setFieldErrors(nextErrors);
+              if (Object.keys(nextErrors).length) return;
+
+              const edit: Parameters<typeof updateChannel>[1] = {};
+              if (nameChanged) {
+                const { plain, map } = userTextEdit(initialName, name, hasLanguages(channel.nameLocalized));
+                edit.name = plain;
+                if (map) edit.nameLocalized = map;
+              }
+              if (handleChanged) edit.handle = handle.trim().replace(/^@/, '');
+              if (descChanged) {
+                const { plain, map } = userTextEdit(initialDescription, description, hasLanguages(channel.descriptionLocalized));
+                edit.description = plain;
+                if (map) edit.descriptionLocalized = map;
+              }
+              await run('edit', () => updateChannel(channel.id, edit), { success: t('content.saved') });
             }}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label htmlFor={`${ids}-name`} className="text-sm text-fg-muted">{t('channels.name')}</label>
-                <input id={`${ids}-name`} value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required dir="auto" className={fieldClass} data-testid="channel-edit-name" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor={`${ids}-handle`} className="text-sm text-fg-muted">{t('channels.handle')}</label>
-                <input id={`${ids}-handle`} value={handle} onChange={(e) => setHandle(e.target.value)} maxLength={60} dir="ltr" className={fieldClass} data-testid="channel-edit-handle" />
-              </div>
+            <LocalizedFieldPair
+              id={`${ids}-name`}
+              label={t('channels.name')}
+              field="channels.name"
+              value={name}
+              onChange={(next) => {
+                setName(next);
+                setFieldErrors((prev) => ({ ...prev, nameEn: undefined, nameAr: undefined }));
+              }}
+              errors={{ en: fieldErrors.nameEn, ar: fieldErrors.nameAr }}
+              maxLength={100}
+              required={hasBoth(initialName)}
+              help={hasBoth(initialName) ? undefined : t('localized.oneIsEnough')}
+              disabled={!!busy}
+              testId="channel-edit-name"
+              inputTestIds={{ en: 'channel-edit-name', ar: 'channel-edit-name-ar' }}
+            />
+            <div className="flex flex-col gap-1 sm:max-w-sm">
+              <label htmlFor={`${ids}-handle`} className="text-sm text-fg-muted">{t('channels.handle')}</label>
+              <input id={`${ids}-handle`} value={handle} onChange={(e) => setHandle(e.target.value)} maxLength={60} dir="ltr" className={fieldClass} data-testid="channel-edit-handle" />
             </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-desc`} className="text-sm text-fg-muted">{t('channels.description')}</label>
-              <textarea id={`${ids}-desc`} value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={5000} dir="auto" className={`${fieldClass} w-full`} data-testid="channel-edit-description" />
-            </div>
-            <button type="submit" className={`${primaryButtonClass} disabled:opacity-60`} disabled={!!busy || Object.keys(edit).length === 0} data-testid="channel-edit-save">
+            <LocalizedFieldPair
+              id={`${ids}-desc`}
+              label={t('channels.description')}
+              field="channels.description"
+              value={description}
+              onChange={(next) => {
+                setDescription(next);
+                setFieldErrors((prev) => ({ ...prev, descEn: undefined, descAr: undefined }));
+              }}
+              errors={{ en: fieldErrors.descEn, ar: fieldErrors.descAr }}
+              multiline
+              rows={4}
+              maxLength={5000}
+              required={hasBoth(initialDescription)}
+              help={hasBoth(initialDescription) ? undefined : t('localized.oneIsEnough')}
+              disabled={!!busy}
+              testId="channel-edit-description"
+              inputTestIds={{ en: 'channel-edit-description', ar: 'channel-edit-description-ar' }}
+            />
+            <button type="submit" className={`${primaryButtonClass} disabled:opacity-60`} disabled={!!busy || !hasChanges} data-testid="channel-edit-save">
               {busy === 'edit' ? t('content.working') : t('content.save')}
             </button>
           </form>

@@ -97,3 +97,37 @@ export const TRANSLATE_ERROR_CODES = ['daily_limit', 'translation_paused', 'budg
 export type TranslateErrorCode = (typeof TRANSLATE_ERROR_CODES)[number] | 'failed';
 export const translateErrorCode = (code: string | undefined): TranslateErrorCode =>
   (TRANSLATE_ERROR_CODES as readonly string[]).includes(code ?? '') ? (code as TranslateErrorCode) : 'failed';
+
+// ---- A user's own text (channel name/description, video title/description) as staff edit it: one language is
+// enough when it has one, the other is offered; text that has both keeps both (api-videos lib/admin/localizedEdit.ts)
+
+/** The two inputs' texts: the stored languages, else the plain text in the input of its own script. */
+export function userTextPair(plain: string, map: Partial<Record<string, string>> | null | undefined): LocalizedPair {
+  if (filled(map?.en) || filled(map?.ar)) return { en: map?.en ?? '', ar: map?.ar ?? '' };
+  return /[\u0600-\u06FF]/.test(plain) ? { en: '', ar: plain } : { en: plain, ar: '' };
+}
+
+/** Whether the record stores languages at all (a plain text otherwise). */
+export const hasLanguages = (map: Partial<Record<string, string>> | null | undefined) => filled(map?.en) || filled(map?.ar);
+export const hasBoth = (pair: LocalizedPair) => filled(pair.en) && filled(pair.ar);
+export const samePair = (a: LocalizedPair, b: LocalizedPair) => a.en.trim() === b.en.trim() && a.ar.trim() === b.ar.trim();
+
+/** The languages an edit leaves empty but must not: either one of a text that had both, or all of a required one. */
+export function userTextErrors(before: LocalizedPair, after: LocalizedPair, required: boolean): FieldLang[] {
+  const empty = emptyLangs(after);
+  if (empty.length === 2) return required ? (hasBoth(before) ? ['en', 'ar'] : [filled(before.ar) ? 'ar' : 'en']) : [];
+  return hasBoth(before) ? empty : [];
+}
+
+/**
+ * What to send: the languages that have text, with the plain text they show. A text stored without languages
+ * stays that way while only its own language has text: nothing is rewritten unasked.
+ */
+export function userTextEdit(before: LocalizedPair, after: LocalizedPair, stored: boolean): { plain: string; map?: Partial<LocalizedPair> } {
+  const map: Partial<LocalizedPair> = {};
+  for (const lang of ['en', 'ar'] as const) if (filled(after[lang])) map[lang] = after[lang].trim();
+  const plain = map.en ?? map.ar ?? '';
+  const only = Object.keys(map).length === 1 ? (map.en ? 'en' : 'ar') : null;
+  if (!stored && (only === null ? !hasBoth(after) : filled(before[only]) && !hasBoth(before))) return { plain };
+  return { plain, map };
+}

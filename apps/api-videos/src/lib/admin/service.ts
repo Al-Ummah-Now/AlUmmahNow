@@ -7,6 +7,7 @@
  * goes through the env's wrapped buckets, so the search, ownership and
  * comment indexes follow (lib/search/sync.ts).
  */
+import { applyUserText, checkUserText, cleanLocalizedText, type UserTextField } from './localizedEdit';
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { runTranscodeAction } from '../media/troubleshoot';
 import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
@@ -285,11 +286,13 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 			created_at: Date.parse(channel.dateCreated) || null,
 		},
 	]);
+	const descriptionLocalized = cleanLocalizedText(channel.descriptionLocalized);
 	return {
 		...row,
 		description: channel.description ?? '',
 		verificationKind:
 			channel.isVerified === true && (channel.verificationKind === 'scholar' || channel.verificationKind === 'institution') ? channel.verificationKind : null,
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		coverUrl: channel.coverUrl ?? null,
 		isMain: channel.isMain === true,
 		suspension: (channel.suspension as SuspensionInfo | undefined) ?? null,
@@ -303,10 +306,17 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 	};
 }
 
+const CHANNEL_NAME: UserTextField = { plain: 'name', map: 'nameLocalized', max: 100, required: true };
+const CHANNEL_DESCRIPTION: UserTextField = { plain: 'description', map: 'descriptionLocalized', max: 5000, required: false };
+const VIDEO_TITLE: UserTextField = { plain: 'title', map: 'titleLocalized', max: 200, required: true };
+const VIDEO_DESCRIPTION: UserTextField = { plain: 'description', map: 'descriptionLocalized', max: 10000, required: false };
+
 export interface ChannelEdit {
 	name?: string;
+	nameLocalized?: Record<string, string | undefined>;
 	handle?: string;
 	description?: string;
+	descriptionLocalized?: Record<string, string | undefined>;
 	avatarUrl?: string | null;
 	coverUrl?: string | null;
 }
@@ -315,6 +325,15 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	const channels = repo(env.channels);
 	const existing = await channels.getObject(id);
 	if (!existing || existing.isDeleted) throw new AdminError(404, 'channel_not_found');
+	// Refused before a handle is claimed
+	const texts = [
+		[CHANNEL_NAME, { plain: edit.name, map: edit.nameLocalized }],
+		[CHANNEL_DESCRIPTION, { plain: edit.description, map: edit.descriptionLocalized }],
+	] as const;
+	for (const [field, text] of texts) {
+		checkUserText(field, text);
+		applyUserText({ ...existing }, field, text);
+	}
 	let claimed: string | null = null;
 	if (edit.handle !== undefined && normalizeHandleInput(edit.handle) !== (existing.handle || '')) {
 		if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
@@ -330,8 +349,7 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	let previousHandle: string | undefined;
 	const saved = await channels.updateObject(id, (fresh) => {
 		previousHandle = fresh.handle;
-		if (edit.name !== undefined) fresh.name = edit.name;
-		if (edit.description !== undefined) fresh.description = edit.description;
+		for (const [field, text] of texts) applyUserText(fresh, field, text);
 		if (edit.avatarUrl !== undefined) fresh.avatarUrl = edit.avatarUrl ?? undefined;
 		if (edit.coverUrl !== undefined) fresh.coverUrl = edit.coverUrl ?? undefined;
 		if (claimed) fresh.handle = claimed;
@@ -342,7 +360,7 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 		await releaseReplacedHandle(env.channel_tabs, env.channels, previousHandle, id);
 	}
 	// The channel's Bunny collections follow its name (lib/channelCollection.ts)
-	if (edit.name !== undefined && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
+	if ((edit.name !== undefined || edit.nameLocalized !== undefined) && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId });
 	return saved;
 }
@@ -1728,10 +1746,14 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 	}
 	const countComments = (list: unknown): number =>
 		Array.isArray(list) ? list.reduce((n: number, c: Row) => n + (c?.isDeleted ? 0 : 1) + countComments(c?.replies), 0) : 0;
+	const titleLocalized = cleanLocalizedText(video.titleLocalized);
+	const descriptionLocalized = cleanLocalizedText(video.descriptionLocalized);
 	return {
 		id,
 		title: video.title ?? '',
+		...(titleLocalized ? { titleLocalized } : {}),
 		description: video.description ?? '',
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		channelId: video.channelId ?? null,
 		channelName: channel?.name ?? null,
 		ownerId: video.userId ?? null,
@@ -1769,21 +1791,19 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 
 export interface VideoEdit {
 	title?: string;
+	titleLocalized?: Record<string, string | undefined>;
 	description?: string;
+	descriptionLocalized?: Record<string, string | undefined>;
 	isPublic?: boolean;
 	thumbnailUrl?: string;
 }
 
 export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoEdit): Promise<Row> {
+	checkUserText(VIDEO_TITLE, { plain: edit.title, map: edit.titleLocalized });
+	checkUserText(VIDEO_DESCRIPTION, { plain: edit.description, map: edit.descriptionLocalized });
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
-		if (edit.title !== undefined) {
-			fresh.title = edit.title;
-			if (fresh.titleLocalized && typeof fresh.titleLocalized === 'object') delete fresh.titleLocalized;
-		}
-		if (edit.description !== undefined) {
-			fresh.description = edit.description;
-			if (fresh.descriptionLocalized && typeof fresh.descriptionLocalized === 'object') delete fresh.descriptionLocalized;
-		}
+		applyUserText(fresh, VIDEO_TITLE, { plain: edit.title, map: edit.titleLocalized });
+		applyUserText(fresh, VIDEO_DESCRIPTION, { plain: edit.description, map: edit.descriptionLocalized });
 		if (edit.isPublic !== undefined) {
 			// Waiting for its premiere (wiki E17): its visibility is the premiere's
 			if (fresh.premiereHold && edit.isPublic !== fresh.isPublic) throw new AdminError(409, 'premiere_scheduled');
