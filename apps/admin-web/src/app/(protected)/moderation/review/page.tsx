@@ -1,3 +1,4 @@
+import { PriorityTabs } from '@/components/PriorityTabs';
 import Link from '@/components/AppLink';
 import { getReviewAlerts, getReviewStats, listReviewQueue, type ReviewRowView, type ReviewStatsView, type ReviewTab } from '@/lib/api/review';
 import { getI18n } from '@/i18n/server';
@@ -63,13 +64,17 @@ export default async function VideoReviewQueuePage({ searchParams }: PageProps) 
         </p>
       )}
 
-      <nav aria-label={t('review.title')} className="flex flex-wrap gap-2">
-        {TABS.map((id) => (
-          <Link key={id} href={`/moderation/review?tab=${id}`} aria-current={id === tab ? 'page' : undefined} className={`rounded-full border px-3 py-1 text-sm ${id === tab ? 'border-accent bg-accent text-on-accent' : 'border-border text-fg'}`} data-testid={`review-tab-${id}`}>
-            {t(`review.tabs.${id}`)}
-          </Link>
-        ))}
-      </nav>
+      <PriorityTabs
+        label={t('review.title')}
+        testId="review-tabs"
+        className="border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        currentClassName="border-accent text-fg"
+        idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+        tabTestIdPrefix="review-tab-"
+        tabs={TABS.map((id) => ({ id, label: t(`review.tabs.${id}`), href: `/moderation/review?tab=${id}`, current: id === tab }))}
+      />
 
       {failed && <ErrorAlert testId="review-error">{t('review.failed')}</ErrorAlert>}
 

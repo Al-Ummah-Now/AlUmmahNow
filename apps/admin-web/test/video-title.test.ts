@@ -99,10 +99,16 @@ describe('phone card meta lines and numbers', () => {
 });
 
 describe('saved views tab strip', () => {
-  it('wraps its tabs and never scrolls sideways, so no label is cut at the edge', () => {
+  it('is one row with the rest under More: never wrapped, scrolled sideways or cut', () => {
     const src = readFileSync(new URL('../src/components/list/SavedViews.tsx', import.meta.url), 'utf8');
-    assert.match(src, /flex flex-wrap/);
+    assert.match(src, /<PriorityTabs/);
     assert.match(src, /whitespace-nowrap/);
-    assert.doesNotMatch(src, /overflow-x-auto|min-w-max/);
+    assert.doesNotMatch(src, /flex-wrap|overflow-x-auto|min-w-max/);
+  });
+
+  it('every list\'s strip of views is the same one', () => {
+    for (const page of ['category-suggestions', 'deleted', 'imports/[id]', 'jobs', 'moderation/review', 'stale-uploads', 'approvals', 'tier-requests']) {
+      assert.match(readFileSync(new URL(`../src/app/(protected)/${page}/page.tsx`, import.meta.url), 'utf8'), /<PriorityTabs/, page);
+    }
   });
 });

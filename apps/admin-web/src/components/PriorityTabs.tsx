@@ -37,6 +37,8 @@ export interface PriorityTab {
   current: boolean;
   /** Shown after the label in the row and the menu (a count badge) */
   extra?: ReactNode;
+  /** Changes when `extra` takes another width (a count that loaded): the row is measured again */
+  extraKey?: string;
 }
 
 interface PriorityTabsProps {
@@ -56,6 +58,8 @@ interface PriorityTabsProps {
   tabTestIdPrefix?: string;
   /** Tabs without `href`: a press in the row or the menu (the row's buttons say aria-pressed) */
   onSelect?: (id: string) => void;
+  /** Buttons that set a list's filters (a view in the URL): the current one says aria-current, as a link does */
+  currentButtons?: boolean;
 }
 
 /** How many leading tabs fit, and where the current one goes (the videos site's fitItems) */
@@ -73,7 +77,7 @@ export function fitItems(widths: number[], gap: number, available: number, moreW
   return current >= 0 && widths[current] + gap + moreWidth <= available + 0.5 ? [current] : [];
 }
 
-export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idleClassName, className = '', rowClassName = '', testId, tabTestIdPrefix, onSelect }: PriorityTabsProps) {
+export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idleClassName, className = '', rowClassName = '', testId, tabTestIdPrefix, onSelect, currentButtons = false }: PriorityTabsProps) {
   const { t } = useLanguage();
   const navRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLUListElement>(null);
@@ -84,12 +88,16 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   const [widths, setWidths] = useState<{ items: number[]; more: number; gap: number } | null>(null);
   /** The nav's inner width (the observer updates it; it does not depend on which tab is current) */
   const [available, setAvailable] = useState<number | null>(null);
-  const signature = tabs.map((tab) => `${tab.id}\u0000${tab.label}`).join('\u0001');
+  const signature = tabs.map((tab) => `${tab.id}\u0000${tab.label}\u0000${tab.extraKey ?? ''}`).join('\u0001');
   const current = tabs.findIndex((tab) => tab.current);
 
+  // New labels or counts: measured again, but not under an open menu (its focus would be lost): once it closes
+  const measured = useRef(signature);
   useLayoutEffect(() => {
+    if (open || measured.current === signature) return;
+    measured.current = signature;
     setWidths(null);
-  }, [signature]);
+  }, [signature, open]);
 
   useLayoutEffect(() => {
     if (widths || !rowRef.current || !moreRef.current) return;
@@ -211,7 +219,7 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                 {tab.extra}
               </Link>
             ) : (
-              <button type="button" aria-pressed={tab.current} onClick={() => onSelect?.(tab.id)} className={`${tabClassName} ${tab.current ? currentClassName : idleClassName}`} data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}${tab.id}` : undefined}>
+              <button type="button" {...(currentButtons ? { 'aria-current': tab.current ? ('page' as const) : undefined } : { 'aria-pressed': tab.current })} onClick={() => onSelect?.(tab.id)} className={`${tabClassName} ${tab.current ? currentClassName : idleClassName}`} data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}${tab.id}` : undefined}>
                 {tab.label}
                 {tab.extra}
               </button>

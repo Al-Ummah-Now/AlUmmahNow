@@ -1,3 +1,5 @@
+import { PriorityTabs } from '@/components/PriorityTabs';
+import { shownViews } from '@/lib/list/shown-views';
 import Link from '@/components/AppLink';
 import { formatMoney, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { listVideoCategoriesAdmin } from '@/lib/api/categories';
@@ -117,23 +119,23 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
         </div>
       )}
 
-      <nav aria-label={t('categorySuggestions.tabs')} className="flex flex-wrap gap-2 border-b border-border">
-        {VIEWS.map((v) => {
-          const active = v === view;
-          return (
-            <Link
-              key={v}
-              href={href({ view: v })}
-              aria-current={active ? 'page' : undefined}
-              className={`px-3 py-2 -mb-px border-b-2 ${active ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
-              data-testid={`category-tab-${v}`}
-            >
-              {t(`categorySuggestions.view_${v}`)}
-              {stats && <span className="ms-2 text-xs rounded bg-surface-2 px-1.5 py-0.5" data-testid={`category-tab-count-${v}`}>{n(stats.views[v] ?? 0)}</span>}
-            </Link>
-          );
-        })}
-      </nav>
+      <PriorityTabs
+        label={t('categorySuggestions.tabs')}
+        testId="category-tabs"
+        className="border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        currentClassName="border-accent text-fg"
+        idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+        tabTestIdPrefix="category-tab-"
+        tabs={shownViews(VIEWS.map((v) => ({ id: v, count: stats ? (stats.views[v] ?? 0) : undefined })), (v) => v.id === view).map((v) => ({
+          id: v.id,
+          label: t(`categorySuggestions.view_${v.id}`),
+          href: href({ view: v.id }),
+          current: v.id === view,
+          extra: v.count === undefined ? undefined : <span className="text-xs rounded bg-surface-2 px-1.5 py-0.5" data-testid={`category-tab-count-${v.id}`}>{n(v.count)}</span>,
+        }))}
+      />
       <p className="text-sm text-fg-muted -mt-3">{t(`categorySuggestions.viewHint_${view}`)}</p>
 
       <form method="GET" action="/category-suggestions" className="flex flex-wrap items-end gap-3">

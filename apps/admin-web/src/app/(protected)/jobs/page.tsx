@@ -1,5 +1,5 @@
+import { PriorityTabs } from '@/components/PriorityTabs';
 import { formatNumber } from '@/i18n/translate';
-import Link from '@/components/AppLink';
 import { ADMIN_JOB_STATUSES } from '@al-ummah/shared-types';
 import { getContentPermissions, getJobCounts, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob, JobCounts } from '@/lib/api/content-types';
@@ -50,24 +50,25 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     <div>
       <LiveRefresh topics={['jobs']} />
       <PageHeader locale={locale} title={t('jobs.title')} subtitle={t('jobs.subtitle')} t={t} />
-      <nav aria-label={t('jobs.statusFilter')} className="mb-6 flex flex-wrap gap-2" data-testid="jobs-filters">
-        {FILTERS.map((f) => {
-          const active = f.status === status;
-          const href = f.status ? `/jobs?status=${f.status}` : '/jobs?status=all';
+      <PriorityTabs
+        label={t('jobs.statusFilter')}
+        testId="jobs-filters"
+        className="mb-6 border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        currentClassName="border-accent text-fg"
+        idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+        tabs={FILTERS.map((f) => {
           const count = f.status === 'failed' ? counts?.failed : f.status === 'retrying' ? counts?.retrying : undefined;
-          return (
-            <Link
-              key={f.label}
-              href={href}
-              aria-current={active ? 'page' : undefined}
-              className={`px-3 py-1.5 rounded border text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${active ? 'bg-surface-hover border-border text-fg font-medium' : 'border-border text-fg-muted hover:text-fg hover:bg-surface-hover'}`}
-            >
-              {t(f.label)}
-              {count !== undefined && count > 0 && <span className="ms-2 tabular-nums" data-testid={`jobs-count-${f.status}`}>{formatNumber(count, locale)}</span>}
-            </Link>
-          );
+          return {
+            id: f.status ?? 'all',
+            label: t(f.label),
+            href: f.status ? `/jobs?status=${f.status}` : '/jobs?status=all',
+            current: f.status === status,
+            extra: count ? <span className="tabular-nums" data-testid={`jobs-count-${f.status}`}>{formatNumber(count, locale)}</span> : undefined,
+          };
         })}
-      </nav>
+      />
       {!jobs && <ErrorAlert testId="jobs-error">{t('content.loadFailed')}</ErrorAlert>}
       {jobs && jobs.length === 0 && <EmptyState>{status === 'failed' ? t('jobs.emptyFailed') : t('jobs.empty')}</EmptyState>}
       {jobs && jobs.length > 0 && <JobsTable jobs={jobs} permissions={permissions} />}
