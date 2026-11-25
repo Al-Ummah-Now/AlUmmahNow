@@ -56,6 +56,7 @@ describe('rendering', () => {
     assert.match(plain(e.text), /Card, Wallet/);
     assert.match(e.text, /Approvals: 1 of 2/);
     assert.match(e.text, /or an approval rule tells you about them\./, 'true for the people a rule tells too');
+    assert.match(e.text, /Waiting until 30 November 2026.* 12:00 UTC\./, 'the date as the other emails write it');
     assert.match(e.text, /https:\/\/admin\.qa\.alummahnow\.net\/approvals\/wfr_1/);
     assert.doesNotMatch(e.text + e.html, /\/approve\b/, 'never approve from the email (WF-D5)');
   });
@@ -64,6 +65,7 @@ describe('rendering', () => {
     const e = renderWorkflowEmail({ to: 'b@example.org', locale: 'ar', event: 'proposed', request, actorName: 'أمينة', names: new Map(), adminUrl: 'https://admin.alummahnow.net' });
     assert.match(e.subject, /^موافقة مطلوبة: /);
     assert.match(e.text, /الموافقات: ١ من ٢/);
+    assert.match(e.text, /ينتظر حتى ٣٠ نوفمبر ٢٠٢٦.* UTC\./);
     assert.match(plain(e.text), /٪٢٫٩ ← ٪١٫٩/);
     assert.match(plain(e.text), /بطاقة، محفظة/);
     const prose = e.text.split('\n').filter((l) => !/https?:\/\//.test(l) && !/PayGood|USD/.test(l));

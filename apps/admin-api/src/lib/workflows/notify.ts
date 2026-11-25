@@ -20,7 +20,7 @@ import { currencyExponent, workflowFieldChanged, workflowFieldPeople, workflowFi
 import type { AdminBindings } from '../../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
 import { envTag, sendContactEmail } from '../contact-email';
-import { renderEmail, type EmailBlock, type EmailDoc, type EmailLocale } from '../email/layout';
+import { formatEmailDate, renderEmail, type EmailBlock, type EmailDoc, type EmailLocale } from '../email/layout';
 import { emailRow, inDirection, isolate } from '../email/direction';
 import type { QueueMessageLike } from '../contact-mail-queue';
 import { logger } from '../logger';
@@ -87,7 +87,7 @@ const COPY = {
     rejection: 'Why it was rejected',
     changes: 'What changes',
     approvals: (n: number, of: number) => `Approvals: ${n} of ${of}`,
-    expires: (d: string) => `Waiting until ${d} (UTC).`,
+    expires: (d: string) => `Waiting until ${d}.`,
     cta: 'Review request',
     yes: 'Yes',
     no: 'No',
@@ -125,7 +125,7 @@ const COPY = {
     rejection: 'سبب الرفض',
     changes: 'ما الذي يتغيّر',
     approvals: (n: number, of: number) => `الموافقات: ${arDigits(n)} من ${arDigits(of)}`,
-    expires: (d: string) => `ينتظر حتى ${d} (بالتوقيت العالمي).`,
+    expires: (d: string) => `ينتظر حتى ${d}.`,
     cta: 'مراجعة الطلب',
     yes: 'نعم',
     no: 'لا',
@@ -216,7 +216,7 @@ export function renderWorkflowEmail(input: {
   const after: EmailBlock[] = [];
   if (event === 'proposed' || event === 'approved') {
     after.push({ kind: 'small', text: c.approvals(r.approvalsCount, r.approvalsNeeded) });
-    if (r.status === 'pending') after.push({ kind: 'small', text: c.expires(dateText(r.expiresAt, locale)) });
+    if (r.status === 'pending') after.push({ kind: 'small', text: c.expires(formatEmailDate(r.expiresAt, locale, true)) });
   }
   const doc: EmailDoc = {
     locale,
