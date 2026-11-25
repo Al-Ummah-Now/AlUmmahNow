@@ -31,7 +31,7 @@ import {
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
 import { logger } from '../logger';
-import R2Repository from '../r2Repo';
+import R2Repository, { NonVideoRepository } from '../r2Repo';
 import Queue, { MessageType } from '../queue';
 import { createJob, getJob, type JobOutcome } from '../admin/jobs';
 import { banUser, purgeVideoForCsam, type AdminServiceEnv } from '../admin/service';
@@ -244,7 +244,7 @@ async function hideComment(env: ContainEnv, caseId: string, r: CsamResolution): 
 
 /** Ends the stream and hides it for good (the hold no restore lifts). Marked first: ending it must not remove what was streamed. */
 async function hideStream(env: ContainEnv, caseId: string, streamId: string): Promise<boolean> {
-	const saved = await repo(env.videos).updateObject(streamKey(streamId), (stream) => {
+	const saved = await new NonVideoRepository<Row>(env.videos).updateObject(streamKey(streamId), (stream) => {
 		const changed = applySuspensionHold(stream as SuspendableRecord, CSAM_HOLD);
 		if (stream.csamTakedown) return changed;
 		stream.csamTakedown = mark(caseId);
@@ -254,6 +254,18 @@ async function hideStream(env: ContainEnv, caseId: string, streamId: string): Pr
 	// The reason is read by the stream's owner and by moderators, so it never says why
 	await moderateLive(env as never, { entityType: 'livestream', entityId: streamId, action: 'removed', notes: `Trust and safety action (ref ${caseId})`, actorId: CSAM_ACTOR });
 	return true;
+}
+
+/** Nothing is copied or removed while the stream can still be watched: hidden again if need be, else the step fails. */
+async function streamMustBeHidden(env: ContainEnv, p: ContainParams): Promise<void> {
+	const read = async () => {
+		const object = await env.videos.get(streamKey(p.resolution.streamId!));
+		return object ? ((await object.json()) as Row) : null;
+	};
+	const hidden = (stream: Row | null) => !stream || (stream.isHidden === true && !!stream.csamTakedown);
+	if (hidden(await read())) return;
+	await hideStream(env, p.caseId, p.resolution.streamId!);
+	if (!hidden(await read())) throw new Error('The live stream could not be hidden');
 }
 
 /** The evidence files that were kept, by name. */
@@ -544,6 +556,7 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 		let next: ContainParams;
 		switch (p.phase) {
 			case 'plan': {
+				if (p.resolution.kind === 'live_stream') await streamMustBeHidden(env, p);
 				const keys = await evidenceKeys(env);
 				const { files, snapshots } = await planEvidence(env, keys, p.caseId, p.matchedUrl, p.resolution);
 				await writeManifest(env, keys, { v: 1, caseId: p.caseId, matchedUrl: p.matchedUrl, resolution: p.resolution, files: snapshots, missing: [], createdAt: p.createdAt });
