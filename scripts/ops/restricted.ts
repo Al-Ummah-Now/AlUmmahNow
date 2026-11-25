@@ -4,11 +4,12 @@
  * keeps its fields. A log line with neither a tag nor a path cannot be placed: only its message's template is printed.
  */
 
-const TAGS = /(?:^|\s)\[(?:CSAM|ChildSafety|SafetyMail|ReportRetention|GuestReport)\]/i;
+/** Every tag these areas log with (a test greps the source files for a new one). */
+const TAGS = /(?:^|\s)\[(?:CSAM|ChildSafety|SafetyMail|ReportRetention|Guest[-_ ]?Report|ImageOwners)\]/i;
 /** Source files of these areas, as a stack frame or a module field names them (the csam files are in WORDS). */
 const MODULES = /lib\/moderation\/(?:childSafety|safetyMail|retention|takedown)\b|endpoints\/moderation\/GuestReportSubmit\b|lib\/guest-report-limits\b/i;
 /** The last net, over every key and string value. */
-const WORDS = /csam|child[-_ ]?safety/i;
+const WORDS = /csam|child[-_ ]?safety|take[-_ ]?down/i;
 /** With everything below them; a locale in front of a page's path does not matter. */
 const PATHS = ['/api/csam', '/internal/csam', '/moderation/csam', '/internal/guest-reports', '/webhooks/cloudflare/notifications'];
 
