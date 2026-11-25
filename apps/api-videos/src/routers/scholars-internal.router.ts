@@ -95,8 +95,8 @@ app.get('/:userId/posts/:externalId', async (c) => {
 	const userId = c.req.param('userId');
 	if (!USER_ID.test(userId)) return c.json({ error: 'bad_request' }, 400);
 	try {
-		const m = await scholarPostMapping(c.env, c.req.param('externalId'));
-		if (!m || m.userId !== userId) return c.json({ error: 'not_found' }, 404);
+		const m = await scholarPostMapping(c.env, userId, c.req.param('externalId'));
+		if (!m) return c.json({ error: 'not_found' }, 404);
 		const post = await new R2Repository<Record<string, unknown>>(c.env.community_posts).getObject(`posts/${m.channelId}/${m.postId}.json`);
 		if (!post) return c.json({ error: 'not_found' }, 404);
 		return c.json({ postId: m.postId, channelId: m.channelId, post });

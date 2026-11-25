@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket } from './helpers';
-import { ArticleError, hideArticle, parseArticle, upsertArticle } from '../src/lib/scholar-articles';
+import { ArticleError, convertScholarPost, hideArticle, parseArticle, parseConvert, scholarPostMapping, upsertArticle } from '../src/lib/scholar-articles';
 import app from '../src/routers/scholars-internal.router';
 
 function env() {
@@ -74,6 +74,70 @@ describe('scholar articles', () => {
 		await upsertArticle(e, 'u1', 'cms-2', article('mine'));
 		await assert.rejects(hideArticle(e, 'u2', 'cms-2'), (x) => x instanceof ArticleError && x.code === 'not_owner');
 		await assert.rejects(upsertArticle(e, 'u1', 'bad-key', article('mine')), (x) => x instanceof ArticleError);
+	});
+
+	it('after the channel moves, what is posted there is its new owner’s: update, hide, convert and read (#1955)', async () => {
+		const convert = (channelId: string) =>
+			parseConvert({ channelId, kind: 'article', locale: 'en', title: 'On patience', article: { title: 'On patience', body: '<p>Be patient.</p>', excerpt: 'A read' }, www: { url: 'https://www.test/en/articles/patience/', slug: 'patience', locale: 'en' }, status: 'published', publishedAt: null });
+		const refused = (p: Promise<unknown>, code = 'not_owner') => assert.rejects(p, (x) => x instanceof ArticleError && x.code === code);
+		const e = env();
+		await channel(e, 'c1', 'u1');
+		await channel(e, 'c2', 'u2');
+		const posted = await upsertArticle(e, 'u1', 'cms-7', article('c1'));
+		// Before: u1's
+		await refused(upsertArticle(e, 'u2', 'cms-7', article('c2')));
+		await refused(hideArticle(e, 'u2', 'cms-7'));
+		await refused(convertScholarPost(e, 'u2', 'cms-7', convert('c2')));
+		assert.equal(await scholarPostMapping(e, 'u2', 'cms-7'), null);
+		assert.equal((await scholarPostMapping(e, 'u1', 'cms-7'))!.postId, posted.post.id);
+
+		// The channel moves to u2; u1 has another channel. The mapping still says u1 posted it
+		await channel(e, 'c1', 'u2');
+		await channel(e, 'c3', 'u1');
+		for (const target of ['c1', 'c3']) {
+			await refused(upsertArticle(e, 'u1', 'cms-7', article(target)));
+			await refused(convertScholarPost(e, 'u1', 'cms-7', convert(target)));
+		}
+		await refused(hideArticle(e, 'u1', 'cms-7'));
+		assert.equal(await scholarPostMapping(e, 'u1', 'cms-7'), null);
+		assert.deepEqual(await index(e, 'c1'), [posted.post.id], 'the refusals changed nothing');
+		assert.equal((await postOf(e, 'c1', posted.post.id)).status, 'published');
+
+		const updated = await upsertArticle(e, 'u2', 'cms-7', article('c1', { title: 'On patience (2)' }));
+		assert.deepEqual([updated.created, updated.post.id], [false, posted.post.id], 'the same post');
+		assert.ok(await hideArticle(e, 'u2', 'cms-7'));
+		assert.deepEqual(await index(e, 'c1'), []);
+		const converted = await convertScholarPost(e, 'u2', 'cms-7', convert('c1'));
+		assert.deepEqual([converted.upgraded, converted.post.id], [true, posted.post.id]);
+		const mapping = await scholarPostMapping(e, 'u2', 'cms-7');
+		assert.deepEqual([mapping!.postId, mapping!.userId], [posted.post.id, 'u1'], 'who posted it stays, for the record');
+		// Its new owner may move it to another channel of theirs
+		const again = await upsertArticle(e, 'u2', 'cms-7', article('c2'));
+		assert.equal(again.created, true);
+		assert.deepEqual([await index(e, 'c1'), await index(e, 'c2')], [[], [again.post.id]]);
+	});
+
+	it('a channel that is gone leaves the article to who posted it; one that can’t be read answers an error, never a yes', async () => {
+		const e = env();
+		await channel(e, 'c1', 'u1');
+		await channel(e, 'c2', 'u1');
+		await upsertArticle(e, 'u1', 'cms-8', article('c1'));
+		await e.channels.put('c1', 'not json');
+		await assert.rejects(hideArticle(e, 'u1', 'cms-8'), (x) => !(x instanceof ArticleError));
+		await assert.rejects(upsertArticle(e, 'u1', 'cms-8', article('c2')), (x) => !(x instanceof ArticleError));
+		await e.channels.delete('c1');
+		await assert.rejects(hideArticle(e, 'u2', 'cms-8'), (x) => x instanceof ArticleError && x.code === 'not_owner');
+		assert.equal((await upsertArticle(e, 'u1', 'cms-8', article('c2'))).created, true);
+	});
+
+	it('the internal router reads a post for the channel’s owner of now', async () => {
+		const e = env();
+		await channel(e, 'c1', 'u1');
+		await upsertArticle(e, 'u1', 'cms-9', article('c1'));
+		const read = async (userId: string) => (await app.request(`/${userId}/posts/cms-9`, {}, e)).status;
+		assert.deepEqual([await read('u1'), await read('u2')], [200, 404]);
+		await channel(e, 'c1', 'u2');
+		assert.deepEqual([await read('u1'), await read('u2')], [404, 200]);
 	});
 
 	it('the internal router answers with codes, never raw errors', async () => {
