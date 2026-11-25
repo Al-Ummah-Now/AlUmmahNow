@@ -195,8 +195,14 @@ describe('rollback', () => {
 });
 
 describe('smoke', () => {
+	/** A healthy env whose candidates answer every request that asks for them (X-Release-Check). */
 	const fakeFetch = (overrides: { health?: string; callback?: string; live?: 'down' | 'html' } = {}) =>
 		(async (input: string | URL | Request, init?: RequestInit) => {
+			const response = await answer(overrides, input, init);
+			if ((init?.headers as Record<string, string> | undefined)?.['X-Release-Check']) response.headers.set('X-Release-Check', 'ok');
+			return response;
+		}) as typeof fetch;
+	const answer = async (overrides: { health?: string; callback?: string; live?: 'down' | 'html' }, input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			const url = new URL(String(input));
 			const headers = (init?.headers ?? {}) as Record<string, string>;
 			const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -216,7 +222,7 @@ describe('smoke', () => {
 				if (seo) return seo;
 			}
 			return new Response('<html><body>ok</body></html>', { status: 200 });
-		}) as typeof fetch;
+	};
 
 	/** A clock that moves only when somebody sleeps. */
 	const clock = () => {
@@ -301,6 +307,156 @@ describe('smoke', () => {
 			assert.deepEqual([health(results).detail, h.asked(), c.now()], [`version ${V(1)}`, 1, 0]);
 		});
 	});
+	describe('who answered the other checks (X-Release-Check)', () => {
+		const WEB = 'al-ummah-now-stage';
+		const overrides = { [WEB]: V(2), 'videos-stage': V(3), 'al-ummah-admin-web-stage': V(4), 'al-ummah-admin-api-stage': V(6), 'al-ummah-now-comms-stage': V(5) };
+		const CHECKS = [
+			'api-videos: public video list answers JSON', 'api-videos: live edge host answers', 'web: home page renders', 'web: sign-in callback error goes to the error page',
+			'web: robots.txt', 'web: sitemap index lists this host', 'web: home page head (canonical, hreflang, og:image, robots)', 'admin-web: answers',
+		];
+		type Page = (url: URL, init: RequestInit, n: number) => Response | null | Promise<Response | null>;
+		/** A healthy env, except what `page` answers; n counts the requests it was asked for. */
+		const env = (page: Page = () => null) => {
+			const base = fakeFetch();
+			const seen: { url: URL; check: string | undefined }[] = [];
+			let n = 0;
+			const fetchImpl = (async (input: string | URL | Request, init: RequestInit) => {
+				const url = new URL(String(input));
+				const headers = init.headers as Record<string, string>;
+				seen.push({ url, check: headers['X-Release-Check'] });
+				if (url.pathname === '/health') {
+					const worker = { 'videos.api.stage.alummahnow.net': 'videos-stage', 'realtime.stage.alummahnow.net': 'al-ummah-now-comms-stage', 'admin.api.stage.alummahnow.net': 'al-ummah-admin-api-stage' }[url.hostname]!;
+					return new Response(JSON.stringify({ status: 'healthy', deployment: overrides[worker as keyof typeof overrides] }));
+				}
+				return (await page(url, init, n++)) ?? base(input, init);
+			}) as typeof fetch;
+			return { fetchImpl, seen };
+		};
+		const old = (response: Response) => response;
+		const isWebHome = (url: URL) => url.hostname === 'videos.stage.alummahnow.net' && url.pathname === '/en';
+		const result = (results: CheckResult[], name: string) => results.find((r) => r.name === name)!;
+
+		it('asks each Worker for its own candidate, and passes at once when they answer', async () => {
+			const c = clock();
+			const e = env();
+			const results = await runSmoke({ env: 'stage', overrides, fetchImpl: e.fetchImpl, ...c });
+			assert.deepEqual(results.filter((r) => !r.ok), []);
+			assert.equal(c.now(), 0);
+			const by = new Map(e.seen.filter((s) => s.url.pathname !== '/health').map((s) => [s.url.hostname, s.check]));
+			assert.deepEqual(Object.fromEntries(by), {
+				'videos.api.stage.alummahnow.net': V(3), 'live.stage.alummahnow.net': V(3), 'videos.stage.alummahnow.net': V(2), 'admin.stage.alummahnow.net': V(4),
+			});
+		});
+
+		it('sends nothing and asks once without overrides, or for a Worker that has no candidate', async () => {
+			const c = clock();
+			const plain = env(() => null);
+			assert.deepEqual((await runSmoke({ env: 'stage', fetchImpl: plain.fetchImpl, ...c })).filter((r) => !r.ok), []);
+			assert.ok(plain.seen.every((s) => s.check === undefined));
+			const one = env();
+			assert.deepEqual((await runSmoke({ env: 'stage', overrides: { [WEB]: V(2) }, fetchImpl: one.fetchImpl, ...c })).filter((r) => !r.ok), []);
+			assert.ok(one.seen.every((s) => (s.check !== undefined) === (s.url.hostname === 'videos.stage.alummahnow.net')));
+			assert.equal(c.now(), 0);
+		});
+
+		it('an old version that would pass every check passes none of them', async () => {
+			const c = clock();
+			const base = fakeFetch();
+			const results = await runSmoke({ env: 'stage', overrides, fetchImpl: env(async (url, init) => old(await base(url, { ...init, headers: {} }))).fetchImpl, ...c });
+			assert.deepEqual(results.filter((r) => !r.ok).map((r) => r.name), CHECKS);
+			for (const r of results.filter((x) => !x.ok)) assert.match(r.detail, /^not answered by candidate [0-9a-f-]+ of \S+ \(after 90 s; last answer, of another version: /, r.name);
+			// One deadline for all of them together
+			assert.equal(c.now(), VERSION_WAIT_MS);
+		});
+
+		it('what an old version answers wrongly is not the candidate’s failure: asked again until it answers', async () => {
+			const c = clock();
+			const e = env((url, _init, n) => (isWebHome(url) && n < 4 ? old(new Response('gone', { status: 500 })) : null));
+			const results = await runSmoke({ env: 'stage', overrides, fetchImpl: e.fetchImpl, ...c });
+			assert.deepEqual(results.filter((r) => !r.ok), []);
+			assert.equal(result(results, 'web: home page renders').detail, 'HTTP 200 HTML (after 10 s)');
+			assert.equal(c.now(), 2 * VERSION_PAUSE_MS);
+		});
+
+		it('what the candidate answers wrongly fails at once, on the first try and after an old answer', async () => {
+			for (const oldFirst of [false, true]) {
+				const c = clock();
+				let asked = 0;
+				const e = env((url) => {
+					if (!isWebHome(url)) return null;
+					asked++;
+					if (oldFirst && asked === 1) return old(new Response('<html></html>'));
+					return new Response('broken', { status: 503, headers: { 'X-Release-Check': 'ok' } });
+				});
+				const home = result(await runSmoke({ env: 'stage', overrides, fetchImpl: e.fetchImpl, ...c }), 'web: home page renders');
+				assert.deepEqual([home.ok, home.detail], [false, 'HTTP 503']);
+				assert.equal(c.now(), oldFirst ? VERSION_PAUSE_MS : 0);
+			}
+		});
+
+		it('a failed connection fails at once; the live edge host keeps its note for a new domain', async () => {
+			const c = clock();
+			const e = env((url) => {
+				if (isWebHome(url) || url.hostname.startsWith('live.')) throw new TypeError('fetch failed');
+				return null;
+			});
+			const results = await runSmoke({ env: 'stage', overrides, fetchImpl: e.fetchImpl, ...c });
+			assert.deepEqual([result(results, 'web: home page renders').ok, result(results, 'web: home page renders').detail], [false, 'fetch failed']);
+			assert.deepEqual([result(results, 'api-videos: live edge host answers').ok, c.now()], [true, 0]);
+			assert.match(result(results, 'api-videos: live edge host answers').detail, /not answering yet/);
+		});
+
+		it('only an exact ok is proof', async () => {
+			for (const value of ['OK', 'true', V(2), 'ok, ok']) {
+				const c = clock();
+				const base = fakeFetch();
+				const e = env(async (url, init) => {
+					if (!isWebHome(url)) return null;
+					const res = await base(url, { ...init, headers: {} });
+					res.headers.set('X-Release-Check', value);
+					return res;
+				});
+				assert.match(result(await runSmoke({ env: 'stage', overrides, fetchImpl: e.fetchImpl, ...c }), 'web: home page renders').detail, /not answered by candidate/, value);
+			}
+		});
+
+		it('production robots.txt without the proof is a printed warning for now, a wrong one still fails; elsewhere the proof is required', async () => {
+			const prod = { 'al-ummah-now-production': V(2) };
+			const run = async (smokeEnv: 'production' | 'stage', body: string) => {
+				const c = clock();
+				const o = smokeEnv === 'production' ? prod : { [WEB]: V(2) };
+				const fetchImpl = (async (input: string | URL | Request) => {
+					const url = new URL(String(input));
+					const headers = { 'X-Release-Check': 'ok' };
+					if (url.pathname === '/robots.txt') return new Response(body);
+					return new Response(JSON.stringify({ status: 'healthy', now: 1 }), { headers: { ...headers, 'content-type': 'application/json' } });
+				}) as typeof fetch;
+				return result(await runSmoke({ env: smokeEnv, overrides: o, fetchImpl, ...c }), 'web: robots.txt');
+			};
+			const good = 'User-agent: *\nAllow: /\nSitemap: https://videos.alummahnow.net/sitemap.xml\n';
+			const warned = await run('production', good);
+			assert.equal(warned.ok, true);
+			assert.match(warned.detail, /WARNING: no proof that candidate/);
+			const wrong = await run('production', 'User-agent: *\nDisallow: /\n');
+			assert.equal(wrong.ok, false);
+			assert.match(wrong.detail, /disallows everything/);
+			const stage = await run('stage', 'User-agent: *\nDisallow: /\n');
+			assert.equal(stage.ok, false);
+			assert.match(stage.detail, /not answered by candidate/);
+		});
+
+		it('promote moves no traffic when an old version answered a page check', async () => {
+			const c = clock();
+			const base = fakeFetch();
+			const { run, calls } = fakeRun({ web: V(1) });
+			const smoke: PromoteDeps['smoke'] = async (e, o) =>
+				(await runSmoke({ env: e, overrides: o, fetchImpl: (async (url: string, init: RequestInit) => base(url, isWebHome(new URL(url)) ? { ...init, headers: {} } : init)) as typeof fetch, ...c })).filter((r) => r.name === 'web: home page renders');
+			await assert.rejects(promote(releaseApps(ROOT, 'stage').filter((a) => a.app === 'web'), 'stage', 'm', deps(run, smoke)), /not answered by candidate/);
+			assert.ok(!calls.some((x) => x.args[1] === 'deploy' && x.args[2].endsWith('@100%')));
+			assert.ok(calls.some((x) => x.args[0] === 'rollback'));
+		});
+	});
+
 	describe('a request that stalls', () => {
 		const overrides = { 'al-ummah-admin-api-stage': V(6) };
 		const isAdminHealth = (input: unknown) => {

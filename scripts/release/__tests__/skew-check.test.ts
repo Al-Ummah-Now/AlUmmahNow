@@ -66,6 +66,29 @@ describe('skew check', () => {
 		assert.equal(r.ok, true);
 	});
 
+	it('at 0% a chunk counts only when the candidate answered', async () => {
+		const headers = { 'Cloudflare-Workers-Version-Overrides': 'w="v"', 'X-Release-Check': 'v' };
+		const answers = (list: { status: number; ok: boolean }[]) => {
+			let n = 0;
+			return (async (url: string | URL, init?: RequestInit) => {
+				assert.equal((init?.headers as Record<string, string>)['X-Release-Check'], 'v');
+				if (!String(url).includes('dpl=')) return new Response('x');
+				const { status, ok } = list[Math.min(n++, list.length - 1)];
+				return new Response('x', { status, headers: ok ? { 'X-Release-Check': 'ok' } : {} });
+			}) as unknown as typeof fetch;
+		};
+		const run = (list: { status: number; ok: boolean }[]) => checkOldBuildServed(before, answers(list), 1, noWait, headers);
+		assert.equal((await run([{ status: 200, ok: true }])).ok, true);
+		// An old version that serves the chunk proves nothing, and one that lacks it fails nothing: asked again
+		assert.equal((await run([{ status: 200, ok: false }, { status: 404, ok: false }, { status: 200, ok: true }])).ok, true);
+		const never = await run([{ status: 200, ok: false }]);
+		assert.equal(never.ok, false);
+		assert.match(never.detail, /answered 200, not from the candidate \(after 3 tries\)/);
+		assert.match((await run([{ status: 404, ok: true }, { status: 200, ok: true }])).detail, /answered 404:/);
+		// After the promote nobody is asked to prove anything
+		assert.equal((await checkOldBuildServed(before, fakeFetch(() => 200), 1, noWait)).ok, true);
+	});
+
 	it('sends the version override to reach a candidate at 0%', async () => {
 		const seen: string[] = [];
 		const f = (async (_u: string | URL, init?: RequestInit) => {

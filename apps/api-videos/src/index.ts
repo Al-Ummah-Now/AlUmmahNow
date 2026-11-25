@@ -6,6 +6,7 @@ import attestationRouter from './routers/attestation.router';
 import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
+import { withReleaseCheck } from '@al-ummah/shared-types/release-check';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { runReleaseIndex } from './lib/app-updates/run';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
@@ -1200,9 +1201,9 @@ export default {
 	...loggedWorker,
 	async fetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
 		// Nothing on the API or live hosts is for search engines (lib/crawlers.ts)
-		const robots = robotsTxtResponse(request);
-		if (robots) return robots;
-		return withNoIndex(await routeFetch(request, env, ctx));
+		// withReleaseCheck: outermost, after everything that may cache; proves to the release which version answered
+		const response = robotsTxtResponse(request) ?? withNoIndex(await routeFetch(request, env, ctx));
+		return withReleaseCheck(request, env, response);
 	},
 };
 

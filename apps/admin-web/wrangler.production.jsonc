@@ -39,6 +39,8 @@
     "logs": { "enabled": true, "head_sampling_rate": 1 }
   },
   "upload_source_maps": true,
+  // Worker version id: the release's proof of which version answered (X-Release-Check)
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": {
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
@@ -73,6 +75,7 @@
       // Workers Logs bills per line: every invocation kept (sampling would drop errors), no invocation log, LOG_LEVEL warn
       "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
       "name": "al-ummah-admin-web-stage",
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "workers_dev": false,
       "preview_urls": true,
       "routes": [

@@ -13,6 +13,10 @@
       "types": "./dist/error-reporting/trail.d.ts",
       "default": "./dist/error-reporting/trail.js"
     },
+    "./release-check": {
+      "types": "./dist/release-check.d.ts",
+      "default": "./dist/release-check.js"
+    },
     "./page-blocks.css": "./src/page-blocks.css"
   },
   "scripts": {
