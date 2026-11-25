@@ -34,6 +34,24 @@ test('an endpoint error points at the migration', async () => {
 	assert.equal(asked.length, 1, 'the site is not fetched once the setting failed');
 });
 
+test('a 503 is asked again three times, 5 s apart; anything else is not', async () => {
+	const run = async (statuses: number[]) => {
+		const waits: number[] = [];
+		let reads = 0;
+		const { fetchFn } = site({ body: { theme: 'nahas' } }, '<html data-theme="nahas">');
+		const flaky = async (url: string) => {
+			const res = await fetchFn(url);
+			const status = url.endsWith('/public/site-theme') ? (statuses[reads++] ?? 200) : 200;
+			return { ...res, ok: status < 400, status };
+		};
+		const result = await checkSiteTheme('https://a', 'https://w', flaky, async (ms) => void waits.push(ms)).catch((e: Error) => e.message);
+		return { waits, reads, result };
+	};
+	assert.deepEqual(await run([503, 503, 503]).then((r) => [r.waits, r.reads, /Site theme nahas/.test(r.result)]), [[5000, 5000, 5000], 4, true]);
+	assert.deepEqual(await run([503, 503, 503, 503]).then((r) => [r.waits.length, r.reads, /answered 503/.test(r.result)]), [3, 4, true]);
+	assert.deepEqual(await run([500]).then((r) => [r.waits.length, r.reads, /answered 500/.test(r.result)]), [0, 1, true]);
+});
+
 test('an unknown or missing setting fails', async () => {
 	for (const body of [{ theme: 'neon' }, {}, { theme: '' }]) {
 		const { fetchFn } = site({ body }, '<html data-theme="fawanees">');
