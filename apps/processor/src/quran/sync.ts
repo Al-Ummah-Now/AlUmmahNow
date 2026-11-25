@@ -55,6 +55,8 @@ export interface QuranSyncEnv extends QfEnv, ErrorReporterEnv {
 export interface QuranSyncState {
   v: 1;
   syncToken?: string;
+  /** The `resources` filter the token was given for: QF takes a token only with the same one */
+  tokenResources?: string;
   syncedAt?: string;
   lastAttemptAt?: string;
   /** Newest first: the live version and the one before it (kept for readers mid-switch) */
@@ -159,13 +161,16 @@ export async function runQuranSync(
   const state = (await readJson<QuranSyncState>(bucket, QURAN_STATE_KEY)) ?? { v: 1 };
   const current = await readJson<QuranCurrent>(bucket, QURAN_CURRENT_KEY);
 
-  let bootstrap = payload.reason === 'bootstrap' || !state.syncToken;
+  // A token from before the filter changed (mushafs:4, 2026-11-22) is refused with 422 every day: start over
+  let bootstrap = payload.reason === 'bootstrap' || !state.syncToken || state.tokenResources !== RESOURCES;
   let changes: { relevant: Mutation[]; nextToken: string | null };
   try {
     changes = await readChanges(client, bootstrap ? undefined : state.syncToken);
   } catch (error) {
-    if (!(error instanceof QfError) || error.code !== 'resync_required') throw error;
-    deps.logger.warn('[Quran] QF asked for a full resync', { status: error.status });
+    // resync_required, or a token QF no longer takes (422: token_filter_mismatch, 410): a bootstrap needs no token
+    const tokenRefused = error instanceof QfError && (error.code === 'resync_required' || error.status === 410 || error.status === 422);
+    if (bootstrap || !tokenRefused) throw error;
+    deps.logger.warn('[Quran] QF did not take the sync token: full resync', { status: error.status, code: error.code });
     bootstrap = true;
     changes = await readChanges(client, undefined);
   }
@@ -217,7 +222,7 @@ export async function runQuranSync(
     result = { status: 'unchanged', version: current!.version };
   }
   // The token moves only after the copy is written: a failed build sees the same changes again
-  await bucket.put(QURAN_STATE_KEY, json({ ...state, v: 1, syncToken: changes.nextToken ?? state.syncToken, syncedAt, lastAttemptAt: syncedAt }));
+  await bucket.put(QURAN_STATE_KEY, json({ ...state, v: 1, syncToken: changes.nextToken ?? state.syncToken, tokenResources: RESOURCES, syncedAt, lastAttemptAt: syncedAt }));
   return result;
 }
 

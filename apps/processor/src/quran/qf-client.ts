@@ -113,10 +113,12 @@ export class QfClient {
 }
 
 async function toError(res: Response, what: string): Promise<QfError> {
-  const body = (await res.json().catch(() => null)) as { error?: string | { code?: string; message?: string }; code?: string; message?: string } | null;
-  const code = (typeof body?.error === 'object' ? body.error.code : typeof body?.error === 'string' ? body.error : body?.code) ?? undefined;
+  const body = (await res.json().catch(() => null)) as { error?: string | { code?: string; message?: string }; code?: string; message?: string; type?: string } | null;
+  const code = (typeof body?.error === 'object' ? body.error.code : typeof body?.error === 'string' ? body.error : (body?.code ?? body?.type)) ?? undefined;
+  // QF's own words (which parameter, why): a 4xx no retry fixes is useless without them
+  const detail = String((typeof body?.error === 'object' ? body.error.message : undefined) ?? body?.message ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const retryAfterMs = qfRetryAfterMs(res.headers.get('retry-after'));
   const retryAfter = retryAfterMs === null ? undefined : Math.ceil(retryAfterMs / 1000);
   const retryable = res.status === 429 || res.status >= 500;
-  return new QfError(`QF ${what}: ${res.status}${code ? ` ${code}` : ''}`, res.status, retryable, code, retryAfter);
+  return new QfError(`QF ${what}: ${res.status}${code ? ` ${code}` : ''}${detail ? `: ${detail}` : ''}`, res.status, retryable, code, retryAfter);
 }

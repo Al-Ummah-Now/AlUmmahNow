@@ -19,7 +19,7 @@ import {
 import { QfClient } from '../quran/qf-client';
 import { QuranCoreCollector, splitUthmaniWords } from '../quran/build';
 import { streamSnapshotRecords } from '../quran/snapshot-stream';
-import { enforceQuranFreshness, processQuranSyncMessages, quranRetryDelaySeconds, runQuranDaily, runQuranSync, type QuranBucket } from '../quran/sync';
+import { enforceQuranFreshness, processQuranSyncMessages, quranRetryDelaySeconds, runQuranDaily, runQuranSync, type QuranBucket, type QuranSyncState } from '../quran/sync';
 import { handleQuranSyncRequest } from '../index';
 import { MINI_QURAN, asr } from './fixtures/quran-mini';
 
@@ -102,6 +102,8 @@ interface FakeQf {
   /** Mutations returned to an incremental (token) sync */
   changes: Array<Record<string, unknown>>;
   resyncRequired: boolean;
+  /** Answer to a token sync: 422 with this body */
+  refuseToken?: Record<string, unknown>;
   expireTokenOnce: boolean;
   status?: number;
   breakVerse?: string;
@@ -147,6 +149,7 @@ function fakeQf(init: Partial<FakeQf> = {}): FakeQf {
         qf.resyncRequired = false;
         return Response.json({ error: { code: 'resync_required' } }, { status: 409 });
       }
+      if (qf.refuseToken) return Response.json(qf.refuseToken, { status: 422 });
       return Response.json({ sync: { has_more: false, next_sync_token: 'TOKEN-2', mutations: qf.changes } });
     }
     if (url.pathname === '/content/api/v4/resources/snapshots/quran_core/1') {
@@ -369,6 +372,31 @@ describe('Content Sync', () => {
     const qf = fakeQf({ resyncRequired: true, expireTokenOnce: true });
     expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
     expect(qf.calls).toEqual(['token', '401 /content/api/v4/resources/sync', 'token', 'sync TOKEN-1', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
+  });
+
+  it('a token for another resources filter is never sent: a bootstrap, once (prod 2026-11-23: 422 every day)', async () => {
+    const e = env();
+    await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
+    // The state as it was stored before the filter was recorded
+    const { tokenResources: _, ...old } = e.REVIEW_MEDIA.read<QuranSyncState>(QURAN_STATE_KEY);
+    await e.REVIEW_MEDIA.put(QURAN_STATE_KEY, JSON.stringify(old));
+    const qf = fakeQf({ refuseToken: { error: { code: 'token_filter_mismatch', message: 'sync_token does not match the requested resources' } } });
+    expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
+    expect(qf.calls).toEqual(['token', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
+    const next = fakeQf();
+    expect((await runQuranSync(e, { reason: 'cron' }, deps(next))).status).toBe('unchanged');
+    expect(next.calls).toEqual(['token', 'sync TOKEN-1']);
+  });
+
+  it('a 422 for the token starts over once; a 422 for the bootstrap fails with QF\'s own reason', async () => {
+    const e = env();
+    await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
+    const qf = fakeQf({ refuseToken: { message: 'bad token', type: 'invalid_request', success: false } });
+    expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
+    expect(qf.calls).toEqual(['token', 'sync TOKEN-1', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
+    const refused = { status: 422, body: { error: { code: 'invalid_resources', message: 'Invalid resources filter' } } };
+    const all: typeof fetch = async (input) => (String(input).includes('/oauth2/token') ? Response.json({ access_token: 't' }) : Response.json(refused.body, { status: refused.status }));
+    await expect(runQuranSync(e, { reason: 'bootstrap' }, { ...deps(fakeQf()), fetchImpl: all })).rejects.toMatchObject({ status: 422, retryable: false, message: 'QF /api/v4/resources/sync: 422 invalid_resources: Invalid resources filter' });
   });
 
   it('never calls the real QF from a test', () => {
