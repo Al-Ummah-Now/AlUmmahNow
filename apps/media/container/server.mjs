@@ -22,7 +22,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
+import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs, stillWithFallbacks } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
@@ -109,9 +109,15 @@ async function download(dest, url = 'http://source.internal/src') {
 	return offset;
 }
 
-function run(cmd, args, onLine) {
+/** One poster attempt may run this long */
+const STILL_TIMEOUT_MS = 60_000;
+
+function run(cmd, args, onLine, timeoutMs) {
 	return new Promise((resolve, reject) => {
 		const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+		// A process that outlives timeoutMs is killed and fails with its own error (timedOut), never as "no frame"
+		let timedOut = false;
+		const timer = timeoutMs ? setTimeout(() => { timedOut = true; p.kill('SIGKILL'); }, timeoutMs) : null;
 		let stdout = '';
 		let tail = '';
 		p.stdout.on('data', (d) => {
@@ -122,12 +128,16 @@ function run(cmd, args, onLine) {
 		p.stderr.on('data', (d) => {
 			tail = (tail + d.toString()).slice(-4000);
 		});
-		p.on('error', reject);
-		p.on('close', (code) =>
-			code === 0
-				? resolve(stdout)
-				: reject(Object.assign(new Error(`${cmd} exited ${code}`), { stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20), exitCode: code })),
-		);
+		p.on('error', (e) => {
+			if (timer) clearTimeout(timer);
+			reject(e);
+		});
+		p.on('close', (code) => {
+			if (timer) clearTimeout(timer);
+			if (code === 0) resolve(stdout);
+			else if (timedOut) reject(Object.assign(new Error(`${cmd} timed out after ${timeoutMs} ms`), { timedOut: true }));
+			else reject(Object.assign(new Error(`${cmd} exited ${code}`), { stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20), exitCode: code }));
+		});
 	});
 }
 
@@ -203,20 +213,6 @@ async function extractReview(job, src, info) {
 		return { failed: true };
 	} finally {
 		await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-	}
-}
-
-/** A still that seeks to no frame (a short MPEG-TS clip, #1946) is retried the slower way: a poster of the first second beats a failed transcode */
-async function stillWithFallbacks(args, fallbacks) {
-	const ways = [args, ...fallbacks];
-	for (let i = 0; i < ways.length; i++) {
-		try {
-			await run('ffmpeg', ways[i]);
-			return;
-		} catch (error) {
-			if (i === ways.length - 1) throw error;
-			log('still found no frame, trying the next way', { way: i + 1, error: String(error.message).slice(0, 200) });
-		}
 	}
 }
 
@@ -535,8 +531,10 @@ async function runJob(job) {
 	const published = prebuilt?.used ? prebuilt.top : src;
 	setStage('stills');
 	const stills = stillsArgs({ input: published, out, durationSeconds: info.durationSeconds });
-	await stillWithFallbacks(stills.thumb, stills.thumbFallbacks);
-	await stillWithFallbacks(stills.thumbSmall, stills.thumbSmallFallbacks);
+	// Each attempt is bounded: a poster is a few seconds of decoding, so a minute means a stuck input
+	const still = { run, log, timeoutMs: STILL_TIMEOUT_MS };
+	await stillWithFallbacks(still, stills.thumb, stills.thumbFallbacks);
+	await stillWithFallbacks(still, stills.thumbSmall, stills.thumbSmallFallbacks);
 	let preview;
 	try {
 		await run('ffmpeg', stills.preview);
