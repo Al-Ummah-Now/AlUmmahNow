@@ -359,8 +359,11 @@ export function Autocomplete(props: AutocompleteProps) {
     setStatus(count === 0 ? (query ? a.noResults : '') : count === 1 ? a.oneResult : fillTemplate(lang, a.resultsCount, { count }));
   }, [expanded, settled, ordered.length, query, a, failureText]);
 
+  // Emptied while a retry runs, so the same failure again is announced again
   useEffect(() => {
-    if (failureText) setStatus(failureText);
+    if (!failureText) return;
+    setStatus(failureText);
+    return () => setStatus((s) => (s === failureText ? '' : s));
   }, [failureText]);
 
   // Arrowing onto the last loaded option asks for the next page
@@ -450,7 +453,8 @@ export function Autocomplete(props: AutocompleteProps) {
         }
         break;
       case 'Tab':
-        setOpen(false);
+        // Forward from a failure goes to Retry; leaving that closes the popup (onBlur)
+        if (!failure || event.shiftKey) setOpen(false);
         setActive(-1);
         break;
       case 'Delete':

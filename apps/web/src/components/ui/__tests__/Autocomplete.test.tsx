@@ -3,6 +3,7 @@
  */
 import React, { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { EN_TRANSLATIONS as en } from '@/lib/i18n/translations/en';
 import { AR_TRANSLATIONS as ar } from '@/lib/i18n/translations/ar';
 import { fillTemplate } from '@al-ummah/shared-types';
@@ -162,6 +163,72 @@ describe('Autocomplete', () => {
       expect(screen.queryByTestId('autocomplete-error')).not.toBeInTheDocument();
       expect(options().map((o) => o.textContent)).toEqual(['Zed']);
       expect(load).toHaveBeenCalledTimes(3);
+    });
+
+    it('in a dropdown Tab reaches Retry, and the next Tab closes it; Shift+Tab closes it', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const load = jest.fn().mockRejectedValue(new Error('offline'));
+      render(<><button>before</button><Harness options={undefined} load={load} errorText={() => 'Why'} /><button>after</button></>);
+      const fail = async () => {
+        await act(async () => { jest.advanceTimersByTime(1000); });
+        expect(screen.getByTestId('autocomplete-error')).toBeVisible();
+      };
+      await user.click(input());
+      await user.keyboard('ze');
+      await fail();
+      await user.tab();
+      expect(screen.getByTestId('autocomplete-retry')).toHaveFocus();
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+      await user.keyboard('{Enter}');
+      expect(input()).toHaveFocus();
+      await fail();
+      expect(load).toHaveBeenCalledTimes(2);
+      await user.tab();
+      await user.tab();
+      expect(screen.getByText('after')).toHaveFocus();
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+      await user.tab({ shift: true });
+      await fail();
+      await user.tab({ shift: true });
+      expect(screen.getByText('before')).toHaveFocus();
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('Tab closes a dropdown without a failure, and Shift+Tab one with it, before focus moves', async () => {
+      const { unmount } = render(<Harness />);
+      fireEvent.change(input(), { target: { value: 'seerah' } });
+      fireEvent.keyDown(input(), { key: 'Tab' });
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+      unmount();
+      render(<Harness options={undefined} load={jest.fn().mockRejectedValue(new Error('offline'))} errorText={() => 'Why'} />);
+      fireEvent.change(input(), { target: { value: 'ze' } });
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      fireEvent.keyDown(input(), { key: 'Tab' });
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.keyDown(input(), { key: 'Tab', shiftKey: true });
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('the same failure again is announced again', async () => {
+      const load = jest.fn().mockRejectedValue(new Error('offline'));
+      render(<Harness options={undefined} load={load} errorText={() => 'Why'} />);
+      fireEvent.change(input(), { target: { value: 'ze' } });
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(screen.getByTestId('autocomplete-status')).toHaveTextContent('Why');
+      fireEvent.click(screen.getByTestId('autocomplete-retry'));
+      expect(screen.getByTestId('autocomplete-status')).toBeEmptyDOMElement();
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(screen.getByTestId('autocomplete-status')).toHaveTextContent('Why');
+    });
+
+    it('a failure followed by results announces the results', async () => {
+      const load = jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue([{ id: 'x', label: 'Zed' }]);
+      render(<Harness options={undefined} load={load} errorText={() => 'Why'} />);
+      fireEvent.change(input(), { target: { value: 'ze' } });
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      fireEvent.click(screen.getByTestId('autocomplete-retry'));
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(en.autocomplete.oneResult);
     });
 
     it('without errorText a failed lookup shows as no matches, as before', async () => {
