@@ -345,3 +345,12 @@ describe('content pass-through allowlist', () => {
     assert.equal(upstreamContentPath(['videos', 'a b?c', 'unpublish'], ''), '/api/content/videos/a%20b%3Fc/unpublish');
   });
 });
+
+describe('phone card labels', () => {
+  it('never join the value beside them (Arabic letters join across elements: «مسندة إلى» + «لا»)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/components/list/DataTable.tsx', import.meta.url), 'utf8');
+    assert.match(src, /\{c\.cardLabel\}\{CARD_LABEL_END\}/);
+    assert.match(src, /export const CARD_LABEL_END = '\\u200c';/);
+  });
+});
