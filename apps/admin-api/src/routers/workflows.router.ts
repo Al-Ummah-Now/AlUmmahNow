@@ -27,6 +27,7 @@ import {
   workflowFloorFor,
   isWorkflowActionType,
   isFeatureKey,
+  type AdminNames,
   type WorkflowActionType,
   type WorkflowActor,
   type WorkflowStatus,
@@ -222,7 +223,9 @@ app.get('/recipients', async (c) => {
   if (!actor.roles.includes('super_admin') && !moneyPerson(actor)) throw new Refused(403, 'forbidden');
   const q = (c.req.query('q') ?? '').trim().toLowerCase().slice(0, 100);
   const ids = await ctx.directory.candidates([{ kind: 'role', role: 'admin' }, { kind: 'finance' }]);
-  const { users } = await resolveNames(c.env as never, { users: ids.slice(0, ADMIN_NAMES_MAX), items: [] });
+  // Names come ADMIN_NAMES_MAX at a time
+  const batches = Array.from({ length: Math.ceil(ids.length / ADMIN_NAMES_MAX) }, (_, n) => ids.slice(n * ADMIN_NAMES_MAX, (n + 1) * ADMIN_NAMES_MAX));
+  const users = Object.assign({}, ...(await Promise.all(batches.map((b) => resolveNames(c.env as never, { users: b, items: [] })))).map((r) => r.users)) as AdminNames['users'];
   const items = ids
     .map((id) => ({ id, name: users[id]?.found ? (users[id].name ?? '').trim() : '' }))
     .filter((p) => p.name && p.name.toLowerCase().includes(q))
