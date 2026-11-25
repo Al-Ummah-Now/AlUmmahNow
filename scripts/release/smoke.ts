@@ -98,11 +98,17 @@ export interface SmokeOptions {
 	fetchImpl?: typeof fetch;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
+	/** How long one request may take (tests) */
+	requestTimeoutMs?: number;
 }
 
 /** How long a /health may keep answering with another version than the candidate, and the pause between tries. */
 export const VERSION_WAIT_MS = 90_000;
 export const VERSION_PAUSE_MS = 5_000;
+
+/** One request may take this long (a stalled one must not outlive the waits around it). */
+export const REQUEST_TIMEOUT_MS = 15_000;
+export const isTimeout = (error: unknown): boolean => (error as Error)?.name === 'TimeoutError';
 
 export function overrideHeader(overrides: Record<string, string>): string {
 	return Object.entries(overrides)
@@ -122,7 +128,8 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 	const headers: Record<string, string> = { 'User-Agent': 'al-ummah-now-release-smoke' };
 	if (opts.overrides && Object.keys(opts.overrides).length) headers['Cloudflare-Workers-Version-Overrides'] = overrideHeader(opts.overrides);
-	const get = (url: string) => doFetch(url, { redirect: 'manual', headers });
+	const requestTimeout = opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
+	const get = (url: string, timeoutMs = requestTimeout) => doFetch(url, { redirect: 'manual', headers, signal: AbortSignal.timeout(timeoutMs) });
 
 	const results: CheckResult[] = [];
 	const check = async (name: string, fn: () => Promise<string>) => {
@@ -142,16 +149,25 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 			const wanted = worker ? opts.overrides?.[worker] : undefined;
 			const start = now();
 			for (;;) {
-				const res = await get(`${hosts[host]}/health`);
-				assert(res.status === 200, `HTTP ${res.status}`);
-				const body = (await res.json()) as { status?: string; deployment?: string };
-				assert(body.status === 'healthy', `status ${body.status}`);
-				const waited = Math.round((now() - start) / 1000);
-				if (!wanted || body.deployment === wanted) return `version ${body.deployment ?? 'unknown'}${waited >= 1 && wanted ? ` (after ${waited} s)` : ''}`;
+				let served: string;
+				try {
+					const res = await get(`${hosts[host]}/health`, Math.min(requestTimeout, Math.max(VERSION_PAUSE_MS, VERSION_WAIT_MS - (now() - start))));
+					assert(res.status === 200, `HTTP ${res.status}`);
+					const body = (await res.json()) as { status?: string; deployment?: string };
+					assert(body.status === 'healthy', `status ${body.status}`);
+					const after = Math.round((now() - start) / 1000);
+					if (!wanted || body.deployment === wanted) return `version ${body.deployment ?? 'unknown'}${after >= 1 && wanted ? ` (after ${after} s)` : ''}`;
+					served = `served by version ${body.deployment}`;
+				} catch (error) {
+					// A request that stalls says nothing about the candidate yet
+					if (!wanted || !isTimeout(error)) throw error;
+					served = 'no answer in time';
+				}
 				// Edge locations learn of a new deployment at different times: one can still answer with the version
-				// before it, after waitForVersions saw the candidate. Only that is waited for: an error, another status
-				// or an unhealthy body fails above, at once, on every try.
-				assert(now() - start + VERSION_PAUSE_MS <= VERSION_WAIT_MS, `served by version ${body.deployment}, expected candidate ${wanted} (after ${waited} s)`);
+				// before it, after waitForVersions saw the candidate. Only that (and a stalled request) is waited for: an
+				// error, another status or an unhealthy body fails above, at once, on every try.
+				const waited = Math.round((now() - start) / 1000);
+				assert(now() - start + VERSION_PAUSE_MS <= VERSION_WAIT_MS, `${served}, expected candidate ${wanted} (after ${waited} s)`);
 				await sleep(VERSION_PAUSE_MS);
 			}
 		});
@@ -166,13 +182,14 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 
 	// The self-hosted live edge (lib/live/edge.ts on api-videos): encoders push HLS to it and players
 	// read from it. A host that answers with anything but the edge's clock is a failure. A host that
-	// does not answer at all passes with a note: the release attaches it as a new custom domain
+	// refuses the connection passes with a note (one that stalls is a failure): the release attaches it as a new custom domain
 	// (custom-domains.ts) and its certificate can take minutes on the first release.
 	await check('api-videos: live edge host answers', async () => {
 		let res: Response;
 		try {
 			res = await get(`https://${LIVE_HOSTS[opts.env]}/time`);
 		} catch (error) {
+			if (isTimeout(error)) throw error;
 			return `not answering yet (${(error as Error).message}); a newly attached custom domain can take minutes`;
 		}
 		assert(res.status === 200, `HTTP ${res.status}`);
