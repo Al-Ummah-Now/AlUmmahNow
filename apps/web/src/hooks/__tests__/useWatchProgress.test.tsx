@@ -271,11 +271,16 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     let callCounter = 0;
     const finish: Array<() => void> = [];
 
-    // Each save is finished by the test, one at a time, in the order the hook started them
+    // Each save is finished by the test. What the mutex promises is counted here: how many saves were
+    // in flight at once (the test finishing them in the order they started cannot hide an overlap)
+    let inFlight = 0;
+    let mostInFlight = 0;
     saveProgressMock.mockImplementation(() => {
       const currentCall = ++callCounter;
+      mostInFlight = Math.max(mostInFlight, ++inFlight);
       return new Promise(resolve => {
         finish.push(() => {
+          inFlight--;
           callOrder.push(currentCall);
           resolve({ success: true });
         });
@@ -307,7 +312,8 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     }
     await act(async () => { await Promise.all(all); });
 
-    // Should have made significantly fewer than 10 API calls due to mutex
+    // The mutex: never two saves in flight, and significantly fewer than 10 API calls
+    expect(mostInFlight).toBe(1);
     expect(saveProgressMock.mock.calls.length).toBeLessThanOrEqual(3);
     expect(saveProgressMock.mock.calls.length).toBeGreaterThan(0);
 
