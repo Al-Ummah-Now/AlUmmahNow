@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { forgetFeatureSwitches, middlewareFeatureRoutes } from '@al-ummah/shared-types';
 import { forgetCachedBan } from '../src/lib/admin/bans';
 import { LiveChatHeld, LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../src/endpoints/live/liveChat';
-import { forgetChatTiers, latestPage, postMessage, readChatStream, readSnapshot, replayPage } from '../src/lib/live/chat';
+import { chatRole, forgetChatTiers, latestPage, postMessage, readChatStream, readSnapshot, replayPage } from '../src/lib/live/chat';
 import { saveTier } from '../src/lib/creatorTiers';
 import { withSearchSync } from '../src/lib/search/sync';
 import { requireFeature } from '../src/middleware/require-feature';
@@ -474,6 +474,53 @@ describe('held for review (E17-D4)', () => {
 		forgetCachedBan('mod');
 		assert.equal((await t.call('mod', 'GET', 's1/chat/held')).status, 403);
 		forgetCachedBan('mod');
+	});
+
+	it('the role comes from the channel record; the stream’s own owner counts only without one', async () => {
+		const t = await setup();
+		await t.post('ali', 'one');
+		await t.post('sara', 'two');
+		hold(t, 'one');
+		const message = (text: string) => (t.db.db.prepare('SELECT id FROM live_chat_messages WHERE text = ?').get(text) as Json).id;
+		/** Held list, settings, moderate, and what chatRole says. */
+		const access = async (who: string) => {
+			const held = (await t.call(who, 'GET', 's1/chat/held')).status;
+			const settings = (await t.call(who, 'PATCH', 's1/chat/settings', { slowModeSeconds: 0 })).status;
+			const moderate = (await t.call(who, 'POST', `s1/chat/${message('two')}/moderate`, { action: 'pin' })).status;
+			const role = await chatRole(t.env as never, (await readChatStream(t.db as never, 's1'))!, who);
+			return [held, settings, moderate, role.isOwner, role.moderates, role.manages];
+		};
+		const all = [200, 200, 200, true, true, true];
+		const none = [403, 403, 403, false, false, false];
+		assert.deepEqual(await access('owner'), all);
+		// The channel record names another owner; the stream's own record and its index row are as they were
+		await t.raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'nadia', name: 'Channel', members: [{ userId: 'mod', role: 'moderator' }] }));
+		assert.equal((await readChatStream(t.db as never, 's1'))!.ownerId, 'owner');
+		assert.deepEqual(await access('owner'), none);
+		assert.deepEqual(await access('nadia'), all);
+		assert.deepEqual(await access('mod'), [200, 200, 200, false, true, true]);
+		// Also what is not open to anyone
+		await t.put({ id: 's1', isPrivate: true });
+		assert.equal((await t.read('owner')).status, 404);
+		assert.equal((await t.read('nadia')).status, 200);
+		await t.put({ id: 's1' });
+		// A role there is a role, whoever the stream's record names
+		await t.raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'nadia', name: 'Channel', members: [{ userId: 'owner', role: 'moderator' }] }));
+		assert.deepEqual(await access('owner'), [200, 200, 200, false, true, true]);
+		// A channel that cannot be read gives nobody a role
+		const get = t.raw.channels.get.bind(t.raw.channels);
+		t.raw.channels.get = async () => { throw new Error('R2 down'); };
+		for (const who of ['owner', 'nadia']) assert.deepEqual(await access(who), none, who);
+		t.raw.channels.get = get;
+		await t.raw.channels.put('ch1', 'null');
+		for (const who of ['owner', 'nadia']) assert.deepEqual(await access(who), none, who);
+		// Without a channel record, and without a channel, it is the stream's own owner's
+		await t.raw.channels.delete('ch1');
+		assert.deepEqual(await access('owner'), all);
+		assert.deepEqual(await access('nadia'), none);
+		await t.put({ id: 's1', channelId: null });
+		assert.deepEqual(await access('owner'), all);
+		assert.deepEqual(await access('nadia'), none);
 	});
 
 	it('of a deleted stream nothing is shown, to its owner either', async () => {

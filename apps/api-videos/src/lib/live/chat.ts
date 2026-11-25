@@ -20,7 +20,7 @@ import {
 	type LiveChatSettings,
 	type LiveStreamVisibility,
 } from '@al-ummah/shared-types';
-import { roleOnChannel, type ChannelAccessEnv } from '../channelAccess';
+import { roleOnRecord, type ChannelAccessEnv } from '../channelAccess';
 import { cachedBan } from '../admin/bans';
 import { isBlocked } from '../channelComments/blocks';
 import { channelOwnerTier } from '../creatorTiers';
@@ -133,10 +133,9 @@ const NO_ROLE: ChatRole = { isOwner: false, moderates: false, manages: false };
 
 export async function chatRole(env: ChannelAccessEnv, stream: ChatStream, userId: string | null | undefined): Promise<ChatRole> {
 	if (!userId) return NO_ROLE;
-	if (stream.ownerId && stream.ownerId === userId) return { isOwner: true, moderates: true, manages: true };
-	if (!stream.channelId) return NO_ROLE;
 	try {
-		const role = await roleOnChannel(env, stream.channelId, userId);
+		// The channel record's role; the stream's own owner only where there is no channel record (see roleOnRecord)
+		const role = await roleOnRecord(env, { userId: stream.ownerId, channelId: stream.channelId }, userId);
 		const manages = can(role, 'live.manage') || can(role, 'live.moderate');
 		return { isOwner: role === 'owner', manages, moderates: manages || can(role, 'comment.moderate') };
 	} catch (error) {
