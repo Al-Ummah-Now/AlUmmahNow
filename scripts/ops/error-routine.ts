@@ -29,8 +29,12 @@ export interface Findings {
 	actions: { kind: string; before: number; now: number }[];
 }
 
-/** No baseline (the first run): nothing is new. An unreadable part of the report keeps what was known. */
-export function compare(prev: Baseline | null, now: ErrorSummary): { findings: Findings; next: Baseline } {
+/**
+ * No baseline (the first run): nothing is new. An unreadable part of the report keeps what was known; with nothing
+ * known yet there is no baseline to write (next: null), so the first readable run makes it.
+ */
+export function compare(prev: Baseline | null, now: ErrorSummary): { findings: Findings; next: Baseline | null } {
+	if (!prev && (!now.groups || !now.actions)) return { findings: { groups: [], actions: [] }, next: null };
 	const known = new Set(prev?.known ?? []);
 	const groups = now.groups ?? [];
 	const actions = now.actions ?? prev?.actions ?? {};
@@ -82,13 +86,14 @@ async function main(): Promise<void> {
 	const runUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 	const did = hasFindings(findings) ? await publish(findings, runUrl) : 'nothing new';
 	// Only after the issue: a failed run leaves the old baseline, and the next one finds the same again
+	if (!next) throw new Error('The first run could not read the whole report: no baseline written');
 	writeFileSync(arg('next'), JSON.stringify(next));
 	process.stdout.write(`${prev ? did : 'first run: baseline written'}\n`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
-		process.stderr.write(`error-routine failed: ${error instanceof Error && error.message.startsWith('GitHub ') ? error.message : 'unexpected error'}\n`);
+		process.stderr.write(`error-routine failed: ${error instanceof Error && /^(GitHub |The first run )/.test(error.message) ? error.message : 'unexpected error'}\n`);
 		process.exit(1);
 	});
 }

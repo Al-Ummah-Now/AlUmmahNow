@@ -14,6 +14,14 @@ test('the first run only writes the baseline', () => {
 	assert.deepEqual(next, base);
 });
 
+test('a first run that cannot read every part writes no baseline', () => {
+	for (const s of [now({ groups: null }), now({ actions: null })]) {
+		const { findings, next } = compare(null, s);
+		assert.equal(hasFindings(findings), false);
+		assert.equal(next, null);
+	}
+});
+
 test('the same errors again, more of them, fewer items or a test group: nothing new', () => {
 	for (const s of [now(), now({ groups: [{ ...A, line: A.line.replace('4', '400') }] }), now({ actions: {} }), now({ groups: [A, { ...B, test: true }] })]) {
 		assert.equal(hasFindings(compare(base, s).findings), false);
@@ -25,7 +33,7 @@ test('a new group, a new kind of item and more items of a kind are found once', 
 	const { findings, next } = compare(base, s);
 	assert.deepEqual(findings.groups, [B]);
 	assert.deepEqual(findings.actions, [{ kind: 'api-videos processing video', before: 2, now: 3 }, { kind: 'processor queue quran-sync', before: 0, now: 1 }]);
-	assert.equal(hasFindings(compare(next, s).findings), false);
+	assert.equal(hasFindings(compare(next!, s).findings), false);
 });
 
 test('a group that was quiet for a while is not new; an unreadable report forgets nothing', () => {
