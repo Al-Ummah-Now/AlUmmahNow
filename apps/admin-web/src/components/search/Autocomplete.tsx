@@ -361,8 +361,11 @@ export function Autocomplete({
   // A later page failed too: its items stay, with Retry
   const initialFailed = showingInitial && initial?.status === 'error';
   const emptyInitial = showingInitial && !state.query.trim() && state.status === 'ready' && suggestionCount === 0;
-  // A typed query with nothing to choose: the list says so, or the status line under the box does (no empty list then)
-  const none = !showingInitial && state.status === 'ready' && state.options.length === 0;
+  // Something typed (one character filters the opening list) and nothing to choose: the list says so, or the status
+  // line under the box does (no empty list then)
+  const none = !!state.query.trim() && state.status === 'ready' && state.options.length === 0;
+  // In a picker Enter has nothing to search
+  const noMatches = messages?.noMatches?.(state.query.trim()) ?? t(mode === 'pick' ? 'autocomplete.pickNoMatches' : 'autocomplete.noMatches');
   const announcement = !expanded
     ? ''
     : state.status === 'loading' && state.options.length === 0
@@ -372,7 +375,7 @@ export function Autocomplete({
         : emptyInitial
           ? (messages?.emptyList ?? t('autocomplete.emptyList'))
           : suggestionCount === 0
-            ? (messages?.noMatches?.(state.query.trim()) ?? t('autocomplete.noMatches'))
+            ? noMatches
             : showingInitial && !state.query.trim()
               ? (messages?.recent?.(suggestionCount) ?? t('autocomplete.recent', { count: suggestionCount }))
               : (messages?.count?.(suggestionCount) ?? t('autocomplete.count', { count: suggestionCount }));
@@ -516,7 +519,7 @@ export function Autocomplete({
           )}
           {none && !showStatus && (
             <p className="px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-none` : undefined}>
-              {messages?.noMatches?.(state.query.trim()) ?? t('autocomplete.noMatches')}
+              {noMatches}
             </p>
           )}
           {showingInitial && initial?.status === 'more' && (

@@ -2143,6 +2143,7 @@ const en = {
     current: 'Current',
     recent: 'Newest {count}. Type to search, or scroll for more.',
     noMatches: 'No matches. Press Enter to search anyway.',
+    pickNoMatches: 'No matches.',
     failed: 'Suggestions are unavailable right now. Press Enter to search.',
     count: '{count, plural, one {# suggestion} other {# suggestions}}. Use the up and down arrows to choose, Enter to open.',
     searchAll: 'Search everything for',
