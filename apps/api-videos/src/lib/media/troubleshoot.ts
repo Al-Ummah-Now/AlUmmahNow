@@ -16,6 +16,7 @@
 import {
 	reportNeedsAction,
 	resolveNeedsAction,
+	sanitizeSourceFacts,
 	scrubOpsText,
 	STALL_QUEUED_MS,
 	STALL_RETRY_LATE_MS,
@@ -31,6 +32,7 @@ import {
 	type TranscoderJobView,
 	type TroubleshootJob,
 	type TroubleshootJobs,
+	type TroubleshootSource,
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
@@ -98,9 +100,24 @@ interface JobRow {
 	failed_at: string | null;
 	error: string | null;
 	updated_at: string;
+	source_facts?: string | null;
 }
 
 const clip = (text: string | null | undefined) => (text ? scrubOpsText(text).slice(0, 300) : null);
+
+/** The stored source facts without the hash. */
+function sourceOf(json: string | null | undefined): TroubleshootSource | null {
+	if (!json) return null;
+	try {
+		const facts = sanitizeSourceFacts(JSON.parse(json));
+		if (!facts) return null;
+		const rest: TroubleshootSource & { sha256?: string } = facts;
+		delete rest.sha256;
+		return rest;
+	} catch {
+		return null;
+	}
+}
 
 /** One row of the panel from media_jobs and the Transcoder's answer. Pure (tested). */
 export function toTroubleshootJob(row: JobRow, title: string | null, answer: TranscoderAnswer | null, asked: boolean): TroubleshootJob {
@@ -127,6 +144,7 @@ export function toTroubleshootJob(row: JobRow, title: string | null, answer: Tra
 		progress: state === 'running' ? (view?.progress ?? null) : null,
 		reason,
 		error,
+		source: state === 'failed' ? sourceOf(row.source_facts) : null,
 		instance: { name: row.video_id, durableObjectId: answer?.durableObjectId ?? null, state: null },
 		...(asked && !answer ? { transcoderUnavailable: true } : {}),
 	};
@@ -165,7 +183,7 @@ export async function readTroubleshootJobs(env: TroubleshootEnv, now = Date.now(
 	const [active, finished] = await Promise.all([
 		activeRows(env),
 		env.SEARCH_DB.prepare(
-			`SELECT video_id, job_id, status, attempts, queued_at, started_at, failed_at, error, updated_at FROM media_jobs
+			`SELECT video_id, job_id, status, attempts, queued_at, started_at, failed_at, error, updated_at, source_facts FROM media_jobs
 			 WHERE status IN ('failed', 'cancelled') AND updated_at >= ? ORDER BY updated_at DESC LIMIT ?`,
 		)
 			.bind(since, FINISHED_LIMIT)

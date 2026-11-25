@@ -3,8 +3,8 @@
  * job offers, the words for each state, reason and Cloudflare problem, and the logs filter check.
  * Server and client safe; tested in test/transcode-troubleshoot.test.ts.
  */
-import { TROUBLESHOOT_FILTER, type TroubleshootApiError, type TroubleshootJob, type TroubleshootState, type TroubleshootStatus, type TranscodeReason } from '@al-ummah/shared-types';
-import type { MessageKey } from '@/i18n/translate';
+import { formatBytes, formatDuration, numberFormat, sourceVerdict, TROUBLESHOOT_FILTER, type SourceVerdict, type TroubleshootSource, type TroubleshootApiError, type TroubleshootJob, type TroubleshootState, type TroubleshootStatus, type TranscodeReason } from '@al-ummah/shared-types';
+import type { MessageKey, Translator } from '@/i18n/translate';
 
 export const TROUBLESHOOT_REFRESH_MS = 30_000;
 
@@ -53,6 +53,36 @@ export const API_ERROR_LABEL: Record<TroubleshootApiError, MessageKey> = {
   rate_limited: 'transcodeTroubleshoot.errRateLimited',
   unavailable: 'transcodeTroubleshoot.errUnavailable',
 };
+
+export const SOURCE_VERDICT_LABEL: Record<SourceVerdict, MessageKey> = {
+  has_video: 'transcodeTroubleshoot.source.hasVideo',
+  audio_only: 'transcodeTroubleshoot.source.audioOnly',
+  half_written: 'transcodeTroubleshoot.source.halfWritten',
+  unreadable: 'transcodeTroubleshoot.source.unreadable',
+};
+
+const STREAM_LABEL: Record<NonNullable<TroubleshootSource['streams']>[number]['kind'], MessageKey> = {
+  video: 'transcodeTroubleshoot.source.kinds.video',
+  audio: 'transcodeTroubleshoot.source.kinds.audio',
+  cover: 'transcodeTroubleshoot.source.kinds.cover',
+  subtitle: 'transcodeTroubleshoot.source.kinds.subtitle',
+  other: 'transcodeTroubleshoot.source.kinds.other',
+};
+
+/** What a failed job's file is, in words: the verdict, then its size, length, streams and empty bytes. */
+export function sourceLines(source: TroubleshootSource, t: Translator, locale: string): { verdict: string; details: string[] } {
+  const percent = numberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
+  return {
+    verdict: t(SOURCE_VERDICT_LABEL[sourceVerdict(source)]),
+    details: [
+      formatBytes(locale as never, source.bytes),
+      ...(source.durationSeconds ? [formatDuration(locale as never)(source.durationSeconds)] : []),
+      // The codec names stay left to right inside Arabic text
+      ...(source.streams ?? []).map((s) => t('transcodeTroubleshoot.source.stream', { kind: t(STREAM_LABEL[s.kind]), codec: `\u2068${s.codec}\u2069` })),
+      t('transcodeTroubleshoot.source.zeros', { start: percent.format(source.zeroStartPercent / 100), end: percent.format(source.zeroEndPercent / 100) }),
+    ],
+  };
+}
 
 /** Retry now: anything not transcoding right now. Cancel: anything still going. */
 export function jobActions(job: Pick<TroubleshootJob, 'state'>): { retry: boolean; cancel: boolean } {
