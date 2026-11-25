@@ -237,24 +237,6 @@ export async function getUserChannels(): Promise<Channel[]> {
 }
 
 /**
- * Reload channels for a specific user
- */
-export async function reloadUserChannels(userId?: string): Promise<Channel[]> {
-  try {
-    const session = await SessionManager.getActiveSession();
-    if (!session) {
-      return [];
-    }
-
-    const targetUserId = userId || session.userId;
-    return await SessionManager.loadUserChannels(targetUserId);
-  } catch (error) {
-    logger.error('[reloadUserChannels] Error:', error);
-    return [];
-  }
-}
-
-/**
  * Re-read the active account's profile (display name, avatar) into the session,
  * e.g. after the user changes their photo, so the navigation shows it.
  */

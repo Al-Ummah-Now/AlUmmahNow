@@ -1,12 +1,15 @@
 /** The error screen: reported, friendly, localised, a reference; never raw text; skew goes to the recovery. */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { errorRefFromDigest } from '@al-ummah/shared-types';
 
 const report = jest.fn((_e: unknown, opts?: { ref?: string }) => opts?.ref ?? 'ERR-CLNT-0001');
 jest.mock('@/lib/errors/reporter', () => ({ reportError: (e: unknown, o: { ref?: string }) => report(e, o) }));
 const recover = jest.fn(() => false);
 jest.mock('@/lib/version-skew/recovery', () => ({ recoverFromVersionSkew: (...a: unknown[]) => (recover as (...x: unknown[]) => boolean)(...a) }));
+
+const leaving = jest.fn(() => false);
+jest.mock('@/lib/errors/leaving', () => ({ isLeavingPage: () => leaving() }));
 
 import { FriendlyError } from '../FriendlyError';
 
@@ -16,6 +19,7 @@ describe('FriendlyError', () => {
   beforeEach(() => {
     report.mockClear();
     recover.mockReset().mockReturnValue(false);
+    leaving.mockReset().mockReturnValue(false);
     window.history.pushState({}, '', '/en/video/abc');
   });
 
@@ -55,6 +59,29 @@ describe('FriendlyError', () => {
     await waitFor(() => expect(recover).toHaveBeenCalledWith(error, 'boundary:locale'));
     expect(container).toBeEmptyDOMElement();
     expect(report).not.toHaveBeenCalled();
+  });
+
+  it('a page stream cut off because the page is being left shows nothing and is not reported, unless the next page never comes', () => {
+    jest.useFakeTimers();
+    try {
+      leaving.mockReturnValue(true);
+      const cut = new TypeError('Error in input stream');
+      const { container } = render(<FriendlyError error={cut} boundary="locale" />);
+      expect(container).toBeEmptyDOMElement();
+      expect(report).not.toHaveBeenCalled();
+      act(() => void jest.advanceTimersByTime(8_000));
+      expect(screen.getByTestId('friendly-error')).toHaveAttribute('data-kind', 'offline');
+      expect(report).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows an ordinary error even while the page is being left', () => {
+    leaving.mockReturnValue(true);
+    render(<FriendlyError error={new TypeError('x is undefined')} boundary="locale" />);
+    expect(screen.getByTestId('friendly-error')).toBeInTheDocument();
+    expect(report).toHaveBeenCalledTimes(1);
   });
 
   it('marks errors from the release test page as test events', async () => {

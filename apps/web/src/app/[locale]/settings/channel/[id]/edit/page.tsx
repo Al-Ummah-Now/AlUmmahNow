@@ -6,6 +6,8 @@ import Link from '@/components/common/AppLink';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
 import { getChannelForOwner } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';
+import { PhotoFileInput } from '@/components/media/PhotoFileInput';
+import { usePhotoUploads } from '@/hooks/usePhotoUploads';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
@@ -164,19 +166,14 @@ function ChannelEditPage() {
     }
   };
 
-  // Which image is uploading or being removed (disables its buttons meanwhile)
-  const [photoBusy, setPhotoBusy] = useState<'avatar' | 'cover' | null>(null);
   const field = (type: 'avatar' | 'cover') => (type === 'avatar' ? 'avatarUrl' : 'coverUrl');
+  // Which image is being removed (its Remove button waits)
+  const [removing, setRemoving] = useState<'avatar' | 'cover' | null>(null);
 
-  const handlePhotoUpdate = async (type: 'avatar' | 'cover', file: File) => {
+  const photos = usePhotoUploads<'avatar' | 'cover'>(async (type, file) => {
     if (!channelId || !user?.id) return;
     const key = field(type);
-    const previous = formData[key];
-    setPhotoBusy(type);
     setError(null);
-    // Local preview while the upload runs
-    const previewUrl = URL.createObjectURL(file);
-    setFormData((f) => ({ ...f, [key]: previewUrl }));
     try {
       // Upload straight from the browser to the API. Not via a Server Action:
       // Cloudflare's WAF rule for CVE-2025-55183 blocks some image bodies (403).
@@ -189,12 +186,8 @@ function ChannelEditPage() {
     } catch (error) {
       logger.error('Error uploading file', { error, type, channelId });
       setError(t.errors.uploadFailed || t.errors.genericError);
-      setFormData((f) => ({ ...f, [key]: previous }));
-    } finally {
-      URL.revokeObjectURL(previewUrl);
-      setPhotoBusy(null);
     }
-  };
+  });
 
   const removePhoto = async (type: 'avatar' | 'cover') => {
     if (!channelId) return;
@@ -206,7 +199,7 @@ function ChannelEditPage() {
     });
     if (!confirmed) return;
     const key = field(type);
-    setPhotoBusy(type);
+    setRemoving(type);
     setError(null);
     try {
       const result = await updateChannelProfile(channelId, { [key]: '' });
@@ -218,7 +211,7 @@ function ChannelEditPage() {
       logger.error('Error removing channel image', { error, type, channelId });
       setError(t.channel.saveFailed);
     } finally {
-      setPhotoBusy(null);
+      setRemoving(null);
     }
   };
 
@@ -256,41 +249,19 @@ function ChannelEditPage() {
       <div className="max-w-6xl mx-auto">
         {/* Channel banner: the current cover as a preview, with Change/Remove */}
         <EditableCover
-          url={formData.coverUrl}
+          url={photos.previews.cover ?? formData.coverUrl}
           alt={t.channel.channelBanner || t.channel.currentCover}
-          onPick={() => document.getElementById('coverPhotoInput')?.click()}
+          inputId="coverPhotoInput"
           onRemove={() => void removePhoto('cover')}
           labels={{ pick: t.channel.clickToChangeCover, change: t.channel.changeCover, remove: t.channel.removeCover }}
           testId="channel-cover-upload"
           imageTestId="channel-cover-image"
-          busy={photoBusy === 'cover'}
+          busy={photos.uploading.cover || removing === 'cover'}
           className="h-52 bg-[var(--fanous-color-hero-start,var(--fanous-color-surface))]"
         />
         {/* Pickers live outside the clickable areas so their click does not bubble back */}
-        <input
-          type="file"
-          id="coverPhotoInput"
-          aria-label={t.channel.clickToChangeCover}
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            e.target.value = '';
-            if (picked) setCropping({ type: 'cover', file: picked });
-          }}
-        />
-        <input
-          type="file"
-          id="avatarPhotoInput"
-          aria-label={t.channel.clickToChangeAvatar}
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            e.target.value = '';
-            if (picked) setCropping({ type: 'avatar', file: picked });
-          }}
-        />
+        <PhotoFileInput id="coverPhotoInput" label={t.channel.clickToChangeCover} onPick={(file) => setCropping({ type: 'cover', file })} />
+        <PhotoFileInput id="avatarPhotoInput" label={t.channel.clickToChangeAvatar} onPick={(file) => setCropping({ type: 'avatar', file })} />
 
         <ImageCropDialog
           file={cropping?.file ?? null}
@@ -299,21 +270,21 @@ function ChannelEditPage() {
           onApply={(cropped) => {
             const type = cropping?.type;
             setCropping(null);
-            if (type) void handlePhotoUpdate(type, cropped);
+            if (type) void photos.start(type, cropped);
           }}
         />
 
         {/* Channel Info & Edit Form */}
         <div className="pb-5 px-5 bg-white dark:bg-gray-800">
           <EditableAvatar
-            url={formData.avatarUrl}
+            url={photos.previews.avatar ?? formData.avatarUrl}
             alt={formData.nameEn || formData.name || t.channel.currentAvatar}
-            onPick={() => document.getElementById('avatarPhotoInput')?.click()}
+            inputId="avatarPhotoInput"
             onRemove={() => void removePhoto('avatar')}
             labels={{ pick: t.channel.clickToChangeAvatar, change: t.channel.changeAvatar, remove: t.channel.removeAvatar }}
             testId="channel-avatar-upload"
             imageTestId="channel-avatar-image"
-            busy={photoBusy === 'avatar'}
+            busy={photos.uploading.avatar || removing === 'avatar'}
             placeholder={
               <div className="flex h-full w-full items-center justify-center bg-[var(--aun-btn-filled-bg)]">
                 <span className="text-3xl font-bold text-white">{avatarInitial(formData.nameEn, formData.name, about.handle)}</span>

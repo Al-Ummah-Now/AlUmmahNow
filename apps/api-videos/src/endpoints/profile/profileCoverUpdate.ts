@@ -51,8 +51,12 @@ const handleCoverUpdate = async (c: AppContext) => {
         const photoId = crypto.randomUUID();
         const path = `/${photoId}_cover.${file.type.split("/")[1]}`;
 
-        // Get Bunny.net storage key and zone from environment
-        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
+        const coverUrl = `https://images.alummahnow.net${path}`;
+        // The key and the review settings together (VR16): each is a round trip, and the uploader waits for all of them
+        const [key, gate] = await Promise.all([
+            requireSecret(c.env.image_storage_key, 'image_storage_key'),
+            imageGate(c.env as never),
+        ]);
         const zone = requireEnvVar(c.env, 'ZONE');
 
         const bunnyStorageClient = new BunnyStorageClient(zone, key);
@@ -61,35 +65,34 @@ const handleCoverUpdate = async (c: AppContext) => {
             throw new Error(`Image storage rejected the upload for ${path}`);
         }
 
-        //Update the profile's cover URL
         // Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6)
-        const coverUrl = `https://images.alummahnow.net${path}`;
-        // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
-        await recordImageOwner(c.env.SEARCH_DB, coverUrl, { kind: 'profile_cover', ownerId: userId });
         // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
-        const gate = await imageGate(c.env as never);
         let reviewId: string | null = null;
-        const saved = await repository.updateObject(userId, (fresh) => {
-            const reviewed = newImagePatch(gate, 'profile_banner', coverUrl, (fresh as { pendingImages?: never }).pendingImages);
-            reviewId = reviewed.reviewId;
-            Object.assign(fresh, reviewed.patch);
-        });
-        if (saved && reviewId) {
-            await queueImageScan(c.env as never, gate, { subject: 'profile_banner', subjectId: userId, reviewId, ownerId: userId, images: [coverUrl] });
-        }
+        const [saved] = await Promise.all([
+            repository.updateObject(userId, (fresh) => {
+                const reviewed = newImagePatch(gate, 'profile_banner', coverUrl, (fresh as { pendingImages?: never }).pendingImages);
+                reviewId = reviewed.reviewId;
+                Object.assign(fresh, reviewed.patch);
+            }),
+            // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+            recordImageOwner(c.env.SEARCH_DB, coverUrl, { kind: 'profile_cover', ownerId: userId }),
+        ]);
         if (!saved) {
             return c.json({ success: false, error: "Profile not found" }, 404);
         }
         Object.assign(profile, saved);
 
-        // Send queue message for cover update
-        const queue = new Queue(c.env.queue);
-        await queue.send(MessageType.ProfileUpdate, {
-            profileId: userId,
-            userId,
-            timestamp: new Date().toISOString(),
-            action: 'cover_update',
-        });
+        await Promise.all([
+            new Queue(c.env.queue).send(MessageType.ProfileUpdate, {
+                profileId: userId,
+                userId,
+                timestamp: new Date().toISOString(),
+                action: 'cover_update',
+            }),
+            reviewId
+                ? queueImageScan(c.env as never, gate, { subject: 'profile_banner', subjectId: userId, reviewId, ownerId: userId, images: [coverUrl] })
+                : undefined,
+        ]);
 
         return c.json(profile, 200);
     } catch (error) {

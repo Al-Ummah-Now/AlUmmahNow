@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { errorRefFromDigest, errorScreenStrings, friendlyErrorKind, type FriendlyErrorKind } from '@al-ummah/shared-types';
+import { errorRefFromDigest, errorScreenStrings, friendlyErrorKind, isNetworkError, type FriendlyErrorKind } from '@al-ummah/shared-types';
+import { isLeavingPage } from '@/lib/errors/leaving';
 import { reportError } from '@/lib/errors/reporter';
 import { recoverFromVersionSkew } from '@/lib/version-skew/recovery';
 
@@ -13,6 +14,9 @@ import { recoverFromVersionSkew } from '@/lib/version-skew/recovery';
  *
  * Version skew (a deploy while the page was open) is handed to the skew
  * recovery first (notice + reload, never during an upload): nothing else shows.
+ *
+ * A page stream the browser aborted because it is leaving this page (lib/errors/leaving.ts) is not an
+ * error: nothing shows and nothing is reported, unless the next page still has not come.
  *
  * Renders without providers (global-error has no layout), so the language
  * comes from the URL or <html lang>.
@@ -28,6 +32,9 @@ export interface FriendlyErrorProps {
   locale?: 'en' | 'ar';
 }
 
+/** How long a page that is being left may take to go before its error shows after all. */
+const LEAVING_WAIT_MS = 8_000;
+
 function pageLocale(): string {
   if (typeof window === 'undefined') return 'en';
   const seg = window.location.pathname.split('/')[1];
@@ -38,6 +45,7 @@ function pageLocale(): string {
 export function FriendlyError({ error, reset, boundary, kind: forcedKind, locale: fixedLocale }: FriendlyErrorProps) {
   const [locale, setLocale] = useState<string>(fixedLocale ?? 'en');
   const [skew, setSkew] = useState(false);
+  const [leaving, setLeaving] = useState(() => isNetworkError(error) && isLeavingPage());
   const [copied, setCopied] = useState(false);
   // Same reference the server logged for this render error (digest), else a new one
   const [reference, setReference] = useState(() => (error.digest ? errorRefFromDigest(error.digest) : ''));
@@ -47,6 +55,13 @@ export function FriendlyError({ error, reset, boundary, kind: forcedKind, locale
   );
 
   useEffect(() => {
+    if (!leaving) return undefined;
+    const timer = window.setTimeout(() => setLeaving(false), LEAVING_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [leaving]);
+
+  useEffect(() => {
+    if (leaving) return;
     setLocale(fixedLocale ?? pageLocale());
     if (recoverFromVersionSkew(error, `boundary:${boundary}`)) {
       // Reported by the skew recovery (kind "skew"); its notice takes over
@@ -62,9 +77,9 @@ export function FriendlyError({ error, reset, boundary, kind: forcedKind, locale
       extra: { boundary, screen: kind, ...(error.digest ? { serverRendered: true } : {}) },
     });
     if (ref) setReference(ref);
-  }, [error, boundary, kind, fixedLocale]);
+  }, [error, boundary, kind, fixedLocale, leaving]);
 
-  if (skew) return null;
+  if (skew || leaving) return null;
 
   const s = errorScreenStrings(locale);
   const copy = s.kinds[kind];

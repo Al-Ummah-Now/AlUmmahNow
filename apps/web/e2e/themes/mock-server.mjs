@@ -79,6 +79,8 @@ export const CHANNEL_FIXTURES = {
     creator: tier({ channelsOwned: 1, maxChannels: 2 }),
     refuseCreate: tier({ canCreateChannel: false, channelsOwned: 2, maxChannels: 2 }),
   },
+  // Owns c1 (CHANNEL): its settings pages open (photo-picker.spec.ts)
+  'c1-owner': { channels: [ch('c1', USER, 'Lectures Channel', 'قناة الدروس', 'owner', true, 7)], creator: tier() },
   // A viewer: no channel, no creator tier (uploads and channels are by invitation)
   'nav-viewer': {
     channels: [],

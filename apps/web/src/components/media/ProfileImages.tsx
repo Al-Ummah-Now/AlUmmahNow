@@ -10,6 +10,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Camera, Trash2 } from 'lucide-react';
+import { openFilePicker } from '@/lib/forms/picker-before-hydration';
 
 /**
  * Stored image URLs as the page should load them: empty/whitespace means none,
@@ -55,13 +56,14 @@ export function AvatarImage({ src, alt, testId, fallback = '/avatar.png' }: { sr
 interface EditableCoverProps {
   url?: string;
   alt: string;
-  /** Opens the file picker */
-  onPick: () => void;
+  /** The file input Change opens (PhotoFileInput) */
+  inputId: string;
   /** Clears the cover; the Remove button only shows when there is one */
   onRemove?: () => void;
   labels: { pick: string; change: string; remove: string };
   testId: string;
   imageTestId: string;
+  /** An upload or removal is running: Remove waits, Change never does (hooks/usePhotoUploads) */
   busy?: boolean;
   className?: string;
   /** Rendered inside the cover (the hidden <input type=file>, the avatar) */
@@ -76,7 +78,8 @@ interface EditableCoverProps {
  * Keyboard and screen-reader users reach the picker through the Change button;
  * a mouse click anywhere on the cover still opens it, as a shortcut.
  */
-export function EditableCover({ url, alt, onPick, onRemove, labels, testId, imageTestId, busy, className = '', children }: EditableCoverProps) {
+export function EditableCover({ url, alt, inputId, onRemove, labels, testId, imageTestId, busy, className = '', children }: EditableCoverProps) {
+  const onPick = () => openFilePicker(inputId);
   const hasImage = !!normalizeImageUrl(url);
   return (
     // Mouse-only shortcut; the Change button below is the keyboard and screen-reader path
@@ -84,6 +87,7 @@ export function EditableCover({ url, alt, onPick, onRemove, labels, testId, imag
       className={`media-cover relative overflow-hidden cursor-pointer ${className}`}
       aria-busy={busy || undefined}
       data-testid={testId}
+      data-file-picker={inputId}
       onClick={onPick}
     >
       {/* Wrappers carry the position: themed buttons are position:relative */}
@@ -92,6 +96,7 @@ export function EditableCover({ url, alt, onPick, onRemove, labels, testId, imag
           type="button"
           className="b b-secondary b-sm"
           data-testid={`${testId}-change`}
+          data-file-picker={inputId}
           onClick={(e) => { e.stopPropagation(); onPick(); }}
         >
           <Camera aria-hidden="true" />
@@ -119,7 +124,8 @@ export function EditableCover({ url, alt, onPick, onRemove, labels, testId, imag
 interface EditableAvatarProps {
   url?: string;
   alt: string;
-  onPick: () => void;
+  /** The file input Change opens (PhotoFileInput) */
+  inputId: string;
   onRemove?: () => void;
   labels: { pick: string; change: string; remove: string };
   testId: string;
@@ -135,7 +141,8 @@ interface EditableAvatarProps {
  * Edit-form avatar: the current photo unobstructed (a small camera badge on the
  * rim, not an overlay across the face), with Change/Remove buttons beside it.
  */
-export function EditableAvatar({ url, alt, onPick, onRemove, labels, testId, imageTestId, busy, placeholder, className = '', children }: EditableAvatarProps) {
+export function EditableAvatar({ url, alt, inputId, onRemove, labels, testId, imageTestId, busy, placeholder, className = '', children }: EditableAvatarProps) {
+  const onPick = () => openFilePicker(inputId);
   const hasImage = !!normalizeImageUrl(url);
   return (
     <div className={`media-avatar-row flex flex-col items-start gap-3 sm:flex-row sm:items-end ${className}`}>
@@ -146,6 +153,7 @@ export function EditableAvatar({ url, alt, onPick, onRemove, labels, testId, ima
         aria-label={labels.pick}
         aria-busy={busy || undefined}
         data-testid={testId}
+        data-file-picker={inputId}
         onClick={onPick}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -168,7 +176,7 @@ export function EditableAvatar({ url, alt, onPick, onRemove, labels, testId, ima
         {children}
       </div>
       <div className="flex flex-wrap gap-2 sm:mb-1">
-        <button type="button" className="b b-secondary b-sm" data-testid={`${testId}-change`} onClick={onPick} disabled={busy}>
+        <button type="button" className="b b-secondary b-sm" data-testid={`${testId}-change`} data-file-picker={inputId} onClick={onPick}>
           <Camera aria-hidden="true" />
           {hasImage ? labels.change : labels.pick}
         </button>

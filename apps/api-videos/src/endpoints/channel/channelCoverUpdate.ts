@@ -64,8 +64,12 @@ const handleCoverUpdate = async (c: AppContext) => {
         const photoId = crypto.randomUUID();
         const path = `/${photoId}_cover.${file.type.split("/")[1]}`;
 
-        // Get Bunny.net storage key and zone from environment
-        const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
+        const coverUrl = `https://images.alummahnow.net${path}`;
+        // The key and the review settings together (VR16): each is a round trip, and the uploader waits for all of them
+        const [key, gate] = await Promise.all([
+            requireSecret(c.env.image_storage_key, 'image_storage_key'),
+            imageGate(c.env as never),
+        ]);
         const zone = requireEnvVar(c.env, 'ZONE');
 
         const bunnyStorageClient = new BunnyStorageClient(zone, key);
@@ -74,32 +78,31 @@ const handleCoverUpdate = async (c: AppContext) => {
             throw new Error(`Image storage rejected the upload for ${path}`);
         }
 
-        //Update the Channel's cover URL
-        const coverUrl = `https://images.alummahnow.net${path}`;
-        // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
-        await recordImageOwner(c.env.SEARCH_DB, coverUrl, { kind: 'channel_cover', ownerId: userId ?? null, channelId: id });
-
-        const queue = new Queue(c.env.queue);
-        await queue.send(MessageType.ChannelUpdate, {
-			channelId: id,
-			userId: userId,
-			timestamp: new Date().toISOString(),
-		});
-
         // Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
         // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
-        const gate = await imageGate(c.env as never);
         const reviewed = newImagePatch(gate, 'banner', coverUrl, (channel as { pendingImages?: never }).pendingImages);
-        const saved = await patchOwnedRecord(repository, id, reviewed.patch as never, { ownerId: channel.userId });
-        if (reviewed.reviewId && saved.status !== 'missing' && saved.status !== 'forbidden') {
-            await queueImageScan(c.env as never, gate, { subject: 'banner', subjectId: id, reviewId: reviewed.reviewId, ownerId: channel.userId, channelId: id, images: [coverUrl] });
-        }
+        const [saved] = await Promise.all([
+            patchOwnedRecord(repository, id, reviewed.patch as never, { ownerId: channel.userId }),
+            // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+            recordImageOwner(c.env.SEARCH_DB, coverUrl, { kind: 'channel_cover', ownerId: userId ?? null, channelId: id }),
+        ]);
         if (saved.status === 'missing') {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }
         if (saved.status === 'forbidden') {
             return c.json({ success: false, error: "You do not have permission to update this channel" }, 403);
         }
+        // After the write, so the consumer reads the channel with its new image
+        await Promise.all([
+            new Queue(c.env.queue).send(MessageType.ChannelUpdate, {
+                channelId: id,
+                userId: userId,
+                timestamp: new Date().toISOString(),
+            }),
+            reviewed.reviewId
+                ? queueImageScan(c.env as never, gate, { subject: 'banner', subjectId: id, reviewId: reviewed.reviewId, ownerId: channel.userId, channelId: id, images: [coverUrl] })
+                : undefined,
+        ]);
         Object.assign(channel, saved.video);
 
         return c.json(withoutMoveMark(channel), 200);
