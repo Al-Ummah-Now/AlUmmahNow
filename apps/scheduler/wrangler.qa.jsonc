@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "al-ummah-scheduler-qa",
+  // No public route: reached through service bindings, queues and crons only
+  "workers_dev": false,
+  "preview_urls": false,
   "main": "src/index.ts",
   "compatibility_date": "2025-01-20",
   "compatibility_flags": ["nodejs_compat"],

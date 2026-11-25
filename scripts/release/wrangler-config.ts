@@ -35,6 +35,7 @@ const INHERITABLE_KEYS = [
 	'routes',
 	'route',
 	'workers_dev',
+	'preview_urls',
 	'triggers',
 	'assets',
 	'tail_consumers',
@@ -137,6 +138,8 @@ export interface EnvRule {
 	 * attached as custom domains in the Cloudflare dashboard rather than in config.
 	 */
 	requireRoutes?: boolean;
+	/** Reached through service bindings, queues and crons only: no route, no workers.dev address, no preview URLs. */
+	noPublicAddress?: boolean;
 	/** Binding or var names that must NOT appear (test-only material). */
 	forbiddenNames?: (string | RegExp)[];
 	/** Values that must not appear anywhere in the deployed config (e.g. QA hosts). */
@@ -218,6 +221,12 @@ export function checkEnv(app: string, resolved: ResolvedEnv, rule: EnvRule): str
 
 	if (rule.requireRoutes && resolved.hosts.length === 0) {
 		errors.push(`${where}: no routes; a deployed env must declare its hostnames`);
+	}
+	if (rule.noPublicAddress) {
+		if (resolved.hosts.length) errors.push(`${where}: must have no routes`);
+		for (const key of ['workers_dev', 'preview_urls'] as const) {
+			if (resolved.config[key] !== false) errors.push(`${where}: no public route, so ${key} must be false`);
+		}
 	}
 	for (const host of resolved.hosts) {
 		if (!hostAllowed(host, rule.allowedHosts)) {

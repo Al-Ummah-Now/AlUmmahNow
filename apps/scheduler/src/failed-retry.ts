@@ -50,16 +50,16 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-/** Internal HTTP API of the scheduler (service binding only; it has no routes). */
+/** Internal HTTP API of the scheduler (service binding only; it has no routes): every request needs the internal key. */
 export async function handleSchedulerRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  if (url.pathname !== '/failed/retry') return json({ error: 'Not found' }, 404);
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   const expected = await resolveKey(env.INTERNAL_API_KEY);
   const given = request.headers.get('X-API-Key') ?? '';
   let diff = expected.length === given.length && expected ? 0 : 1;
   for (let i = 0; i < Math.min(expected.length, given.length); i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
   if (diff !== 0) return json({ error: 'Unauthorized' }, 401);
+  if (url.pathname !== '/failed/retry') return json({ error: 'Not found' }, 404);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const body = (await request.json().catch(() => null)) as { videoId?: unknown; scheduledPublishDate?: unknown } | null;
   if (!body || typeof body.videoId !== 'string' || !/^[\w-]{1,64}$/.test(body.videoId) || typeof body.scheduledPublishDate !== 'string') {

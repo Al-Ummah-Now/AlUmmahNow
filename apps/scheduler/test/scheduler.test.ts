@@ -271,6 +271,10 @@ describe('failed scheduled publish: flagged for an admin, retried from the Error
 
     const call = (key: string, body: unknown) =>
       handleSchedulerRequest(new Request('https://scheduler.internal/failed/retry', { method: 'POST', headers: { 'X-API-Key': key }, body: JSON.stringify(body) }), env);
+    for (const path of ['/', '/health', '/failed/retry']) {
+      assert.equal((await handleSchedulerRequest(new Request(`https://scheduler.internal${path}`), env)).status, 401, path);
+    }
+    assert.equal((await handleSchedulerRequest(new Request('https://scheduler.internal/x', { headers: { 'X-API-Key': 'k' } }), env)).status, 404);
     assert.equal((await call('wrong', item?.retry && (item.retry as { body: unknown }).body)).status, 401);
     assert.equal((await call('k', (item!.retry as { body: unknown }).body)).status, 200);
     assert.ok(![...r2.data.keys()].some((k) => k.startsWith(FAILED_PREFIX)), 'no longer in failed/');

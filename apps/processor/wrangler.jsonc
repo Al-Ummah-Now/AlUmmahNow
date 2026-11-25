@@ -1,5 +1,8 @@
 {
 	"name": "al-ummah-now-processor",
+	// No public route: reached through service bindings, queues and crons only
+	"workers_dev": false,
+	"preview_urls": false,
 	"main": "src/index.ts",
 	"compatibility_date": "2024-09-01",
 	"compatibility_flags": ["nodejs_compat"],
@@ -174,6 +177,9 @@
 			// Workers Logs bills per line: every invocation kept (sampling would drop errors), no invocation log, LOG_LEVEL warn
 			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"name": "al-ummah-now-processor-stage",
+			// No public route: reached through service bindings, queues and crons only
+			"workers_dev": false,
+			"preview_urls": false,
 			"d1_databases": [
 				{
 					"binding": "REPORTS_DB",

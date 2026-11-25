@@ -670,6 +670,9 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
     }
   }
 
+  // Everything else is for our own Workers (service bindings)
+  if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+
   // Queue status endpoint
   if (url.pathname === '/queue/status') {
     logger.debug('Queue status requested');
