@@ -281,6 +281,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
                 kind="user"
                 mode="pick"
                 label={t('workflows.rules.alsoTellAdd')}
+                placeholder={t('workflows.rules.alsoTellPlaceholder')}
                 source={recipientSource}
                 allowIds={false}
                 showIds={false}
