@@ -4,16 +4,22 @@
  * minutes. Any other status is the answer, at once.
  */
 export const RETRY_MS = 180_000;
-/** One try at most: a connection that hangs is a network error. */
+/** One try at most, and never past RETRY_MS: a connection that hangs is a network error. */
 export const TRY_MS = 120_000;
 const FIRST_PAUSE_MS = 2_000;
 const MAX_PAUSE_MS = 30_000;
+/** The least that Retry-After means, and the random part added to it. */
+const ASKED_MIN_MS = 1_000;
+const ASKED_JITTER_MS = 1_000;
+/** A try with less time than this left is not started. */
+const MIN_TRY_MS = 1_000;
 
 export interface GetDeps {
   fetch: typeof fetch;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
   random: () => number;
+  timeout: (ms: number) => AbortSignal;
   log: (line: string) => void;
 }
 
@@ -22,6 +28,7 @@ const real: GetDeps = {
   now: Date.now,
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   random: Math.random,
+  timeout: (ms) => AbortSignal.timeout(ms),
   log: (line) => void process.stderr.write(`${line}\n`),
 };
 
@@ -53,7 +60,7 @@ export async function githubGet<T>(url: string, opts: { accept: string; token?: 
       const res = await d.fetch(url, {
         headers: { Accept: opts.accept, ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}) },
         redirect: 'follow',
-        signal: AbortSignal.timeout(TRY_MS),
+        signal: d.timeout(Math.min(TRY_MS, RETRY_MS - (d.now() - start))),
       });
       if (res.ok) return await opts.read(res);
       failure = new HttpStatusError(url, res.status, tries > 1 ? ` (try ${tries})` : '');
@@ -64,11 +71,11 @@ export async function githubGet<T>(url: string, opts: { accept: string; token?: 
       if (error instanceof HttpStatusError) throw error;
       failure = new Error(`GET ${url} failed: ${(error as Error).message}`, { cause: error });
     }
-    // Half of the pause is random: several jobs that failed together do not come back together
+    // Half of the pause is random (a second on top of what Retry-After asks): several jobs that failed together do not come back together
     const backoff = Math.min(FIRST_PAUSE_MS * 2 ** (tries - 1), MAX_PAUSE_MS);
-    const pause = asked ?? Math.round(backoff * (0.5 + d.random() / 2));
+    const pause = Math.round(asked === null ? backoff * (0.5 + d.random() / 2) : Math.max(asked, ASKED_MIN_MS) + d.random() * ASKED_JITTER_MS);
     const waited = d.now() - start;
-    if (waited + pause > RETRY_MS) {
+    if (waited + pause + MIN_TRY_MS > RETRY_MS) {
       failure.message += `; gave up after ${tries} ${tries === 1 ? 'try' : 'tries'} in ${Math.round(waited / 1000)} s${asked !== null ? ` (Retry-After ${Math.round(asked / 1000)} s)` : ''}`;
       throw failure;
     }
