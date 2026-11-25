@@ -77,7 +77,7 @@ on its own port:
   - **Resend**: emails are kept, never sent.
   - **Cloudflare API** (`api.cloudflare.com`): only the read calls of the transcode troubleshooting panel
     (containers, queues, queue backlog, Observability logs; admin-api `lib/media-troubleshoot/cloudflare.ts`),
-    and only with an `e2e-fake-cloudflare-token-…` token. `PUT /__fake/cloudflare { logVideo }` names the
+    and only with an `e2e-fake-cloudflare-token-…` token; and cache purges, with any (nothing is cached). `PUT /__fake/cloudflare { logVideo }` names the
     video its log lines mention; `DELETE /__fake/cloudflare` forgets it.
   - **The R2 media pipeline** (the transcoder Container and the media Worker are not in the stack):
     `POST /__fake/media/transcode/<videoId>` checks the record's queued job and its kept original, then

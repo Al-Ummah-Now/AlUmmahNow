@@ -50,7 +50,8 @@ import { findStoredComment, removeStoredComment, type StoredComment } from '../c
 import { eraseUserSubscriptions, subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
 import { CLEANUP, endParts, erasedRecord, takePart, unlessUnderCase, type EraseTarget } from '../privacy/erase-targets';
-import { RUN_ACCOUNT_DELAY, eraseMediaHooks, runEraseMedia } from '../privacy/erase-media';
+import { isRunAccount } from '../e2e/runAccounts';
+import { eraseMediaHooks, runEraseMedia } from '../privacy/erase-media';
 import { flagResumeUnavailable, flagUnreadableChannel } from '../privacy/notices';
 import { OperationBudget } from '../privacy/scan';
 import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
@@ -2539,7 +2540,7 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 	const previousErrors = Array.isArray(job.result?.errors) ? (job.result.errors as string[]) : [];
 	// Media goes through a job written down before each record is deleted (lib/privacy/erase-media.ts)
 	const budget = new OperationBudget(900);
-	const media = eraseMediaHooks(env, budget, { delaySeconds: RUN_ACCOUNT_DELAY });
+	const media = eraseMediaHooks(env, budget, { runAccount: true });
 	const step = await eraseRunUserData(
 		env as never,
 		job.targetId,
@@ -2577,7 +2578,8 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 
 async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
 	const budget = new OperationBudget(900);
-	const media = eraseMediaHooks(env, budget);
+	const profile = await env.SEARCH_DB!.prepare("SELECT email FROM content_ownership WHERE kind = 'profile' AND id = ?").bind(userId).first<{ email: string | null }>();
+	const media = eraseMediaHooks(env, budget, { runAccount: isRunAccount(env as never, profile?.email) });
 	const summary = await eraseUserData(
 		env as never,
 		userId,

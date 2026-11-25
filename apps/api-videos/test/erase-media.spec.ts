@@ -151,11 +151,11 @@ async function setup() {
 	return env;
 }
 
-async function erase(env: Json, status = 200): Promise<Json> {
+async function erase(env: Json, status = 200, email = 'me@test.example'): Promise<Json> {
 	const app = new Hono();
 	app.onError(errorHandler);
 	app.use('*', async (c, next) => {
-		c.set('auth' as never, { userId: ME, email: 'me@test.example', payload: {} } as never);
+		c.set('auth' as never, { userId: ME, email, payload: {} } as never);
 		c.set('userId' as never, ME as never);
 		await next();
 	});
@@ -285,6 +285,7 @@ describe('the job', () => {
 			assert.equal(outcome.done, false);
 			assert.equal(outcome.delaySeconds, delay);
 			assert.match(outcome.note, /^video v-mine: .*500/);
+			assert.ok(out.purged.includes('media.test/pub/v-mine/'), 'nor the CDN for Bunny');
 		}
 		await assert.rejects(step(env, id), /Not erased: video v-mine/);
 		assert.deepEqual(left(env, 'v-mine'), [], 'everything else went');
@@ -301,6 +302,7 @@ describe('the job', () => {
 		const id = await start(env, [video('v-mine'), video('v-member')]);
 		const outcome = await step(env, id);
 		assert.equal(outcome.delaySeconds, RETRY_DELAYS[0]);
+		for (const v of ['v-mine', 'v-member']) assert.equal(out.bunny.has(v), false, 'what is stored does not wait for the CDN');
 		assert.deepEqual(outcome.params.items.map((i: Json) => i.t).sort(), ['files', 'files', 'video', 'video'], 'and what each was deleting');
 		out.failCdn = false;
 		await step(env, id);
@@ -1098,7 +1100,7 @@ describe('a takedown and an erasure of the same media', () => {
 		for (const full of [true, false]) {
 			const env = await setup();
 			env.videos.store.set('v-mine', JSON.stringify({ ...env.videos.read('v-mine'), playUrl: 'https://vz-x.b-cdn.net/v-mine/playlist.m3u8', title: 'a title', r2: { status: 'ready', access: 'pub', rev: 'r1' } }));
-			const hooks = eraseMediaHooks(env, undefined, full ? {} : { delaySeconds: RUN_ACCOUNT_DELAY });
+			const hooks = eraseMediaHooks(env, undefined, full ? {} : { runAccount: true });
 			let post: Json | null = null;
 			const withCase = {
 				...hooks,
@@ -1292,6 +1294,84 @@ describe('the day before anything is deleted', () => {
 		const [job] = jobs(env);
 		assert.ok(Date.parse(JSON.parse(job.params).runAfter) <= Date.now() + RUN_ACCOUNT_DELAY * 1000);
 		assert.equal(env.ADMIN_JOBS_QUEUE.sent.find((m: Json) => m.delaySeconds)?.delaySeconds, RUN_ACCOUNT_DELAY);
+		assert.equal(RUN_ACCOUNT_DELAY, 5);
+	});
+
+	const RUN_EMAIL = 'e2e+45566375022-1-web-chromium-single@e2e.alummahnow.net';
+	const TEST_ENV = { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'qa' };
+	for (const by of ['their own "Delete my data"', 'an admin', 'the run sweep'] as const) {
+		it(`a run account erased by ${by}: at once, in one round, and nothing of it is left, the upload marker by Bunny's id too`, async () => {
+			const env = await setup();
+			Object.assign(env, TEST_ENV);
+			await env.profiles.put(ME, JSON.stringify({ ...env.profiles.read(ME), email: RUN_EMAIL }));
+			await env.videos.put('v-mine', JSON.stringify({ ...env.videos.read('v-mine'), media: { providers: { bunny: { ref: 'guid-1' } } } }));
+			out.bunny.add('guid-1');
+			env.global_settings.store.set('ops/upload-reaper/created/guid-1', JSON.stringify({ userId: ME }));
+			await runIndex(env);
+			await runOwnershipPass(env as never, 'profile', { maxPages: 10 });
+			if (by === 'their own "Delete my data"') await erase(env, 200, RUN_EMAIL);
+			else {
+				await recordDeletion(env.SEARCH_DB, { kind: 'user', id: ME, deletedBy: 'admin' } as never);
+				const kind = by === 'an admin' ? 'user.delete-data' : 'user.erase-run';
+				const outcome = (await ADMIN_JOB_HANDLERS[kind]!(env as never, { id: 'j', kind, targetId: ME, params: {}, result: null } as never)) as Json;
+				assert.equal(outcome.done, true);
+			}
+			const own = jobs(env);
+			assert.ok(own.length > 0);
+			for (const job of own) {
+				const p = JSON.parse(job.params);
+				assert.deepEqual([p.run, p.delay, Date.parse(p.runAfter) <= Date.now() + 5000], [true, 5, true]);
+			}
+			// As it is: nothing is moved forward but those seconds
+			env.SEARCH_DB.db.prepare("UPDATE admin_jobs SET params = json_set(params, '$.runAfter', ?) WHERE kind = ?").run(new Date(0).toISOString(), ERASE_MEDIA_JOB);
+			env.SEARCH_DB.db.prepare("UPDATE media_erase_targets SET erased_at = '2026-01-01T00:00:00.000Z'").run();
+			const delays = env.ADMIN_JOBS_QUEUE.sent.length;
+			assert.ok(delays > 0);
+			const send = env.ADMIN_JOBS_QUEUE.send.bind(env.ADMIN_JOBS_QUEUE);
+			const waits: number[] = [];
+			env.ADMIN_JOBS_QUEUE.send = async (body: unknown, options?: { delaySeconds?: number }) => {
+				waits.push(options?.delaySeconds ?? 0);
+				return send(body, options);
+			};
+			await drainJobs(env as never);
+			assert.ok(jobs(env).every((j) => j.status === 'succeeded'), jobs(env).map((j) => j.last_error).join());
+			assert.ok(waits.every((s) => s <= 30), `${waits}`);
+			assert.equal(env.SEARCH_DB.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets').get().n, 0);
+			assert.equal(env.SEARCH_DB.db.prepare('SELECT COUNT(*) AS n FROM image_owners WHERE owner_id = ?').get(ME).n, 0);
+			assert.deepEqual([left(env, 'v-mine'), out.bunny.has('guid-1'), env.global_settings.store.has('ops/upload-reaper/created/guid-1')], [[], false, false]);
+		});
+	}
+
+	it('only a run account of a test environment: any other address, or production, keeps the day', async () => {
+		for (const [email, over] of [['me@test.example', TEST_ENV], [RUN_EMAIL, { BUNNY_TEST_LIBRARY: 'false', ENVIRONMENT: 'qa' }], [RUN_EMAIL, { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'production' }], [RUN_EMAIL, {}], [`x${RUN_EMAIL}`, TEST_ENV]] as Array<[string, Json]>) {
+			const env = await setup();
+			Object.assign(env, over);
+			await erase(env, 200, email);
+			const p = JSON.parse(jobs(env)[0].params);
+			assert.deepEqual([p.run, p.delay], [undefined, ERASE_DELAY], `${email} ${JSON.stringify(over)}`);
+		}
+	});
+
+	it('what the job writes of the files it is deleting names no account', async () => {
+		const env = await setup();
+		env.profiles.store.delete(ME);
+		const id = await start(env, [{ t: 'images', paths: ['/a-me_avatar.jpg', '/a-me-old_avatar.jpg'] }]);
+		const prepare = env.SEARCH_DB.prepare.bind(env.SEARCH_DB);
+		const seen: string[] = [];
+		env.SEARCH_DB.prepare = (text: string) => {
+			const statement = prepare(text);
+			if (!text.includes("'$.unfinished'")) return statement;
+			return { bind: (...args: unknown[]) => (seen.push(String(args[0])), statement.bind(...args)) };
+		};
+		out.failCdn = true;
+		await step(env, id);
+		assert.ok(seen.length && seen.every((text) => text.includes('/a-me_avatar.jpg') && !text.includes(ME)), seen.join());
+		assert.ok(!JSON.stringify(jobs(env)[0]).includes(ME));
+		// Finished from its rows
+		out.failCdn = false;
+		for (const files of JSON.parse(jobs(env)[0].params).items.filter((i: Json) => i.t === 'files')) assert.equal(files.id, '');
+		await step(env, id);
+		for (const path of ['/a-me_avatar.jpg', '/a-me-old_avatar.jpg']) assert.deepEqual([out.images.has(path), rowOf(env, path), out.purged.includes(`${IMG}${path}`)], [false, undefined, true]);
 	});
 });
 

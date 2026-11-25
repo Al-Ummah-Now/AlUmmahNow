@@ -15,6 +15,7 @@ test('only revocations and tombstones are kept on purpose', () => {
 test('history is the admin registry and logs and the message archive; personal data never is', () => {
   assert.ok(isHistory({ store: 'd1:al-ummah-now-search', location: 'admin_jobs' }));
   assert.ok(isHistory({ store: 'd1:al-ummah-now-search', location: 'admin_deletions' }));
+  assert.ok(isHistory({ store: 'd1:al-ummah-now-search', location: 'media_erase_targets' }));
   assert.ok(isHistory({ store: 'r2:al-ummah-now-messages', location: '2026-11-13T18-05-19.abc' }));
   for (const [store, location] of [
     ['d1:al-ummah-now-search', 'content_ownership'],

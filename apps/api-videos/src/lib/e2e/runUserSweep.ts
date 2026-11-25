@@ -29,8 +29,8 @@ import { pendingDeletion, purgeDeletionNow } from '../admin/deletions';
 import { AdminError, deleteUserData, purgeDeletion, type AdminServiceEnv } from '../admin/service';
 import { logger } from '../logger';
 
-/** Same rule as the auth server's RUN_USER_EMAIL and apps/web/e2e/test-utils/run-users.ts. */
-export const RUN_USER_EMAIL = /^e2e\+\d{1,20}-\d{1,3}-[a-z0-9][a-z0-9-]{0,62}@e2e\.alummahnow\.net$/;
+export { RUN_USER_EMAIL, isRunUserEmail } from './runAccounts';
+import { isRunUserEmail } from './runAccounts';
 export { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
 import { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
 export const RUN_USER_SWEEP_KEY = 'ops/run-user-sweep.json';
@@ -48,10 +48,6 @@ export const RUN_USER_SWEEP_MAX_PAGES = 25;
 export const RUN_USER_SWEEP_ERASE_MAX = 100;
 const AUTH_BATCH = 50;
 const CONCURRENCY = 5;
-
-export function isRunUserEmail(email: unknown): email is string {
-	return typeof email === 'string' && RUN_USER_EMAIL.test(email.toLowerCase());
-}
 
 type Db = {
 	prepare(sql: string): { bind(...values: unknown[]): { all<T>(): Promise<{ results?: T[] }> } };
