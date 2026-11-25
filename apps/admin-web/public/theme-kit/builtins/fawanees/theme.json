@@ -3,7 +3,7 @@
   "format": "alummahnow.theme-package",
   "formatVersion": 1,
   "id": "fawanees",
-  "version": "1.3.0",
+  "version": "1.2.0",
   "name": {
     "en": "Fawanees",
     "ar": "فوانيس"
@@ -55,7 +55,7 @@
         "onErrorFill": "#ffffff",
         "live": "#fbc661",
         "onLive": "#09151e",
-        "accent": "#8a4900",
+        "accent": "#9a5200",
         "focusRing": "#8a5a12",
         "focusGlow": "#a85600",
         "verifiedIcon": "#0f5a2c",
@@ -818,22 +818,16 @@
       "dark": "assets/street-lights-dark.svg"
     },
     "line": {
-      "light": "#dfd4c8ff",
+      "light": "#d8cebdff",
       "dark": "#f5cf9242"
     },
     "window": {
-      "light": "#f4ae3a4d",
+      "light": "#f4ae3a29",
       "dark": "#fbc661b8"
     },
     "glow": {
-      "light": 0.1,
+      "light": 0.34,
       "dark": 0.6
-    },
-    "tile": {
-      "light": ["assets/street-tile-1.webp", "assets/street-tile-2.webp", "assets/street-tile-3.webp", "assets/street-tile-4.webp"],
-      "dark": ["assets/street-tile-dark-1.webp", "assets/street-tile-dark-2.webp", "assets/street-tile-dark-3.webp", "assets/street-tile-dark-4.webp"]
-    },
-    "faint": { "light": 1, "dark": 0.35 },
-    "lightsOpacity": { "light": 1, "dark": 0.85 }
+    }
   }
 }
