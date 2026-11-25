@@ -21,6 +21,9 @@ import { createRunUser, createVideosProfile } from './support/profiles';
 import { purgeChannel } from './support/cleanup';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
+/** A value inside a sentence is isolated, in either language */
+const iso = (value: string) => `\u2068${value}\u2069`;
+
 interface SearchItem { id: string; displayName: string; userName: string | null; email: string | null }
 
 const created: string[] = [];
@@ -140,7 +143,7 @@ test.describe('channel transfer', () => {
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(`Move this channel to ${creator.displayName} (${creator.id})?`);
+    await expect(dialog).toContainText(`Move this channel to ${iso(creator.displayName)} ${iso(`(${creator.id})`)}?`);
     await expect(dialog).toContainText(/videos and \d+ playlists/);
     await expect(dialog).toContainText('The current owner stays on the team as channel admin.');
     await expect(dialog).toContainText('The public contact email is cleared.');
@@ -219,9 +222,7 @@ test.describe('channel transfer', () => {
     await option(page, creator.id).click();
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
-    // In Arabic the name and id are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the
-    // Latin text and its parentheses stay in place inside the right-to-left sentence
-    const iso = (value: string) => `\u2068${value}\u2069`;
+    // The name and id are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the Latin text and its parentheses stay in place inside the right-to-left sentence
     await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} ${iso(`(${creator.id})`)}؟`);
     await expect(dialog).toContainText('يفقد المالك الحالي كل وصول إلى القناة.');
     await page.getByTestId('channel-transfer-submit-reason').fill('نقل بطلب صاحب القناة (اختبار)');
