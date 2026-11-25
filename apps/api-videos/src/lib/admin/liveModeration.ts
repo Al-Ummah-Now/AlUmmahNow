@@ -8,7 +8,7 @@ import { deleteEdgeCache } from '../edge-cache';
 import { chatCacheUrl, readMessage, removeMessage, restoreMessage } from '../live/chat';
 import { cancelPremiere, endPremiere, isPremiere } from '../live/premieres';
 import { endOpenSession, readStream, streamEnd, streamKey, type LiveStreamRecord, type StreamsEnv } from '../live/streams';
-import R2Repository from '../r2Repo';
+import { NonVideoRepository } from '../r2Repo';
 import { broadcast } from '../websocket-notify';
 
 export type LiveModerationAction = 'removed' | 'warning' | 'banned' | 'deleted' | 'restored';
@@ -49,7 +49,7 @@ async function moderateMessage(env: StreamsEnv, input: LiveModerationInput, now:
 async function moderateStream(env: StreamsEnv, input: LiveModerationInput, now: number): Promise<{ found: boolean; changed: boolean }> {
 	const at = new Date(now).toISOString();
 	const reason = input.notes?.trim() || null;
-	const saved = await new R2Repository<LiveStreamRecord>(env.videos).updateObject(streamKey(input.entityId), (fresh) => {
+	const saved = await new NonVideoRepository<LiveStreamRecord>(env.videos).updateObject(streamKey(input.entityId), (fresh) => {
 		// The same flags admin-api's contentModeration puts on videos, channels and playlists
 		if (input.action === 'warning') Object.assign(fresh, { hasWarning: true, warningAt: at, warningReason: reason ?? 'Content flagged for policy violation' });
 		else if (input.action === 'restored') Object.assign(fresh, { isHidden: false, isDeleted: false });

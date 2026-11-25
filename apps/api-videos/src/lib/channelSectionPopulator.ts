@@ -11,7 +11,7 @@
 import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { subscribedChannelIds } from './subscription-store';
-import R2Repository from './r2Repo';
+import R2Repository, { NonVideoRepository } from './r2Repo';
 import {
   CHANNEL_SECTION_CONSTRAINTS,
   ChannelSection,
@@ -449,7 +449,7 @@ const timeOf = (value?: string) => {
  * (most recent first). Public, not hidden streams of this channel.
  */
 async function getLiveStreams(channelId: string, limit: number, env: any, filter: 'live_and_upcoming' | 'past', channel?: StoredChannel | null): Promise<SectionLiveStream[]> {
-  const repo = new R2Repository<StoredLiveStream>(env.videos);
+  const repo = new NonVideoRepository<StoredLiveStream>(env.videos);
   const shown = (st: StoredLiveStream | null): st is StoredLiveStream => !!st && st.channelId === channelId && !st.isPrivate && !st.isHidden;
   // The channel's streams of the statuses this shelf shows, from the ownership index (kind 'stream')
   const statuses = filter === 'past' ? ['ended'] : ['live', 'scheduled'];

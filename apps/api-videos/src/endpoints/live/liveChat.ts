@@ -21,7 +21,7 @@ import { MAX_PAGE, REPLAY_WINDOW_MS, SNAPSHOT_TTL_SECONDS, chatCacheUrl, chatRol
 import { streamKey, type LiveStreamRecord } from '../../lib/live/streams';
 import { logger } from '../../lib/logger';
 import { scanInBackground } from '../../lib/moderation-scan';
-import R2Repository from '../../lib/r2Repo';
+import { NonVideoRepository } from '../../lib/r2Repo';
 import { broadcastInBackground } from '../../lib/websocket-notify';
 import { allowLiveChatAddress } from '../../middleware/bot-protection';
 import { PollAfterMs } from './pollAfter';
@@ -254,7 +254,7 @@ export class LiveChatSettingsUpdate extends AuthenticatedRoute {
 		if (!stream) return notFound(c);
 		const role = await chatRole(c.env as never, stream, userId);
 		if (!role.manages) return (await mayRead(c.env as never, stream, userId)) ? apiError(c, 403, 'forbidden') : notFound(c);
-		const { data, rejected } = await new R2Repository<LiveStreamRecord>(c.env.videos).updateObjectOrReject<true>(streamKey(stream.id), (fresh) => {
+		const { data, rejected } = await new NonVideoRepository<LiveStreamRecord>(c.env.videos).updateObjectOrReject<true>(streamKey(stream.id), (fresh) => {
 			// The role was judged on this channel; a held stream (suspension) is not changed
 			if ((fresh.channelId ?? null) !== stream.channelId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
 			for (const key of ['allowChat', 'chatReplay', 'slowModeSeconds', 'subscribersOnly'] as const) if (body[key] !== undefined) fresh[key] = body[key];

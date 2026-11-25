@@ -8,7 +8,7 @@
  * session; a session that is live is never moved.
  */
 import { isReviewCleared, type LiveProviderId } from '@al-ummah/shared-types';
-import R2Repository from '../r2Repo';
+import { NonVideoRepository } from '../r2Repo';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
 import type { LiveEnv } from './providers';
@@ -40,7 +40,7 @@ export interface LiveStreamRecord {
 
 export type StreamsEnv = LiveEnv & { videos: R2Bucket; channels?: R2Bucket; queue?: Queue; NOTIFICATIONS_DB?: D1Database };
 
-const repo = (env: StreamsEnv) => new R2Repository<LiveStreamRecord>(env.videos);
+const repo = (env: StreamsEnv) => new NonVideoRepository<LiveStreamRecord>(env.videos);
 export const streamKey = (id: string) => `livestream:${id}`;
 
 export async function readStream(env: StreamsEnv, id: string): Promise<LiveStreamRecord | null> {

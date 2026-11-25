@@ -6,7 +6,7 @@ import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types
 import { LiveStreamUpdateInput } from "../../lib/model/input";
 import { canManageLiveStream } from "../../lib/channelAccess";
 import { LiveStreamView } from "../../lib/model/view";
-import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
+import { rethrowBusy, NonVideoRepository } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { eventTagRefused, shownEventType, switchOn } from '../../lib/live/events';
@@ -109,7 +109,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 		try {
 			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
-			const repository = new R2Repository<LiveStreamType>(bucket);
+			const repository = new NonVideoRepository<LiveStreamType>(bucket);
 
 			// Get existing live stream
 			const existingStream = await repository.getObject(`livestream:${id}`);

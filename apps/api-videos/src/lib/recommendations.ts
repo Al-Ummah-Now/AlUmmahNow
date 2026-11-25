@@ -18,6 +18,7 @@ import { DiscoveryVideo, isDiscoverable, loadDiscoverableVideos } from './discov
 import { logger } from './logger';
 import { findSeriesNext } from './series';
 import { channelNameFields } from './channelName';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** Rows read per source: the upper bound on what one request ranks. */
 export const CANDIDATE_LIMITS = { category: 100, channel: 40, text: 50, recent: 50, recentWithoutSeeds: 200 };
@@ -142,6 +143,7 @@ export function poolSeeds(seed: DiscoveryVideo | null, history: DiscoveryVideo[]
 }
 
 async function readSeedObject(bucket: R2Bucket, id: string): Promise<DiscoveryVideo | null> {
+  if (isInternalVideoKey(id)) return null;
   return bucket.get(id).then(o => (o ? o.json<DiscoveryVideo>() : null)).catch(() => null);
 }
 

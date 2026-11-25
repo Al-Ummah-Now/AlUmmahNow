@@ -138,6 +138,7 @@ import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 import { errorEnvelope } from './middleware/error-envelope';
 import { applyFeatureGates } from './middleware/require-feature';
 import { apiError } from './lib/api-error';
+import { refuseInternalVideoKeys } from './middleware/internal-video-keys';
 
 // ==========================================
 // APP SETUP
@@ -239,6 +240,7 @@ app.options('/api/*', (c) => {
 // Add authentication middleware to all API routes
 // Use optionalAuthMiddleware for GET endpoints (allow both authenticated and public access)
 // Use authMiddleware for CUD operations (require authentication)
+app.use('/api/*', refuseInternalVideoKeys);
 app.use('/api/*', optionalAuthMiddleware);
 // Feature switches (FEAT-2): mapped routes answer 404 feature_off while their switch is off
 applyFeatureGates(app, 'api-videos');

@@ -15,7 +15,7 @@
  */
 
 import { sectionOrderKey } from './channelSectionOrder';
-import R2Repository from './r2Repo';
+import { NonVideoRepository } from './r2Repo';
 import { logger } from './logger';
 import { isSystemPlaylist } from './library';
 
@@ -99,7 +99,7 @@ async function deletePrefix(bucket: R2Bucket | undefined, prefix: string): Promi
  */
 async function softDeleteIfOwned(bucket: R2Bucket, key: string, channelId: string, now: string): Promise<boolean> {
 	let marked = false;
-	await new R2Repository<Record<string, unknown>>(bucket).updateObject(key, (record) => {
+	await new NonVideoRepository<Record<string, unknown>>(bucket).updateObject(key, (record) => {
 		marked = false;
 		// Watch later belongs to its user: deleting a channel never takes it
 		if (!record || record.channelId !== channelId || record.isDeleted === true || isSystemPlaylist(record)) return false;
@@ -115,7 +115,7 @@ async function softDeleteIfOwned(bucket: R2Bucket, key: string, channelId: strin
  * lib/admin/deletions.ts). Idempotent: an object already gone counts as done.
  */
 async function hardDeleteIfOwned(bucket: R2Bucket, key: string, channelId: string): Promise<boolean> {
-	const record = await new R2Repository<Record<string, unknown>>(bucket).getObject(key);
+	const record = await new NonVideoRepository<Record<string, unknown>>(bucket).getObject(key);
 	if (!record || record.channelId !== channelId || isSystemPlaylist(record)) return false;
 	await bucket.delete(key);
 	return true;

@@ -22,6 +22,7 @@
  */
 import type { SearchDb, SearchStatement } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export const FOOTPRINT_BUCKETS = ['videos', 'channels', 'community_posts', 'playlists', 'reports'] as const;
 export type FootprintBucket = (typeof FOOTPRINT_BUCKETS)[number];
@@ -39,7 +40,6 @@ export interface Footprint {
 /** Tombstone of erased users (lib/privacy/user-data.ts DELETED_USER_ID): never recorded. */
 const ERASED_USER_ID = 'deleted-user';
 
-const VIDEO_INTERNAL_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 type Json = Record<string, any>;
 
@@ -70,7 +70,7 @@ export function isCommunityCommentKey(key: string): boolean {
 export function footprintNeedsValue(bucket: FootprintBucket, key: string): boolean {
 	switch (bucket) {
 		case 'videos':
-			return !VIDEO_INTERNAL_PREFIXES.some((prefix) => key.startsWith(prefix));
+			return !isInternalVideoKey(key);
 		case 'channels':
 		case 'playlists':
 			return true;

@@ -26,6 +26,7 @@ import {
 	rankTopVideos,
 	sumSeries,
 } from "../../lib/analytics";
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export class AnalyticsGet extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -161,7 +162,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 		let rollups: MonthlyRollup[];
 
 		if (entityType === 'video' && entityId) {
-			const object = await c.env.videos.get(entityId);
+			const object = isInternalVideoKey(entityId) ? null : await c.env.videos.get(entityId);
 			const video = object ? await object.json<AnalyticsVideo>() : null;
 			if (!video || video.isDeleted) return { status: 404 as const, error: "Video not found" };
 			if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) return { status: 403 as const, error: "You can only view analytics for your own videos" };

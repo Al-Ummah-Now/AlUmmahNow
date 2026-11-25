@@ -17,7 +17,7 @@ import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
 import { enqueueNotification } from '../notifications';
 import { markPublished } from '../published';
-import R2Repository from '../r2Repo';
+import R2Repository, { NonVideoRepository } from '../r2Repo';
 import { scheduleDateProblem } from '../videoSchedule';
 import { streamKey, type LiveStreamRecord } from './streams';
 
@@ -46,7 +46,7 @@ export type PremiereStream = LiveStreamRecord & {
 };
 
 const videos = (env: PremiereEnv) => new R2Repository<PremiereVideo>(env.videos);
-const streams = (env: PremiereEnv) => new R2Repository<PremiereStream>(env.videos);
+const streams = (env: PremiereEnv) => new NonVideoRepository<PremiereStream>(env.videos);
 
 export const isPremiere = (stream: object | null | undefined): stream is PremiereStream => (stream as { kind?: unknown } | null | undefined)?.kind === 'premiere';
 

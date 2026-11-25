@@ -15,6 +15,7 @@
  * is still accepted.
  */
 
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 
@@ -127,7 +128,7 @@ export async function scanFill<T>(options: ScanFillOptions<T>): Promise<ScanFill
 		let consumed = 0;
 		while (consumed < keys.length && items.length < limit) {
 			const batch = keys.slice(consumed, consumed + Math.min(LOAD_CONCURRENCY, Math.max(limit - items.length, MIN_BATCH)));
-			const loaded = await Promise.all(batch.map(key => load(key).catch(() => null)));
+			const loaded = await Promise.all(batch.map(key => (!prefix && isInternalVideoKey(key) ? null : load(key).catch(() => null))));
 			scanned += batch.length;
 			for (let i = 0; i < batch.length; i++) {
 				consumed++;

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
-import R2Repository from "../../lib/r2Repo";
+import { NonVideoRepository } from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { attachSession, type LiveStreamRecord, type StreamsEnv } from "../../lib/live/streams";
@@ -128,7 +128,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		// stream: off, at capacity or over budget) removes the record again.
 		const bucket = c.env.videos;
 		type LiveStreamType = z.infer<typeof BusinessLiveStream>;
-		const repository = new R2Repository<LiveStreamType>(bucket);
+		const repository = new NonVideoRepository<LiveStreamType>(bucket);
 		const isTest = c.req.header('x-live-test') === '1' && (c.env as { ENVIRONMENT?: string }).ENVIRONMENT !== 'production';
 		await repository.putObject(`livestream:${liveStream.id}`, { ...liveStream, ...(isTest ? { isTest: true } : {}) } as LiveStreamType);
 		let attached: Awaited<ReturnType<typeof attachSession>>;

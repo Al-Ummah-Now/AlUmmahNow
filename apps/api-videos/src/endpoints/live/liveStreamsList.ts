@@ -5,7 +5,7 @@ import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
-import R2Repository from "../../lib/r2Repo";
+import { NonVideoRepository } from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { scanFill } from '../../lib/listFill';
 import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/search/ownership';
@@ -77,7 +77,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 		try {
 			const bucket = c.env.videos;
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
-			const repository = new R2Repository<LiveStreamType>(bucket);
+			const repository = new NonVideoRepository<LiveStreamType>(bucket);
 
 			// Filled page of live streams (lib/listFill.ts): filtering a cut listing
 			// returned empty pages with a cursor when the first streams were private,

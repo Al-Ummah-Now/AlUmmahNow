@@ -75,13 +75,18 @@ export interface VideoVisibilityFields extends VisibilityFlags {
 }
 
 /**
- * The videos bucket also stores records that are not videos (section indexes
- * such as "index:recent-videos", live streams under "livestream:", "metadata:"
- * rows). They never appear anywhere.
+ * Whether a key of the videos bucket is not a video's: section indexes such as
+ * "index:recent-videos", live streams ("livestream:<id>") and "metadata:" rows share the bucket.
+ * The one check every reader of that bucket uses. Ask it about the KEY: a live stream's record
+ * carries its id without the prefix.
  */
+export function isInternalVideoKey(key: string | null | undefined): boolean {
+  return typeof key === 'string' && (key.startsWith('index:') || key.startsWith('livestream:') || key.startsWith('metadata:'));
+}
+
+/** A record read from such a key that also stores the key as its id. They never appear anywhere. */
 export function isInternalVideoRecord(video: Pick<VideoVisibilityFields, 'id'> | null | undefined): boolean {
-  const id = video?.id;
-  return typeof id === 'string' && (id.startsWith('index:') || id.startsWith('livestream:') || id.startsWith('metadata:'));
+  return isInternalVideoKey(video?.id);
 }
 
 /** Removed from circulation (soft delete, moderation, a deleted channel): for everyone, the owner included. */

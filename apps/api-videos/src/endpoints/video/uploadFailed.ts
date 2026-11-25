@@ -7,6 +7,7 @@ import { rethrowBusy } from "../../lib/r2Repo";
 import { flagNeedsReupload } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
 import { canOnVideo, type AccessVideo } from '../../lib/channelAccess';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /**
  * The uploader's browser gave up on an upload it cannot finish (after every
@@ -54,7 +55,7 @@ export class UploadFailedEndpoint extends AuthenticatedRoute {
 			// by the channel owner, spec §8) while their role still uploads. Only
 			// the uploading browser reports its own failure: another member
 			// cannot flag someone else's upload.
-			const object = await c.env.videos.get(videoId);
+			const object = isInternalVideoKey(videoId) ? null : await c.env.videos.get(videoId);
 			if (!object) return c.json({ success: false, error: 'Video not found' }, 404);
 			const video = (await object.json()) as AccessVideo;
 			const isOwner = !!video.userId && video.userId === userId;

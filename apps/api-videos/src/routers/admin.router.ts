@@ -42,7 +42,7 @@ import { COUNTRY_METHOD_DEFAULTS, PRAYER_METHOD_IDS, isPrayerMethodId } from '..
 import { hijriKey, prayerKey } from '../lib/prayer/service';
 import { apiError } from '../lib/api-error';
 import { createSeason, deleteSeason, listSeasons, purgeSeasons, readSeason, restoreSeason, SEASON_ITEMS_MAX, SEASON_ITEM_TYPES, SEASON_KINDS, SeasonError, updateSeason } from '../lib/islamic-seasons';
-import R2Repository from '../lib/r2Repo';
+import R2Repository, { NonVideoRepository } from '../lib/r2Repo';
 import type { LiveEnv } from '../lib/live/providers';
 import { providerUsage } from '../lib/live/service';
 import { listChannelOverrides, readLiveRouting, readSession, removeChannelOverride, resetLiveRouting, setChannelOverride, writeLiveRouting } from '../lib/live/store';
@@ -931,7 +931,7 @@ app.post('/live/streams/:id/move', async (c) => {
 	const input = parse(LiveMove, await body(c));
 	const id = c.req.param('id');
 	let previous: string | null = null;
-	const updated = await new R2Repository<LiveStreamRecord>(liveEnv(c).videos).updateObject(`livestream:${id}`, (fresh) => {
+	const updated = await new NonVideoRepository<LiveStreamRecord>(liveEnv(c).videos).updateObject(`livestream:${id}`, (fresh) => {
 		previous = fresh.providerMove ?? null;
 		fresh.providerMove = input.provider;
 	});

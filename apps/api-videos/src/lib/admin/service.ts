@@ -35,7 +35,7 @@ import {
 	type SuspensionInfo,
 	type VideosBan,
 } from '@al-ummah/shared-types';
-import R2Repository from '../r2Repo';
+import R2Repository, { NonVideoRepository } from '../r2Repo';
 import { logger } from '../logger';
 import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
@@ -229,7 +229,8 @@ async function cascade(bucket: R2Bucket, ids: string[], mutate: (record: Row) =>
 	await eachLimited(ids, 8, async (id) => {
 		try {
 			let did = false;
-			await repo(bucket).updateObject(id, (record) => {
+			// Keys the server listed: videos and live streams alike
+			await new NonVideoRepository<Row>(bucket).updateObject(id, (record) => {
 				did = mutate(record);
 				if (did) record.dateModified = now();
 				return did;

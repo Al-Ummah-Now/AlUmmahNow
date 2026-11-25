@@ -4,6 +4,7 @@
  */
 import { applyFormatChoice, classifyVideoFormat, type VideoFormatIssue } from '@al-ummah/shared-types';
 import { updateJson, type CasBucket } from './r2Cas';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export type FormatChoice = 'short' | 'video' | 'auto';
 
@@ -31,7 +32,7 @@ export async function setVideoFormats(
   const results: SetFormatResult[] = [];
   for (const id of [...new Set(ids)]) {
     try {
-      const written = await updateJson<Record<string, unknown>>(bucket, id, (current) => {
+      const written = isInternalVideoKey(id) ? null : await updateJson<Record<string, unknown>>(bucket, id, (current) => {
         if (!current) return undefined;
         const next = { ...current };
         if (!applyFormatChoice(next as never, format, { by: 'admin', userId: actorId, at: now })) return undefined;
