@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, type PromoteDeps, type ReleaseApp } from '../promote.ts';
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
-import { runSmoke, type CheckResult } from '../smoke.ts';
+import { runSmoke, VERSION_PAUSE_MS, VERSION_WAIT_MS, type CheckResult } from '../smoke.ts';
 import { seoHostResponse } from './seo-host-fixture.ts';
 import { attachWhenMissing, ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
 import { CfApiError } from '../cf-api.ts';
@@ -216,6 +216,12 @@ describe('smoke', () => {
 			return new Response('<html><body>ok</body></html>', { status: 200 });
 		}) as typeof fetch;
 
+	/** A clock that moves only when somebody sleeps. */
+	const clock = () => {
+		let t = 0;
+		return { now: () => t, sleep: async (ms: number) => void (t += ms) };
+	};
+
 	it('passes against a healthy env', async () => {
 		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch() });
 		assert.deepEqual(results.filter((r) => !r.ok), []);
@@ -229,8 +235,69 @@ describe('smoke', () => {
 		assert.match(down.detail, /not answering yet/);
 	});
 	it('fails when the candidate did not answer through the override', async () => {
-		const results = await runSmoke({ env: 'stage', overrides: { 'videos-stage': V(3) }, fetchImpl: fakeFetch({ health: V(1) }) });
-		assert.match(results.find((r) => r.name === 'api-videos: health')!.detail, /expected candidate/);
+		const c = clock();
+		const results = await runSmoke({ env: 'stage', overrides: { 'videos-stage': V(3) }, fetchImpl: fakeFetch({ health: V(1) }), ...c });
+		const health = results.find((r) => r.name === 'api-videos: health')!;
+		assert.equal(health.ok, false);
+		assert.match(health.detail, new RegExp(`served by version ${V(1)}, expected candidate ${V(3)}`));
+		// Waited for, as long as allowed and no longer
+		assert.ok(c.now() > VERSION_WAIT_MS - VERSION_PAUSE_MS && c.now() <= VERSION_WAIT_MS, String(c.now()));
+		assert.deepEqual(results.filter((r) => !r.ok).map((r) => r.name), ['api-videos: health']);
+	});
+
+	describe('the version that answers (v2026.11.25.5)', () => {
+		const overrides = { 'al-ummah-admin-api-stage': V(6) };
+		/** admin-api's /health answers with these in turn (the last one from then on); everything else is healthy. */
+		const adminHealth = (...answers: (() => Response)[]) => {
+			let n = 0;
+			const base = fakeFetch();
+			const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+				const url = new URL(String(input));
+				if (url.hostname !== 'admin.api.stage.alummahnow.net' || url.pathname !== '/health') return base(input, init);
+				return answers[Math.min(n++, answers.length - 1)]();
+			}) as typeof fetch;
+			return { fetchImpl, asked: () => n };
+		};
+		const says = (deployment: string, over: object = {}) => () => new Response(JSON.stringify({ status: 'healthy', deployment, ...over }), { status: 200 });
+		const health = (results: CheckResult[]) => results.find((r) => r.name === 'admin-api: health')!;
+
+		it('waits for the candidate when an edge location still answers with the version before', async () => {
+			const c = clock();
+			const h = adminHealth(says(V(1)), says(V(1)), says(V(6)));
+			const results = await runSmoke({ env: 'stage', overrides, fetchImpl: h.fetchImpl, ...c });
+			assert.deepEqual(results.filter((r) => !r.ok), []);
+			assert.equal(health(results).detail, `version ${V(6)} (after ${(2 * VERSION_PAUSE_MS) / 1000} s)`);
+			assert.equal(h.asked(), 3);
+			assert.equal(c.now(), 2 * VERSION_PAUSE_MS);
+		});
+
+		it('does not wait for an error, a status or an unhealthy body, not even between tries', async () => {
+			const bad: [string, () => Response, RegExp][] = [
+				['status', () => new Response('no', { status: 500 }), /HTTP 500/],
+				['unhealthy', says(V(6), { status: 'degraded' }), /status degraded/],
+				['not JSON', () => new Response('<html>', { status: 200 }), /./],
+				['network', () => { throw new TypeError('fetch failed'); }, /fetch failed/],
+			];
+			for (const [name, answer, detail] of bad) {
+				const first = clock();
+				const a = adminHealth(answer, says(V(6)));
+				const atOnce = health(await runSmoke({ env: 'stage', overrides, fetchImpl: a.fetchImpl, ...first }));
+				assert.deepEqual([atOnce.ok, a.asked(), first.now()], [false, 1, 0], name);
+				assert.match(atOnce.detail, detail, name);
+				const later = clock();
+				const b = adminHealth(says(V(1)), answer, says(V(6)));
+				const afterOne = health(await runSmoke({ env: 'stage', overrides, fetchImpl: b.fetchImpl, ...later }));
+				assert.deepEqual([afterOne.ok, b.asked(), later.now()], [false, 2, VERSION_PAUSE_MS], name);
+				assert.match(afterOne.detail, detail, name);
+			}
+		});
+
+		it('asks once without overrides (after the promotion, waitForVersions reads the version)', async () => {
+			const c = clock();
+			const h = adminHealth(says(V(1)));
+			const results = await runSmoke({ env: 'stage', fetchImpl: h.fetchImpl, ...c });
+			assert.deepEqual([health(results).detail, h.asked(), c.now()], [`version ${V(1)}`, 1, 0]);
+		});
 	});
 	it('fails when the callback error leaks off the error page (R4)', async () => {
 		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch({ callback: 'https://evil.example/' }) });
