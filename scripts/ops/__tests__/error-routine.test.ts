@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compare, hasFindings, issueBody, LABEL, publish, TITLE, type Baseline } from '../error-routine.ts';
+import { compare, dueRelease, hasFindings, issueBody, LABEL, publish, TITLE, type Baseline, type ReleaseRun } from '../error-routine.ts';
 import type { ErrorSummary } from '../public-report.ts';
 
 const A = { id: 'eg_aaaaaaaaaaaaaaaa', line: 'web caught Error /:locale/video/:id status – count 4', test: false };
@@ -42,6 +42,31 @@ test('a group that was quiet for a while is not new; an unreadable report forget
 	const broken = compare(base, { groups: null, actions: null });
 	assert.equal(hasFindings(broken.findings), false);
 	assert.deepEqual(broken.next, base);
+});
+
+test('a production release is due once, 45 minutes to a day after it ended', () => {
+	const t = Date.parse('2026-11-25T20:44:05Z');
+	const run = (over: Partial<ReleaseRun> = {}): ReleaseRun => ({ id: 9, event: 'push', conclusion: 'success', head_branch: 'v2026.11.25.9', updated_at: '2026-11-25T20:44:05Z', repository: { id: 1 }, head_repository: { id: 1 }, ...over });
+	const min = 60_000;
+	assert.equal(dueRelease([run()], undefined, t + 44 * min), null);
+	assert.equal(dueRelease([run()], undefined, t + 45 * min), '9');
+	assert.equal(dueRelease([run()], '8', t + 24 * 60 * min), '9');
+	assert.equal(dueRelease([run()], '9', t + 60 * min), null, 'already checked');
+	assert.equal(dueRelease([run()], undefined, t + 25 * 60 * min), null, 'the daily check has seen it');
+	// A newer release resets the wait; an older one is not checked instead
+	const newer = run({ id: 10, updated_at: '2026-11-25T21:20:00Z' });
+	assert.equal(dueRelease([run(), newer], undefined, t + 60 * min), null);
+	assert.equal(dueRelease([run(), newer], undefined, t + 90 * min), '10');
+	// A stage-only dispatch, a failed or cancelled release, another branch, a fork: never
+	for (const over of [{ event: 'workflow_dispatch' }, { conclusion: 'failure' }, { conclusion: 'cancelled' }, { conclusion: null }, { head_branch: 'main' }, { head_branch: 'verify' }, { head_branch: null }, { head_repository: { id: 2 } }, { head_repository: null }, { repository: undefined, head_repository: undefined }, { updated_at: 'x' }]) {
+		assert.equal(dueRelease([run(over)], undefined, t + 60 * min), null, JSON.stringify(over));
+	}
+	assert.equal(dueRelease([], undefined, t), null);
+});
+
+test('the checked release is carried from run to run', () => {
+	assert.equal(compare({ ...base, release: '9' }, now()).next?.release, '9');
+	assert.equal('release' in compare(base, now()).next!, false);
 });
 
 test('one issue: opened, then commented on while it is open', async () => {
