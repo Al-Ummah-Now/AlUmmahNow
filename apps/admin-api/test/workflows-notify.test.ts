@@ -15,6 +15,7 @@ import { processWorkflowNotifyJob, renderWorkflowEmail, fieldValue, arDigits, ty
 import { clearWorkflowExecutors, proposeChange, registerWorkflowExecutor, ruleVersionStatement } from '../src/lib/workflows/engine';
 import { createWorkflowDirectory } from '../src/lib/workflows/directory';
 import type { WorkflowCtx } from '../src/lib/workflows/types';
+import { mayReadRequest } from '../src/lib/workflows/visibility';
 import { sqliteD1 } from './d1-sqlite';
 
 const request: WorkflowRequestView = {
@@ -222,7 +223,6 @@ describe('delivery', () => {
     const expected: Record<string, string[]> = {
       platform: ['adm', 'fin1', 'sa2'],
       money: ['fin1', 'sa2'],
-      'not-a-domain': ['fin1', 'sa2'],
     };
     for (const [domain, readers] of Object.entries(expected)) {
       for (const by of ['step', 'rule'] as const) {
@@ -250,6 +250,14 @@ describe('delivery', () => {
         assert.deepEqual(asked.filter((u) => u !== 'sa1').sort(), readers, 'nobody else is looked up');
         clearWorkflowExecutors();
       }
+    }
+  });
+
+  it('a domain that is not one of the open ones needs the right to see money', () => {
+    const who = (roles: string[], financePermissions: string[] = []) => ({ roles, financePermissions }) as never;
+    for (const [reader, platform, other] of [[who(['admin']), true, false], [who(['super_admin']), true, true], [who([], ['support:payouts']), true, true], [who(['moderator']), false, false], [who([]), false, false]] as const) {
+      assert.equal(mayReadRequest(reader, 'platform'), platform);
+      for (const domain of ['money', 'not-a-domain', '']) assert.equal(mayReadRequest(reader, domain), other, domain);
     }
   });
 
