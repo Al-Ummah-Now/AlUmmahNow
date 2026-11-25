@@ -233,7 +233,11 @@ describe('channel JSON writers (AV-5)', () => {
 		const kept = channels.read('ch').bunnyCollections?.['1'];
 		assert.ok(kept);
 		assert.ok(results.every((id) => id === kept), 'every upload uses the stored collection');
-		assert.equal(deleted.length, 19, 'the other collections were removed');
-		assert.ok(!deleted.includes(kept));
+		// A writer that reads the channel after the winner stored its collection adopts it and creates
+		// none, so how many were created depends on the interleaving: whatever was created and not kept
+		// is removed, and nothing else
+		assert.ok(created.length >= 1 && created.length <= 20);
+		assert.ok(created.includes(kept), 'the stored collection is one that was created');
+		assert.deepEqual([...deleted].sort(), created.filter((id) => id !== kept).sort(), 'every other collection created was removed');
 	});
 });

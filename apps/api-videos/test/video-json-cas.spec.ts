@@ -65,29 +65,52 @@ function as(userId: string) {
 }
 
 describe('video JSON: parallel writers never drop each other’s change', () => {
-	it('stores every acknowledged comment, like and view of 120 writers at the same time', async () => {
-		const videos = new SlowBucket({ v1: videoFixture() });
-		const e = env(videos);
-		const N = 40;
-		const ok = (p: Promise<unknown>) => p.then(() => true, () => false);
-		const [comments, likes, views] = await Promise.all([
-			Promise.all(Array.from({ length: N }, (_, i) =>
-				as(`commenter-${i}`).request('/api/videos/v1/comments', send('POST', { text: `comment ${i}` }, `ch-${i}`), e)
-					.then((r) => r.status === 200 || r.status === 201, () => false))),
-			Promise.all(Array.from({ length: N }, (_, i) =>
-				ok(applyVideoReaction(new R2Repository<any>(videos as any), 'v1', 'likes', 'add', { userId: `liker-${i}`, channelId: `liker-ch-${i}` })))),
-			Promise.all(Array.from({ length: N }, () => ok(countView({ videos: videos as any }, 'v1')))),
-		]);
+	// The writers' interleaving comes from the bucket's pauses and the backoff between attempts, both
+	// random milliseconds on the real clock: on a busy machine the timers fire in bunches, more writers
+	// collide and "nearly all got through" failed in about one full run in ten (#1993). The clock is
+	// the test's own here (a tick per turn of the event loop) and Math.random a seeded sequence, so a
+	// seed always gives the same interleaving, whatever the machine is doing.
+	for (const seed of [1, 2, 3, 4, 5]) {
+		it(`stores every acknowledged comment, like and view of 120 writers at the same time (interleaving ${seed})`, async (t) => {
+			t.mock.timers.enable({ apis: ['setTimeout'] });
+			let state = seed * 2654435761;
+			t.mock.method(Math, 'random', () => {
+				state = (state + 0x6d2b79f5) | 0;
+				let x = Math.imul(state ^ (state >>> 15), 1 | state);
+				x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+				return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+			});
+			const videos = new SlowBucket({ v1: videoFixture() });
+			const e = env(videos);
+			const N = 40;
+			const ok = (p: Promise<unknown>) => p.then(() => true, () => false);
+			const work = Promise.all([
+				Promise.all(Array.from({ length: N }, (_, i) =>
+					as(`commenter-${i}`).request('/api/videos/v1/comments', send('POST', { text: `comment ${i}` }, `ch-${i}`), e)
+						.then((r) => r.status === 200 || r.status === 201, () => false))),
+				Promise.all(Array.from({ length: N }, (_, i) =>
+					ok(applyVideoReaction(new R2Repository<any>(videos as any), 'v1', 'likes', 'add', { userId: `liker-${i}`, channelId: `liker-ch-${i}` })))),
+				Promise.all(Array.from({ length: N }, () => ok(countView({ videos: videos as any }, 'v1')))),
+			]);
+			let finished = false;
+			void work.then(() => { finished = true; }, () => { finished = true; });
+			for (let turn = 0; !finished; turn++) {
+				assert.ok(turn < 200_000, 'the writers finished');
+				await new Promise<void>((resolve) => setImmediate(resolve));
+				if (!finished) t.mock.timers.tick(1);
+			}
+			const [comments, likes, views] = await work;
 
-		// A writer that loses every attempt is told so (an error), never acknowledged and dropped
-		const acked = (list: boolean[]) => list.filter(Boolean).length;
-		const stored = videos.read('v1');
-		assert.equal(stored.comments.length, acked(comments), 'every acknowledged comment is stored');
-		assert.equal(new Set(stored.comments.map((c: any) => c.text)).size, stored.comments.length);
-		assert.equal(stored.likes.length, acked(likes), 'every acknowledged like is stored');
-		assert.equal(stored.views, acked(views), 'every acknowledged view is stored');
-		assert.ok(acked(comments) + acked(likes) + acked(views) >= 3 * N * 0.9, 'nearly all writers got through');
-	});
+			// A writer that loses every attempt is told so (an error), never acknowledged and dropped
+			const acked = (list: boolean[]) => list.filter(Boolean).length;
+			const stored = videos.read('v1');
+			assert.equal(stored.comments.length, acked(comments), 'every acknowledged comment is stored');
+			assert.equal(new Set(stored.comments.map((c: any) => c.text)).size, stored.comments.length);
+			assert.equal(stored.likes.length, acked(likes), 'every acknowledged like is stored');
+			assert.equal(stored.views, acked(views), 'every acknowledged view is stored');
+			assert.ok(acked(comments) + acked(likes) + acked(views) >= 3 * N * 0.9, 'nearly all writers got through');
+		});
+	}
 
 	it('keeps 30 parallel replies and 30 parallel likes of one comment', async () => {
 		const videos = new SlowBucket({ v1: videoFixture({ comments: [commentFixture('top')] }) });

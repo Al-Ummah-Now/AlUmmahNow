@@ -46,13 +46,27 @@ describe('useWatchProgress - Mutex Pattern', () => {
     saveProgressMock = WatchHistoryService.saveProgress as jest.Mock;
     saveLocalMock = WatchHistoryService.saveLocal as jest.Mock;
 
-    // Simulate API call delay
-    saveProgressMock.mockImplementation(() =>
-      new Promise(resolve => setTimeout(() => resolve({ success: true }), 100))
-    );
+    saveProgressMock.mockImplementation(() => Promise.resolve({ success: true }));
   });
 
+  /**
+   * Makes every API save wait until the test lets it finish, so "a save is in flight" is a state the
+   * test sets and ends, not a 100 ms the machine may stretch (a loaded runner failed the 500 ms
+   * waits that used to stand for it).
+   */
+  const holdSaves = () => {
+    const finish: Array<() => void> = [];
+    saveProgressMock.mockImplementation(() => new Promise((resolve) => { finish.push(() => resolve({ success: true })); }));
+    /** Lets the oldest save finish, and the hook go on to the queued one, if any */
+    const finishOldest = async () => {
+      await act(async () => { finish.shift()?.(); });
+      await act(async () => {});
+    };
+    return { finishOldest, inFlight: () => finish.length };
+  };
+
   it('should prevent concurrent saves with mutex', async () => {
+    const { finishOldest } = holdSaves();
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
@@ -73,14 +87,18 @@ describe('useWatchProgress - Mutex Pattern', () => {
       void result.current.saveProgress();
     });
 
-    // Wait for all saves to complete
-    await waitFor(() => {
-      // Should only make 1-2 API calls, not 3
-      expect(saveProgressMock).toHaveBeenCalledTimes(1);
-    }, { timeout: 500 });
+    // One save is in flight; the other two did not start a second one
+    expect(saveProgressMock).toHaveBeenCalledTimes(1);
+
+    // When it finishes the hook saves what was queued meanwhile, once (2 API calls, not 3)
+    await finishOldest();
+    expect(saveProgressMock).toHaveBeenCalledTimes(2);
+    await finishOldest();
+    expect(saveProgressMock).toHaveBeenCalledTimes(2);
   });
 
   it('should queue and process pending saves', async () => {
+    const { finishOldest } = holdSaves();
     let currentTime = 10;
     mockPlayer = createMockPlayer(currentTime, 100);
 
@@ -109,11 +127,12 @@ describe('useWatchProgress - Mutex Pattern', () => {
       void result.current.saveProgress(); // currentTime: 25 (should replace previous queue)
     });
 
-    // Wait for all saves to complete
-    await waitFor(() => {
-      // Should process the first save and the last queued one
-      expect(saveProgressMock).toHaveBeenCalledTimes(2);
-    }, { timeout: 500 });
+    // The first save is in flight; the other two are queued, the later replacing the earlier
+    expect(saveProgressMock).toHaveBeenCalledTimes(1);
+    await finishOldest();
+    // Should process the first save and the last queued one
+    expect(saveProgressMock).toHaveBeenCalledTimes(2);
+    await finishOldest();
 
     // Verify the last saved position is the most recent
     const lastCall = saveProgressMock.mock.calls[saveProgressMock.mock.calls.length - 1];
@@ -146,6 +165,7 @@ describe('useWatchProgress - Mutex Pattern', () => {
   });
 
   it('should not save if component unmounts during save', async () => {
+    const { finishOldest } = holdSaves();
     const { result, unmount } = renderHook(() =>
       useWatchProgress(
         'video-123',
@@ -166,13 +186,14 @@ describe('useWatchProgress - Mutex Pattern', () => {
     // Unmount immediately
     unmount();
 
-    await waitFor(() => {
-      // Save might start but state shouldn't update after unmount
-      expect(saveProgressMock).toHaveBeenCalledTimes(1);
-    }, { timeout: 500 });
+    // Save might start but state shouldn't update after unmount
+    await waitFor(() => expect(saveProgressMock).toHaveBeenCalledTimes(1));
+    await finishOldest();
+    expect(saveProgressMock).toHaveBeenCalledTimes(1);
   });
 
   it('should handle rapid event-based saves', async () => {
+    const { finishOldest, inFlight } = holdSaves();
     const { result } = renderHook(() =>
       useWatchProgress(
         'video-123',
@@ -189,17 +210,16 @@ describe('useWatchProgress - Mutex Pattern', () => {
     await act(async () => {
       // These could come from pause, seeked, ended events
       void result.current.saveProgress();
-      await new Promise(r => setTimeout(r, 10));
+      await Promise.resolve();
       void result.current.saveProgress();
-      await new Promise(r => setTimeout(r, 10));
+      await Promise.resolve();
       void result.current.saveProgress();
     });
 
-    await waitFor(() => {
-      // Should handle all saves without race conditions
-      expect(saveProgressMock.mock.calls.length).toBeGreaterThan(0);
-      expect(saveProgressMock.mock.calls.length).toBeLessThanOrEqual(3);
-    }, { timeout: 1000 });
+    // Should handle all saves without race conditions: the first in flight, the rest queued as one
+    for (let i = 0; i < 5 && inFlight() > 0; i++) await finishOldest();
+    expect(saveProgressMock.mock.calls.length).toBeGreaterThan(0);
+    expect(saveProgressMock.mock.calls.length).toBeLessThanOrEqual(3);
   });
 
   it('should respect force flag to bypass throttling', async () => {
@@ -249,17 +269,16 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     const saveProgressMock = WatchHistoryService.saveProgress as jest.Mock;
     const callOrder: number[] = [];
     let callCounter = 0;
+    const finish: Array<() => void> = [];
 
-    // Track call order with varying delays
+    // Each save is finished by the test, one at a time, in the order the hook started them
     saveProgressMock.mockImplementation(() => {
       const currentCall = ++callCounter;
-      const delay = Math.random() * 200; // Random delay 0-200ms
-
       return new Promise(resolve => {
-        setTimeout(() => {
+        finish.push(() => {
           callOrder.push(currentCall);
           resolve({ success: true });
-        }, delay);
+        });
       });
     });
 
@@ -276,19 +295,21 @@ describe('useWatchProgress - Race Condition Scenarios', () => {
     simulatePlayback(mockPlayer, 10);
 
     // Trigger 10 rapid saves
+    const all: Array<Promise<void>> = [];
     await act(async () => {
-      const promises = [];
       for (let i = 0; i < 10; i++) {
-        promises.push(result.current.saveProgress());
+        all.push(result.current.saveProgress());
       }
-      await Promise.all(promises);
     });
+    for (let i = 0; i < 10 && finish.length > 0; i++) {
+      await act(async () => { finish.shift()?.(); });
+      await act(async () => {});
+    }
+    await act(async () => { await Promise.all(all); });
 
-    await waitFor(() => {
-      // Should have made significantly fewer than 10 API calls due to mutex
-      expect(saveProgressMock.mock.calls.length).toBeLessThanOrEqual(3);
-      expect(saveProgressMock.mock.calls.length).toBeGreaterThan(0);
-    }, { timeout: 1000 });
+    // Should have made significantly fewer than 10 API calls due to mutex
+    expect(saveProgressMock.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(saveProgressMock.mock.calls.length).toBeGreaterThan(0);
 
     // Verify no race conditions occurred (calls completed in order they started)
     for (let i = 1; i < callOrder.length; i++) {
