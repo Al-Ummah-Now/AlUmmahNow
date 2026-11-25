@@ -1,0 +1,72 @@
+name: Prod errors routine
+
+# Every morning and after each release: the production error report (scripts/ops/prod-errors.ts, read-only), compared
+# with the last run (scripts/ops/error-routine.ts). One issue is opened or commented on only when there is a new error
+# group or more items that need action. The log, the issue and the baseline artifact hold the allow list of
+# scripts/ops/public-report.ts only; the full report is the sealed artifact (scripts/ops/seal.ts).
+on:
+  schedule:
+    - cron: '7 10 * * *'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-errors-routine
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event_name == 'schedule' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Last baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The newest baseline from this repository's main (never a fork's) that has not expired; none on the first run. A failed read fails the job.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=prod-errors-baseline&per_page=20" \
+            --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main" and .workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.created_at) | last | .id // empty')
+          if [ -n "$id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > baseline.zip
+            unzip -q -o baseline.zip baseline.json
+          fi
+      - name: Report
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env production --hours 72 --sealed report.sealed.json --summary summary.json | tee "$GITHUB_STEP_SUMMARY"
+      - name: Compare with the last run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json
+          mv next.json baseline.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prod-errors-baseline
+          path: baseline.json
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: prod-errors-production
+          path: report.sealed.json
+          retention-days: 7
