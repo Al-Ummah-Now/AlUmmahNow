@@ -210,11 +210,19 @@ export function colourPlan(c) {
 	return { kind: touch ? 'convert' : 'as_is', matrix: m, primaries: p, full: c.full, rgb: c.rgb };
 }
 
+/** 4:2:0 and the colorspace filter need even sizes. */
+const EVEN = 'w=trunc(iw/2)*2:h=trunc(ih/2)*2';
 const FINE = 'flags=bicubic+accurate_rnd+full_chroma_int';
 /** Every frame says what it is; the encoder writes it (H.264 VUI) and the muxer too (colr). */
 export const SDR_TAGS = 'setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709';
-/** Mastering display, light level, HDR10+ and Dolby Vision metadata never reach an SDR file (every frame's side data goes; older ffmpeg builds do not know all the names). */
-export const DROP_HDR_DATA = 'sidedata=mode=delete';
+/**
+ * No HDR metadata on an SDR rung: mastering display, light level and HDR10+, also from a source that is
+ * SDR and carries it all the same. By name, so closed captions stay (names every ffmpeg in use knows;
+ * H.264 encoders write no Dolby Vision).
+ */
+export const DROP_HDR_DATA = ['MASTERING_DISPLAY_METADATA', 'CONTENT_LIGHT_LEVEL', 'DYNAMIC_HDR_PLUS'].map((t) => `sidedata=mode=delete:type=${t}`).join(',');
+/** The last filters of every rung. */
+export const SDR_END = `${DROP_HDR_DATA},${SDR_TAGS}`;
 
 /** A .cube path that needs no escaping inside a filter graph (the importer runs ffmpeg in the file's folder and passes its name). */
 export function cubePath(p) {
@@ -231,13 +239,16 @@ export function cubePath(p) {
 export function toSdrFilters(plan, o = {}) {
 	if (plan.kind === 'hlg' || plan.kind === 'pq') {
 		if (!o.cube) throw new Error('no cube for an HDR source');
-		const size = o.size ? `w=${o.size.width}:h=${o.size.height}:` : '';
+		const size = o.size ? `w=${o.size.width}:h=${o.size.height}:` : `${EVEN}:`;
 		const from = plan.rgb ? '' : `:in_color_matrix=${plan.matrix}:in_range=${plan.full ? 'pc' : 'tv'}`;
-		return [`scale=${size}${FINE}${from}`, 'format=gbrp16le', `lut3d=file=${cubePath(o.cube)}:interp=tetrahedral`, `scale=${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv420p', DROP_HDR_DATA, SDR_TAGS].join(',');
+		return [`scale=${size}${FINE}${from}`, 'format=gbrp16le', `lut3d=file=${cubePath(o.cube)}:interp=tetrahedral`, `scale=${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv420p', SDR_TAGS].join(',');
 	}
 	if (plan.kind === 'convert') {
-		if (plan.rgb) return [`scale=${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv420p', SDR_TAGS].join(',');
-		return [`colorspace=ispace=${plan.matrix}:iprimaries=${plan.primaries}:itrc=bt709:irange=${plan.full ? 'pc' : 'tv'}:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p`, SDR_TAGS].join(',');
+		const colorspace = (from, full) => `colorspace=ispace=${from}:iprimaries=${plan.primaries}:itrc=bt709:irange=${full ? 'pc' : 'tv'}:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p`;
+		if (plan.rgb && WIDE.includes(plan.primaries)) return [`scale=${EVEN}:${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv444p', colorspace('bt709', false), SDR_TAGS].join(',');
+		if (plan.rgb) return [`scale=${EVEN}:${FINE}:out_color_matrix=bt709:out_range=tv`, 'format=yuv420p', SDR_TAGS].join(',');
+		// The colorspace filter takes even sizes only (this scale is a no-op for them)
+		return [`scale=${EVEN}:${FINE}`, colorspace(plan.matrix, plan.full), SDR_TAGS].join(',');
 	}
 	return '';
 }

@@ -83,6 +83,17 @@ export function mediaPlaylist(pl) {
 export const MATCH_FRAMES = 24;
 /** Thumbnail size the frames are scaled to before comparing (grey, 1 byte per pixel). */
 export const MATCH_FRAME_SIZE = { width: 32, height: 18 };
+/**
+ * Filters of one compared frame. `sdr` (the source's toSdrFilters) runs at full size: averaging HLG or PQ
+ * signals into thumbnails first gives another picture than the rung's. `from` skips to an instant before
+ * any of it, for a decode from the start.
+ * @param {{ sdr?: string, from?: number }} [o]
+ */
+export function matchFilters({ sdr = '', from } = {}) {
+	const { width, height } = MATCH_FRAME_SIZE;
+	return [from === undefined ? '' : `trim=start=${from}`, sdr, `scale=${width}:${height}:flags=area`, 'format=gray'].filter(Boolean).join(',');
+}
+
 /** Mean absolute pixel difference (0–255) a re-encode stays under; a different picture does not. */
 export const FRAME_DIFF_MEDIAN_MAX = 12;
 export const FRAME_DIFF_MAX = 48;

@@ -26,7 +26,7 @@ import { colourOf, colourPlan, cubeText, hasHdrData, toSdrFilters } from './colo
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs, stillWithFallbacks } from './ladder.mjs';
 import { SourceFacts, sourceChanged, streamFacts } from './source-facts.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
-import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
+import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchFilters, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
 import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
@@ -329,7 +329,7 @@ async function greyFrame(input, t, exact = false, sdr = '') {
 	const { width, height } = MATCH_FRAME_SIZE;
 	const seek = ['-ss', String(t)];
 	try {
-		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,${sdr ? `${sdr},` : ''}format=gray`, '-f', 'rawvideo', 'pipe:1'], exact ? EXACT_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
+		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, '-frames:v', '1', '-vf', matchFilters({ sdr, ...(exact ? { from: t } : {}) }), '-f', 'rawvideo', 'pipe:1'], exact ? EXACT_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
 		return buf.length === width * height ? buf : null;
 	} catch {
 		return null;

@@ -31,8 +31,8 @@ export function framesArgs(o) {
 	const select = `select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,${o.interval})+gt(scene\\,${scene})'`;
 	const scale = "scale='if(gt(iw\\,ih)\\,min(512\\,iw)\\,-2)':'if(gt(iw\\,ih)\\,-2\\,min(512\\,ih))'";
 	// The reviewer sees the colours viewers get (colour.mjs), whatever the source is
-	const colour = [o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '', toJpegFilters].filter(Boolean).join(',');
-	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', `mpdecimate=hi=768:lo=320:frac=0.33,${select},${scale},${colour},showinfo`, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
+	const shown = [o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '', scale, toJpegFilters].filter(Boolean).join(',');
+	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', `mpdecimate=hi=768:lo=320:frac=0.33,${select},${shown},showinfo`, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
 }
 
 /** Frame times (ms) from showinfo's stderr lines, in output order. */
