@@ -21,13 +21,6 @@ const ids = () => screen.queryAllByTestId('playlist-manager-item').map((el) => e
 
 beforeEach(() => jest.clearAllMocks());
 
-/**
- * Paging to #150 renders 160 rows four times: 2.3 to 3 s on a fast machine with nothing else running, and
- * it passed 5 s (jest's default) on a loaded CI runner (#1993's family). It is the test's own work, not
- * something it waits for, so it gets a budget that fits it.
- */
-const PAGING_TIMEOUT_MS = 30_000;
-
 it.each([
   ['personal playlists', '', { mine: true }],
   ['a channel\'s playlists', 'ch1', { channelId: 'ch1' }],
@@ -36,19 +29,20 @@ it.each([
   render(<PlaylistManager channelId={channelId} />);
   await waitFor(() => expect(ids()).toContain('Mine-1'));
   expect(ids()).not.toContain('Mine-150');
-  while (screen.queryByRole('button', { name: 'Show more playlists' })) {
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show more playlists' })); });
+  // By test id, not by role: a role query computes the accessible name of every button among 160 rows,
+  // which is most of what this test cost
+  for (let more = screen.queryByTestId('playlist-manager-more'); more; more = screen.queryByTestId('playlist-manager-more')) {
+    await act(async () => { fireEvent.click(more); });
   }
   expect(mockList).toHaveBeenCalledWith(expect.objectContaining({ ...scope, cursor: '50' }));
   expect(ids()).toHaveLength(160);
-}, PAGING_TIMEOUT_MS);
+});
 
 it('the search box finds #150 on the server', async () => {
   mockList.mockImplementation(pagedList(manyPlaylists('Mine')));
   render(<PlaylistManager channelId="" />);
   await waitFor(() => expect(ids()).toContain('Mine-1'));
   fireEvent.change(screen.getByRole('searchbox', { name: 'Search your playlists' }), { target: { value: 'Mine 150' } });
-  // The search is debounced and then re-renders the list: a condition with a budget, over as soon as it holds
-  await waitFor(() => expect(ids()).toEqual(['Mine-150']), { timeout: PAGING_TIMEOUT_MS });
+  await waitFor(() => expect(ids()).toEqual(['Mine-150']));
   expect(mockList).toHaveBeenCalledWith(expect.objectContaining({ mine: true, q: 'Mine 150' }));
-}, PAGING_TIMEOUT_MS);
+});
