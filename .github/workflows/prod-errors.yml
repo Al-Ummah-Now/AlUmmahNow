@@ -4,9 +4,11 @@ name: Prod errors
 # groups and their latest sample, open needs-action items, and warn/error lines from Workers
 # Observability for web, admin-web, api-videos, admin-api, media, processor, websocket, scheduler and
 # Auth. D1 is read with bounded SELECTs on indexed columns through the Cloudflare API; the
-# Observability query only reads. No app endpoint is called and nothing is changed. The log, the
-# summary and the artifact are public: scripts/ops/scrub.ts drops secrets, emails, user ids and handles and
-# shortens every other id.
+# Observability query only reads. No app endpoint is called and nothing is changed.
+#
+# The log and the summary are public: they get the allow list of scripts/ops/public-report.ts only. The full report
+# is the artifact, encrypted on the runner (scripts/ops/seal.ts); scripts/ops/open-report.ts opens it with the
+# private key, which is in no repository and on no runner. A pull request reads stage only, public part only.
 on:
   workflow_dispatch:
     inputs:
@@ -20,13 +22,16 @@ on:
         type: string
         default: '72'
       paths:
-        description: Also list requests whose path contains one of these (comma-separated, each starting with /), e.g. /passkeys/
+        description: "Also list requests whose path contains one of these (comma-separated, each starting with /), e.g. /passkeys/. Public: never an id or a name"
         type: string
         default: ''
   pull_request:
     paths:
       - scripts/ops/prod-errors.ts
+      - scripts/ops/public-report.ts
+      - scripts/ops/seal.ts
       - scripts/ops/scrub.ts
+      - scripts/ops/__tests__/**
       - .github/workflows/prod-errors.yml
 
 permissions:
@@ -47,21 +52,27 @@ jobs:
         with:
           node-version: '22'
       - name: Tests
-        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts scripts/ops/__tests__/scrub.test.ts
-      - name: Report
+        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts scripts/ops/__tests__/public-report.test.ts scripts/ops/__tests__/seal.test.ts scripts/ops/__tests__/scrub.test.ts
+      - name: Report (stage, public part)
+        if: github.event_name == 'pull_request'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # A PR run reads stage only
-          ENV_NAME: ${{ inputs.env || 'stage' }}
-          HOURS: ${{ inputs.hours || '24' }}
-          PATHS: ${{ inputs.paths || '' }}
+        run: node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env stage --hours 24 | tee "$GITHUB_STEP_SUMMARY"
+      - name: Report
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENV_NAME: ${{ inputs.env }}
+          HOURS: ${{ inputs.hours }}
+          PATHS: ${{ inputs.paths }}
         run: |
           set -o pipefail
-          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" --paths "$PATHS" | tee report.md
-          head -c 900000 report.md >> "$GITHUB_STEP_SUMMARY"
+          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" --paths "$PATHS" --sealed report.sealed.json | tee "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
         with:
-          name: prod-errors-${{ inputs.env || 'stage' }}
-          path: report.md
+          name: prod-errors-${{ inputs.env }}
+          path: report.sealed.json
           retention-days: 7

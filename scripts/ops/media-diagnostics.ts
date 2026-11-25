@@ -2,9 +2,10 @@
  * Read-only diagnostics of the R2 transcode pipeline (apps/media) in one environment.
  *
  *   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node --experimental-strip-types scripts/ops/media-diagnostics.ts \
- *     --env production [--hours 6] [--search "Could not start job"]
+ *     --env production [--hours 6] [--search "Could not start job"] [--sealed report.sealed.json]
  *
- * Prints, as markdown (stdout, also the job summary):
+ * stdout (the workflow log and summary, which are public) gets the allow list of public-report.ts only. The
+ * full report, encrypted to --sealed (seal.ts; open-report.ts opens it; dropped without --sealed), holds:
  *  - the media Worker's recent deployments (a `wrangler deploy` restarts its containers)
  *  - the transcode queue and its DLQ: backlog over the window (GraphQL Analytics)
  *  - the Transcoder container application and its instances (state, as Cloudflare reports it)
@@ -14,18 +15,21 @@
  *    collector's daily cost metrics per provider, viewer-hours per provider (read-only aggregates)
  *  - transcode start times over the last 30 days: queued → the container running FFmpeg, p50/p95
  *    (a read-only SELECT of api-videos' own media_jobs timestamps in the search D1), then the three
- *    slowest starts with the first 8 characters of their video and job ids, times, attempts and error, and the media Worker's
+ *    slowest starts with their video and job ids, times, attempts and error, and the media Worker's
  *    warn/error lines around each (to tell a backlog, a retry, a source wait or an image pull apart).
  *    No titles or user data are printed.
  *
  * Only al-ummah resources are named and read. Calls are GET lists/reads, the GraphQL Analytics
  * read and the Observability telemetry query (a POST that only reads). The token is never printed;
- * every printed line goes through scrub.ts (the log is public): ids only by their first 8 characters.
+ * credentials, emails and addresses are scrubbed even from the sealed report. The --search workflow input is public.
  */
 
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { publicMedia, type MediaData } from './public-report.ts';
 import { clip, scrub } from './scrub.ts';
+import { seal } from './seal.ts';
 
 const API = 'https://api.cloudflare.com/client/v4';
 
@@ -81,12 +85,15 @@ function errs(r: { status: number; body: any }): string {
 }
 
 const out: string[] = [];
+/** What the public part is made of */
+const data: Omit<MediaData, 'env' | 'since' | 'until'> = { deployments: null, backlog: { queue: null, dlq: null }, containers: null, starts: null, logs: [] };
 const p = (s = '') => out.push(scrub(s));
 
 async function deployments(names: Names): Promise<void> {
 	p(`## ${names.media}: deployments`);
 	const r = await get(`/accounts/${account}/workers/scripts/${names.media}/deployments`);
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+	data.deployments = (r.body.result?.deployments ?? []).length;
 	for (const d of (r.body.result?.deployments ?? []).slice(0, 8)) {
 		p(`- ${d.created_on} ${d.source ?? ''} ${d.annotations?.['workers/message'] ?? ''} ${(d.versions ?? []).map((v: any) => `${v.version_id}@${v.percentage}%`).join(' ')}`);
 	}
@@ -117,6 +124,7 @@ async function queues(names: Names, since: Date, until: Date): Promise<void> {
 		}
 		const backlog = acc.queueBacklogAdaptiveGroups ?? [];
 		// Every change of the backlog (not every minute)
+		data.backlog[q.queue_name === names.dlq ? 'dlq' : 'queue'] = Math.round(backlog.at(-1)?.avg?.messages ?? 0);
 		let last = -1;
 		p(`- backlog changes (minute: messages):`);
 		for (const b of backlog) {
@@ -137,6 +145,7 @@ async function containers(names: Names): Promise<void> {
 	const r = await get(`/accounts/${account}/containers/applications`);
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
 	const apps = (r.body.result ?? []).filter((a: any) => typeof a.name === 'string' && a.name.startsWith(names.media) && (names.media !== 'al-ummah-now-media' || !/-(stage|qa)/.test(a.name)));
+	data.containers = apps.length;
 	for (const a of apps) {
 		p(`### ${a.name} (${a.id})`);
 		p(`- version ${a.version}, instances ${a.instances}, max ${a.max_instances}, image ${a.configuration?.image ?? ''}, updated ${a.updated_at ?? ''}`);
@@ -175,7 +184,7 @@ async function containerQuota(all: any[]): Promise<void> {
 	p();
 }
 
-async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false): Promise<void> {
+async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false): Promise<{ warn: number; error: number; readable: boolean }> {
 	p(`## Logs: ${script}${key === '$workers.scriptName' ? '' : ` (${key})`}`);
 	const filters: unknown[] = [{ key, operation: 'eq', type: 'string', value: script }];
 	if (search) filters.push({ key: '$metadata.message', operation: 'includes', type: 'string', value: search });
@@ -186,7 +195,10 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 		limit: 1000,
 		parameters: { datasets: key === '$workers.scriptName' ? ['cloudflare-workers'] : [], filters, filterCombination: 'and' },
 	});
-	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+	if (!r.ok) {
+		p(`unavailable: ${errs(r)}`), p();
+		return { warn: 0, error: 0, readable: false };
+	}
 	// warn/error only (these Workers log nothing else; invocation events and console.log are left out)
 	const events = (r.body.result?.events?.events ?? []).filter((e: any) => allLevels || /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')));
 	p(`${events.length} events`);
@@ -203,6 +215,8 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 		.sort();
 	for (const row of rows) p(row);
 	p();
+	const warn = events.filter((e: any) => /warn/i.test(String(e.$metadata?.level ?? e.source?.level ?? ''))).length;
+	return { warn, error: events.length - warn, readable: true };
 }
 
 async function discover(names: Names, since: Date, until: Date): Promise<void> {
@@ -261,7 +275,9 @@ async function startTimes(env: EnvName): Promise<void> {
 		return;
 	}
 	const rows: { ms: number }[] = r.body?.result?.[0]?.results ?? [];
-	p(`- ${startTimeSummary(rows.map((x) => Number(x.ms)))}`);
+	const ms = rows.map((x) => Number(x.ms)).filter((v) => Number.isFinite(v) && v >= 0).sort((a, b) => a - b);
+	data.starts = { n: ms.length, p50: percentile(ms, 50) ?? 0, p95: percentile(ms, 95) ?? 0 };
+	p(`- ${startTimeSummary(ms)}`);
 	p();
 	const slow = await post(`/accounts/${account}/d1/database/${SEARCH_D1[env]}/query`, { sql: SLOWEST_STARTS_SQL });
 	const worst: Record<string, unknown>[] = slow.ok ? (slow.body?.result?.[0]?.results ?? []) : [];
@@ -323,15 +339,20 @@ async function main(): Promise<void> {
 	await containers(names);
 	await startTimes(env);
 	await costInputs(env);
-	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
+	for (const [app, s] of [['media', names.media], ['api-videos', names.videos], ['admin-api', names.admin]] as const) data.logs.push({ app, ...(await logs(s, since, until, search)) });
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);
-	process.stdout.write(out.join('\n') + '\n');
+	const sealedPath = arg('sealed', '');
+	if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(out.join('\n') + '\n')));
+	process.stdout.write(publicMedia({ env, since, until, ...data }).join('\n') + '\n');
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
-		process.stderr.write(`media-diagnostics failed: ${scrub(error instanceof Error ? error.message : String(error))}\n`);
+		// The log is public: the reason goes into the sealed report only
+		const sealedPath = arg('sealed', '');
+		if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(scrub(`${out.join('\n')}\nfailed: ${error instanceof Error ? error.stack : String(error)}\n`))));
+		process.stderr.write('media-diagnostics failed; the reason is in the sealed report\n');
 		process.exit(1);
 	});
 }

@@ -19,14 +19,6 @@ test('stage names carry the -stage suffix', () => {
 	assert.equal(n.dlq, 'al-ummah-now-transcode-dlq-stage');
 });
 
-test('scrub drops signed URL queries and credentials', async () => {
-	const { scrub } = await import('../scrub.ts');
-	assert.equal(scrub('src https://vz-1.b-cdn.net/a/play_720p.mp4?token=abc&expires=1 ok'), 'src https://vz-1.b-cdn.net/a/play_720p.mp4?… ok');
-	assert.doesNotMatch(scrub('Authorization: Bearer abc.def'), /abc/);
-	assert.match(scrub('{"apiKey":"s3cr3t","videoId":"v1"}'), /"apiKey":"…","videoId":"v1"/);
-	assert.equal(scrub('jwt eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.sig'), 'jwt …jwt…');
-});
-
 test('start times: nearest-rank percentiles and a summary without ids', () => {
 	assert.equal(percentile([], 50), null);
 	assert.equal(percentile([1000, 2000, 3000, 4000], 50), 2000);
