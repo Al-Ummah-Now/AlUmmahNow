@@ -120,6 +120,23 @@ function mediaKeyOf(matchedUrl: string): { bucket: 'MEDIA' | 'MEDIA_PRIVATE'; ke
 	return null;
 }
 
+/** A comment in the list of what cases hold (lib/privacy/erase-targets.ts). */
+export const commentTarget = (r: CsamResolution) => `${r.commentOn}:${r.commentParentId}/${r.commentId}`;
+
+/** The comment only: what it is on, and what other people replied, is not evidence. */
+export async function storedComment(env: Pick<EvidenceEnv, 'videos' | 'community_posts'>, r: CsamResolution): Promise<Record<string, unknown> | null> {
+	let comment: Record<string, unknown> | null = null;
+	if (r.commentOn === 'video') {
+		const video = await json<{ comments?: StoredComment[] }>(env.videos, r.commentParentId!);
+		comment = (findStoredComment(video?.comments, r.commentId!)?.comment as unknown as Record<string, unknown>) ?? null;
+	} else if (env.community_posts) {
+		comment = ((await locatePostComment(env.community_posts, r.commentParentId!, r.commentId!))?.comment as unknown as Record<string, unknown>) ?? null;
+	}
+	if (!comment) return null;
+	const { replies: _replies, ...own } = comment;
+	return own;
+}
+
 /** One value sealed into the case's evidence. */
 export async function keepJson(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, name: string, source: string, value: unknown): Promise<CsamEvidenceFile> {
 	const sealed = await sealJson(keys.current.key, value, { caseId, name });
@@ -189,18 +206,9 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		});
 	}
 	if (r.kind === 'comment' && r.commentId && r.commentParentId) {
-		// The comment only: what it is on, and what other people replied, is not evidence
-		let comment: Record<string, unknown> | null = null;
-		if (r.commentOn === 'video') {
-			const video = await json<{ comments?: StoredComment[] }>(env.videos, r.commentParentId);
-			comment = (findStoredComment(video?.comments, r.commentId)?.comment as unknown as Record<string, unknown>) ?? null;
-		} else if (env.community_posts) {
-			comment = ((await locatePostComment(env.community_posts, r.commentParentId, r.commentId))?.comment as unknown as Record<string, unknown>) ?? null;
-		}
-		if (comment) {
-			const { replies: _replies, ...own } = comment;
-			await snapshot('record-comment.json', `${r.commentOn}:${r.commentParentId}/comments/${r.commentId}`, own);
-		}
+		// As the case found it (holdComment); it may be gone or emptied by now
+		const comment = (await erasedRecord(env.SEARCH_DB, { kind: 'comment', id: commentTarget(r) })) ?? (await storedComment(env, r));
+		if (comment) await snapshot('record-comment.json', `${r.commentOn}:${r.commentParentId}/comments/${r.commentId}`, comment);
 	}
 	if (r.kind === 'live_stream' && r.streamId) {
 		const stream = await json(env.videos, streamKey(r.streamId));
