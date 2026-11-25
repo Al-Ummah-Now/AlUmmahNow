@@ -71,7 +71,10 @@ groups after a day; source maps in R2 after 90 days.
 **Alerts**: production only, to `ERRORS_ALERT_TO` (else `CONTACT_INBOX`), for
 new groups and spikes (this hour ≥ 50 and ≥ 10× the previous 24 h average),
 at most one per group per 6 hours and 10 mails an hour in all. Never for
-test errors. Each alert is recorded in the group's timeline.
+test errors. Each alert is recorded in the group's timeline. Items of child safety
+reports and cases (`isChildSafetyErrorKey`) are never in these: each super admin of
+the staff list is mailed instead (`lib/moderation/safetyMail.ts`), and only super
+admins see them on the Errors page.
 
 **Scrubbing** (`@al-ummah/shared-types` `scrubText`/`scrubUrl`/`scrubEvent`),
 in the reporter and again on ingest: emails, bearer tokens, JWTs, secret-like

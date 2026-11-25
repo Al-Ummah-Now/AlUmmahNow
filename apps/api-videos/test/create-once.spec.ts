@@ -96,6 +96,27 @@ describe('reports (AV-21)', () => {
 		assert.equal((await as('me').request('/api/reports', { method: 'POST', headers: json, body: report('v2') }, e)).status, 200);
 	});
 
+	it('someone who reported it for another reason may raise it to child safety, once', async () => {
+		const e = { reports: new SlowBucket({}), queue: new MemoryQueue() };
+		const file = (reason: string, user = 'me') => as(user).request('/api/reports', { method: 'POST', headers: json, body: JSON.stringify({ entityType: 'video', entityId: 'v1', reason }) }, e).then((r) => r.status);
+		assert.equal(await file('spam'), 200);
+		assert.equal(await file('harassment'), 409);
+		const raised = await Promise.all(Array.from({ length: 4 }, () => file('child_safety')));
+		assert.deepEqual(raised.sort(), [200, 409, 409, 409]);
+		assert.equal(await file('child_safety'), 409);
+		assert.equal(await file('child_safety', 'other'), 200);
+		assert.equal(await file('spam', 'other'), 409);
+		assert.equal(e.queue.messages.filter((m: any) => m.type === MessageType.ReportCreate && m.payload.reason === 'child_safety').length, 2);
+	});
+
+	it('a text longer than any report takes is refused', async () => {
+		const e = { reports: new SlowBucket({}), queue: new MemoryQueue() };
+		const file = (description: string) => as('me').request('/api/reports', { method: 'POST', headers: json, body: JSON.stringify({ entityType: 'video', entityId: 'v1', reason: 'spam', description }) }, e).then((r) => r.status);
+		assert.equal(await file('x'.repeat(5001)), 400);
+		assert.equal(e.queue.messages.length, 0);
+		assert.equal(await file('x'.repeat(5000)), 200);
+	});
+
 	it('a report filed before claims existed still blocks a second one', async () => {
 		const e = { reports: new MemoryBucket({ 'report:v1:old-id:me': { id: 'old-id', entityId: 'v1', reporterId: 'me' } }), queue: new MemoryQueue() };
 		assert.equal((await as('me').request('/api/reports', { method: 'POST', headers: json, body: report() }, e)).status, 409);

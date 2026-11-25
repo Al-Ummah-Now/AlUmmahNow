@@ -3,6 +3,10 @@ import { Num } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError, ReportSchema } from "../../lib/types";
+import { REPORT_REASONS } from "@al-ummah/shared-types";
+import { listReports } from "../../lib/moderation/reportList";
+import type { D1Database } from "../../lib/types";
+import { hiddenFrom, isHiddenItem, withoutCopies } from "../../lib/moderation/takedown";
 import { logger } from "../../lib/logger";
 
 export class ReportsList extends AdminRoute {
@@ -14,6 +18,7 @@ export class ReportsList extends AdminRoute {
       query: z.object({
         status: z.enum(['pending', 'reviewing', 'resolved', 'dismissed']).optional(),
         entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat']).optional(),
+        reason: z.enum(REPORT_REASONS).optional(),
         entity_id: z.string().trim().min(1).max(200).optional().describe("Only reports about this item (the admin picks it by name)"),
         reporter_id: z.string().trim().min(1).max(200).optional().describe("Only reports filed by this user"),
         limit: Num({ description: "Number of reports to return (max 100)" }).optional().default(50),
@@ -29,7 +34,9 @@ export class ReportsList extends AdminRoute {
               success: z.boolean().default(true),
               result: z.object({
                 reports: z.array(ReportSchema),
-                total: z.number(),
+                total: z.number().describe('Reports under the filters, counted up to 1000'),
+                totalCapped: z.boolean().describe('There are more than `total`'),
+                openChildSafety: z.number().describe('Open child safety reports in all, counted up to 1000'),
                 limit: z.number(),
                 offset: z.number(),
               }),
@@ -50,71 +57,24 @@ export class ReportsList extends AdminRoute {
 
   async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
-    const { status, entity_type, entity_id, reporter_id, limit, offset } = request.query;
+    const { status, entity_type, reason, entity_id, reporter_id, limit, offset } = request.query;
 
     try {
-      const db = c.env.REPORTS_DB;
+      const db = c.env.REPORTS_DB as unknown as D1Database;
+      const pageSize = Math.min(limit || 50, 100);
+      const page = await listReports(db, { status, entity_type, reason, entity_id, reporter_id }, pageSize, offset || 0);
 
-      // Build query with optional filters
-      let query = 'SELECT * FROM reports';
-      const conditions: string[] = [];
-      const params: any[] = [];
-
-      if (status) {
-        conditions.push('status = ?');
-        params.push(status);
-      }
-
-      if (entity_type) {
-        conditions.push('entity_type = ?');
-        params.push(entity_type);
-      }
-
-      if (entity_id) {
-        conditions.push('entity_id = ?');
-        params.push(entity_id);
-      }
-
-      if (reporter_id) {
-        conditions.push('reporter_id = ?');
-        params.push(reporter_id);
-      }
-
-      if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
-      }
-
-      query += ' ORDER BY created_at DESC';
-      query += ` LIMIT ${Math.min(limit || 50, 100)} OFFSET ${offset || 0}`;
-
-      // Get reports
-      const stmt = db.prepare(query);
-      const boundStmt = params.length > 0 ? stmt.bind(...params) : stmt;
-      const result = await boundStmt.all();
-
-      // Get total count
-      let countQuery = 'SELECT COUNT(*) as count FROM reports';
-      if (conditions.length > 0) {
-        countQuery += ' WHERE ' + conditions.join(' AND ');
-      }
-      const countStmt = db.prepare(countQuery);
-      const boundCountStmt = params.length > 0 ? countStmt.bind(...params) : countStmt;
-      const countResult = await boundCountStmt.first<{ count: number }>();
+      const hidden = await hiddenFrom(db, this.getRoles(c), page.reports.map((r) => ({ type: r.entity_type, id: r.entity_id })));
 
       logger.debug('Reports listed', {
         moderatorId: this.getUserId(c),
-        filters: { status, entity_type, entity: !!entity_id, reporter: !!reporter_id },
-        count: result.results?.length || 0
+        filters: { status, entity_type, reason, entity: !!entity_id, reporter: !!reporter_id },
+        count: page.reports.length
       });
 
       return {
         success: true,
-        result: {
-          reports: result.results || [],
-          total: countResult?.count || 0,
-          limit: Math.min(limit || 50, 100),
-          offset: offset || 0,
-        },
+        result: { ...page, reports: page.reports.map((r) => (isHiddenItem(hidden, r.entity_type, r.entity_id) ? withoutCopies(r) : r)), limit: pageSize, offset: offset || 0 },
       };
     } catch (error) {
       logger.error('Error listing reports:', error);

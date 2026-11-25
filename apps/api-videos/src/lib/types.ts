@@ -392,11 +392,11 @@ export const LiveStream = z.object({
 // Phase 2: Content Moderation models
 export const Report = z.object({
     id: Str(),
-    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'live_chat']),
+    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'live_chat', 'post']),
     entityId: Str(),
     reporterId: Str(),
     reporterChannelId: Str(),
-    reason: z.enum(['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),
+    reason: z.enum(['child_safety', 'inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),
     description: Str().optional(),
     status: z.enum(['pending', 'reviewed', 'resolved', 'dismissed']).default('pending'),
     dateCreated: DateTime(),

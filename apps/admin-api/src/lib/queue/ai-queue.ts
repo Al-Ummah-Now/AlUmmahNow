@@ -16,6 +16,7 @@ import {
   type ModerationSubjectType,
   type ModerationSurface,
 } from '@al-ummah/shared-types';
+import { noCaseAboutSignalSql } from '../csam';
 import type { D1Database } from '../types';
 import { add, addDateRange, pageAndCounts, personOf, where, type QueueFilters, type Where } from './common';
 import { matchIds, resolveNames, type IdMatches } from './names';
@@ -75,8 +76,10 @@ export function aiSearchCondition(q: string, m: AiSearchMatches): { sql: string;
 }
 
 /** WHERE of each tab under the same filters. */
-export function aiQueueWhere(f: QueueFilters, matches?: AiSearchMatches): { action: Where; history: Where } {
+export function aiQueueWhere(f: QueueFilters & { withheld?: boolean }, matches?: AiSearchMatches): { action: Where; history: Where } {
   const base = (w: Where) => {
+    // Items under a takedown are for super admins
+    if (f.withheld) add(w, noCaseAboutSignalSql('s'));
     if (f.type) add(w, 's.surface = ?', f.type);
     if (f.category) add(w, 's.top_category = ?', f.category);
     if (f.q && f.q.trim()) {
@@ -141,7 +144,7 @@ export function aiLink(r: Pick<Row, 'subject_type' | 'subject_id' | 'parent_id' 
   }
 }
 
-export async function listAiQueue(db: D1Database, search: D1Database | undefined, f: QueueFilters): Promise<AdminQueuePage<AiQueueItem>> {
+export async function listAiQueue(db: D1Database, search: D1Database | undefined, f: QueueFilters & { withheld?: boolean }): Promise<AdminQueuePage<AiQueueItem>> {
   const matches = f.q && f.q.trim() ? { ids: await matchIds(search, f.q), categories: categoriesMatching(f.q) } : undefined;
   const { action, history } = aiQueueWhere(f, matches);
   const { rows, counts } = await pageAndCounts<Row>(db, {

@@ -40,7 +40,7 @@ export interface NewReport {
  */
 export async function storeReport(db: D1Database, r: NewReport, tombstone: string): Promise<void> {
   const ERASED = (n: number) => `EXISTS (SELECT 1 FROM erased_users WHERE user_key = ?${n})`;
-  await db
+  const insert = db
     .prepare(
       `INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at, entity_title, entity_parent_id, channel_id, owner_id)
        VALUES (?1, ?2, ?3, CASE WHEN ${ERASED(12)} THEN ?14 ELSE ?4 END, ?5, ?6, 'pending', ?7,
@@ -50,6 +50,20 @@ export async function storeReport(db: D1Database, r: NewReport, tombstone: strin
       r.id, r.entityType, r.entityId, r.reporterId, r.reason, r.description, r.createdAt,
       r.subject?.text || null, r.subject?.parentId ?? null, r.subject?.channelId ?? null, r.subject?.ownerId ?? null,
       await eraseTombstoneKey(r.reporterId), r.subject?.ownerId ? await eraseTombstoneKey(r.subject.ownerId) : null, tombstone,
-    )
-    .run();
+    );
+  // The alert of a child safety report is written with it (admin-api lib/moderation/childSafety.ts raises it). A
+  // repeat of the message stores no second report, and leaves a closed alert closed
+  const alert =
+    r.reason === 'child_safety'
+      ? [
+          db
+            .prepare(
+              `INSERT INTO child_safety_alerts (entity_type, entity_id, created_at) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM reports WHERE id = ?4 AND status IN ('pending', 'reviewing'))
+               ON CONFLICT(entity_type, entity_id) DO UPDATE SET created_at = excluded.created_at, alerted_at = NULL, flag_key = NULL, own_flag = 0, evidence = NULL, evidence_attempts = 0, closed_at = NULL
+               WHERE child_safety_alerts.closed_at IS NOT NULL`
+            )
+            .bind(r.entityType, r.entityId, r.createdAt, r.id),
+        ]
+      : [];
+  await db.batch([insert, ...alert]);
 }

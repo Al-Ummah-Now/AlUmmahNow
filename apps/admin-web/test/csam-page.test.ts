@@ -16,6 +16,7 @@ import {
   csamFactsText,
   isCsamEvidenceName,
   needsReport,
+  prefillOf,
   sortCases,
   logDetailText,
   retentionLabelKey,
@@ -166,6 +167,14 @@ describe('readable values', () => {
     assert.equal(logDetailText({}), null);
     assert.equal(utcTime('2026-11-14T04:05:06.789Z'), '2026-11-14 04:05:06');
     assert.equal(utcTime('not a time'), 'not a time');
+  });
+});
+
+describe('the intake prefill', () => {
+  it('takes one of our pages that the intake maps, and nothing else', () => {
+    const ours = 'https://videos.alummahnow.net/en/video/vid-synth-01?comment=cmt-synth-01';
+    assert.equal(prefillOf(ours), ours);
+    for (const bad of [undefined, [ours], '', 'https://example.org/x', 'https://videos.alummahnow.net/en/search?q=x', `${ours}\nhttps://example.org`, 'http://videos.alummahnow.net/en/video/vid-synth-01', 'https://user@videos.alummahnow.net/en/video/vid-synth-01', 'javascript:alert(1)']) assert.equal(prefillOf(bad as never), '', String(bad));
   });
 });
 

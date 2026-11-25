@@ -24,7 +24,8 @@ import { userProfilePath } from '@/lib/user-url';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { channelLabel } from '@/lib/channel-name';
 import { MenuButton } from '@/components/common/MenuButton';
-import { MoreVertical, Pencil, Pin, Trash2 } from 'lucide-react';
+import ReportContentButton from '@/components/moderation/ReportContentButton';
+import { Flag, MoreVertical, Pencil, Pin, Trash2 } from 'lucide-react';
 import { avatarInitial } from '@/lib/avatar-initial';
 
 interface CommentProps {
@@ -84,6 +85,7 @@ export default function Comment({
   const [editContent, setEditContent] = useState(comment.content);
   const [hearted, setHearted] = useState(comment.isHeartedByCreator);
   const [pinned, setPinned] = useState(comment.isPinned);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Pinning another comment unpins this one in the parent list; keep local state in sync.
   useEffect(() => {
@@ -313,21 +315,38 @@ export default function Comment({
           </div>
 
           {/* Menu: the shared menu (keyboard, on-screen placement below the button, frosted panel) */}
-          {!comment.deletedAt && (isOwner || isPostOwner) && (
-            <MenuButton
-              label={isRTL ? 'إجراءات التعليق' : 'Comment actions'}
-              testId="comment-actions"
-              buttonClassName="p-1 rounded-full hover:bg-[color-mix(in_srgb,currentColor_8%,transparent)]"
-              items={[
-                ...(isOwner ? [{ id: 'edit', label: isRTL ? 'تعديل' : 'Edit', icon: <Pencil className="w-4 h-4" />, testId: 'comment-edit', onSelect: handleEdit }] : []),
-                ...(isPostOwner && !comment.parentCommentId
-                  ? [{ id: 'pin', label: pinned ? t.community.unpinComment : t.community.pinComment, icon: <Pin className="w-4 h-4" />, testId: 'comment-pin', onSelect: handlePin }]
-                  : []),
-                { id: 'delete', label: isRTL ? 'حذف' : 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true, testId: 'comment-delete', onSelect: handleDelete },
-              ]}
-            >
-              <MoreVertical className="w-5 h-5 text-[var(--fanous-color-text-secondary)]" aria-hidden="true" />
-            </MenuButton>
+          {!comment.deletedAt && (isOwner || isPostOwner || !!userId) && (
+            <>
+              <MenuButton
+                label={isRTL ? 'إجراءات التعليق' : 'Comment actions'}
+                testId="comment-actions"
+                buttonClassName="p-1 rounded-full hover:bg-[color-mix(in_srgb,currentColor_8%,transparent)]"
+                items={[
+                  ...(isOwner ? [{ id: 'edit', label: isRTL ? 'تعديل' : 'Edit', icon: <Pencil className="w-4 h-4" />, testId: 'comment-edit', onSelect: handleEdit }] : []),
+                  ...(isPostOwner && !comment.parentCommentId
+                    ? [{ id: 'pin', label: pinned ? t.community.unpinComment : t.community.pinComment, icon: <Pin className="w-4 h-4" />, testId: 'comment-pin', onSelect: handlePin }]
+                    : []),
+                  ...((isOwner || isPostOwner)
+                    ? [{ id: 'delete', label: isRTL ? 'حذف' : 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true, testId: 'comment-delete', onSelect: handleDelete }]
+                    : []),
+                  ...(userId && !isOwner
+                    ? [{ id: 'report', label: t.reportContent.report, icon: <Flag className="w-4 h-4" />, testId: 'comment-report', onSelect: () => setReportOpen(true) }]
+                    : []),
+                ]}
+              >
+                <MoreVertical className="w-5 h-5 text-[var(--fanous-color-text-secondary)]" aria-hidden="true" />
+              </MenuButton>
+              {userId && !isOwner && (
+                <ReportContentButton
+                  contentType="comment"
+                  contentId={comment.id}
+                  contentTitle={authorName}
+                  open={reportOpen}
+                  onOpenChange={setReportOpen}
+                  hideTrigger
+                />
+              )}
+            </>
           )}
         </div>
 

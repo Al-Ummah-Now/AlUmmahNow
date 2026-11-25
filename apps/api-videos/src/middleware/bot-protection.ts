@@ -186,8 +186,9 @@ export function scriptedClientBlock() {
 /**
  * Turnstile for one endpoint. The token comes in the X-Turnstile-Token header.
  * "first": only until the signed-in account has passed once (KV HUMAN_VERIFIED).
+ * "signed_out": never of a signed-in person (a report: owner decision, 2026-11-25; the edge limiter stays).
  */
-export function requireHuman(endpoint: string, policy: 'always' | 'first') {
+export function requireHuman(endpoint: string, policy: 'always' | 'first' | 'signed_out') {
 	return async (c: Context, next: Next) => {
 		if (c.req.method !== 'POST') return next();
 		const env = c.env as BotEnv;
@@ -201,6 +202,7 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 		}
 		if (turnstileMode(env) === 'off') return next();
 		const user = signedInUser(c);
+		if (policy === 'signed_out' && user) return next();
 		if (policy === 'first') {
 			if (!user) return next(); // the endpoint answers 401
 			if (env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(humanVerifiedKey(user)).catch(() => null))) return next();
@@ -237,7 +239,8 @@ export async function humanCheckStatus(c: Context): Promise<Response> {
 	const kind = c.req.query('kind');
 	const mode = turnstileMode(env);
 	let required = mode !== 'off' && !isNativeClient(c, env);
-	// Reports and tier requests check every time; comments and posts only an account's first
+	// A signed-in person's report is never checked; tier requests are every time, comments and posts only an account's first
+	if (kind === 'report' && signedInUser(c)) required = false;
 	if (required && kind !== 'report' && kind !== 'tier_request') {
 		const user = signedInUser(c);
 		if (user && env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(humanVerifiedKey(user)).catch(() => null))) required = false;

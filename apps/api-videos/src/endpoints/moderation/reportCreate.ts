@@ -109,6 +109,9 @@ export class ReportCreate extends AuthenticatedRoute {
 			type ReportType = z.infer<typeof BusinessReport>;
 			const repository = new R2Repository<ReportType>(bucket);
 
+			// Someone who reported it for another reason may still raise it to child safety, once
+			const raising = inputReport.reason === 'child_safety';
+
 			// List existing reports to check for duplicates
 			// Since R2Repository doesn't support prefix directly, we'll use the R2 bucket directly
 			const existingReportsResponse = await bucket.list({
@@ -119,7 +122,7 @@ export class ReportCreate extends AuthenticatedRoute {
 			if (existingReportsResponse.objects) {
 				for (const reportKey of existingReportsResponse.objects) {
 					// Keys are report:<entityId>:<reportId>:<userId> (the old `:<userId>:` test never matched)
-					if (reportKey.key && reportKey.key.endsWith(`:${userId}`)) {
+					if (!raising && reportKey.key && reportKey.key.endsWith(`:${userId}`)) {
 						return c.json(
 							{
 								success: false,
@@ -144,10 +147,16 @@ export class ReportCreate extends AuthenticatedRoute {
 			// One report per user and entity, claimed once (SCALABILITY-AUDIT AV-21):
 			// of a double submit only the request that creates the claim files a
 			// report. The report keeps its random id, so it does not reveal who filed it.
-			const claimed = await bucket.put(reportClaimKey(report.entityId, userId), JSON.stringify({ reportId: report.id }), {
-				httpMetadata: { contentType: "application/json" },
-				onlyIf: CREATE_ONLY,
-			});
+			const claimKey = reportClaimKey(report.entityId, userId);
+			const previous = raising ? await bucket.get(claimKey) : null;
+			const earlier = previous ? ((await previous.json().catch(() => null)) as { childSafety?: boolean } | null) : null;
+			const raised = earlier?.childSafety === true;
+			const claimed = raised
+				? null
+				: await bucket.put(claimKey, JSON.stringify({ reportId: report.id, ...(raising ? { childSafety: true } : {}) }), {
+						httpMetadata: { contentType: "application/json" },
+						onlyIf: previous ? { etagMatches: previous.etag } : CREATE_ONLY,
+					});
 			if (!claimed) {
 				return c.json(
 					{
@@ -162,7 +171,7 @@ export class ReportCreate extends AuthenticatedRoute {
 			try {
 				await repository.putObject(`report:${report.entityId}:${report.id}:${userId}`, report);
 			} catch (error) {
-				await bucket.delete(reportClaimKey(report.entityId, userId)).catch(() => undefined);
+				await (previous ? bucket.put(claimKey, JSON.stringify(earlier)) : bucket.delete(claimKey)).catch(() => undefined);
 				throw error;
 			}
 

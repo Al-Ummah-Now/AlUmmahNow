@@ -4,7 +4,8 @@
  * admin notification address (ERRORS_ALERT_TO, else the support inbox
  * CONTACT_INBOX). Production only, never for the release E2E's test errors,
  * at most one alert per group every 6 hours and ERROR_ALERT_LIMITS.perHour
- * mails per hour in all (the rest are recorded in the group's activity only).
+ * mails per hour in all (the rest are recorded in the group's activity only). Never
+ * for child safety and CSAM case items: those go to super admins (lib/moderation/safetyMail.ts).
  */
 import { sendContactEmail, type MailerEnv, type RenderedEmail } from './contact-email';
 import { renderEmail, type EmailDoc } from './email/layout';
@@ -78,10 +79,12 @@ export async function sendErrorAlerts(db: D1Database, env: AlertEnv, outcome: In
   if (env.ENVIRONMENT !== 'production') return 0;
   const to = alertRecipient(env);
   if (!to) return 0;
+  // Super admins alone are told of these (lib/moderation/safetyMail.ts)
+  const safety = new Set(outcome.safety.map((s) => s.groupId));
   const candidates: [ErrorGroupRow, 'new' | 'spike'][] = [
-    ...outcome.created.filter((g) => !g.test && isAlertWorthy(g)).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
+    ...outcome.created.filter((g) => !g.test && isAlertWorthy(g) && !safety.has(g.id)).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
     ...outcome.spiking
-      .filter((g) => !g.test && g.status !== 'ignored' && isAlertWorthy(g))
+      .filter((g) => !g.test && g.status !== 'ignored' && isAlertWorthy(g) && !safety.has(g.id))
       .filter((g) => !g.last_alert_at || now.getTime() - Date.parse(g.last_alert_at) > ERROR_ALERT_LIMITS.perGroupHours * 3600_000)
       .map((g) => [g, 'spike'] as [ErrorGroupRow, 'spike']),
   ];

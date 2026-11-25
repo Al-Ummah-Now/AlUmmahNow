@@ -4,7 +4,7 @@
  * the api-videos translation seed).
  */
 
-import type { ReportReason } from './moderation';
+import type { WarningReason } from './moderation';
 
 export interface LibraryTranslations {
   title: string;
@@ -149,7 +149,7 @@ export interface NotificationCenterTranslations {
   accountWarning: {
     title: string;
     message: string;
-    reasons: Record<ReportReason, string>;
+    reasons: Record<WarningReason, string>;
   };
   /** Settings: email about the account (warnings and other account notices). */
   emailSettings: {

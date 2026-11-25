@@ -23,7 +23,7 @@ import {
   scrubEvent,
   type AccountEmailContact,
   type NotificationEmailLocale,
-  type ReportReason,
+  type WarningReason,
 } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from './content/videosClient';
@@ -98,7 +98,7 @@ const COPY = {
   },
 } as const;
 
-const REASONS: Record<NotificationEmailLocale, Record<ReportReason, string>> = {
+const REASONS: Record<NotificationEmailLocale, Record<WarningReason, string>> = {
   en: NOTIFICATION_CENTER_EN.accountWarning.reasons,
   ar: NOTIFICATION_CENTER_AR.accountWarning.reasons,
 };
@@ -107,7 +107,7 @@ export interface WarningEmailInput {
   to: string;
   name: string;
   locale: NotificationEmailLocale;
-  reasonCode: ReportReason;
+  reasonCode: WarningReason;
   count: number;
   /** Videos web origin; links are left out when unknown. */
   origin: string | null;
@@ -234,7 +234,7 @@ export async function processWarningMailJob(
       to: decision.to,
       name: contact.displayName,
       locale: decision.locale,
-      reasonCode: warning.reason_code as ReportReason,
+      reasonCode: warning.reason_code as WarningReason,
       count: Number(count?.n ?? 1),
       origin: videosWebOrigin(env),
       environment: env.ENVIRONMENT,

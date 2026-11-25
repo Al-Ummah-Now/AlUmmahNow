@@ -36,7 +36,7 @@ import {
 } from '../../lib/errors-store';
 import { apiError } from '../../lib/api-error';
 import { parseRetry, retryPermissions, retrySitePermissions, runRetry } from '../../lib/errors-actions';
-import { hasContentPermission } from '@al-ummah/shared-types';
+import { hasContentPermission, isSuperAdmin } from '@al-ummah/shared-types';
 
 const TAGS = ['Errors'];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,6 +48,16 @@ abstract class ErrorsRoute extends AdminRoute {
     if (hasPermission(this.getRoles(c), permission)) return null;
     logger.warn('[Errors] Permission denied', { userId: this.getUserId(c), permission, path: c.req.path });
     return c.json({ success: false, error: `Permission required: ${permission}` }, 403);
+  }
+
+  /** Child safety and CSAM case items: seen and acted on by super admins only. */
+  protected childSafety(c: AppContext): boolean {
+    return isSuperAdmin(this.getRoles(c));
+  }
+
+  /** The group the reader may act on. */
+  protected async mayTouch(c: AppContext, groupId: string): Promise<boolean> {
+    return this.childSafety(c) || !!(await getErrorGroup(c.env.REPORTS_DB, groupId, false));
   }
 
   protected actor(c: AppContext) {
@@ -95,6 +105,7 @@ export class ErrorGroupList extends ErrorsRoute {
       includeTest: query.includeTest === '1' || !!ref,
       needsAction: query.needsAction === '1',
       viewerId: this.getUserId(c),
+      childSafety: this.childSafety(c),
     });
     return { success: true, result: { ...result, limit: query.limit, offset: query.offset } };
   }
@@ -128,6 +139,7 @@ export class ErrorQueue extends ErrorsRoute {
       ...toFilters({ ...query, q: ref ?? query.q }, this.getUserId(c)),
       app: query.app,
       environment: query.environment,
+      childSafety: this.childSafety(c),
       includeTest: query.includeTest === '1' || !!ref,
     });
     logger.debug('[Errors] Queue listed', { tab: query.tab, total: result.total, searched: !!query.q });
@@ -146,7 +158,7 @@ export class ErrorCounts extends ErrorsRoute {
   async handle(c: AppContext) {
     const denied = this.deny(c, 'errors:read');
     if (denied) return denied;
-    const [counts, openActions] = await Promise.all([errorCounts(c.env.REPORTS_DB), openActionCount(c.env.REPORTS_DB)]);
+    const [counts, openActions] = await Promise.all([errorCounts(c.env.REPORTS_DB, this.childSafety(c)), openActionCount(c.env.REPORTS_DB, this.childSafety(c))]);
     return { success: true, result: { ...counts, openActions } };
   }
 }
@@ -178,7 +190,7 @@ export class ErrorRefLookup extends ErrorsRoute {
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
     const ref = parseErrorRef(params.ref);
-    const hit = ref ? await findByRef(c.env.REPORTS_DB, ref) : null;
+    const hit = ref ? await findByRef(c.env.REPORTS_DB, ref, this.childSafety(c)) : null;
     if (!hit) return c.json({ success: false, error: 'Reference not found' }, 404);
     return { success: true, result: { ref, groupId: hit.group_id, eventId: hit.event_id } };
   }
@@ -198,7 +210,7 @@ export class ErrorGroupGet extends ErrorsRoute {
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
     const db = c.env.REPORTS_DB;
-    const group = await getErrorGroup(db, params.id);
+    const group = await getErrorGroup(db, params.id, this.childSafety(c));
     if (!group) return c.json({ success: false, error: 'Error group not found' }, 404);
     const [actions, events, releases, activity, hourly, daily, origins] = await Promise.all([
       listGroupActions(db, params.id),
@@ -243,6 +255,7 @@ export class ErrorGroupUpdate extends ErrorsRoute {
     const db = c.env.REPORTS_DB;
     const actor = this.actor(c);
     const now = new Date();
+    if (!(await this.mayTouch(c, params.id))) return apiError(c, 404, 'not_found', { error: 'Error group not found' });
     if (body.status !== undefined && !(await setErrorStatus(db, params.id, body.status, actor, now))) {
       return c.json({ success: false, error: 'Error group not found' }, 404);
     }
@@ -268,6 +281,7 @@ export class ErrorGroupAddNote extends ErrorsRoute {
     const denied = this.deny(c, 'errors:manage');
     if (denied) return denied;
     const { params, body } = await this.getValidatedData<typeof this.schema>();
+    if (!(await this.mayTouch(c, params.id))) return apiError(c, 404, 'not_found', { error: 'Error group not found' });
     const note = await addErrorNote(c.env.REPORTS_DB, params.id, body.body, this.actor(c), new Date());
     if (!note) return c.json({ success: false, error: 'Error group not found' }, 404);
     return { success: true, result: { note } };
@@ -311,7 +325,7 @@ export class ErrorActionRetry extends ErrorsRoute {
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
     const db = c.env.REPORTS_DB;
-    const item = await getActionItem(db, params.id);
+    const item = await getActionItem(db, params.id, this.childSafety(c));
     if (!item) return c.json({ success: false, error: 'Item not found' }, 404);
     const spec = parseRetry(item.retry_json);
     if (!spec) return c.json({ success: false, error: 'This item has no retry action' }, 409);
@@ -352,7 +366,7 @@ export class ErrorActionUpdate extends ErrorsRoute {
     if (denied) return denied;
     const { params, body } = await this.getValidatedData<typeof this.schema>();
     const db = c.env.REPORTS_DB;
-    const item = await getActionItem(db, params.id);
+    const item = await getActionItem(db, params.id, this.childSafety(c));
     if (!item) return c.json({ success: false, error: 'Item not found' }, 404);
     await recordActionAttempt(db, item, { status: body.status, result: `Marked ${body.status}` }, this.actor(c), new Date(), 'item');
     const { retry_json, ...updated } = (await getActionItem(db, params.id))!;

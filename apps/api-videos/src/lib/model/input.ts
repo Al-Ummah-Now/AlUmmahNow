@@ -189,11 +189,14 @@ export const LiveStreamUpdateInput = z.object({
 });
 
 // Phase 2: Content Moderation input schemas
+/** Longest report text. The apps stop at 500 characters, plus a timestamp and the reason's note. */
+export const REPORT_DESCRIPTION_MAX = 5000;
+
 export const ReportInput = z.object({
-    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'live_chat']),
+    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'live_chat', 'post']),
     entityId: Str({ description: "ID of the entity being reported" }),
-    reason: z.enum(['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),
-    description: Str({ required: false, description: "Additional details about the report" }),
+    reason: z.enum(['child_safety', 'inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),
+    description: z.string().max(REPORT_DESCRIPTION_MAX).optional().describe("Additional details about the report"),
 });
 
 export const ModerationActionInput = z.object({

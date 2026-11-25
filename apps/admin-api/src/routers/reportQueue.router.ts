@@ -59,7 +59,7 @@ function itemParams(c: C): { type: ReportableEntityType; id: string } {
 app.get('/', async (c) => {
   const query = parseQueueQuery(queryOf(c));
   await fillCopies(c);
-  const result = await listQueue(c.env, query);
+  const result = await listQueue(c.env, query, c.get('auth')?.roles);
   logger.debug('[ReportQueue] Action needed listed', { userId: c.get('auth')?.userId, search: !!query.q, count: result.items.length, total: result.total });
   return c.json({ success: true, result });
 });
@@ -67,7 +67,7 @@ app.get('/', async (c) => {
 app.get('/history', async (c) => {
   const query = parseHistoryQuery(queryOf(c));
   await fillCopies(c);
-  const result = await listHistory(c.env, query);
+  const result = await listHistory(c.env, query, c.get('auth')?.roles);
   logger.debug('[ReportQueue] History listed', { userId: c.get('auth')?.userId, search: !!query.q, count: result.items.length, total: result.total });
   return c.json({ success: true, result });
 });

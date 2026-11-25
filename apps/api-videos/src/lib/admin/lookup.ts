@@ -19,8 +19,10 @@ import {
 	type ReportableEntityType,
 	type SearchDb,
 } from '@al-ummah/shared-types';
+import { resolveHandle, resolveHandleHistory } from '../channelHandles';
 import { locatePostComment } from '../channelComments/moderation';
 import { readPostLocation } from '../community-posts';
+import { reportableChatMessage } from '../live/reportable';
 import { readMany, type AdminEnv } from './directory';
 
 type Row = Record<string, any>;
@@ -136,6 +138,20 @@ async function postsByIds(env: AdminEnv, db: SearchDb, ids: string[]): Promise<M
 	return out;
 }
 
+/** The channels behind @handles: the current handle index, else the handle's history. */
+async function channelsByHandle(env: AdminEnv, handles: string[]): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	const bucket = (env as { channel_tabs?: R2Bucket }).channel_tabs;
+	if (!bucket) return out;
+	await Promise.all(
+		handles.map(async (handle) => {
+			const id = (await resolveHandle(bucket, handle).catch(() => null)) ?? (await resolveHandleHistory(bucket, handle).catch(() => null));
+			if (id) out.set(handle, id);
+		}),
+	);
+	return out;
+}
+
 /** Normalises and caps the request (the caller is admin-api; this keeps a bad call cheap). */
 export function cleanLookup(input: Partial<AdminLookupRequest> | null | undefined): AdminLookupRequest {
 	const items: AdminLookupRequest['items'] = [];
@@ -158,11 +174,13 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 	const idsOf = (...types: ReportableEntityType[]) => request.items.filter((i) => types.includes(i.type)).map((i) => i.id);
 
 	const commentIds = idsOf('comment');
+	// A channel reported by its @handle (the web report page, short links)
+	const handles = await channelsByHandle(env, idsOf('channel').filter((id) => id.startsWith('@')));
 	const chatIds = idsOf('live_chat');
 	const [videos, streams, channels, comments, posts, chats, playlists] = await Promise.all([
 		ownershipRows(db, 'video', idsOf('video')),
 		ownershipRows(db, 'stream', idsOf('livestream')),
-		ownershipRows(db, 'channel', idsOf('channel')),
+		ownershipRows(db, 'channel', [...idsOf('channel').filter((id) => !id.startsWith('@')), ...handles.values()]),
 		commentsByIds(env, db, commentIds),
 		postsByIds(env, db, idsOf('post')),
 		chatIds.length
@@ -183,9 +201,10 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 				: notFound(type, id);
 		}
 		if (type === 'channel') {
-			const ch = channels.get(id);
+			const channelId = handles.get(id) ?? id;
+			const ch = channels.get(channelId);
 			return ch
-				? { type, id, found: true, title: ch.admin_title ?? null, parentId: null, channelId: id, channelName: ch.admin_title ?? null, ownerId: ch.owner_id ?? null, isHidden: ch.is_hidden === 1, isDeleted: ch.is_deleted === 1 }
+				? { type, id, ...(channelId !== id ? { canonicalId: channelId } : {}), found: true, title: ch.admin_title ?? null, parentId: null, channelId, channelName: ch.admin_title ?? null, ownerId: ch.owner_id ?? null, isHidden: ch.is_hidden === 1, isDeleted: ch.is_deleted === 1 }
 				: notFound(type, id);
 		}
 		if (type === 'comment') {
@@ -214,6 +233,16 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 		}
 		return notFound(type, id);
 	});
+
+	// Whether anyone may read a reported chat message now (a guest's report keeps what it said only then)
+	await Promise.all(
+		items
+			.filter((i) => i.type === 'live_chat' && i.found)
+			.map(async (i) => {
+				const open = await reportableChatMessage(env as never, i.id, '').catch(() => null);
+				i.openToAnyone = !!open && open !== 'off';
+			}),
+	);
 
 	// Channel names for items that name a channel; a comment without one takes its video's channel
 	const missingVideoChannels = items.filter((i) => i.type === 'comment' && i.parentType === 'video' && i.found && !i.channelId && i.parentId).map((i) => i.parentId!);

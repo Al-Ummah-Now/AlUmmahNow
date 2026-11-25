@@ -168,6 +168,8 @@
 			}
 		]
 	},
+	// Guest content reports per network, before anything else (POST /internal/guest-reports)
+	"ratelimits": [{ "name": "GUEST_REPORT_LIMITER", "namespace_id": "2361", "simple": { "limit": 10, "period": 60 } }],
 	// Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
 	"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
 	// Private source maps uploaded by the release (lib/sourcemaps.ts) are in r2_buckets as SOURCEMAPS.
@@ -367,6 +369,8 @@
 					}
 				]
 			},
+			// Guest content reports per network, before anything else (POST /internal/guest-reports)
+			"ratelimits": [{ "name": "GUEST_REPORT_LIMITER", "namespace_id": "2362", "simple": { "limit": 10, "period": 60 } }],
 			// Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
 			"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
 			// VIDEOS: content data; PROCESSOR, SCHEDULER: Retry actions on the Errors page (lib/errors-actions.ts)

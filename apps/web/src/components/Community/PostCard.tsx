@@ -21,6 +21,9 @@ import { avatarInitial } from '@/lib/avatar-initial';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MetaSep } from '@/components/ui/MetaSep';
 import { fromSourceShortText, fromSourceText, sourceOrigin } from '@/components/VideoDate';
+import { MenuButton } from '@/components/common/MenuButton';
+import ReportContentButton from '@/components/moderation/ReportContentButton';
+import { Flag, MoreVertical } from 'lucide-react';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -54,6 +57,8 @@ export default function PostCard({
   openPostLabel,
 }: PostCardProps) {
   const [showComments, setShowComments] = useState(initialShowComments);
+  const [reportOpen, setReportOpen] = useState(false);
+  const canReportPost = Boolean(userId && userId !== post.userId);
   const timeAgo = getTimeAgo(new Date(post.createdAt), isRTL);
   const { t } = useLanguage();
   // Brought from the channel's own social account or site (TOOLS-ADMIN TA-9): where it first came out
@@ -169,18 +174,35 @@ export default function PostCard({
           </p>
         </div>
 
-        {/* Three-dot Menu */}
-        <button
-          className={cn(
-            'p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-            'shrink-0'
-          )}
-          aria-label={isRTL ? 'المزيد من الخيارات' : 'More options'}
-        >
-          <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-          </svg>
-        </button>
+        {/* Three-dot Menu (Report post for signed-in viewers) */}
+        {canReportPost && (
+          <>
+            <MenuButton
+              label={isRTL ? 'المزيد من الخيارات' : 'More options'}
+              testId="post-actions"
+              buttonClassName="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              items={[
+                {
+                  id: 'report',
+                  label: t.reportContent.report,
+                  icon: <Flag className="w-4 h-4" />,
+                  testId: 'post-report',
+                  onSelect: () => setReportOpen(true),
+                },
+              ]}
+            >
+              <MoreVertical className="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+            </MenuButton>
+            <ReportContentButton
+              contentType="post"
+              contentId={post.id}
+              contentTitle={channelLabel(post, locale)}
+              open={reportOpen}
+              onOpenChange={setReportOpen}
+              hideTrigger
+            />
+          </>
+        )}
       </div>
 
       {/* Post Content */}

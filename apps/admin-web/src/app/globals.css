@@ -256,6 +256,12 @@ html.dark .aun-menu {
   ::file-selector-button {
     border-color: var(--border);
   }
+
+  /* The default is half the text colour: 3.2:1 on a light field */
+  ::placeholder {
+    color: var(--color-fg-muted);
+    opacity: 1;
+  }
 }
 
 body {

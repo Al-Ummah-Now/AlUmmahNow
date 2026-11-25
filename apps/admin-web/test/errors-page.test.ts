@@ -102,6 +102,14 @@ describe('errors actions are gated by errors:manage', () => {
     assert.deepEqual(itemActionsFor('admin', { status: 'resolved', can_retry: true }), []);
     assert.deepEqual(itemActionsFor('admin', { status: 'dismissed', can_retry: true }), []);
   });
+
+  it('child safety and CSAM case items are super admins’', () => {
+    for (const item_key of ['child-safety-report:video:v', 'child-safety-reports:2026-11-24T01', 'child-safety-evidence:post:p', 'child-safety-retention', 'csam:case-1', 'csam-contain:case-1']) {
+      assert.deepEqual(itemActionsFor('admin', { status: 'open', can_retry: true, item_key }), [], item_key);
+      assert.deepEqual(itemActionsFor('super_admin', { status: 'open', can_retry: true, item_key }), ['retry', 'dismiss'], item_key);
+    }
+    assert.deepEqual(itemActionsFor('admin', { status: 'open', can_retry: false, item_key: 'browser:child-safety-x' }), ['dismiss']);
+  });
 });
 
 describe('needs-action item links', () => {

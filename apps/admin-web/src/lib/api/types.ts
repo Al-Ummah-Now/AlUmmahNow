@@ -10,6 +10,9 @@ import type { AdminJob, AiModerationConfig, AiUsageDay, IndexRepair, ModerationC
 
 import type {
   Report,
+  ReportedItemSummary,
+  ReportOutcomeOption,
+  ReportReason,
   ReportStatus,
   ReportableEntityType,
   ModerationAction,
@@ -19,6 +22,7 @@ import type {
 export interface ListReportsParams {
   status?: ReportStatus;
   entity_type?: ReportableEntityType;
+  reason?: ReportReason;
   entity_id?: string;
   reporter_id?: string;
   limit?: number;
@@ -27,9 +31,24 @@ export interface ListReportsParams {
 
 export interface ListReportsResponse {
   reports: Report[];
+  /** Counted up to 1000 */
   total: number;
+  /** There are more than `total` */
+  totalCapped?: boolean;
+  /** Open child safety reports, whatever the filters */
+  openChildSafety?: number;
   limit: number;
   offset: number;
+}
+
+/** GET /api/moderation/reports/:id */
+export interface ReportDetail {
+  report: Report;
+  outcomes: ReportOutcomeOption[];
+  /** The reported item as it is now, or the copy its report keeps */
+  item?: ReportedItemSummary;
+  /** A child safety report, for a super admin: the page that opens a case for exactly this item (null: none does), and whether a record of it was kept */
+  intake?: { url: string | null; evidence: boolean } | null;
 }
 
 export interface TakeActionParams {

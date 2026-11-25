@@ -1,12 +1,14 @@
-import type { AdminSuggestKind, ReportStatus, ReportableEntityType } from '@al-ummah/shared-types';
+import { REPORT_REASONS as REASONS, type AdminSuggestKind, type ReportReason, type ReportStatus, type ReportableEntityType } from '@al-ummah/shared-types';
 
 export const REPORT_STATUSES: ReportStatus[] = ['pending', 'reviewing', 'resolved', 'dismissed'];
 export const ENTITY_TYPES: ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat'];
+export const REPORT_REASONS: readonly ReportReason[] = REASONS;
 export const PAGE_SIZE = 20;
 
 export interface ModerationFilters {
   status?: ReportStatus;
   entity_type?: ReportableEntityType;
+  reason?: ReportReason;
   /** The reported item, chosen by name once a type is chosen */
   entity_id?: string;
   /** Who filed the report */
@@ -27,6 +29,7 @@ export function parseModerationFilters(params: Record<string, string | string[] 
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const status = first(params.status);
   const entityType = first(params.entity_type);
+  const reason = first(params.reason);
   const page = Number.parseInt(first(params.page) ?? '1', 10);
   const id = (v: string | string[] | undefined) => {
     const value = first(v)?.trim();
@@ -38,6 +41,7 @@ export function parseModerationFilters(params: Record<string, string | string[] 
     entity_type: ENTITY_TYPES.includes(entityType as ReportableEntityType)
       ? (entityType as ReportableEntityType)
       : undefined,
+    reason: REPORT_REASONS.includes(reason as ReportReason) ? (reason as ReportReason) : undefined,
     entity_id: id(params.entity_id),
     reporter_id: id(params.reporter_id),
     page: Number.isFinite(page) && page >= 1 ? page : 1,
@@ -48,6 +52,7 @@ export function moderationHref(filters: Partial<ModerationFilters>): string {
   const search = new URLSearchParams();
   if (filters.status) search.set('status', filters.status);
   if (filters.entity_type) search.set('entity_type', filters.entity_type);
+  if (filters.reason) search.set('reason', filters.reason);
   if (filters.entity_id) search.set('entity_id', filters.entity_id);
   if (filters.reporter_id) search.set('reporter_id', filters.reporter_id);
   if (filters.page && filters.page > 1) search.set('page', String(filters.page));

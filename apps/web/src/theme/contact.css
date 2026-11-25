@@ -1,6 +1,8 @@
 /* Contact us page (components/contact/ContactPage.tsx). Theme tokens and the
    theme's materials (materials.css) only: every theme and mode restyles it. */
 .ct{width:100%;max-width:1080px;margin-inline:auto;padding:clamp(20px,4vw,48px) 16px 48px;color:var(--fanous-color-text-primary)}
+/* Clear the fixed mobile bottom tab bar so form cards and submit controls are never covered */
+@media (max-width:1023px){.ct{padding-block-end:calc(96px + env(safe-area-inset-bottom,0px))}}
 .ct-head{display:flex;align-items:flex-start;gap:var(--fanous-spacing-md,16px);margin-block-end:clamp(20px,3vw,32px)}
 .ct-badge{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:var(--r-lg,14px);background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
 .ct-badge svg{width:26px;height:26px}
@@ -47,9 +49,16 @@ html[lang=ar] .ct-title{line-height:1.45}
 .ct-topic[data-checked] .ct-topic-icon{background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
 .ct-topic-icon svg{width:18px;height:18px}
 .ct-topic-text{display:flex;flex-direction:column;gap:2px;min-width:0}
-.ct-topic-label{font-weight:600;font-size:14px;line-height:1.35}
+.ct-topic-label{font-weight:600;font-size:14px;line-height:1.35;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .ct-topic-hint{font-size:12.5px;line-height:1.4;color:var(--fanous-color-text-muted)}
+.ct-priority-pill{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid color-mix(in srgb,var(--fanous-color-error-text) 55%,transparent);background:color-mix(in srgb,var(--fanous-color-error-text) 12%,var(--fanous-color-surface));color:var(--fanous-color-error-text)}
 fieldset[data-invalid] .ct-topic{border-color:color-mix(in srgb,var(--fanous-color-error-text) 60%,var(--fanous-color-divider))}
+
+/* Info / privacy / signed-in notices */
+.ct-notice{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--r-lg,14px);border:1px solid var(--fanous-color-divider);background:color-mix(in srgb,var(--fanous-color-surface) 75%,transparent);font-size:13.5px;line-height:1.55;color:var(--fanous-color-text-secondary)}
+.ct-notice>svg{flex:none;width:18px;height:18px;margin-block-start:2px;color:var(--fanous-color-link)}
+.ct-notice p{margin:0}
+.ct-notice-title{font-weight:600;color:var(--fanous-color-text-primary);margin-block-end:3px!important}
 
 /* Errors */
 .ct-error{display:flex;align-items:flex-start;gap:6px;margin:2px 0 0;font-size:13.5px;font-weight:500;color:var(--fanous-color-error-text)}
@@ -106,3 +115,11 @@ fieldset[data-invalid] .ct-topic{border-color:color-mix(in srgb,var(--fanous-col
 .ct-tips a{color:var(--fanous-color-link);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 
 @media (prefers-reduced-motion:reduce){.ct-input,.ct-topic,.ct-btn{transition:none}.ct-btn-primary:active{transform:none}}
+
+/* The reported item's ids are read whole, unlike a page's address */
+.ct-page-url.ct-page-id {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}

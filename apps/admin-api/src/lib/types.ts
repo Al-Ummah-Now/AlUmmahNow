@@ -1,5 +1,6 @@
 import { Str, DateTime } from "./chanfana-params";
 import { z } from "zod";
+import { REPORT_REASONS } from "@al-ummah/shared-types";
 
 // Re-export shared D1 and moderation types
 export type {
@@ -39,15 +40,18 @@ export const ReportSchema = z.object({
   entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat']),
   entity_id: Str(),
   reporter_id: Str(),
-  reason: z.enum(['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),
+  reason: z.enum(REPORT_REASONS),
   description: Str().optional().nullable(),
   status: z.enum(['pending', 'reviewing', 'resolved', 'dismissed']).default('pending'),
   moderator_id: Str().optional().nullable(),
   action: z.enum(['warning', 'removed', 'banned', 'deleted', 'dismissed']).optional().nullable(),
   moderator_notes: Str().optional().nullable(),
+  taken_down: z.boolean().optional(),
   created_at: Str(),
   updated_at: Str().optional().nullable(),
   resolved_at: Str().optional().nullable(),
+  entity_title: Str().optional().nullable(),
+  channel_name: Str().optional().nullable(),
 });
 
 // Video schema for R2 (simplified for moderation)

@@ -17,6 +17,7 @@ import { ADMIN_LOOKUP_MAX_ITEMS, ADMIN_LOOKUP_MAX_USERS, eraseTombstoneKey } fro
 import { callVideos, type VideosClientEnv } from '../content/videosClient';
 import { erasedUserIds } from '../errors-store';
 import { logger } from '../logger';
+import { GUEST_REPORTER_ID, moveAlert } from './childSafety';
 import type { D1Database } from '../types';
 
 /** Rows filled per run (one lookup call; items and users stay under the lookup caps). */
@@ -86,7 +87,7 @@ export async function lookupMany(env: MetaEnv, items: { type: ReportableEntityTy
     seen.add(key);
     return true;
   }).slice(0, ADMIN_LOOKUP_MAX_ITEMS);
-  const uniqueUsers = [...new Set(users.filter((u) => u && u !== DELETED_USER_ID))].slice(0, ADMIN_LOOKUP_MAX_USERS);
+  const uniqueUsers = [...new Set(users.filter((u) => u && u !== DELETED_USER_ID && u !== GUEST_REPORTER_ID))].slice(0, ADMIN_LOOKUP_MAX_USERS);
   if (uniqueItems.length === 0 && uniqueUsers.length === 0) return { items: new Map(), users: new Map() };
   try {
     const body: AdminLookupRequest = { items: uniqueItems, users: uniqueUsers };
@@ -121,7 +122,9 @@ const userName = (lookup: Lookup, id: string | null): string | null => {
 /** The UPDATE for one row from a lookup. Item copies are kept when the item was not found. */
 async function metaUpdate(db: D1Database, row: MetaRow, lookup: Lookup, now: string) {
   const item = lookup.items.get(itemKey(row.entity_type, row.entity_id));
-  const found = !!item?.found;
+  // What a chat message said is kept only when the person who reported it could read it
+  const unreadable = row.entity_type === 'live_chat' && row.reporter_id === GUEST_REPORTER_ID && !item?.openToAnyone;
+  const found = !!item?.found && !unreadable;
   const ownerId = found ? item?.ownerId ?? null : row.owner_id;
   const names = { owner: userName(lookup, ownerId), reporter: userName(lookup, row.reporter_id), moderator: userName(lookup, row.moderator_id) };
   // Only whom this names: a moderator who is gone must not hold the row back
@@ -177,8 +180,19 @@ async function writeMeta(env: MetaEnv, rows: MetaRow[], now: string): Promise<nu
   );
   if (!lookup) return 0;
   await env.REPORTS_DB.batch(await Promise.all(rows.map((r) => metaUpdate(env.REPORTS_DB, r, lookup, now))));
+  await useChannelIds(env, rows, lookup);
   logger.debug('[ReportQueue] Report copies filled', { rows: rows.length });
   return rows.length;
+}
+
+/** Reports filed under a channel's @handle move to its id, where the queue groups them and decisions act on them. */
+async function useChannelIds(env: MetaEnv, rows: MetaRow[], lookup: Lookup): Promise<void> {
+  const handles = [...new Set(rows.filter((r) => r.entity_type === 'channel' && r.entity_id.startsWith('@')).map((r) => r.entity_id))];
+  for (const handle of handles) {
+    const id = lookup.items.get(itemKey('channel', handle))?.canonicalId;
+    if (!id) continue;
+    await moveAlert(env as never, handle, id, [env.REPORTS_DB.prepare("UPDATE reports SET entity_id = ? WHERE entity_type = 'channel' AND entity_id = ?").bind(id, handle)]);
+  }
 }
 
 /** Cron: fill new reports' copies even when nobody opens the queue. */

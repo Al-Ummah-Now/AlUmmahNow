@@ -2,6 +2,9 @@
  * Report lookups for the content pages, from REPORTS_DB (idx_reports_entity).
  * "Open" reports are the ones moderation has not closed yet.
  */
+import type { ReportableEntityType } from '@al-ummah/shared-types';
+import { hiddenFrom, isHiddenItem } from '../moderation/takedown';
+
 export type ReportEntity = 'channel' | 'video' | 'comment' | 'playlist' | 'post';
 
 interface ReportsDb {
@@ -62,8 +65,8 @@ interface ReportRow {
   created_at: string;
 }
 
-/** The latest reports (any status) against these entities, newest first. */
-export async function recentReports(db: ReportsDb, targets: { type: ReportEntity; ids: string[] }[], limit = 10): Promise<ContentReport[]> {
+/** The latest reports (any status) against these entities, newest first. What they say about an item under a takedown is for super admins. */
+export async function recentReports(db: ReportsDb, targets: { type: ReportEntity; ids: string[] }[], roles?: readonly unknown[], limit = 10): Promise<ContentReport[]> {
   const rows: ReportRow[] = [];
   for (const { type, ids } of targets) {
     const unique = [...new Set(ids.filter(Boolean))];
@@ -76,16 +79,16 @@ export async function recentReports(db: ReportsDb, targets: { type: ReportEntity
       rows.push(...results);
     }
   }
-  return rows
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, limit)
+  const latest = rows.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit);
+  const hidden = await hiddenFrom(db as never, roles, latest.map((r) => ({ type: r.entity_type as ReportableEntityType, id: r.entity_id })));
+  return latest
     .map((r) => ({
       id: r.id,
       entityType: r.entity_type,
       entityId: r.entity_id,
       reporterId: r.reporter_id,
       reason: r.reason,
-      description: r.description,
+      description: isHiddenItem(hidden, r.entity_type, r.entity_id) ? null : r.description,
       status: r.status,
       action: r.action,
       createdAt: r.created_at,

@@ -138,6 +138,10 @@ export async function processIngestMessage(env: AdminBindings, msg: ErrorIngestM
   if (outcome.created.length || outcome.spiking.length) {
     await sendErrorAlerts(env.REPORTS_DB, env, outcome, now).catch((e) => logger.error('[Errors] Alerts failed', { error: String(e) }));
   }
+  if (outcome.safety.length) {
+    const { sendSafetyAlerts } = await import('../../lib/moderation/safetyMail');
+    await sendSafetyAlerts(env as never, outcome.safety, now);
+  }
   // Open Errors pages refresh (never throws; a queue consumer has no waitUntil, so it is awaited, 3 s at most)
   const live = errorLiveEvents(outcome, msg.resolved.length);
   if (live.length) await publishAdminLive(env, 'errors', live);

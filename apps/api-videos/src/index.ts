@@ -309,7 +309,7 @@ app.use('/api/live-streams/:id/chat', requireHuman('videos.live_chat', 'first'))
 // Anonymous prayer-time and Hijri reads (wiki Epic 21 §3): per-IP limit in front of the edge cache
 app.use('/api/prayer-times', edgeRateLimit('PRAYER_LIMITER', 'videos.prayer_times', ['GET']));
 app.use('/api/hijri', edgeRateLimit('PRAYER_LIMITER', 'videos.hijri', ['GET']));
-app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
+app.use('/api/moderation/reports', requireHuman('videos.report', 'signed_out'));
 // Tier requests on /upgrade: Turnstile on every request (wiki AUN-TIER-REQUESTS)
 app.use('/api/me/tier-requests', requireHuman('videos.tier_request', 'always'));
 for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/initiate']) {

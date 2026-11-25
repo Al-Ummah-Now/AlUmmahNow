@@ -15,9 +15,13 @@ export interface ReportSubject {
 export const REPORTABLE_ENTITY_TYPES = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat'] as const;
 export type ReportableEntityType = (typeof REPORTABLE_ENTITY_TYPES)[number];
 
-// Reasons for reporting content
-export const REPORT_REASONS = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'] as const;
+// Reasons for reporting content (child_safety first: it is reviewed first)
+export const REPORT_REASONS = ['child_safety', 'inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/** Why an account is warned. Never child safety: those go to review and escalation, not to a notice to the person. */
+export const WARNING_REASONS = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'] as const satisfies readonly ReportReason[];
+export type WarningReason = (typeof WARNING_REASONS)[number];
 
 // Status of a report
 export type ReportStatus = 'pending' | 'reviewing' | 'resolved' | 'dismissed';
@@ -39,6 +43,8 @@ export interface Report {
   moderator_id?: string | null;
   action?: ModerationAction | null;
   moderator_notes?: string | null;
+  /** Its item is under a takedown and the reader is no super admin: the report's copies and texts are left out. */
+  taken_down?: boolean;
   created_at: string;
   updated_at?: string | null;
   resolved_at?: string | null;

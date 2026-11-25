@@ -8,7 +8,7 @@
  */
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { CSAM_ITEM_KINDS, type CsamAccounts, type CsamResolution } from '@al-ummah/shared-types';
+import { CSAM_ITEM_KINDS, REPORT_ENTITY_TYPES, type CsamAccounts, type CsamResolution } from '@al-ummah/shared-types';
 import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
 import { authAccountsWithDeleted } from '../lib/admin/authUsers';
@@ -18,6 +18,7 @@ import { resolveByHand, resolveCsamUrl } from '../lib/csam/resolve';
 import { CSAM_ACTOR, containJobOf, ensureHidden, erasedProfileAccount, startContainment, validResolution, type ContainEnv, type ContainParams } from '../lib/csam/contain';
 import { deleteEvidence, openEvidenceFile, readManifest } from '../lib/csam/evidence';
 import { EvidenceKeyError } from '../lib/csam/crypto';
+import { deleteReportEvidence, keepReportEvidence, readReportEvidence, validReportedItem, type ReportEvidenceInput } from '../lib/csam/reportEvidence';
 
 type Env = { Bindings: ContainEnv };
 const app = new Hono<Env>();
@@ -150,6 +151,31 @@ app.get('/cases/:caseId/files/:name', async (c) => {
 			'Content-Security-Policy': "default-src 'none'; sandbox",
 			'X-Evidence-Sha256-Chunks': String(opened.file.chunkSha256.length),
 		},
+	});
+});
+
+/** A child safety report was filed: keep the reported item's records (lib/csam/reportEvidence.ts). */
+const ReportEvidenceBody = z.object({ entityType: z.enum(REPORT_ENTITY_TYPES as [string, ...string[]]), entityId: z.string().min(1).max(200), publicOnly: z.boolean(), reportedText: z.string().max(20_000).nullable() }).strict();
+app.post('/report-evidence', async (c) => {
+	const input = parse(ReportEvidenceBody, await body(c));
+	// An id that cannot be one of ours names nothing to keep
+	if (!validReportedItem(input.entityType, input.entityId)) return ok(c, { kept: false });
+	return ok(c, await keepReportEvidence(c.env as never, input as ReportEvidenceInput));
+});
+
+app.delete('/report-evidence/:type/:id', async (c) => {
+	const { type, id } = c.req.param();
+	if (!validReportedItem(type, id)) throw new BadRequest(404, 'not_found');
+	return ok(c, { deleted: await deleteReportEvidence(c.env as never, type, id) });
+});
+
+app.get('/report-evidence/:type/:id', async (c) => {
+	const { type, id } = c.req.param();
+	if (!validReportedItem(type, id)) throw new BadRequest(404, 'not_found');
+	const copies = await readReportEvidence(c.env as never, type, id);
+	if (!copies) throw new BadRequest(404, 'not_found');
+	return new Response(JSON.stringify(copies, null, 2), {
+		headers: { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store, private', 'Content-Security-Policy': "default-src 'none'; sandbox" },
 	});
 });
 

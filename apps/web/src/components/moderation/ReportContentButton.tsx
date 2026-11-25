@@ -4,7 +4,7 @@ import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState } from "react";
 import { Flag, X, Info } from "lucide-react";
-import { useAuth } from "@/components/AuthProvider/authContext";
+import { useOptionalAuth } from "@/components/AuthProvider/authContext";
 import * as ModerationAPI from "@/lib/api/moderation";
 import type { ReportCreateRequest, ReportContentType, ReportReason } from "@/lib/api/moderation";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ interface ReportContentButtonProps {
   hideTrigger?: boolean;
 }
 
-const REASONS: ReportReason[] = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'];
+const REASONS: ReportReason[] = ['child_safety', 'inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'];
 
 const ReportContentButton: React.FC<ReportContentButtonProps> = ({
   contentType,
@@ -62,7 +62,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
     description: '',
   });
 
-  const auth = useAuth();
+  const auth = useOptionalAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

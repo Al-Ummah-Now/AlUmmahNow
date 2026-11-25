@@ -8,7 +8,7 @@ import { getI18n } from '@/i18n/server';
 import { type MessageKey, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
-import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, needsReport, retentionLabelKey, sortCases } from './model';
+import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, needsReport, prefillOf, retentionLabelKey, sortCases } from './model';
 import { IntakeForm, SettingsCard } from './CsamAdmin';
 
 import { LocalTime } from '@/components/LocalTime';
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * and the owner's settings (retention, Cloudflare webhook). Super admins only; every read is
  * logged by admin-api.
  */
-export default async function CsamCasesPage() {
+export default async function CsamCasesPage({ searchParams }: { searchParams: Promise<{ prefill?: string | string[] }> }) {
   const { t, locale } = await getI18n();
   const session = await getAdminSession();
   if (!isSuperAdmin(session?.user.role)) return <ErrorAlert testId="csam-no-access">{t('csamPage.noAccess')}</ErrorAlert>;
@@ -34,7 +34,7 @@ export default async function CsamCasesPage() {
         <p className="text-fg-muted mt-1">{t('csamPage.subtitle')}</p>
       </div>
 
-      <IntakeForm />
+      <IntakeForm initialText={prefillOf((await searchParams).prefill)} />
 
       <section className={`${cardClass} mb-6`} aria-labelledby="csam-cases-title" data-testid="csam-cases">
         <h2 id="csam-cases-title" className="text-lg font-semibold text-fg mb-3">

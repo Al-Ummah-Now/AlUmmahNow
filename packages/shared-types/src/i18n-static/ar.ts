@@ -1395,6 +1395,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       video: 'مرئي',
       comment: 'تعليق',
       channel: 'قناة',
+      post: 'منشور',
       playlist: 'قائمة تشغيل',
       allTypes: 'جميع الأنواع',
     },
@@ -2227,6 +2228,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     failed: 'تعذر إرسال البلاغ. يرجى المحاولة مرة أخرى.',
     alreadyReported: 'لقد أبلغت عن هذا المحتوى من قبل.',
     reasons: {
+      child_safety: 'سلامة الأطفال',
       inappropriate: 'محتوى غير لائق',
       spam: 'بريد مزعج أو مضلل',
       harassment: 'مضايقة أو تنمر',

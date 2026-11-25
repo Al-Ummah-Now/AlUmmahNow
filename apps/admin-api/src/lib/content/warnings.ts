@@ -8,14 +8,14 @@
  */
 import {
   NOTIFICATION_EMAIL_LOCALES,
-  REPORT_REASONS,
+  WARNING_REASONS,
   REPORTABLE_ENTITY_TYPES,
   USER_WARNING_EMAIL_STATUSES,
   USER_WARNING_NOTE_MAX,
   warningEscalation,
   type IssueUserWarningRequest,
   type NotificationEmailLocale,
-  type ReportReason,
+  type WarningReason,
   type ReportableEntityType,
   type UserWarning,
   type UserWarningEmailStatus,
@@ -50,7 +50,7 @@ export class WarningInputError extends Error {
   }
 }
 
-const isReason = (v: unknown): v is ReportReason => typeof v === 'string' && (REPORT_REASONS as readonly string[]).includes(v);
+const isReason = (v: unknown): v is WarningReason => typeof v === 'string' && (WARNING_REASONS as readonly string[]).includes(v);
 const isEntityKind = (v: unknown): v is ReportableEntityType => typeof v === 'string' && (REPORTABLE_ENTITY_TYPES as readonly string[]).includes(v);
 const isLocale = (v: unknown): v is NotificationEmailLocale => typeof v === 'string' && (NOTIFICATION_EMAIL_LOCALES as readonly string[]).includes(v);
 const isEmailStatus =(v: unknown): v is UserWarningEmailStatus => typeof v === 'string' && (USER_WARNING_EMAIL_STATUSES as readonly string[]).includes(v);
@@ -62,7 +62,7 @@ const optionalId = (v: unknown, name: string): string | null => {
 
 /** Checks a POST body; throws WarningInputError with a clear message. */
 export function parseWarningRequest(body: Record<string, unknown>): IssueUserWarningRequest {
-  if (!isReason(body.reasonCode)) throw new WarningInputError('invalid_reason', `reasonCode must be one of ${REPORT_REASONS.join(', ')}`);
+  if (!isReason(body.reasonCode)) throw new WarningInputError('invalid_reason', `reasonCode must be one of ${WARNING_REASONS.join(', ')}`);
   if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') throw new WarningInputError('invalid_request', 'note must be a string');
   const note = typeof body.note === 'string' ? body.note.trim() : '';
   if (note.length > USER_WARNING_NOTE_MAX) throw new WarningInputError('note_too_long', `note must be at most ${USER_WARNING_NOTE_MAX} characters`);

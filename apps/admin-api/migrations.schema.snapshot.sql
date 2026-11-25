@@ -44,6 +44,7 @@
 --   apps/admin-api/migrations/0050_channel_verification_kind.sql
 --   apps/admin-api/migrations/0051_reports_live_chat.sql
 --   apps/admin-api/migrations/0052_reports_banned_user_idx.sql
+--   apps/admin-api/migrations/0053_reports_child_safety.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -51,13 +52,14 @@ CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
 CREATE TABLE auth_moderation_requests (id TEXT PRIMARY KEY, auth_request_id TEXT UNIQUE, subject_user_id TEXT NOT NULL, action TEXT NOT NULL, reason_category TEXT NOT NULL, reason TEXT NOT NULL, evidence TEXT NOT NULL DEFAULT '[]', requested_by_id TEXT NOT NULL, requested_by_name TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, status TEXT, decision_note TEXT, history TEXT NOT NULL DEFAULT '[]', pending_info TEXT, sync_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, kind TEXT);
+CREATE TABLE child_safety_alerts (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, created_at TEXT NOT NULL, alerted_at TEXT, flag_key TEXT, own_flag INTEGER NOT NULL DEFAULT 0, evidence TEXT, evidence_attempts INTEGER NOT NULL DEFAULT 0, closed_at TEXT, PRIMARY KEY (entity_type, entity_id)) WITHOUT ROWID;
 CREATE TABLE "contact_messages" (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, send_failed_at TEXT, delivery_error TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, handled_by_id TEXT, handled_by_email TEXT, handled_at TEXT, read_at TEXT, bot_verdict TEXT, spam_reason TEXT);
 CREATE TABLE "contact_notes" (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES "contact_messages"(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL, email_error TEXT);
 CREATE TABLE content_review_findings (id TEXT PRIMARY KEY, review_id TEXT NOT NULL, source TEXT NOT NULL, category TEXT NOT NULL, score REAL NOT NULL, at_ms INTEGER, end_ms INTEGER, media_key TEXT, text TEXT, quran_ref TEXT, model TEXT NOT NULL, rationale TEXT, created_at TEXT NOT NULL);
 CREATE TABLE content_reviews (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, channel_id TEXT, owner_id TEXT, status TEXT NOT NULL, mode TEXT NOT NULL, timing TEXT NOT NULL DEFAULT 'pre', trigger TEXT, route TEXT, risk REAL, nsfw INTEGER NOT NULL DEFAULT 0, escalate INTEGER NOT NULL DEFAULT 0, hold_cause TEXT, top_category TEXT, findings_count INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0, models TEXT, prompt_version TEXT, cost_usd REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, checked_at TEXT, sla_due_at TEXT, assigned_to TEXT, decided_at TEXT, decided_by TEXT, decision TEXT, reason_code TEXT, note TEXT, undo_until TEXT, appeal_of TEXT, appeal_message TEXT, media_purge_after TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE creator_invites (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT, locale TEXT NOT NULL DEFAULT 'en', note TEXT, role TEXT NOT NULL DEFAULT 'creator', tier_id TEXT, auth_roles TEXT NOT NULL DEFAULT '[]', channels TEXT NOT NULL DEFAULT '[]', expires_in_days INTEGER NOT NULL DEFAULT 14, continue_url TEXT, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, email_sent INTEGER NOT NULL DEFAULT 0, status TEXT, expires_at TEXT, accepted_at TEXT, last_sent_at TEXT, send_count INTEGER NOT NULL DEFAULT 0, pending_op TEXT, op_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_by TEXT NOT NULL, created_by_email TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, deleted_reason TEXT, purge_requested_at TEXT, video_en_id TEXT, video_ar_id TEXT);
 CREATE TABLE csam_access_log (id TEXT PRIMARY KEY, case_id TEXT, actor_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
-CREATE TABLE csam_cases (id TEXT PRIMARY KEY, matched_url TEXT NOT NULL, url_key TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('paste', 'webhook')), status TEXT NOT NULL CHECK (status IN ('unmapped', 'containing', 'contained', 'containment_failed', 'reported', 'closed')), item_kind TEXT, resolution TEXT, uploader_id TEXT, job_id TEXT, freeze TEXT, facts TEXT, detected_at TEXT NOT NULL, created_by TEXT NOT NULL, report_id TEXT, reported_at TEXT, reported_by TEXT, legal_hold INTEGER NOT NULL DEFAULT 0, legal_hold_reason TEXT, evidence_deleted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE csam_cases (id TEXT PRIMARY KEY, matched_url TEXT NOT NULL, url_key TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('paste', 'webhook')), status TEXT NOT NULL CHECK (status IN ('unmapped', 'containing', 'contained', 'containment_failed', 'reported', 'closed')), item_kind TEXT, resolution TEXT, uploader_id TEXT, job_id TEXT, freeze TEXT, facts TEXT, detected_at TEXT NOT NULL, created_by TEXT NOT NULL, report_id TEXT, reported_at TEXT, reported_by TEXT, legal_hold INTEGER NOT NULL DEFAULT 0, legal_hold_reason TEXT, evidence_deleted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, item_type TEXT, item_id TEXT);
 CREATE TABLE csam_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE email_template_versions (key TEXT NOT NULL, version INTEGER NOT NULL, content TEXT NOT NULL, action TEXT NOT NULL, source_version INTEGER, created_at TEXT NOT NULL, created_by TEXT NOT NULL, PRIMARY KEY (key, version));
 CREATE TABLE email_templates (key TEXT PRIMARY KEY, version INTEGER NOT NULL, content TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
@@ -73,6 +75,7 @@ CREATE TABLE error_hourly (group_id TEXT NOT NULL, hour TEXT NOT NULL, occurrenc
 CREATE TABLE error_rate (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL);
 CREATE TABLE error_refs (ref TEXT PRIMARY KEY, group_id TEXT NOT NULL, event_id TEXT, created_at TEXT NOT NULL);
 CREATE TABLE error_releases (environment TEXT NOT NULL, app TEXT NOT NULL, release TEXT NOT NULL, first_seen TEXT NOT NULL, PRIMARY KEY (environment, app, release));
+CREATE TABLE guest_report_limits (k TEXT PRIMARY KEY, n INTEGER NOT NULL, expires_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE import_batches (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, name TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE import_items (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, channel_id TEXT NOT NULL, sha256 TEXT NOT NULL, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, video_id TEXT, state TEXT NOT NULL DEFAULT 'initiated', error TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, attach_job_id TEXT);
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
@@ -85,7 +88,7 @@ CREATE TABLE newsletter_subscribers (id TEXT PRIMARY KEY, email TEXT NOT NULL UN
 CREATE TABLE plan_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT, after_json TEXT, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE plan_entitlements (plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, PRIMARY KEY (plan_id, plan_version, key));
 CREATE TABLE plans (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, description_en TEXT, description_ar TEXT, audience TEXT NOT NULL CHECK (audience IN ('creator', 'organisation', 'viewer', 'everyone')), status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')), is_public INTEGER NOT NULL DEFAULT 0, is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
-CREATE TABLE "reports" (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'deleted', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT, entity_title TEXT, entity_parent_id TEXT, channel_id TEXT, channel_name TEXT, owner_id TEXT, owner_name TEXT, reporter_name TEXT, moderator_name TEXT, meta_synced_at TEXT, banned_user_id TEXT);
+CREATE TABLE "reports" (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('child_safety', 'inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'deleted', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT, entity_title TEXT, entity_parent_id TEXT, channel_id TEXT, channel_name TEXT, owner_id TEXT, owner_name TEXT, reporter_name TEXT, moderator_name TEXT, meta_synced_at TEXT, banned_user_id TEXT);
 CREATE TABLE review_alert_subscribers (user_id TEXT PRIMARY KEY, senior INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_domain_checks (host TEXT PRIMARY KEY, channel_id TEXT NOT NULL, cf_id TEXT, added_at TEXT NOT NULL, next_check_at INTEGER NOT NULL);
 CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -104,6 +107,11 @@ CREATE INDEX idx_auth_modreq_delivery ON auth_moderation_requests(delivery_statu
 CREATE INDEX idx_auth_modreq_status ON auth_moderation_requests(status, created_at);
 CREATE INDEX idx_auth_modreq_subject ON auth_moderation_requests(subject_user_id, created_at);
 CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
+CREATE INDEX idx_child_safety_alerts_alerted ON child_safety_alerts(alerted_at);
+CREATE INDEX idx_child_safety_alerts_closed ON child_safety_alerts(closed_at) WHERE closed_at IS NOT NULL;
+CREATE INDEX idx_child_safety_alerts_evidence ON child_safety_alerts(evidence_attempts, created_at) WHERE evidence IS NULL;
+CREATE INDEX idx_child_safety_alerts_flag ON child_safety_alerts(flag_key);
+CREATE INDEX idx_child_safety_alerts_pending ON child_safety_alerts(created_at) WHERE alerted_at IS NULL;
 CREATE INDEX idx_contact_messages_created ON contact_messages (created_at DESC);
 CREATE INDEX idx_contact_messages_deleted ON contact_messages (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_contact_messages_handled ON contact_messages (handled_at DESC) WHERE handled_at IS NOT NULL;
@@ -128,6 +136,7 @@ CREATE INDEX csam_access_log_case ON csam_access_log (case_id, created_at);
 CREATE UNIQUE INDEX csam_cases_open_url ON csam_cases (url_key) WHERE status != 'closed';
 CREATE INDEX csam_cases_retention ON csam_cases (reported_at) WHERE evidence_deleted_at IS NULL AND legal_hold = 0;
 CREATE INDEX csam_cases_status ON csam_cases (status, created_at);
+CREATE INDEX idx_csam_cases_item ON csam_cases(item_type, item_id) WHERE item_id IS NOT NULL;
 CREATE INDEX idx_entitlement_overrides_key ON entitlement_overrides(key, subject_type, created_at);
 CREATE INDEX idx_erased_users_erased_at ON erased_users (erased_at);
 CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);
@@ -148,6 +157,7 @@ CREATE INDEX idx_error_hourly_hour ON error_hourly (hour);
 CREATE INDEX idx_error_rate_expires ON error_rate (expires_at);
 CREATE INDEX idx_error_refs_created ON error_refs (created_at);
 CREATE INDEX idx_error_refs_group ON error_refs (group_id);
+CREATE INDEX idx_guest_report_limits_expires ON guest_report_limits(expires_at);
 CREATE INDEX idx_import_batches_channel ON import_batches (channel_id, created_at);
 CREATE INDEX idx_import_batches_created ON import_batches (created_at);
 CREATE INDEX idx_import_items_batch ON import_items (batch_id, created_at);
@@ -175,17 +185,24 @@ CREATE INDEX idx_newsletter_subscribers_status ON newsletter_subscribers (status
 CREATE INDEX idx_plan_audit_entity ON plan_audit_log(entity_type, entity_id, created_at);
 CREATE UNIQUE INDEX idx_plans_one_default ON plans(is_default) WHERE is_default = 1;
 CREATE INDEX idx_reports_banned_user ON reports(banned_user_id) WHERE banned_user_id IS NOT NULL;
+CREATE INDEX idx_reports_child_safety_open ON reports(created_at, id) WHERE reason = 'child_safety' AND status IN ('pending', 'reviewing');
 CREATE INDEX idx_reports_closed ON reports(status, resolved_at);
+CREATE INDEX idx_reports_created ON reports(created_at, id);
 CREATE INDEX idx_reports_created_at ON reports(created_at);
 CREATE INDEX idx_reports_entity ON reports(entity_type, entity_id);
-CREATE INDEX idx_reports_entity_id ON reports(entity_id);
+CREATE INDEX idx_reports_entity_id ON reports(entity_id, created_at, id);
 CREATE INDEX idx_reports_entity_type ON reports(entity_type);
+CREATE INDEX idx_reports_guest_closed ON reports(resolved_at) WHERE reporter_id = 'guest' AND status IN ('resolved', 'dismissed');
 CREATE INDEX idx_reports_meta ON reports(meta_synced_at);
 CREATE INDEX idx_reports_moderator ON reports(moderator_id, resolved_at);
 CREATE INDEX idx_reports_open_entity ON reports(status, entity_type, entity_id, created_at);
 CREATE INDEX idx_reports_owner ON reports(owner_id);
+CREATE INDEX idx_reports_reason_created ON reports(reason, created_at, id);
+CREATE INDEX idx_reports_reporter_created ON reports(reporter_id, created_at, id);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
 CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_status_created ON reports(status, created_at, id);
+CREATE INDEX idx_reports_type_created ON reports(entity_type, created_at, id);
 CREATE INDEX idx_site_domain_checks_due ON site_domain_checks (next_check_at);
 CREATE INDEX idx_site_settings_log_actor ON site_settings_log (actor_id, created_at);
 CREATE INDEX idx_site_settings_log_created ON site_settings_log (created_at, id);

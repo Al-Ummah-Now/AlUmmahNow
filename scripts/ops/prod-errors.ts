@@ -67,9 +67,13 @@ export function scriptsFor(env: EnvName): Record<string, string[]> {
 	};
 }
 
+/** Items of child safety reports and cases (shared-types isChildSafetyErrorKey): never in this report. */
+const SUPER_ADMINS_ONLY = "cs.item_key GLOB 'child-safety-*' OR cs.item_key GLOB 'csam[-:]*'";
+
 /** SELECT-only, indexed (idx_error_groups_last_seen), bounded. */
 export const GROUPS_SQL = `SELECT id, app, kind, name, message, culprit, route, status, occurrences, users, first_seen, last_seen,
- first_release, last_release, test FROM error_groups WHERE last_seen >= ?1 AND environment = ?2 ORDER BY last_seen DESC LIMIT 200`;
+ first_release, last_release, test FROM error_groups g WHERE last_seen >= ?1 AND environment = ?2
+ AND NOT EXISTS (SELECT 1 FROM error_actions cs WHERE cs.group_id = g.id AND (${SUPER_ADMINS_ONLY})) ORDER BY last_seen DESC LIMIT 200`;
 
 /** The latest sample of one group (idx_error_events_group). */
 export const LATEST_EVENT_SQL = `SELECT occurred_at, release, worker_version, route, method, status, request_id, name, message,
@@ -79,7 +83,7 @@ export const LATEST_EVENT_SQL = `SELECT occurred_at, release, worker_version, ro
 
 /** Open needs-action items (idx_error_actions_status). */
 export const ACTIONS_SQL = `SELECT app, source, title, detail, item_type, item_id, status, occurrences, attempts, updated_at
- FROM error_actions WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 ORDER BY updated_at DESC LIMIT 100`;
+ FROM error_actions cs WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 AND NOT (${SUPER_ADMINS_ONLY}) ORDER BY updated_at DESC LIMIT 100`;
 
 /** Every statement this script sends: SELECT only. */
 export const ALL_SQL = [GROUPS_SQL, LATEST_EVENT_SQL, ACTIONS_SQL, COLLECTOR_RUNS_SQL, COST_JOB_RUNS_SQL];

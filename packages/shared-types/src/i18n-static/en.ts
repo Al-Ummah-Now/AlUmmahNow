@@ -1397,6 +1397,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
       video: 'Video',
       comment: 'Comment',
       channel: 'Channel',
+      post: 'Post',
       playlist: 'Playlist',
       allTypes: 'All Types',
     },
@@ -2234,6 +2235,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     failed: 'Failed to submit report. Please try again.',
     alreadyReported: 'You have already reported this content.',
     reasons: {
+      child_safety: 'Child safety concern',
       inappropriate: 'Inappropriate Content',
       spam: 'Spam or Misleading',
       harassment: 'Harassment or Bullying',

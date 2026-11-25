@@ -149,7 +149,7 @@ describe('reports queue: query building', () => {
   it('groups match on any open report but count them all; binds line up with placeholders', () => {
     const q = buildQueueSql({ q: 'x', reason: 'spam', from: '2026-11-01', to: '2026-11-30', entityType: 'video', page: 2, pageSize: 10, sort: 'most_reports' });
     assert.match(q.page.sql, /\(r\.entity_type, r\.entity_id\) IN \(SELECT m\.entity_type, m\.entity_id FROM reports m WHERE m\.status IN/);
-    assert.match(q.page.sql, /ORDER BY report_count DESC/);
+    assert.match(q.page.sql, /ORDER BY [^)]*child_safety[^)]* DESC, report_count DESC/);
     assert.equal((q.page.sql.match(/\?/g) ?? []).length, q.page.binds.length);
     assert.deepEqual(q.page.binds.slice(-2), [10, 10]);
     const h = buildHistorySql({ action: 'banned', moderatorId: 'usr_mod', page: 1, pageSize: 5, sort: 'oldest' });
@@ -177,7 +177,7 @@ describe('reports queue: Action needed', () => {
     assert.equal(status, 200);
     const { items, total, counts } = body.result;
     assert.equal(total, 2);
-    assert.deepEqual(counts, { actionNeeded: 2, openReports: 4, history: 2 });
+    assert.deepEqual(counts, { actionNeeded: 2, openReports: 4, openChildSafety: 0, history: 2, capped: false });
     assert.deepEqual(items.map((g: any) => g.key), ['video:v_1', 'comment:c_1']);
     const [video, comment] = items;
     assert.equal(video.reportCount, 3);
@@ -226,7 +226,7 @@ describe('reports queue: Action needed', () => {
     assert.deepEqual((await get('sort=most_reports')).items.map((g: any) => g.key), ['video:v_1', 'comment:c_1']);
     const page2 = await get('pageSize=1&page=2');
     assert.deepEqual([page2.items.length, page2.total, page2.items[0].key], [1, 2, 'comment:c_1']);
-    assert.deepEqual((await get('entityType=comment')).counts, { actionNeeded: 1, openReports: 1, history: 0 });
+    assert.deepEqual((await get('entityType=comment')).counts, { actionNeeded: 1, openReports: 1, openChildSafety: 0, history: 0, capped: false });
     assert.equal((await t.call('/api/moderation/queue?sort=loudest')).status, 400);
   });
 
