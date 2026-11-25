@@ -179,13 +179,16 @@ async function retry<T>(fn: () => Promise<T>, attempts = 5, until = Infinity, ti
 	}
 }
 
+/** Bucket calls made, retries included (printed at the end of the read phase). */
+const calls = { list: 0, get: 0 };
+
 /** Every object under `prefix` (top level only with `flat`): key → etag. */
 async function listObjects(bucket: R2Bucket, until: number, options: { prefix?: string; flat?: boolean } = {}): Promise<Map<string, string>> {
 	const out = new Map<string, string>();
 	let cursor: string | undefined;
 	do {
 		if (Date.now() >= until) throw new Error(`listing a bucket did not finish in ${DEADLINES_MIN.list} minutes`);
-		const page = await retry(() => bucket.list({ prefix: options.prefix, cursor, limit: 1000, ...(options.flat ? { delimiter: '/' } : {}) }), 5, until);
+		const page = await retry(() => (calls.list++, bucket.list({ prefix: options.prefix, cursor, limit: 1000, ...(options.flat ? { delimiter: '/' } : {}) })), 5, until);
 		for (const o of page.objects) out.set(o.key, o.etag);
 		cursor = page.truncated ? page.cursor : undefined;
 	} while (cursor);
@@ -207,7 +210,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 }
 
 async function readJson<T>(bucket: R2Bucket, key: string, attempts = 5, until = Infinity): Promise<T | null> {
-	const text = await retry(async () => (await bucket.get(key))?.text() ?? null, attempts, until);
+	const text = await retry(async () => (calls.get++, await bucket.get(key))?.text() ?? null, attempts, until);
 	if (text === null) return null;
 	try {
 		return JSON.parse(text) as T;
@@ -445,9 +448,12 @@ async function main(): Promise<void> {
 		prune(state, listing);
 		const toRead = pendingReads(state, listing);
 		for (const [store, objects] of Object.entries(listing)) say(`  ${store.padEnd(10)} ${objects.size} listed, ${objects.size - Object.keys(state.stores[store as Store]).length} to read`);
+		say(`[cleanup] listed in ${Math.round((Date.now() - started) / 1000)} s`);
 		const read = await readPending(env, state, toRead, until(DEADLINES_MIN.read));
 		if (args.state) writeFileSync(args.state, JSON.stringify(state));
 		say(`[cleanup] read ${read.done}/${toRead.length} new or changed record(s)${read.failed ? `, ${read.failed} failed` : ''}${read.left + read.failed ? `; ${read.left + read.failed} left for the next run` : ''}`);
+
+		say(`[cleanup] R2 calls so far: ${calls.list} list, ${calls.get} get; ${Math.round((Date.now() - started) / 1000)} s`);
 
 		const inv = buildInventory(state, listing, keys, { now: Date.now(), minAgeMs: args.minAgeMs });
 		const summary = summarize(inv.items);
