@@ -4,7 +4,7 @@ name: Media diagnostics
 # media Worker deployments, transcode queue + DLQ backlog, the Transcoder container application and
 # its instances, and the warn/error logs of media, videos and admin-api (scripts/ops/media-diagnostics.ts).
 # GET reads, the GraphQL Analytics read and the Observability query only; no app endpoint is called
-# and nothing is changed. Prints no secrets.
+# and nothing is changed. The log is public: scripts/ops/scrub.ts drops secrets and people's data and shortens ids.
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +24,7 @@ on:
   pull_request:
     paths:
       - scripts/ops/media-diagnostics.ts
+      - scripts/ops/scrub.ts
       - .github/workflows/media-diagnostics.yml
 
 permissions:
