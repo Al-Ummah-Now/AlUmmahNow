@@ -31,6 +31,15 @@ export async function signIn(context: BrowserContext, baseURL: string, opts: { c
       s.textContent = 'nextjs-portal,.fixed.bottom-4.right-4.z-50.max-w-sm{display:none!important}';
       document.head.append(s);
     });
+    // Who starts a navigation (#1941): a page that reloads in the middle of a test ("Execution context
+    // was destroyed") is told apart from one the test moved. The stack is the script that asked for it
+    // (empty for the browser's own: a typed URL, page.goto); it lands in the failing test's trace.
+    (window as unknown as { navigation?: EventTarget }).navigation?.addEventListener('navigate', (event) => {
+      const e = event as Event & { navigationType: string; destination: { url: string; sameDocument: boolean } };
+      if (e.destination.sameDocument) return; // history.replaceState and hash changes keep the document
+      const by = (new Error().stack ?? '').split('\n').slice(2, 10).map((l) => l.trim()).join(' | ');
+      console.warn(`[sweep] navigation ${e.navigationType} to ${e.destination.url}${by ? ` by ${by}` : ' by the browser'}`);
+    });
   });
 }
 
