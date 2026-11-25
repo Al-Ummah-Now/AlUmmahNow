@@ -27,7 +27,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { placeVideoInCollection } from '../channelCollection';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
-import { classifyVideoFormat, publishAdminLive, type AdminLiveEnv, type VideoFormatInput } from '@al-ummah/shared-types';
+import { classifyVideoFormat, publishAdminLiveFor, type AdminLiveEnv, type VideoFormatInput } from '@al-ummah/shared-types';
 import {
 	applyPlan,
 	bunnyPhase,
@@ -347,7 +347,7 @@ export async function startProcessingLoop(
 	};
 	await queue.send(message, { delaySeconds: delay });
 	logger.debug('[ProcessingLoop] Loop started', { videoId, loopId, reason: opts.reason, delay });
-	if (!underTakedown(saved)) await publishAdminLive(env, 'uploads', uploadLiveEvent(videoId, { uploadStatus: saved.uploadStatus, checking: true }));
+	await publishAdminLiveFor(env, 'uploads', underTakedown(saved), uploadLiveEvent(videoId, { uploadStatus: saved.uploadStatus, checking: true }));
 	return { started: true, loopId };
 }
 
@@ -427,7 +427,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 		decision = { kind: 'done', outcome: 'stalled' };
 	}
 
-	await repo.updateObject(message.videoId, (fresh) => {
+	const checked = await repo.updateObject(message.videoId, (fresh) => {
 		if (fresh.processingCheck?.loopId !== message.loopId) return false;
 		fresh.processingCheck = {
 			...fresh.processingCheck,
@@ -441,7 +441,9 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 		};
 		return true;
 	});
-	if (!underTakedown(video)) await publishAdminLive(env, 'uploads', uploadLiveEvent(message.videoId, {
+	// As the record is now (a takedown may have come during the check): on admin:restricted for super admins only
+	const current = checked ?? (await repo.getObject(message.videoId));
+	await publishAdminLiveFor(env, 'uploads', underTakedown(current), uploadLiveEvent(message.videoId, {
 		uploadStatus: result.ours?.uploadStatus,
 		encodeProgress: bunny?.encodeProgress,
 		outcome: decision.kind === 'done' ? decision.outcome : outcome,
@@ -451,7 +453,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	return decision;
 }
 
-/** Every admin gets the live events: nothing about a video under a takedown (only super admins see those). */
+/** Only super admins see a video under a takedown: its live events go on admin:restricted. */
 const underTakedown = (video: unknown): boolean => !!(video as { csamTakedown?: unknown } | null)?.csamTakedown;
 
 /** The admin:uploads live event of a processing step (docs/admin/LIVE_OPS.md): a hint, pages refetch. */

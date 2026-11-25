@@ -926,9 +926,14 @@ const JobQuery = z.object({
 	targetKind: z.enum(['channel', 'video', 'user']).optional(),
 	targetId: z.string().max(200).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
+	/** admins: without the jobs only super admins see (admin-api asks so for anyone else) */
+	shown: z.enum(['all', 'admins']).optional(),
 });
 app.get('/jobs', async (c) => ok(c, { items: await listJobs(c.env, parse(JobQuery, c.req.query())) }));
-app.get('/jobs/counts', async (c) => ok(c, { failed: await countJobs(c.env, 'failed'), retrying: await countJobs(c.env, 'retrying') }));
+app.get('/jobs/counts', async (c) => {
+	const shown = c.req.query('shown') === 'admins' ? 'admins' : 'all';
+	return ok(c, { failed: await countJobs(c.env, 'failed', shown), retrying: await countJobs(c.env, 'retrying', shown) });
+});
 // The job with its log (what happened, oldest first)
 app.get('/jobs/:id', async (c) => {
 	const job = await getJobWithLog(c.env, c.req.param('id'));

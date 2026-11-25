@@ -185,13 +185,14 @@ The collector also watches every D1 database against Cloudflare's limits: 10 GB 
 
 | Topic | Who may subscribe | Events (`data.kind`) | Producer |
 | --- | --- | --- | --- |
-| `admin:jobs` | admins | `job` {id, kind, status, progress?} (not its target: some are for super admins only) for purges, transfers, erasures, rebuilds, repairs | api-videos admin-jobs consumer |
+| `admin:jobs` | admins | `job` {id, kind, status, progress?} (not its target) for purges, transfers, erasures, rebuilds, repairs | api-videos admin-jobs consumer |
 | `admin:media` | admins | `job` {videoId, jobId, status, attempt, progress?, rungs? `[['720p','uploading',0.4], …]`, failure? {stage, error, attempt}}, `live` {transcoding, queued, maxTranscodes?, oldestQueuedAt?} | api-videos `/internal/media` (job status writes) |
 | `admin:media` (playback) | admins | `qoe` {minute, bunny, r2, now} every 5 s at most: each touched minute's playback sums per provider and the plays going on now (§B.8) | realtime worker `qoe-live` object |
 | `admin:queues` | admins | `backlog` {queue, messages} | transcode backlog from `media_jobs` (live); others from the collector (hourly) |
-| `admin:uploads` | admins | `upload` {videoId, status, encodeProgress?}; none about a video under a takedown (`admin:media` `job` likewise) | api-videos processing / Bunny webhook path |
+| `admin:uploads` | admins | `upload` {videoId, status, encodeProgress?} | api-videos processing / Bunny webhook path |
 | `admin:errors` | admins | `error` {groupId, isNew, kind, app}, `counts` {open, actionNeeded} | admin-api errors ingest |
 | `admin:moderation` | moderators and admins | `changed` {queue: reports \| ai \| contact \| authRequests}, `counts`? | api-videos (new report), admin-api (status changes) |
+| `admin:restricted` | super admins | the `media`, `uploads` and `jobs` events about what only super admins see (a video under a takedown, a takedown's jobs), each with `of` (its topic) and the key `<topic>\|<key>`; the admin's live client follows it beside those topics and hands each event to its topic's listeners (refused to anyone else, who never got the event) | api-videos |
 | `admin:live` | admins | `session` {id, channelId, provider, state: started \| stopped} | live layer (#867/#871; wired when those merge) |
 | `admin:ops` | admins | `alert` {rule, resource, env, state}, `collected` {hour} | collector |
 

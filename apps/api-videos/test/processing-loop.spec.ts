@@ -259,15 +259,15 @@ describe('processing-check loop', () => {
 		);
 	});
 
-	it('says nothing on admin:uploads about a video under a takedown', async () => {
+	it('a video under a takedown: its steps go to super admins only (admin:restricted), never on admin:uploads', async () => {
 		const env = Object.assign(makeEnv(), { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
 		await env.videos.put(ID, JSON.stringify({ ...stuck(), csamTakedown: { caseId: 'case-1', at: NOW.toISOString() } }));
 		bunnyResponses[ID] = { status: 200, body: { guid: ID, status: 3, encodeProgress: 50 } };
-		let published = 0;
+		const channels: string[] = [];
 		const bunnyFetch = globalThis.fetch;
 		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			if (String(input) === 'https://realtime.test/broadcast') {
-				published++;
+				for (const item of JSON.parse(String(init?.body)).items) channels.push(`${item.channel} ${item.message.data.events.map((e: any) => `${e.of}:${e.key}`).join()}`);
 				return new Response('{}', { status: 200 });
 			}
 			return bunnyFetch(input, init);
@@ -275,7 +275,7 @@ describe('processing-check loop', () => {
 		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
 		const msg = env.PROCESSING_CHECK_QUEUE.sent.shift();
 		await handleProcessingCheckBatch({ messages: [{ body: msg.body, attempts: 1, ack() {}, retry() {} }] }, env);
-		assert.equal(published, 0);
+		assert.deepEqual(channels, [`admin:restricted uploads:uploads|upload:${ID}`, `admin:restricted uploads:uploads|upload:${ID}`]);
 	});
 
 	it('drops messages of a superseded loop', async () => {

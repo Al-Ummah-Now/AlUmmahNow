@@ -17,6 +17,9 @@ import {
   ADMIN_LIVE_UPDATE,
   adminLiveChannel,
   adminLiveTopicOf,
+  RESTRICTED_ADMIN_LIVE_TOPICS,
+  unrestrictedAdminLiveEvent,
+  type AdminLiveEvent,
   type AdminLiveTopic,
   type AdminLiveUpdate,
 } from '@al-ummah/shared-types';
@@ -116,12 +119,37 @@ export class AdminLiveClient {
 
   constructor(private deps: ClientDeps) {}
 
+  /**
+   * `restricted` (super admins only) carries the events of media, uploads and jobs about items only they see: it is
+   * followed alongside those topics and its events go to their listeners. Anyone else is refused it, and their pages
+   * never miss anything they may see. Its own state never makes a page live or polling.
+   */
+  private readonly onRestricted: UpdateListener = (update) => {
+    const byTopic = new Map<AdminLiveTopic, AdminLiveEvent[]>();
+    for (const e of update.events) {
+      const r = unrestrictedAdminLiveEvent(e);
+      if (r) byTopic.set(r.topic, [...(byTopic.get(r.topic) ?? []), r.event]);
+    }
+    for (const [topic, events] of byTopic) this.deliver({ ...update, topic, events });
+    // Some were dropped: every page of those topics refetches
+    if (update.resync) for (const topic of RESTRICTED_ADMIN_LIVE_TOPICS) if (!byTopic.has(topic)) this.deliver({ ...update, topic, events: [] });
+  };
+
+  private readonly noLive: LiveListener = () => undefined;
+
+  private needsRestricted(): boolean {
+    return RESTRICTED_ADMIN_LIVE_TOPICS.some((t) => this.topics.has(t));
+  }
+
   /** Follows a topic; returns the unsubscribe function. */
   subscribe(topic: AdminLiveTopic, onUpdate: UpdateListener, onLive: LiveListener): () => void {
     let state = this.topics.get(topic);
     if (!state) {
       state = { updates: new Set(), live: new Set(), isLive: false, forbidden: false };
       this.topics.set(topic, state);
+    }
+    if ((RESTRICTED_ADMIN_LIVE_TOPICS as readonly string[]).includes(topic) && !this.topics.has('restricted')) {
+      this.topics.set('restricted', { updates: new Set([this.onRestricted]), live: new Set([this.noLive]), isLive: false, forbidden: false });
     }
     state.updates.add(onUpdate);
     state.live.add(onLive);
@@ -136,6 +164,11 @@ export class AdminLiveClient {
         this.topics.delete(topic);
         if (this.socket?.readyState === OPEN && this.authenticated && state!.isLive) {
           this.send({ type: 'unsubscribe', channel: adminLiveChannel(topic) });
+        }
+        const restricted = this.topics.get('restricted');
+        if (restricted && !this.needsRestricted()) {
+          this.topics.delete('restricted');
+          if (this.socket?.readyState === OPEN && this.authenticated && restricted.isLive) this.send({ type: 'unsubscribe', channel: adminLiveChannel('restricted') });
         }
       }
       if (this.topics.size === 0) this.idleTimer = this.deps.setTimeout(() => this.close(), IDLE_CLOSE_MS);
@@ -260,16 +293,7 @@ export class AdminLiveClient {
         return;
       default: {
         const data = msg.data as AdminLiveUpdate | undefined;
-        if (msg.type === ADMIN_LIVE_UPDATE && data && Array.isArray(data.events)) {
-          const state = this.topics.get(data.topic);
-          for (const listener of state?.updates ?? []) {
-            try {
-              listener(data);
-            } catch (error) {
-              this.deps.log?.('warn', '[admin-live] Update listener failed', { topic: data.topic, error: String(error) });
-            }
-          }
-        }
+        if (msg.type === ADMIN_LIVE_UPDATE && data && Array.isArray(data.events)) this.deliver(data);
       }
     }
   }
@@ -352,9 +376,22 @@ export class AdminLiveClient {
     }, wait);
   }
 
+  private deliver(data: AdminLiveUpdate): void {
+    const state = this.topics.get(data.topic);
+    for (const listener of state?.updates ?? []) {
+      try {
+        listener(data);
+      } catch (error) {
+        this.deps.log?.('warn', '[admin-live] Update listener failed', { topic: data.topic, error: String(error) });
+      }
+    }
+  }
+
   private subscribeNext(): void {
     if (!this.authenticated || this.pendingSubscribe || this.socket?.readyState !== OPEN) return;
-    for (const [topic, state] of this.topics) {
+    // The pages' own topics first, `restricted` last
+    const order = [...this.topics].sort(([a], [b]) => Number(a === 'restricted') - Number(b === 'restricted'));
+    for (const [topic, state] of order) {
       if (!state.isLive && !state.forbidden) {
         this.pendingSubscribe = topic;
         this.send({ type: 'subscribe', channel: adminLiveChannel(topic) });

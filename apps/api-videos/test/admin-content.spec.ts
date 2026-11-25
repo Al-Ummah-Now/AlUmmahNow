@@ -3671,7 +3671,8 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 		assert.ok(published.every((p) => p.url === 'https://realtime.test/broadcast'));
 		const events = published.flatMap((p) => p.events);
 		assert.deepEqual(events.map((e) => e.status), ['queued', 'running', 'succeeded']);
-		assert.ok(events.every((e) => e.kind === 'job' && e.key.startsWith('job:') && e.jobKind === 'user.delete-data' && e.targetId === OTHER));
+		// Which job and how it is doing, not what it is about (no page reads it)
+		assert.ok(events.every((e) => e.kind === 'job' && e.key.startsWith('job:') && e.jobKind === 'user.delete-data' && e.targetId === undefined && e.targetType === undefined));
 	});
 
 	it('backoff doubles from 10s and caps at 5 minutes', () => {

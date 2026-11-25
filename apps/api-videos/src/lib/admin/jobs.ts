@@ -15,7 +15,7 @@
  * (admin_job_log, the newest ADMIN_JOB_LOG_LIMIT lines) come from search/0071 (TA-8: the Jobs page shows
  * attempts n/max, the next retry and what happened). Log writes never fail or stall the job.
  */
-import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, ADMIN_JOB_UNCANCELLABLE_KINDS, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
+import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, ADMIN_JOB_UNCANCELLABLE_KINDS, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, isSuperAdminOnlyJob, MessageType, publishAdminLiveFor, SUPER_ADMIN_ONLY_JOB_KINDS, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 
@@ -170,9 +170,11 @@ async function log(env: JobEnv, jobId: string, entry: Omit<AdminJobLogEntry, 'at
 
 const later = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
 
-export async function listJobs(env: JobEnv, query: { status?: string; targetKind?: string; targetId?: string; limit?: number }): Promise<AdminJob[]> {
+export async function listJobs(env: JobEnv, query: { status?: string; targetKind?: string; targetId?: string; limit?: number; shown?: 'all' | 'admins' }): Promise<AdminJob[]> {
 	const where: string[] = [];
 	const args: unknown[] = [];
+	// An admin's list: not the jobs only super admins see
+	if (query.shown === 'admins') where.push(`kind NOT IN (${SUPER_ADMIN_ONLY_JOB_KINDS.map(() => '?').join(', ')})`), args.push(...SUPER_ADMIN_ONLY_JOB_KINDS);
 	if (query.status) {
 		where.push('status = ?');
 		args.push(query.status);
@@ -189,8 +191,9 @@ export async function listJobs(env: JobEnv, query: { status?: string; targetKind
 	return (results ?? []).map(toJob);
 }
 
-export async function countJobs(env: JobEnv, status: AdminJobStatus): Promise<number> {
-	const row = await db(env).prepare('SELECT COUNT(*) AS n FROM admin_jobs WHERE status = ?').bind(status).first<{ n: number }>();
+export async function countJobs(env: JobEnv, status: AdminJobStatus, shown: 'all' | 'admins' = 'all'): Promise<number> {
+	const hide = shown === 'admins' ? ` AND kind NOT IN (${SUPER_ADMIN_ONLY_JOB_KINDS.map(() => '?').join(', ')})` : '';
+	const row = await db(env).prepare(`SELECT COUNT(*) AS n FROM admin_jobs WHERE status = ?${hide}`).bind(status, ...(hide ? SUPER_ADMIN_ONLY_JOB_KINDS : [])).first<{ n: number }>();
 	return Number(row?.n ?? 0);
 }
 
@@ -198,7 +201,7 @@ type JobRef = Pick<AdminJob, 'id' | 'kind' | 'targetKind' | 'targetId'>;
 
 /**
  * The admin:jobs live event of a status change (docs/admin/LIVE_OPS.md): a hint, pages refetch the job. Not what it
- * is about: every admin gets it, and some targets are for super admins only (a takedown's).
+ * is about (no page reads that). A job only super admins see goes on admin:restricted.
  */
 export function jobLiveEvent(job: JobRef, status: AdminJobStatus, attempts?: number) {
 	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, ...(attempts !== undefined ? { attempts } : {}) };
@@ -218,7 +221,7 @@ async function setStatus(env: JobEnv, job: JobRef, fields: StatusFields, opts: {
 		.run();
 	const changed = opts.unlessCancelled ? Number((out as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 1) > 0 : true;
 	// Never throws, gives up after a few seconds: a live update never fails or stalls the job
-	if (changed && fields.status) await publishAdminLive(env, 'jobs', jobLiveEvent(job, fields.status, fields.attempts));
+	if (changed && fields.status) await publishAdminLiveFor(env, 'jobs', isSuperAdminOnlyJob(job.kind), jobLiveEvent(job, fields.status, fields.attempts));
 	return changed;
 }
 
@@ -270,7 +273,7 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 	const links = jobUserIds(job).map((userId) => store.prepare('INSERT OR IGNORE INTO admin_job_users (user_id, job_id) VALUES (?, ?)').bind(userId, job.id));
 	if (links.length) await store.batch(links);
 	await log(env, job.id, { event: 'queued' });
-	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'queued'));
+	await publishAdminLiveFor(env, 'jobs', isSuperAdminOnlyJob(job.kind), jobLiveEvent(job, 'queued'));
 	return enqueue(env, job, runId, input.delaySeconds);
 }
 
@@ -322,7 +325,7 @@ export async function cancelJob(env: JobEnv, id: string, by?: AdminJobLogEntry['
 		.bind(at, at, job.id)
 		.run();
 	if (Number((out as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0) === 0) return getJob(env, id);
-	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'cancelled', job.attempts));
+	await publishAdminLiveFor(env, 'jobs', isSuperAdminOnlyJob(job.kind), jobLiveEvent(job, 'cancelled', job.attempts));
 	await log(env, job.id, { event: 'cancelled', ...(by ? { by } : {}) });
 	return { ...job, status: 'cancelled', finishedAt: at, nextRunAt: null };
 }

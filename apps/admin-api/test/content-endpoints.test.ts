@@ -441,6 +441,26 @@ describe('content endpoints: admin jobs', () => {
     assert.equal((await call('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'super_admin' })).status, 200);
   });
 
+  it('a takedown\'s jobs reach super admins only: not in an admin\'s list, counts or details', async () => {
+    const { db } = fakeDb();
+    const { fetcher, calls } = fakeVideos({
+      'GET /jobs': () => ({ body: { success: true, result: { items: [] } } }),
+      'GET /jobs/counts': () => ({ body: { success: true, result: { failed: 0, retrying: 0 } } }),
+      'GET /jobs/job_9': () => ({ body: { success: true, result: job('csam.contain', 'video', 'v_1') } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    for (const [roles, shown] of [['admin', 'admins'], ['super_admin', 'all']] as const) {
+      calls.length = 0;
+      await call('/api/content/jobs?status=failed', { roles });
+      await call('/api/content/jobs/counts', { roles });
+      assert.deepEqual(calls.map((c) => new URLSearchParams(c.search).get('shown')), [shown, shown], roles);
+    }
+    const detail = await call('/api/content/jobs/job_9', { roles: 'admin' });
+    assert.equal(detail.status, 404);
+    assert.doesNotMatch(await detail.text(), /v_1|csam/);
+    assert.equal((await call('/api/content/jobs/job_9', { roles: 'super_admin' })).status, 200);
+  });
+
   it('cancelling a job (TA-8) needs the permissions of its action, is audited with the status it had, and a refusal leaves no row', async () => {
     const { db, log } = fakeDb();
     let current = { ...job('video.purge', 'video', 'v_1'), status: 'retrying' };
@@ -463,12 +483,11 @@ describe('content endpoints: admin jobs', () => {
     assert.equal((await call('/api/content/jobs/job_9/cancel', { method: 'POST', roles: 'admin' })).status, 403, 'CSAM jobs: super admins only');
   });
 
-  it('a CSAM job\'s log errors are hidden from admins who are not super admins', async () => {
+  it('a CSAM job\'s log errors are hidden; an admin who is not a super admin gets no such job at all', async () => {
     const detail = { ...job('csam.contain', 'user', 'usr_1'), log: [{ at: 't', event: 'failed_attempt', attempt: 1, error: 'match https://x' }, { at: 't', event: 'started', attempt: 2 }] };
     const { fetcher } = fakeVideos({ 'GET /jobs/job_9': () => ({ body: { success: true, result: detail } }) });
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
-    const admin = (await (await call('/api/content/jobs/job_9', { roles: 'admin' })).json()) as { result: { log: { error?: string }[] } };
-    assert.deepEqual(admin.result.log.map((l) => l.error ?? null), ['hidden', null]);
+    assert.equal((await call('/api/content/jobs/job_9', { roles: 'admin' })).status, 404);
     const sup = (await (await call('/api/content/jobs/job_9', { roles: 'super_admin' })).json()) as { result: { log: { error?: string }[] } };
     assert.equal(sup.result.log[0].error, 'match https://x');
   });
@@ -488,7 +507,7 @@ describe('content endpoints: admin jobs', () => {
     const { fetcher, calls } = fakeVideos({ 'GET /jobs/counts': () => ({ body: { success: true, result: { failed: 2, retrying: 1 } } }) });
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
     assert.equal((await call('/api/content/jobs?status=failed', { roles: 'moderator' })).status, 200);
-    assert.equal(calls[0].search, '?status=failed');
+    assert.equal(calls[0].search, '?status=failed&shown=admins');
     const counts = (await (await call('/api/content/jobs/counts', { roles: 'moderator' })).json()) as { result: { failed: number } };
     assert.equal(counts.result.failed, 2);
   });
