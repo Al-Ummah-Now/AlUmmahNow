@@ -19,6 +19,7 @@ import {
 	classifySection,
 	classifyVideo,
 	junkCommentIds,
+	publicItem,
 	scheduleEntryVideoId,
 	staleProfileChannels,
 } from '../e2e-leftovers.ts';
@@ -331,5 +332,41 @@ describe('assertQaTarget', () => {
 		const qa = readFileSync(join(ROOT, 'apps/api-videos/wrangler.qa.jsonc'), 'utf8');
 		assert.match(qa, /"name":\s*"videos-qa"/);
 		for (const b of ['videos-qa', 'channels-qa', 'community-posts-qa', 'scheduled-videos-qa', 'al-ummah-now-search-qa']) assert.ok(qa.includes(`"${b}"`), b);
+	});
+});
+
+describe('what a run publishes (this repo is public)', () => {
+	const item = (action: 'delete' | 'keep' | 'unsure', kind = 'video', owner = 'non-test account u-1') => ({
+		kind, id: kind === 'handle' ? 'channel-handles/ahmad' : 'id-1', title: 'A private title', owner, parent: 'c-1', action, reason: 'why', detail: { handle: 'ahmad', isPublic: false },
+	});
+
+	it('keeps titles, names, handles and text only of what is marked as test data', () => {
+		assert.deepEqual(publicItem(item('delete')), item('delete'));
+		for (const action of ['keep', 'unsure'] as const) {
+			for (const kind of ['video', 'comment', 'channel', 'playlist', 'post', 'section', 'handle', 'tabs', 'schedule-entry']) {
+				const out = publicItem(item(action, kind));
+				assert.doesNotMatch(JSON.stringify(out), /A private title|ahmad|u-1/, `${action} ${kind}`);
+				assert.deepEqual([out.kind, out.parent, out.action, out.reason], [kind, 'c-1', action, 'why']);
+			}
+		}
+	});
+
+	it('names no account that is not a test account', () => {
+		assert.equal(publicItem(item('unsure')).owner, 'non-test account');
+		assert.equal(publicItem(item('unsure', 'video', 'unknown (u-1)')).owner, 'unknown');
+		assert.equal(publicItem(item('unsure', 'video', EMAILS.oldRun)).owner, EMAILS.oldRun);
+	});
+
+	it('the runner publishes only such items', () => {
+		const runner = readFileSync(join(ROOT, 'scripts/qa/cleanup-e2e-leftovers.ts'), 'utf8');
+		assert.match(runner, /items: inv\.items\.map\(publicItem\) \}, null, 2\)/);
+		assert.match(runner, /action === 'unsure'\)\.map\(publicItem\)\) say\(/);
+		assert.doesNotMatch(runner, /say\([^\n]*\btitle\b/);
+	});
+
+	it('a scheduled run deletes nothing', () => {
+		const workflow = readFileSync(join(ROOT, '.github/workflows/qa-cleanup.yml'), 'utf8');
+		assert.match(workflow, /MODE: \$\{\{ inputs\.mode \|\| 'dry-run' \}\}/);
+		assert.match(workflow, /if \[ "\$MODE" = apply \]; then args\+=\(--apply --reconcile\); fi/);
 	});
 });
