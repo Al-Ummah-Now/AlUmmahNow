@@ -334,3 +334,9 @@ export interface AdminLookupResult {
   items: AdminLookupItem[];
   users: AdminLookupUser[];
 }
+
+/**
+ * What became of a report, as its reporter reads it in their own data export: `kept` is decided and nothing was done
+ * to the item. Never who decided it, notes, or anything about the other party.
+ */
+export type ReportFiledOutcome = 'open' | 'kept' | 'action_taken' | 'dismissed';

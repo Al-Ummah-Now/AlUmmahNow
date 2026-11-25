@@ -51,6 +51,8 @@ import { deleteVideoSideRecords } from '../videoSideRecords';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 import { isReportClaimOf, reportClaimKey } from '../report-claims';
+import { OUTCOMES_PER_REQUEST, reportOutcomes, type FiledOutcome } from '../reportOutcomes';
+import type { ReportStatusEnv } from '../channelReportStatus';
 import { ResumeUnavailableError, openResume, sealResume, type ResumeEnv, type ResumeScope } from './resume-state';
 import { isOwnershipComplete } from '../search/ownership';
 import { logger } from '../logger';
@@ -84,7 +86,7 @@ const EXPORT_CHANNELS_PHASE = 4;
 /** Objects per list page. Small enough that one page's work fits in a request budget. */
 export const DEFAULT_PAGE_SIZE = 100;
 
-export interface PrivacyBuckets extends ResumeEnv {
+export interface PrivacyBuckets extends ResumeEnv, ReportStatusEnv {
 	profiles: unknown;
 	channels: unknown;
 	channel_sections: unknown;
@@ -467,6 +469,7 @@ const EXPORT_NOTES = [
 	'Your sign-in account (email, password, sessions) is held by the Al Ummah Now account service; export it from your account settings.',
 	'Pseudonymous event logs (views, likes, analytics beacons) are kept for 13 months for abuse prevention and statistics and are not individually exportable; see docs/compliance/GDPR.md.',
 	"Video metadata is included for videos you own; comments other people left on them are summarized as counts because they are those people's data.",
+	"Each report you filed has its outcome: 'open' (not decided yet), 'kept' (decided, the item stays as it was), 'action_taken' or 'dismissed', with the date it was decided. 'unavailable' means the outcome could not be read when this file was made; export again later.",
 ];
 
 function emptyExport(userId: string): UserDataExport {
@@ -482,6 +485,16 @@ function emptyExport(userId: string): UserDataExport {
 	} as UserDataExport;
 	for (const field of EXPORT_LIST_FIELDS) out[field] = [];
 	return out;
+}
+
+/** What the person sent, and what became of it. The stored `status` is never updated: decisions are in admin-api. */
+const FILED_FIELDS = ['id', 'entityType', 'entityId', 'reason', 'description', 'reporterId', 'reporterChannelId', 'dateCreated'] as const;
+
+function filedReport(report: Json, outcomes: Map<string, FiledOutcome> | null): Json {
+	const filed: Json = {};
+	for (const field of FILED_FIELDS) if (report[field] !== undefined) filed[field] = report[field];
+	const decision = outcomes ? (outcomes.get(String(report.id)) ?? { outcome: 'open', decidedAt: null }) : { outcome: 'unavailable', decidedAt: null };
+	return { ...filed, outcome: decision.outcome, decidedAt: decision.decidedAt };
 }
 
 function summariseOwnedVideo(video: Json): Json {
@@ -681,7 +694,26 @@ export async function collectUserData(
 			readEach(asBucket(env.playlists), () => true, async (playlist, _key, c) => {
 				if (playlist.userId === userId && (await own.isMine(c, playlist))) out.playlists.push(playlist);
 			})(ctx),
-		(ctx) => readEach(asBucket(env.reports), (key) => key.endsWith(`:${userId}`), (r) => void out.reportsFiled.push(r))(ctx),
+		// Reports as filed, with what became of them (lib/reportOutcomes.ts); asked for once per page of the bucket
+		(ctx) => {
+			const bucket = asBucket(env.reports);
+			return scanPages(bucket, undefined, ctx, (objects) =>
+				atomically(async () => {
+					const filed: Json[] = [];
+					for (const { key } of objects) {
+						if (!key.endsWith(`:${userId}`)) continue;
+						const report = await readJson<Json>(bucket, key, ctx.budget);
+						if (report) filed.push(report);
+					}
+					for (let i = 0; i < filed.length; i += OUTCOMES_PER_REQUEST) {
+						const batch = filed.slice(i, i + OUTCOMES_PER_REQUEST);
+						ctx.budget.spend();
+						const outcomes = await reportOutcomes(env, userId, batch.map((r) => String(r.id)));
+						out.reportsFiled.push(...batch.map((r) => filedReport(r, outcomes)));
+					}
+				}),
+			);
+		},
 		// Subscriptions stored in D1 (SCALABILITY-AUDIT AV-4)
 		(ctx) =>
 			atomically(async () => {

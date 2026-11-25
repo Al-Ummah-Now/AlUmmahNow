@@ -31,7 +31,7 @@ import { runWeeklyDigest } from './lib/costs';
 import costsRouter from './routers/costs.router';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
-import { channelReportsRouter } from './routers/channelReports.router';
+import { channelReportsRouter, reportOutcomesRouter } from './routers/channelReports.router';
 import { siteDomainsStatusRouter, staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
 import { runDomainChecks } from './lib/sites/domains';
 import { scheduleInviteSyncs } from './lib/invites';
@@ -229,6 +229,8 @@ app.route('/internal/site-domains', studioSiteDomainsRouter as never);
 app.route('/internal/site-domains-status', siteDomainsStatusRouter as never);
 // Whether a report about a channel is under review (api-videos' channel moves)
 app.route('/internal/channel-reports', channelReportsRouter as never);
+// What became of a person's own reports (api-videos' data export)
+app.route('/internal/report-outcomes', reportOutcomesRouter as never);
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);
