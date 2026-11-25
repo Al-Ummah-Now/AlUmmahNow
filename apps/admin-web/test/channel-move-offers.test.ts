@@ -42,7 +42,7 @@ describe('the open offer on the admin channel page', () => {
       assert.ok(!html.includes('handle_'), 'a user has no handle');
       for (const text of [m.channels.moveOffer.title, m.channels.moveOffer.hint, m.channels.moveOffer.contactKept, m.channels.moveOffer.stop]) assert.ok(html.includes(text), text);
       assert.ok(html.includes('channel-move-offer-stop'));
-      if (locale === 'ar') assert.ok(!/[0-9]/.test(html.replace(/<[^>]*>/g, '').replace(/usr_\d(@example\.com)?/g, '')), 'Arabic digits');
+      if (locale === 'ar') assert.ok(!/[0-9]/.test(JSDOM.fragment(html).textContent!.replace(/usr_\d(@example\.com)?/g, '')), 'Arabic digits');
     });
   }
 
