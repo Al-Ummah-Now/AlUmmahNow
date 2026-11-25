@@ -4,6 +4,14 @@ import { join } from 'node:path';
 import { logger } from '@/lib/logger';
 import { getSiteTheme, resetSiteThemeCache } from '../site-theme';
 
+let waits: Promise<unknown>[] | null = null;
+jest.mock('@opennextjs/cloudflare', () => ({
+  getCloudflareContext: async () => {
+    if (!waits) throw new Error('no Worker context');
+    return { ctx: { waitUntil: (p: Promise<unknown>) => waits!.push(p) } };
+  },
+}));
+
 describe('getSiteTheme', () => {
   const env = { ...process.env };
   afterEach(() => {
@@ -17,6 +25,8 @@ describe('getSiteTheme', () => {
     jest.spyOn(global, 'fetch')
       .mockResolvedValueOnce({ ok: true, json: async () => body } as Response)
       .mockResolvedValueOnce({ ok: css !== null, text: async () => css ?? '' } as Response);
+  /** The answer of every read after the ones already set */
+  const answerLater = (body: unknown) => jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, json: async () => body } as Response);
   const fawanees = { id: 'fawanees', css: null };
 
   beforeEach(() => {
@@ -135,6 +145,93 @@ describe('getSiteTheme', () => {
     jest.spyOn(Date, 'now').mockReturnValue(now + 11 * 60 * 1000);
     jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('down'));
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
+  });
+
+  describe('on Workers', () => {
+    const store = new Map<string, string>();
+    const settled = async () => {
+      while (waits!.length) await waits!.shift();
+    };
+    /** Another isolate in the same data centre */
+    const newIsolate = () => resetSiteThemeCache();
+    beforeEach(() => {
+      waits = [];
+      store.clear();
+      (globalThis as { caches?: unknown }).caches = {
+        default: {
+          match: async (key: string) => (store.has(key) ? new Response(store.get(key)) : undefined),
+          put: async (key: string, res: Response) => void store.set(key, await res.text()),
+        },
+      };
+    });
+    afterEach(() => {
+      waits = null;
+      delete (globalThis as { caches?: unknown }).caches;
+    });
+
+    it('a new isolate renders the kept theme without waiting for a slow admin-api', async () => {
+      answer({ theme: 'nahas' });
+      await getSiteTheme();
+      await settled();
+      newIsolate();
+      let timedOut!: (e: Error) => void;
+      const slow = jest.spyOn(global, 'fetch').mockClear().mockReturnValue(new Promise((_, no) => (timedOut = no)));
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+      expect(slow).toHaveBeenCalledTimes(1);
+      timedOut(new DOMException('timed out', 'TimeoutError'));
+      await settled();
+    });
+
+    it('a change is read after the page and shows on the next visit, in every isolate', async () => {
+      answer({ theme: 'nahas' });
+      await getSiteTheme();
+      await settled();
+      answer({ theme: 'zujaj' });
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+      await settled();
+      newIsolate();
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+    });
+
+    it('the first read of all waits a little, then the data centre keeps what came after', async () => {
+      jest.spyOn(global, 'fetch').mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+      answerLater({ theme: 'nahas' });
+      await expect(getSiteTheme()).resolves.toEqual(fawanees);
+      await settled();
+      newIsolate();
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+    });
+
+    it('a theme taken away falls back to the default on the next visit; one kept for too long is not used', async () => {
+      answers(pkg, css);
+      await getSiteTheme();
+      await settled();
+      answer({ theme: 'eid-lights' });
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+      await settled();
+      await expect(getSiteTheme()).resolves.toEqual(fawanees);
+      await settled();
+      newIsolate();
+      store.set([...store.keys()][0], JSON.stringify({ theme: { id: 'nahas', css: null }, at: 1 }));
+      answer({ theme: 'zujaj' });
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+      await settled();
+    });
+
+    it('one background read at a time', async () => {
+      answer({ theme: 'nahas' });
+      const t0 = 1_800_000_000_000;
+      const at = (ms: number) => jest.spyOn(Date, 'now').mockReturnValue(t0 + ms);
+      at(0);
+      await getSiteTheme();
+      await settled();
+      const spy = answer({ theme: 'nahas' });
+      spy.mockClear();
+      at(40_000);
+      await Promise.all([getSiteTheme(), getSiteTheme(), getSiteTheme()]);
+      expect(spy).toHaveBeenCalledTimes(1);
+      await settled();
+    });
   });
 
   it('lets a build-time theme win, without a request', async () => {
