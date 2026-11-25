@@ -28,7 +28,7 @@ const OTHER = 'usr_other';
 const IMG = 'https://images.alummahnow.net';
 
 /** Bunny Storage, Bunny Stream and Cloudflare's cache API. */
-const out = { images: new Set<string>(), bunny: new Set<string>(), purged: [] as string[], failBunny: false, failCdn: false, failImages: false, flagged: [] as Json[] };
+const out = { images: new Set<string>(), bunny: new Set<string>(), purged: [] as string[], failBunny: false, failCdn: false, cdnStatus: 500, failImages: false, flagged: [] as Json[] };
 let realFetch: typeof fetch;
 before(() => {
 	realFetch = globalThis.fetch;
@@ -46,7 +46,7 @@ before(() => {
 			return Response.json({});
 		}
 		if (url.hostname === 'api.cloudflare.com') {
-			if (out.failCdn) return new Response('no', { status: 500 });
+			if (out.failCdn) return new Response('no', { status: out.cdnStatus });
 			const body = JSON.parse(String(init?.body ?? '{}')) as { files?: string[]; prefixes?: string[] };
 			out.purged.push(...(body.files ?? []), ...(body.prefixes ?? []));
 			return Response.json({ success: true });
@@ -65,7 +65,7 @@ after(() => {
 	globalThis.fetch = realFetch;
 });
 beforeEach(() => {
-	Object.assign(out, { images: new Set(), bunny: new Set(), purged: [], failBunny: false, failCdn: false, failImages: false, flagged: [] });
+	Object.assign(out, { images: new Set(), bunny: new Set(), purged: [], failBunny: false, failCdn: false, cdnStatus: 500, failImages: false, flagged: [] });
 });
 
 const media = (id: string) => ({
@@ -1350,6 +1350,29 @@ describe('the day before anything is deleted', () => {
 			const p = JSON.parse(jobs(env)[0].params);
 			assert.deepEqual([p.run, p.delay], [undefined, ERASE_DELAY], `${email} ${JSON.stringify(over)}`);
 		}
+	});
+
+	it('a cache purge the token may not do says so, and what to fix, on the job and first on the Errors page', async () => {
+		for (const status of [403, 401, 500]) {
+			const env = await setup();
+			env.ERRORS_INGEST_URL = 'https://errors.test/internal/errors';
+			env.videos.store.clear();
+			Object.assign(out, { failCdn: true, cdnStatus: status, flagged: [] });
+			const id = await start(env, [video('v-mine'), video('v-member')]);
+			const refused = /Cloudflare refused the cache purge \(40[13]\): the token in the Secrets Store secret media-cdn-api-token may not purge the alummahnow\.net zone\. Give it the Cache Purge permission on that zone, or store one that has it, then Retry\./;
+			for (let i = 0; i < RETRY_DELAYS.length; i++) {
+				const { note } = await step(env, id);
+				assert.equal(refused.test(note), status !== 500, note);
+				if (status === 500) assert.match(note, /Cloudflare cache purge failed \(500\)/);
+			}
+			const error = await step(env, id).then(() => '', (e: Error) => e.message);
+			await onEraseMediaFailed(env, (await getJob(env as never, id))!, error);
+			const item = out.flagged.find((f) => f.key === `admin-job:${id}`)!;
+			assert.equal(new RegExp(`^${refused.source}`).test(item.message), status !== 500, item.message);
+			assert.equal(item.message.match(/Give it the Cache Purge/g)?.length ?? 0, status === 500 ? 0 : 1, 'once');
+			assert.ok(item.message.includes('v-mine') && item.message.includes('v-member'), item.message);
+		}
+		Object.assign(out, { failCdn: false });
 	});
 
 	it('what fails of a run account is tried again within seconds', async () => {
