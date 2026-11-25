@@ -59,6 +59,43 @@ export function parseSessionCookie(value: string): SessionTokens | null {
   return { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken };
 }
 
+interface CookieReader {
+  get(name: string): { value: string } | undefined;
+}
+
+/** The session a request carries: the cookie's tokens, or the legacy pair (no `cookie`). */
+export function readSession(cookies: CookieReader): { tokens: SessionTokens; cookie?: string } | null {
+  const cookie = cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (cookie) {
+    const tokens = parseSessionCookie(cookie);
+    return tokens ? { tokens, cookie } : null;
+  }
+  const accessToken = cookies.get(LEGACY_ACCESS_COOKIE)?.value;
+  const refreshToken = cookies.get(LEGACY_REFRESH_COOKIE)?.value;
+  return accessToken && refreshToken ? { tokens: { accessToken, refreshToken } } : null;
+}
+
+interface CookieWriter {
+  set(name: string, value: string, options: ReturnType<typeof sessionCookieOptions>): unknown;
+  delete(name: string): unknown;
+}
+
+/** Stores a refreshed session in a response (moving a legacy pair to `admin_session`); returns the cookie's value. */
+export function storeSession(cookies: CookieWriter, found: { cookie?: string }, tokens: SessionTokens, host: string | null): string {
+  const value = withRotatedTokens(found.cookie, tokens);
+  cookies.set(SESSION_COOKIE_NAME, value, sessionCookieOptions(host));
+  if (!found.cookie) {
+    cookies.delete(LEGACY_ACCESS_COOKIE);
+    cookies.delete(LEGACY_REFRESH_COOKIE);
+  }
+  return value;
+}
+
+/** Deletes every cookie that can carry a session from a response. */
+export function dropSession(cookies: Pick<CookieWriter, 'delete'>): void {
+  for (const name of [SESSION_COOKIE_NAME, LEGACY_ACCESS_COOKIE, LEGACY_REFRESH_COOKIE]) cookies.delete(name);
+}
+
 /**
  * The cookie value with its tokens replaced by `tokens`, keeping every other
  * field (e.g. `user`) of `previous` so the format stays exactly the same.

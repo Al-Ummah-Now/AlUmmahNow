@@ -1,5 +1,5 @@
 /**
- * Security audit 2026-11-14: admin-web's openauth client (lib/auth.ts getAuthClient) checks that a
+ * Security audit 2026-11-14: admin-web's openauth client (lib/auth-client.ts getAuthClient) checks that a
  * session's access token was issued to admin-web, through withAudienceCheck.
  */
 import { test } from 'node:test';
@@ -40,7 +40,7 @@ test('enforce mode: another client\'s token is a verify error', async () => {
 });
 
 test('getAuthClient wraps the openauth client with the admin-web audience check', () => {
-  const src = readFileSync(new URL('../src/lib/auth.ts', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/lib/auth-client.ts', import.meta.url), 'utf8');
   assert.match(src, /withAudienceCheck\(\s*withKeyRefetch\(\(\) => createClient\(/);
   assert.match(src, /service: 'admin-web'/);
 });

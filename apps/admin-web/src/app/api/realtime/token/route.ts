@@ -5,48 +5,22 @@
  * (lib/live/admin-live-client.ts, docs/admin/LIVE_OPS.md §B.5). Same-origin
  * only and never cached; the session cookie itself stays httpOnly. The middleware does not run for
  * /api routes: an access token that has expired, or is about to, is refreshed here (a route handler
- * can store the rotated pair).
+ * can store the rotated pair), and the new one is checked like the old one.
  * The realtime worker checks the token's roles per admin topic.
  */
-import { type NextRequest, NextResponse } from 'next/server';
-import { getAdminSessionState } from '@/lib/auth';
-import { hasAdminAccess } from '@/lib/roles';
-import { SESSION_COOKIE_NAME, parseSessionCookie, sessionCookieOptions, withRotatedTokens } from '@/lib/session-cookie';
-import { refreshTokens, shouldRefresh } from '@/lib/token-refresh';
-import { realtimeUrlFor, tokenExpiry } from '@/lib/live/realtime-ticket';
+import type { NextRequest } from 'next/server';
+import { getAdminSessionState, verifyAccessToken } from '@/lib/auth';
+import { handleRealtimeToken } from '@/lib/live/realtime-token';
 import { logger } from '@/lib/logger';
+import { refreshVerified } from '@/lib/verified-refresh';
 
 export const dynamic = 'force-dynamic';
 
-const NO_STORE = { 'Cache-Control': 'no-store' };
-
-function ticket(token: string) {
-  return { url: realtimeUrlFor({ REALTIME_URL: process.env.REALTIME_URL, ADMIN_API_URL: process.env.ADMIN_API_URL }), token, expiresAt: tokenExpiry(token) ?? null };
-}
-
-export async function GET(request: NextRequest) {
-  const site = request.headers.get('sec-fetch-site');
-  if (site && site !== 'same-origin') return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: NO_STORE });
-
-  const { session, expired } = await getAdminSessionState();
-  if (session && !hasAdminAccess(session.user.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: NO_STORE });
-  // Still good for the socket's next minutes
-  if (session && !shouldRefresh(session.accessToken, Math.floor(Date.now() / 1000))) return NextResponse.json(ticket(session.accessToken), { headers: NO_STORE });
-  if (!session && !expired) return NextResponse.json({ error: 'not signed in' }, { status: 401, headers: NO_STORE });
-
-  // Refresh it here and store the rotated pair
-  const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const tokens = cookie ? parseSessionCookie(cookie) : null;
-  const issuer = process.env.Issuer;
-  // A token that is still valid is handed out when there is nothing to refresh with, or the auth server cannot
-  const usable = session ? NextResponse.json(ticket(session.accessToken), { headers: NO_STORE }) : null;
-  if (!tokens?.refreshToken || !issuer) return usable ?? NextResponse.json({ error: 'not signed in' }, { status: 401, headers: NO_STORE });
-  const result = await refreshTokens(issuer, tokens.refreshToken);
-  if (result.kind !== 'refreshed') {
-    logger.debug('[realtime token] Refresh did not succeed', { kind: result.kind });
-    return usable ?? NextResponse.json({ error: 'not signed in' }, { status: 401, headers: NO_STORE });
-  }
-  const response = NextResponse.json(ticket(result.tokens.accessToken), { headers: NO_STORE });
-  response.cookies.set(SESSION_COOKIE_NAME, withRotatedTokens(cookie, result.tokens), sessionCookieOptions(request.headers.get('host')));
-  return response;
+export function GET(request: NextRequest) {
+  return handleRealtimeToken(request, {
+    state: getAdminSessionState,
+    issuer: process.env.Issuer,
+    refresh: (issuer, refreshToken) => refreshVerified(issuer, refreshToken, { verify: verifyAccessToken }),
+    log: logger,
+  });
 }

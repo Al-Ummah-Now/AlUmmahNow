@@ -32,7 +32,7 @@ function request(path: string, roles: string[], method = 'GET'): NextRequest {
 }
 
 const run = (path: string, roles: string[], method?: string) =>
-  refreshSessionMiddleware(request(path, roles, method), { issuer: 'https://auth.qa.alummahnow.net', now: () => NOW * 1000, log: silent, fetch: (() => { throw new Error('no refresh expected'); }) as unknown as typeof fetch });
+  refreshSessionMiddleware(request(path, roles, method), { issuer: 'https://auth.qa.alummahnow.net', now: () => NOW * 1000, log: silent, fetch: (() => { throw new Error('no refresh expected'); }) as unknown as typeof fetch, verify: async () => { throw new Error('nothing to verify'); } });
 
 describe('reviewer roles', () => {
   it('lets content and senior reviewers into admin-web, but not as admins', () => {
