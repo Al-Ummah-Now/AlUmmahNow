@@ -522,9 +522,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
                         </div>
                         <div className="min-w-0">
                           {edit && actions.includes('edit') ? (
-                            <Link href={edit} onClick={() => rememberListUrl(channelId, edit)} onMouseEnter={() => router.prefetch(edit)} onFocus={() => router.prefetch(edit)} dir="auto" className="block truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</Link>
+                            <Link href={edit} onClick={() => rememberListUrl(channelId, edit)} onMouseEnter={() => router.prefetch(edit)} onFocus={() => router.prefetch(edit)} dir="auto" className="block w-fit max-w-full truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</Link>
                           ) : (
-                            <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</span>
+                            <span dir="auto" className="block w-fit max-w-full truncate font-medium text-foreground" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</span>
                           )}
                           <span className="mt-1 flex gap-1 text-xs text-muted-foreground">
                             {video.premiere && <Link href={studioLiveHref(locale, channelId, video.premiere.streamId)} className="rounded bg-muted px-1 underline" data-testid="studio-video-premiere">{video.premiere.startsAt ? t.studio.live.apps.premiereOn.replace('{date}', dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(video.premiere.startsAt))) : t.studio.live.apps.premiere}</Link>}
@@ -532,7 +532,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
                             {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>
-                          {query.status === 'failed' && uploadIssueText(video, t.upload.issue) && <span className="mt-1 block text-xs text-muted-foreground" data-testid="studio-video-issue">{uploadIssueText(video, t.upload.issue)}</span>}
+                          {query.status === 'failed' && uploadIssueText(video, t.upload.issue) && <span className="mt-1 block max-w-md text-xs text-muted-foreground" data-testid="studio-video-issue">{uploadIssueText(video, t.upload.issue)}</span>}
                           <ReviewLine review={(video as StudioVideo & { review?: CreatorReviewView }).review} queueMinutes={reviewQueueMinutes} />
                         </div>
                       </div>
