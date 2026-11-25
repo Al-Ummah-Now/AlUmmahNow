@@ -213,3 +213,12 @@ export async function drainJobs(env: { ADMIN_JOBS_QUEUE: JobsQueue }, maxDeliver
 	}
 	return delivered;
 }
+
+/** A Secrets Store binding as a Worker has it: an RPC stub, so its method can only be called, never `.call`ed. */
+export const rpcSecret = (value: string) => ({
+	get: new Proxy(async () => value, {
+		get(_target, property) {
+			throw new TypeError(`The RPC receiver does not implement the method "${String(property)}".`);
+		},
+	}),
+});

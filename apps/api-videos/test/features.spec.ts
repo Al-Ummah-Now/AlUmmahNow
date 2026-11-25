@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, QURAN_CURRENT_KEY, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
-import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
+import { MemoryBucket, MemoryQueue, buildApp, rpcSecret } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
 import { addGrant } from '../src/lib/captions/minutes';
 import { forgetLiveRouting, writeLiveRouting } from '../src/lib/live/store';
@@ -257,6 +257,40 @@ describe('feature answer', () => {
 		assert.equal(await saasConfigured(real, probe as typeof fetch), false);
 		assert.equal(await saasConfigured(real, probe as typeof fetch), false);
 		assert.equal(calls, 1);
+	});
+
+	it('credentials in a Worker’s secret bindings show Quran editions and own domains; without them both stay hidden (#1974)', async () => {
+		const unreadable = { get: async () => { throw new Error('Secret not found'); } };
+		const none = [undefined, '', ' ', 'unset', rpcSecret(''), rpcSecret('unset'), rpcSecret('unset\n'), unreadable, {}];
+		const editions = async (id: unknown, secret: unknown) => {
+			const { env } = await setup({ QF_CLIENT_ID: id, QF_CLIENT_SECRET: secret });
+			const app = buildApp((router) => router.get('/api/quran/translations', QuranTranslationsList), null);
+			const res = await app.request('/api/quran/translations?language=en', {}, { ...env, NODE_ENV: 'test' });
+			const shown = (await computeFeatures(env, { userId: null })).quranEditions;
+			assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).quranEditions, shown);
+			// The entry point and its API agree
+			assert.equal(isFeatureOff(res.status, await res.json().catch(() => null)), !shown);
+			return shown;
+		};
+		assert.equal(await editions(rpcSecret('id'), rpcSecret('secret')), true);
+		for (const missing of none) {
+			assert.equal(await editions(missing, rpcSecret('secret')), false);
+			assert.equal(await editions(rpcSecret('id'), missing), false);
+		}
+
+		const domains = async (key: unknown, available: boolean) => {
+			forgetFeatureCaches();
+			const keys: string[] = [];
+			const { env } = await setup({ ADMIN_API_URL: 'https://admin.test', INTERNAL_API_KEY: key });
+			const probe = async (_url: unknown, init?: RequestInit) => {
+				keys.push((init?.headers as Record<string, string>)['X-API-Key']);
+				return Response.json({ success: true, result: { available } });
+			};
+			return { shown: await saasConfigured(env, probe as typeof fetch), keys };
+		};
+		assert.deepEqual(await domains(rpcSecret('k'), true), { shown: true, keys: ['k'] });
+		assert.deepEqual(await domains(rpcSecret('k'), false), { shown: false, keys: ['k'] }, 'SaaS not set up');
+		for (const missing of none) assert.deepEqual(await domains(missing, true), { shown: false, keys: [] }, 'admin-api not asked');
 	});
 
 	it('GET /api/me/features: version 1, revalidated every time, all hidden when the lookup fails', async () => {

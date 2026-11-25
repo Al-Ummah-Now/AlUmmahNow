@@ -41,6 +41,7 @@ import {
 	type UserFeatures,
 } from '@al-ummah/shared-types';
 import { loadChannelRecord } from '../channelAccess';
+import { getSecret } from '../env-helpers';
 import { channelOwnerTier, resolveCreator } from '../creatorTiers';
 import { cachedPendingUserDeletion } from '../admin/pendingUserDeletion';
 import { memberUploadChannelIds } from '../../endpoints/creator/creatorAccess';
@@ -49,7 +50,7 @@ import { LIVE_ADAPTERS, type LiveEnv } from '../live/providers';
 import { readLiveRouting, readUsage } from '../live/store';
 import { networkReadiness, type SocialEnv } from '../social/platform';
 import { readPlatformSettings } from '../social/store';
-import { googleClientSecret, readYtSettings, type YtSettingsEnv } from '../youtube-import/settings';
+import { UNSET_SECRET, googleClientSecret, readYtSettings, type YtSettingsEnv } from '../youtube-import/settings';
 import { checkBulkScheduleAllowed } from '../studioLimits';
 import { readSettings as readSiteSettings, type SitesEnv } from '../sites/store';
 import { logger } from '../logger';
@@ -84,16 +85,10 @@ export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
 	[binding: string]: unknown;
 }
 
-async function secretValue(b: SecretLike): Promise<string> {
-	if (!b) return '';
-	if (typeof b === 'string') return b.trim();
-	const get = (b as { get?: () => Promise<string> }).get;
-	if (typeof get !== 'function') return '';
-	try {
-		return ((await get.call(b)) ?? '').trim();
-	} catch {
-		return '';
-	}
+/** A secret's value; '' while it is not bound, can't be read, or holds the release's placeholder. */
+async function secretValue(binding: SecretLike, name: string): Promise<string> {
+	const value = (await getSecret(binding, name)).trim();
+	return value === UNSET_SECRET ? '' : value;
 }
 
 /**
@@ -180,7 +175,7 @@ export function viewerTitlesConfigured(env: FeaturesEnv, settings: CaptionSettin
 /** Quran Foundation editions: the credentials are bound (the local stack serves fixtures). */
 export async function quranEditionsConfigured(env: FeaturesEnv): Promise<boolean> {
 	if (env.QURAN_PROVIDER === 'fixture') return true;
-	const [id, secret] = await Promise.all([secretValue(env.QF_CLIENT_ID), secretValue(env.QF_CLIENT_SECRET)]);
+	const [id, secret] = await Promise.all([secretValue(env.QF_CLIENT_ID, 'QF_CLIENT_ID'), secretValue(env.QF_CLIENT_SECRET, 'QF_CLIENT_SECRET')]);
 	return !!id && !!secret;
 }
 
@@ -250,7 +245,7 @@ export function saasConfigured(env: FeaturesEnv, fetchImpl: typeof fetch = fetch
 	if (!base) return Promise.resolve(false);
 	return saasMemo.get(base, async () => {
 		try {
-			const key = await secretValue(env.INTERNAL_API_KEY);
+			const key = await secretValue(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY');
 			if (!key) return false;
 			const res = await fetchImpl(`${base}/internal/site-domains-status`, { headers: { 'X-API-Key': key } });
 			if (!res.ok) return false;

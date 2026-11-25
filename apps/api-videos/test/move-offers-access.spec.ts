@@ -12,7 +12,7 @@ import { channelReportUnderReview } from '../src/lib/channelReportStatus';
 import { forgetCachedBan, writeBan, deleteBan } from '../src/lib/admin/bans';
 import { recordDeletion, removeDeletion } from '../src/lib/admin/deletions';
 import { forgetPendingUserDeletion } from '../src/lib/admin/pendingUserDeletion';
-import { MemoryBucket, MemoryQueue } from './helpers';
+import { MemoryBucket, MemoryQueue, rpcSecret } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const ISSUER = 'https://auth.test.example';
@@ -84,15 +84,6 @@ const READS: Record<string, string[]> = {
 	[OWNER_NOW]: ['/api/move-offers/o1', '/api/channels/ch1/move-offers', '/api/channels/ch1/move-receivers'],
 };
 const NAMES = /Name of|Morning/;
-
-/** A Secrets Store binding as a Worker has it: an RPC stub, so its method can only be called, never `.call`ed. */
-const rpcSecret = (value: string) => ({
-	get: new Proxy(async () => value, {
-		get(_target, property) {
-			throw new TypeError(`The RPC receiver does not implement the method "${String(property)}".`);
-		},
-	}),
-});
 
 describe('secrets read from a Worker’s bindings', () => {
 	it('the report check calls the binding’s own get', async () => {
