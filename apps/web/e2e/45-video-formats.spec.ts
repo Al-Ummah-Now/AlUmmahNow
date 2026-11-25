@@ -22,7 +22,8 @@ import { formatClips, refusedFiles, type FormatClip } from './test-utils/video-c
 test.use({ storageState: AUTH_STATE.single });
 
 const FORMATS_EN = 'MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV';
-const FORMATS_AR = 'MP4، M4V، MOV، WebM، MKV، AVI، WMV، FLV';
+/** Arabic names each format in its own bidi isolate (bidiIsolate in lib/upload/video-formats.ts) */
+const FORMATS_AR = ['MP4', 'M4V', 'MOV', 'WebM', 'MKV', 'AVI', 'WMV', 'FLV'].map((n) => `\u2068${n}\u2069`).join('، ');
 
 let prefix = '';
 const prefixes: string[] = [];
