@@ -56,6 +56,14 @@ describe('rules in one line', () => {
     assert.match(arLine, /قائمة المالية بصلاحية المزوّدون والرسوم/);
   });
 
+  it('names who else is told, only while emails are on', () => {
+    const base = WORKFLOW_ACTIONS['features.set'].defaultRule;
+    const extra = [{ kind: 'finance' as const }, { kind: 'people' as const, userIds: ['a', 'b'] }];
+    assert.match(ruleSummary({ ...base, notify: { email: true, extra } }, en, 'en', permissionLabel(en)), /also tells the finance list, 2 named people/);
+    assert.match(ruleSummary({ ...base, notify: { email: true, extra } }, ar, 'ar', permissionLabel(ar)), /ويُبلَّغ أيضًا قائمة المالية، شخصان محدّدان|ويُبلَّغ أيضًا قائمة المالية، /);
+    assert.doesNotMatch(ruleSummary({ ...base, notify: { email: false, extra } }, en, 'en', permissionLabel(en)), /also tells/);
+  });
+
   it('a direct rule says it takes effect at once', () => {
     assert.match(ruleSummary(WORKFLOW_ACTIONS['features.set'].defaultRule, en, 'en', permissionLabel(en)), /^Takes effect at once/);
   });

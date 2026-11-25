@@ -16,6 +16,7 @@
  */
 import { Hono, type Context } from 'hono';
 import {
+  ADMIN_NAMES_MAX,
   WORKFLOW_ACTIONS,
   WORKFLOW_ACTION_TYPES,
   WORKFLOW_SEEDED_SCOPES,
@@ -55,6 +56,7 @@ import {
   withdrawRequest,
   type RequestListView,
 } from '../lib/workflows/engine';
+import { resolveNames } from '../lib/audit/names';
 import { createWorkflowDirectory, ownerIdsFrom } from '../lib/workflows/directory';
 import { registerRuleChangeExecutor } from '../lib/workflows/rule-change';
 import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
@@ -209,6 +211,25 @@ app.post('/rules/:type', async (c) => {
   const input = await body(c);
   const out = await proposeChange(ctx, actor, { type: 'workflows.rule.set', payload: { type: c.req.param('type'), scope: input.scope, config: input.config }, reason: input.reason });
   return ok(c, out, out.status === 'applied' ? 200 : 202);
+});
+
+/**
+ * Who a rule can name for its emails: active admins and the finance list, by name (the picker of the rule
+ * editor; it opens with all of them). For whoever may change a rule. Names only, never an email.
+ */
+app.get('/recipients', async (c) => {
+  const ctx = ctxFor(c);
+  const actor = await needRead(c, ctx);
+  if (!actor.roles.includes('super_admin') && !moneyPerson(actor)) throw new Refused(403, 'forbidden');
+  const q = (c.req.query('q') ?? '').trim().toLowerCase().slice(0, 100);
+  const ids = await ctx.directory.candidates([{ kind: 'role', role: 'admin' }, { kind: 'finance' }]);
+  const { users } = await resolveNames(c.env as never, { users: ids.slice(0, ADMIN_NAMES_MAX), items: [] });
+  const items = ids
+    .map((id) => ({ id, name: users[id]?.found ? (users[id].name ?? '').trim() : '' }))
+    .filter((p) => p.name && p.name.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({ kind: 'user' as const, id: p.id, label: p.name, secondary: null, imageUrl: null }));
+  return ok(c, { items });
 });
 
 // ---------------------------------------------------------------------------

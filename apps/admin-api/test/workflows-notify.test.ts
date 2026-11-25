@@ -78,7 +78,7 @@ describe('rendering', () => {
 
 describe('delivery', () => {
   let raw: DatabaseSync;
-  let sent: { to: string; key: string | null; subject: string }[];
+  let sent: { to: string; key: string | null; subject: string; text: string }[];
   const realFetch = globalThis.fetch;
 
   function searchD1() {
@@ -126,7 +126,7 @@ describe('delivery', () => {
       if (url.startsWith('https://api.resend.com/')) {
         const body = JSON.parse(String(init?.body));
         const key = new Headers(init?.headers).get('Idempotency-Key');
-        if (!sent.some((s) => s.key === key)) sent.push({ to: Array.isArray(body.to) ? body.to[0] : body.to, key, subject: body.subject });
+        if (!sent.some((s) => s.key === key)) sent.push({ to: Array.isArray(body.to) ? body.to[0] : body.to, key, subject: body.subject, text: body.text });
         return Response.json({ id: 'em_1' });
       }
       throw new Error(`unexpected fetch ${url}`);
@@ -181,6 +181,24 @@ describe('delivery', () => {
     assert.equal(sent[0].to, 'sa2@example.org');
     assert.equal(sent[0].subject, 'موافقة مطلوبة: إيقاف الرفع');
     assert.ok(sent[0].key?.startsWith(`workflow-${id}-proposed-sa1-sa2`));
+  });
+
+  it('a person whose account is gone shows as a deleted account, in the email\'s language', async () => {
+    const { env, id } = await setup(true);
+    const fields = [{ key: 'p', label: { en: 'People also told by email', ar: 'أشخاص يُبلَّغون أيضًا بالبريد' }, kind: 'person', before: null, after: ['gone', 'sa1'] }];
+    raw.prepare('UPDATE workflow_requests SET diff = ?').run(JSON.stringify({ title: { en: 'T', ar: 'ع' }, fields }));
+    const deliver = async (recipient: string, actor: string) => {
+      await processWorkflowNotifyJob(env as never, msg({ v: 1, kind: 'workflow_notify', requestId: id, event: 'proposed', actor, recipients: [recipient] }));
+      return plain(sent.at(-1)!.text);
+    };
+    assert.match(await deliver('sa2', 'sa1'), /أشخاص يُبلَّغون أيضًا بالبريد: حساب محذوف، Sara/);
+    assert.match(await deliver('sa1', 'sa2'), /People also told by email: Deleted account, Sara/);
+    // A lookup that failed is not a deleted account
+    const fetcher = env.VIDEOS.fetch;
+    env.VIDEOS.fetch = async (input: string) => (input.includes('/gone/') ? Response.json({ success: false, code: 'unavailable' }, { status: 503 }) : fetcher(input));
+    raw.prepare("UPDATE workflow_requests SET id = 'wfr_again'").run();
+    await processWorkflowNotifyJob(env as never, msg({ v: 1, kind: 'workflow_notify', requestId: 'wfr_again', event: 'proposed', actor: 'sa2', recipients: ['sa1'] }));
+    assert.match(plain(sent.at(-1)!.text), /People also told by email: Someone, Sara/);
   });
 
   it('a recipient without an account email gets none; an unreadable account retries the job', async () => {

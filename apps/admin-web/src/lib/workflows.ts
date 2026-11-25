@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, isolateText, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { currencyExponent, formatMoney, isolateText, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -90,6 +90,7 @@ export function ruleSummary(rule: WorkflowRuleConfig, t: Translator, locale: Loc
     parts.push(rule.approvers.map((a) => approverText(a, t, permissionLabel)).join(locale === 'ar' ? '، ' : ', '));
   }
   parts.push(t(`workflows.rules.stepUp.${rule.stepUp}` as MessageKey));
+  if (rule.notify.email && rule.notify.extra.length) parts.push(t('workflows.rules.alsoTells', { who: rule.notify.extra.map((a) => approverText(a, t, permissionLabel)).join(locale === 'ar' ? '، ' : ', ') }));
   parts.push(rule.expiryHours % 24 === 0 ? t('workflows.rules.days', { count: rule.expiryHours / 24 }) : t('workflows.rules.hours', { count: rule.expiryHours }));
   return parts.join(sep);
 }
@@ -111,7 +112,6 @@ export function scopeName(type: WorkflowActionType, scope: string, locale: Local
   if (!scope) return null;
   const label = workflowScopeLabel(type, scope);
   if (label) return { text: label[locale], named: true };
-  if (type === 'features.set' && isFeatureKey(scope)) return { text: featureDefinition(scope).name[locale], named: true };
   return { text: scope, named: false };
 }
 

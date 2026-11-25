@@ -93,7 +93,7 @@ async function setup() {
       return { status: res.status, body: (await res.json()) as Record<string, any> };
     };
   };
-  return { search, reports, as };
+  return { search, reports, env, as };
 }
 
 const featureRule = (approvalsNeeded: number) => ({
@@ -428,5 +428,70 @@ describe('request lists in pages', () => {
     t.search.raw.exec("UPDATE workflow_requests SET action_type = 'support.fees.set' WHERE domain = 'money'");
     for (const view of ['waiting', 'mine', 'open', 'history']) assert.deepEqual(await pages(t, ADMIN, `view=${view}&type=support.fees.set`), [{ items: [], next: null }]);
     assert.deepEqual((await pages(t, FINANCE, 'view=history&type=support.fees.set')).map((p) => p.items.length), [50, 15]);
+  });
+});
+
+describe('a rule\'s extra recipients', () => {
+  const SUPER: [string, string[]] = ['sa1', ['super_admin']];
+  const rule = (extra: unknown[], more: Record<string, unknown> = {}) => ({ ...featureRule(1), notify: { email: true, extra }, ...more });
+  const propose = (t: Awaited<ReturnType<typeof setup>>, extra: unknown[], more = {}) => t.as(...SUPER)('POST', '/rules/features.set', { scope: 'live', config: rule(extra, more), reason: 'r' });
+
+  it('the request shows groups by name and people as people, in approvers and recipients, and the switch by its name', async () => {
+    const t = await setup();
+    const res = await propose(t, [{ kind: 'finance', permission: 'support:providers' }, { kind: 'people', userIds: ['adm', 'fin1'] }], { approvers: [{ kind: 'role', role: 'super_admin' }, { kind: 'people', userIds: ['sa2'] }] });
+    assert.equal(res.status, 202, JSON.stringify(res.body));
+    const request = res.body.result.request as { title: { en: string; ar: string }; fields: { key: string; kind: string; before: unknown; after: unknown; label: { en: string; ar: string }; enumLabels?: Record<string, { en: string; ar: string }> }[] };
+    assert.match(request.title.en, /\(Live streaming\)$/);
+    assert.match(request.title.ar, /\(البث المباشر\)$/);
+    const field = (key: string) => request.fields.find((f) => f.key === key)!;
+    assert.deepEqual([field('approvers').kind, field('approvers').after], ['list', ['role:super_admin']]);
+    assert.deepEqual([field('approversPeople').kind, field('approversPeople').before, field('approversPeople').after], ['person', null, ['sa2']]);
+    assert.deepEqual([field('notifyExtra').before, field('notifyExtra').after], [null, ['finance:support:providers']]);
+    assert.deepEqual(field('notifyExtra').enumLabels!['finance:support:providers'], { en: 'The finance list with Providers and fees', ar: 'قائمة المالية بصلاحية المزوّدون والرسوم' });
+    assert.deepEqual([field('notifyExtraPeople').kind, field('notifyExtraPeople').after], ['person', ['adm', 'fin1']]);
+    for (const f of request.fields) if (f.kind === 'list') for (const k of [...((f.before as string[]) ?? []), ...((f.after as string[]) ?? [])]) assert.ok(f.enumLabels![k], `${f.key} ${k}`);
+  });
+
+  it('a rule with no extra recipients and no named people has no people fields', async () => {
+    const t = await setup();
+    const { request } = (await propose(t, [])).body.result;
+    assert.deepEqual(request.fields.filter((f: { kind: string }) => f.kind === 'person'), []);
+  });
+
+  it('only active admins and the finance list can be named; a group must be one of the known ones', async () => {
+    const t = await setup();
+    for (const extra of [[{ kind: 'people', userIds: ['someone'] }], [{ kind: 'people', userIds: ['adm', 'mod'] }], [{ kind: 'role', role: 'moderator' }]]) {
+      const res = await propose(t, extra);
+      assert.equal(res.status, 400, JSON.stringify(res.body));
+      assert.deepEqual(res.body.problems, ['recipients_invalid']);
+    }
+    assert.equal((t.search.raw.prepare('SELECT COUNT(*) AS n FROM workflow_requests').get() as { n: number }).n, 0);
+    assert.equal((await propose(t, [{ kind: 'people', userIds: ['adm', 'fin1', 'sa2'] }])).status, 202);
+  });
+
+  it('a person already in the rule stays when they are no longer an admin, and shows in the diff', async () => {
+    const t = await setup();
+    const first = (await propose(t, [{ kind: 'people', userIds: ['adm'] }])).body.result.request.id as string;
+    assert.equal((await t.as('sa2', ['super_admin'])('POST', `/requests/${first}/approve`, {})).body.result.status, 'applied');
+    await t.reports.prepare("UPDATE admin_staff SET active = 0 WHERE user_id = 'adm'").run();
+    const res = await propose(t, [{ kind: 'people', userIds: ['adm', 'sa2'] }]);
+    assert.equal(res.status, 202, JSON.stringify(res.body));
+    const people = res.body.result.request.fields.find((f: { key: string }) => f.key === 'notifyExtraPeople');
+    assert.deepEqual([people.before, people.after], [['adm'], ['adm', 'sa2']]);
+  });
+
+  it('the picker lists active admins and the finance list by name, all of them at first, for who may change a rule', async () => {
+    const t = await setup();
+    const names: Record<string, string | null> = { sa1: 'Bilal Ahmed', sa2: 'Aisha Rahman', owner: 'Omar Haddad', adm: 'Khadija Noor', fin1: 'Yusuf Rahman', fin2: null };
+    (t.env as Record<string, unknown>).VIDEOS = { fetch: async (_u: string, init: RequestInit) => Response.json({ success: true, result: { users: (JSON.parse(String(init.body)).users as string[]).map((id) => ({ id, found: !!names[id], displayName: names[id] ?? null, userName: null, email: `${id}@example.com` })), items: [] } }) };
+    (t.env as Record<string, unknown>).INTERNAL_API_KEY = 'k';
+    const list = async (who: [string, string[]], q = '') => (await t.as(...who)('GET', `/recipients?q=${q}`));
+    const all = (await list(SUPER)).body.result.items as { id: string; label: string; secondary: unknown }[];
+    assert.deepEqual(all.map((i) => i.label), ['Aisha Rahman', 'Bilal Ahmed', 'Khadija Noor', 'Omar Haddad', 'Yusuf Rahman']);
+    assert.doesNotMatch(JSON.stringify(all), /@/);
+    assert.deepEqual(((await list(SUPER, 'rahman')).body.result.items as { label: string }[]).map((i) => i.label), ['Aisha Rahman', 'Yusuf Rahman']);
+    assert.equal((await list(['fin1', ['user']])).status, 200, 'the finance list changes money rules');
+    assert.equal((await list(['adm', ['admin']])).status, 403);
+    assert.equal((await list(['mod', ['moderator']])).status, 403);
   });
 });

@@ -6,7 +6,7 @@
  * (and its floors), which also runs the step-up. Mutations return an ActionResult instead of throwing,
  * because production builds redact server-action error messages.
  */
-import type { WorkflowActionType, WorkflowDomain, WorkflowFloor, WorkflowLocalized, WorkflowRequestView, WorkflowRuleConfig, WorkflowStatus } from '@al-ummah/shared-types';
+import type { AdminSuggestion, WorkflowActionType, WorkflowDomain, WorkflowFloor, WorkflowLocalized, WorkflowRequestView, WorkflowRuleConfig, WorkflowStatus } from '@al-ummah/shared-types';
 import type { ActionResult } from './errors';
 import { logger } from '@/lib/logger';
 import { requestAdmin, toResult } from './request';
@@ -101,6 +101,12 @@ export async function workflowsWaitingCount(): Promise<number> {
 
 export async function getWorkflowActions(): Promise<WorkflowActionInfo[]> {
   return ((await requestAdmin('/api/workflows/actions')).result as { actions?: WorkflowActionInfo[] } | undefined)?.actions ?? [];
+}
+
+/** Who a rule can name for its emails: active admins and the finance list, by name; all of them before anything is typed. */
+export async function searchWorkflowRecipients(query: string): Promise<{ items: AdminSuggestion[] }> {
+  const items = ((await requestAdmin(`/api/workflows/recipients?q=${encodeURIComponent(query)}`)).result as { items?: AdminSuggestion[] } | undefined)?.items ?? [];
+  return { items };
 }
 
 export async function getWorkflowRuleHistory(type: WorkflowActionType, scope: string): Promise<WorkflowRuleVersion[]> {

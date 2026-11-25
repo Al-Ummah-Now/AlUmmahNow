@@ -1,4 +1,4 @@
-import { WORKFLOW_DOMAINS, type WorkflowActionType, type WorkflowDomain } from '@al-ummah/shared-types';
+import { WORKFLOW_DOMAINS, workflowSetPeople, type WorkflowActionType, type WorkflowDomain } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -6,7 +6,7 @@ import { ErrorAlert, cardClass, linkClass, secondaryButtonClass } from '@/compon
 import { RuleEditor } from '@/components/workflows/RuleEditor';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, translateDynamic } from '@/i18n/translate';
-import { getWorkflowActions, getWorkflowRuleHistory, proposeWorkflowRule, type WorkflowActionInfo, type WorkflowRuleVersion } from '@/lib/api/workflows';
+import { getWorkflowActions, getWorkflowRuleHistory, proposeWorkflowRule, searchWorkflowRecipients, type WorkflowActionInfo, type WorkflowRuleVersion } from '@/lib/api/workflows';
 import { logger } from '@/lib/logger';
 import { getNames } from '@/lib/api/audit';
 import { permissionLabel, ruleSummary, scopeName } from '@/lib/workflows';
@@ -33,12 +33,12 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
   let versions: WorkflowRuleVersion[] | null = null;
   if (historyType) versions = await getWorkflowRuleHistory(historyType, historyScope).catch(() => null);
   const perm = permissionLabel(t);
-  // Named approvers are shown by name, never by id
+  // Named approvers and recipients are shown by name, never by id
   const named = new Set<string>();
-  for (const action of actions ?? []) for (const r of action.rules) for (const set of r.config.approvers) if (set.kind === 'people') set.userIds.forEach((u) => named.add(u));
+  for (const action of actions ?? []) for (const r of action.rules) for (const u of workflowSetPeople([...r.config.approvers, ...r.config.notify.extra])) named.add(u);
   const lookup = named.size ? await getNames({ users: [...named].slice(0, 100) }).catch(() => null) : null;
   const names: Record<string, string> = {};
-  for (const [uid, u] of Object.entries(lookup?.users ?? {})) if (u.name) names[uid] = u.name;
+  for (const [uid, u] of Object.entries(lookup?.users ?? {})) names[uid] = u.name ?? (u.found ? t('workflows.someone') : t('workflows.deletedAccount'));
 
   // Rows are grouped by the rule's own floor: a money scope (money rule changes) sits with money
   const byDomain = new Map<WorkflowDomain, { action: WorkflowActionInfo; rule: WorkflowActionInfo['rules'][number] }[]>();
@@ -99,7 +99,7 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
                       {action.connected === false ? (
                         <span className="self-center text-xs text-fg-subtle" data-testid="approval-rule-not-connected">{t('workflows.rules.notConnected')}</span>
                       ) : rule.canEdit !== true ? null : (
-                        <RuleEditor type={action.type} scope={rule.scope} actionName={name} rule={rule.config} floor={rule.floor} propose={proposeWorkflowRule} names={names} />
+                        <RuleEditor type={action.type} scope={rule.scope} actionName={name} rule={rule.config} floor={rule.floor} scopeText={scopeName(action.type, rule.scope, locale)} propose={proposeWorkflowRule} recipients={searchWorkflowRecipients} names={names} />
                       )}
                     </div>
                   </li>
