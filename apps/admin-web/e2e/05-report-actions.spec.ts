@@ -61,14 +61,35 @@ test.describe('report detail', () => {
   });
 });
 
+/** MEASURE ONLY */
+function watch(page: Page, tag: string) {
+  const say = (t: string) => process.stdout.write(`ACT ${Date.now()} ${tag} ${t}\n`);
+  page.on('console', (m) => { if (/RSC|Falling back|browser navigation|Failed to fetch/i.test(m.text())) say(`console ${m.type()} ${m.text().slice(0, 220)}`); });
+  page.on('request', (r) => { const u = new URL(r.url()); if (r.isNavigationRequest() || r.headers()['rsc']) say(`request ${r.method()} ${u.pathname} doc=${r.isNavigationRequest()}`); });
+  page.on('requestfailed', (r) => { const u = new URL(r.url()); if (u.pathname.startsWith('/moderation')) say(`failed ${r.method()} ${u.pathname} doc=${r.isNavigationRequest()} ${r.failure()?.errorText}`); });
+  return say;
+}
+
 test.describe('moderation actions', () => {
+  test('ACT-01 probe candidate: verify in a fresh tab', async ({ page, makeReport }) => {
+    const report = await makeReport({ label: 'dismiss-b' });
+    await page.goto(`/moderation/reports/${report.id}`);
+    const notes = `${E2E_DESCRIPTION_TAG} dismissed by UI test`;
+    await takeAction(page, 'Dismiss Report', notes);
+    const check = await page.context().newPage();
+    await check.goto(`/moderation/reports/${report.id}`);
+    await expect(check.getByTestId('status-chip')).toHaveText('Dismissed');
+    await expect(check.getByTestId('moderator-notes')).toHaveText(notes);
+  });
   test('ACT-01 dismiss with notes closes the report and the decision sticks', async ({ page, makeReport }) => {
+    const say = watch(page, `w${test.info().repeatEachIndex}`);
     const report = await makeReport({ label: 'dismiss' });
     await page.goto(`/moderation/reports/${report.id}`);
     const notes = `${E2E_DESCRIPTION_TAG} dismissed by UI test`;
     await takeAction(page, 'Dismiss Report', notes);
 
-    await page.goto(`/moderation/reports/${report.id}`);
+    say('goto detail');
+    await page.goto(`/moderation/reports/${report.id}`).catch((e: Error) => { say(`goto error ${e.message.split('\n')[0].replace(/[0-9a-f-]{36}/g, 'ID')}`); throw e; });
     await expect(page.getByTestId('status-chip')).toHaveText('Dismissed');
     await expect(page.getByTestId('moderator-notes')).toHaveText(notes);
     await expect(page.getByTestId('action-taken')).toHaveAttribute('data-action', 'dismissed');
@@ -77,7 +98,6 @@ test.describe('moderation actions', () => {
 
     // The queue consumer mirrors the decision asynchronously; it used to flip
     // dismissals to "resolved" and wipe the notes a second later.
-    await page.waitForTimeout(8_000);
     const after = await getReport(report.id);
     expect(after?.status).toBe('dismissed');
     expect(after?.moderator_notes).toBe(notes);

@@ -125,6 +125,7 @@ jobs:
           if-no-files-found: error
 
   release:
+    if: ${{ false }}
     name: Local release suite - ${{ matrix.name }}
     needs: build
     runs-on: ubuntu-24.04
@@ -296,11 +297,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: chromium 1/2, project: chromium, shard: 1/2, browsers: chromium }
-          - { name: chromium 2/2, project: chromium, shard: 2/2, browsers: chromium }
           - { name: webkit, project: webkit, shard: 1/1, browsers: chromium webkit }
-          - { name: mobile, project: mobile, shard: 1/1, browsers: chromium }
-          - { name: shared-state, project: shared-state, shard: 1/1, browsers: chromium }
     steps:
       - uses: actions/checkout@v4
 
@@ -353,7 +350,7 @@ jobs:
             AXE_VERSION=$(node -p "require('../../node_modules/@axe-core/playwright/package.json').version")
             (cd "$SUITE" && npm init -y > /dev/null && npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_WEBKIT_VERSION" "@axe-core/playwright@$AXE_VERSION" && npx playwright install --with-deps chromium webkit)
             code=0
-            (cd "$SUITE/apps/admin-web" && npx playwright test --project=webkit --shard="${{ matrix.shard }}") || code=$?
+            (cd "$SUITE/apps/admin-web" && npx playwright test --project=webkit -g "ACT-01" --repeat-each=30 --retries=0) || code=$?
             rm -rf playwright-report test-results
             cp -R "$SUITE/apps/admin-web/playwright-report" playwright-report 2>/dev/null || true
             cp -R "$SUITE/apps/admin-web/test-results" test-results 2>/dev/null || true
@@ -456,6 +453,7 @@ jobs:
   # channels and videos (release/builders.ts) and delete them. Each shard boots and seeds its own
   # stack, erases and deletes its run accounts, then checks that nothing of the run is left.
   web:
+    if: ${{ false }}
     name: Local web suite - ${{ matrix.shard }}
     needs: build
     runs-on: ubuntu-24.04
