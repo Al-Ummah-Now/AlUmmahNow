@@ -4,7 +4,7 @@
  * `videos:processing` permission and writes the audit row (apps/admin-api,
  * endpoints/processing). Not part of the public contract.
  *
- *   GET  /internal/processing/videos?status=stuck|processing|failed|all&bunny=1&limit=
+ *   GET  /internal/processing/videos?status=stuck|processing|failed|r2_failed|stalled|needs_reupload|all&bunny=1&limit=
  *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs + index drift
  *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
  *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
@@ -17,6 +17,8 @@
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
  */
 
+import { readMany } from '../../lib/admin/directory';
+import { unfinishedVideoIds } from '../../lib/media/failures';
 import { bunnyRef } from '../../lib/media/providers';
 import { Hono } from 'hono';
 import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
@@ -40,6 +42,9 @@ import { readIndexRepairs, repairJobs, retryIndexRepairs, type RepairJobEnv } fr
 import { ALL_OWNERSHIP_KINDS, INDEX_REPAIR_ENTITIES, SEARCH_ENTITY_TYPES, type AdminJob, type IndexRepair, type IndexRepairEntity, type OwnershipDrift, type SearchDrift } from '@al-ummah/shared-types';
 
 const MAX_IDS = 100;
+/** Most unfinished or failed videos one page looks through (newest first), and how many records are read at once */
+const MAX_UNFINISHED = 1000;
+const READ_AT_ONCE = 50;
 
 interface HealthVideo {
 	id: string;
@@ -58,6 +63,7 @@ interface HealthVideo {
 	processingAnnounced?: 'ready' | 'failed';
 	/** Removed by the upload reaper (Stale uploads view) */
 	abandoned?: unknown;
+	r2?: { status: string };
 }
 
 function parseIds(body: unknown): string[] | null {
@@ -70,20 +76,24 @@ function parseIds(body: unknown): string[] | null {
 function matches(video: HealthVideo, status: string): boolean {
 	if (video.abandoned && status !== 'all') return false;
 	const notReady = video.uploadStatus && video.uploadStatus !== 'ready';
+	// An R2 transcode that failed, also while Bunny's copy plays
+	const r2Failed = video.r2?.status === 'failed';
 	switch (status) {
 		case 'all':
 			return true;
 		case 'processing':
 			return video.uploadStatus === 'processing' || video.uploadStatus === 'uploading' || video.uploadStatus === 'initiated';
 		case 'failed':
-			return video.uploadStatus === 'failed';
+			return video.uploadStatus === 'failed' || r2Failed;
+		case 'r2_failed':
+			return r2Failed;
 		case 'stalled':
 			return video.processingIssue?.kind === 'stalled';
 		case 'needs_reupload':
 			return video.processingIssue?.kind === 'needs_reupload';
 		default:
-			// stuck: anything not ready, or flagged
-			return !!notReady || !!video.processingIssue;
+			// stuck: anything not ready, flagged, or failed on R2
+			return !!notReady || !!video.processingIssue || r2Failed;
 	}
 }
 
@@ -187,19 +197,28 @@ export function createProcessingInternalRouter() {
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
 		const items: HealthVideo[] = [];
 		let scanned = 0;
-		let cursor: string | undefined;
-		do {
-			const page = await c.env.videos.list({ cursor, limit: 500 });
-			cursor = page.truncated ? page.cursor : undefined;
-			for (const object of page.objects) {
-				if (object.key.includes('/') || object.key.includes(':')) continue;
-				scanned++;
-				const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-				if (!video?.id || !matches(video, status)) continue;
-				if (channelId && video.channelId !== channelId) continue;
-				items.push(video);
+		const wanted = (video: HealthVideo | null): video is HealthVideo => !!video?.id && matches(video, status) && (!channelId || video.channelId === channelId);
+		// From the index: only unfinished and failed videos are read. Every video ('all'), or an index that cannot answer: the bucket
+		const ids = status === 'all' ? null : await unfinishedVideoIds(c.env as never, MAX_UNFINISHED);
+		if (ids) {
+			for (let i = 0; i < ids.length && items.length < limit; i += READ_AT_ONCE) {
+				const read = await readMany<HealthVideo>(c.env.videos, ids.slice(i, i + READ_AT_ONCE));
+				scanned += read.size;
+				for (const video of read.values()) if (wanted(video)) items.push(video);
 			}
-		} while (cursor && items.length < limit);
+		} else {
+			let cursor: string | undefined;
+			do {
+				const page = await c.env.videos.list({ cursor, limit: 500 });
+				cursor = page.truncated ? page.cursor : undefined;
+				for (const object of page.objects) {
+					if (object.key.includes('/') || object.key.includes(':')) continue;
+					scanned++;
+					const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
+					if (wanted(video)) items.push(video);
+				}
+			} while (cursor && items.length < limit);
+		}
 		items.sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || ''));
 		const page = items.slice(0, limit);
 		const rows = await Promise.all(
@@ -228,6 +247,7 @@ export function createProcessingInternalRouter() {
 					isPublic: video.isPublic,
 					availableResolutions: video.availableResolutions ?? [],
 					thumbnailUrl: video.thumbnailUrl,
+					r2Status: video.r2?.status ?? null,
 					processingIssue: video.processingIssue ?? null,
 					processingCheck: video.processingCheck ?? null,
 					...(withBunny ? { bunny } : {}),
@@ -263,16 +283,24 @@ export function createProcessingInternalRouter() {
 	app.get('/errors', async (c) => {
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
 		const videos: HealthVideo[] = [];
-		let cursor: string | undefined;
-		do {
-			const page = await c.env.videos.list({ cursor, limit: 500 });
-			cursor = page.truncated ? page.cursor : undefined;
-			for (const object of page.objects) {
-				if (object.key.includes('/') || object.key.includes(':')) continue;
-				const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-				if (video?.id && (video.uploadStatus === 'failed' || video.processingIssue)) videos.push(video);
+		const failed = (video: HealthVideo | null): video is HealthVideo => !!video?.id && (video.uploadStatus === 'failed' || !!video.processingIssue || video.r2?.status === 'failed');
+		const ids = await unfinishedVideoIds(c.env as never, MAX_UNFINISHED);
+		if (ids) {
+			for (let i = 0; i < ids.length && videos.length < limit; i += READ_AT_ONCE) {
+				for (const video of (await readMany<HealthVideo>(c.env.videos, ids.slice(i, i + READ_AT_ONCE))).values()) if (failed(video)) videos.push(video);
 			}
-		} while (cursor && videos.length < limit);
+		} else {
+			let cursor: string | undefined;
+			do {
+				const page = await c.env.videos.list({ cursor, limit: 500 });
+				cursor = page.truncated ? page.cursor : undefined;
+				for (const object of page.objects) {
+					if (object.key.includes('/') || object.key.includes(':')) continue;
+					const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
+					if (failed(video)) videos.push(video);
+				}
+			} while (cursor && videos.length < limit);
+		}
 		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
 		let deadLetters: unknown[] = [];
 		const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;

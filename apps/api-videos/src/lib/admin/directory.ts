@@ -342,7 +342,14 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 	if (query.status) {
 		binds.push(query.status);
 		// Videos without an upload status are legacy uploads that play: treat them as ready
-		where.push(query.status === 'ready' ? `(v.upload_status = ${n()} OR v.upload_status IS NULL)` : `v.upload_status = ${n()}`);
+		where.push(
+			query.status === 'ready'
+				? `(v.upload_status = ${n()} OR v.upload_status IS NULL)`
+				: // Failed on R2 counts too, while Bunny's copy plays
+					query.status === 'failed'
+					? `(v.id IN (SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND upload_status = ${n()} UNION SELECT video_id FROM media_jobs WHERE status = 'failed'))`
+					: `v.upload_status = ${n()}`,
+		);
 	}
 	if (query.visibility) where.push(`v.is_public = ${query.visibility === 'public' ? 1 : 0}`);
 	if (query.hidden) where.push(`v.is_hidden = ${query.hidden === 'yes' ? 1 : 0}`);

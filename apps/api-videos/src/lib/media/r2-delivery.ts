@@ -667,9 +667,10 @@ export async function applyJobEvent(
 			error: details.error,
 			itemType: 'video',
 			itemId: ev.videoId,
-			itemUrl: `/videos/${ev.videoId}`,
+			// The one place that says why and what to do
+			itemUrl: `/delivery?video=${encodeURIComponent(ev.videoId)}#transcode-troubleshooting`,
 			// The same bytes fail the same way
-			...(changed
+			...(changed || issueCodeOf(ev).code
 				? {}
 				: { retry: { kind: 'service' as const, service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } }, retryLabel: 'Transcode again' }),
 			extra: details.extra,

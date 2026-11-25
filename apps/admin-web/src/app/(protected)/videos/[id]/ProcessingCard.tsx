@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AdminLiveUpdate } from '@al-ummah/shared-types';
+import type { AdminLiveUpdate, VideoFailure } from '@al-ummah/shared-types';
 import type { AdminVideoR2, VideoDetailView } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { useAdminLive } from '@/lib/live/useAdminLive';
@@ -27,6 +27,7 @@ export function ProcessingCard({
   processingIssue,
   fallbackResolutions,
   r2: serverR2,
+  failure = null,
   canManage,
 }: {
   videoId: string;
@@ -35,6 +36,8 @@ export function ProcessingCard({
   fallbackResolutions: string[];
   /** undefined: an older api-videos without the R2 state */
   r2: AdminVideoR2 | null | undefined;
+  /** Why it failed, when it did */
+  failure?: VideoFailure | null;
   canManage: boolean;
 }) {
   const { t, locale } = useLanguage();
@@ -83,7 +86,7 @@ export function ProcessingCard({
         {r2 === undefined ? (
           <p className="text-sm text-fg-muted">{t('mediaDelivery.r2Unavailable')}</p>
         ) : (
-          <VideoR2Panel videoId={videoId} r2={r2} canManage={canManage} />
+          <VideoR2Panel videoId={videoId} r2={r2} failure={failure} canManage={canManage} />
         )}
       </section>
     </div>

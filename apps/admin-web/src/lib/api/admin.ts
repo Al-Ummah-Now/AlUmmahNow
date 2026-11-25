@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { ReportDetail, TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -393,9 +393,15 @@ async function readResult<T>(endpoint: string): Promise<ActionResult<T>> {
   }
 }
 
+/** Why these videos failed (admin-api /api/media/failures; media:manage). Ids without a failure are left out. */
+export async function getVideoFailures(ids: string[]): Promise<ActionResult<{ items: VideoFailure[] }>> {
+  if (!ids.length) return { ok: true, data: { items: [] } };
+  return readResult<{ items: VideoFailure[] }>(`/api/media/failures?ids=${ids.map(encodeURIComponent).join(',')}`);
+}
+
 /** Per-job view, container and queue status, and the token's state. A result, not a throw (the panel polls it). */
-export async function getTranscodeTroubleshoot(): Promise<ActionResult<TranscodeTroubleshoot>> {
-  return readResult<TranscodeTroubleshoot>('/api/media/troubleshoot');
+export async function getTranscodeTroubleshoot(video?: string | null): Promise<ActionResult<TranscodeTroubleshoot>> {
+  return readResult<TranscodeTroubleshoot>(`/api/media/troubleshoot${video ? `?video=${encodeURIComponent(video)}` : ''}`);
 }
 
 /** Recent media Worker and transcoder container log lines; `q` is a video or job id (checked again server-side). */

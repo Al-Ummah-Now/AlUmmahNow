@@ -226,6 +226,8 @@ export interface ProcessingVideoRow {
   thumbnailUrl?: string;
   processingIssue: ProcessingIssue | null;
   processingCheck: ProcessingCheckState | null;
+  /** The R2 copy's state; null without one, absent from an older api-videos */
+  r2Status?: string | null;
   /** null: Bunny has no such video; undefined: not fetched */
   bunny?: BunnyState | null;
 }

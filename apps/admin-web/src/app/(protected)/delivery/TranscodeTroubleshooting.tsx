@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/AppLink';
-import { TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView } from '@al-ummah/shared-types';
+import { explainTranscodeFailure, TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView, type VideoFailure } from '@al-ummah/shared-types';
+import { FailureWhy } from '@/components/content/failure';
+import { causedByFile, failureStepLabel } from '@/lib/video-failure';
 import {
   getTranscodeLogs,
   getTranscodeTroubleshoot,
@@ -35,6 +37,8 @@ export interface TranscodeTroubleshootingProps {
   canSetToken: boolean;
   /** ?video=<id> (the Errors page links here): that video's job first, and the logs filter set to it */
   focusVideo: string | null;
+  /** Why videos failed, by id, as the page was loaded (the linked video, the failed jobs) */
+  failures: Readonly<Record<string, VideoFailure>>;
 }
 
 /**
@@ -42,7 +46,7 @@ export interface TranscodeTroubleshootingProps {
  * admin to troubleshoot?"): why an R2 transcode waits or fails, without Cloudflare access. Polls
  * admin-api every 30 s while the page is visible; log lines load only when asked for.
  */
-export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo }: TranscodeTroubleshootingProps) {
+export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, failures }: TranscodeTroubleshootingProps) {
   const { t, locale } = useLanguage();
   const [data, setData] = useState<TranscodeTroubleshoot | null>(initial);
   const [stale, setStale] = useState(false);
@@ -56,7 +60,7 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo }: T
     inFlight.current = true;
     setRefreshing(true);
     try {
-      const result = await getTranscodeTroubleshoot();
+      const result = await getTranscodeTroubleshoot(focusVideo);
       if (result.ok) {
         setData(result.data);
         setStale(false);
@@ -106,6 +110,7 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo }: T
           <JobsList
             data={data}
             focusVideo={focusVideo}
+            failures={failures}
             t={t}
             locale={locale}
             onChanged={refresh}
@@ -183,7 +188,9 @@ function when(iso: string | null, locale: string): string | null {
   return Number.isNaN(d.getTime()) ? null : formatDate(d, locale as Locale, true);
 }
 
-function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
+function JobsList({ data, focusVideo, failures, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; failures: Readonly<Record<string, VideoFailure>>; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
+  // A linked video that failed without a transcode job to list (its upload, or Bunny)
+  const focused = focusVideo && !data.jobs?.items.some((j) => j.videoId === focusVideo) ? failures[focusVideo] : undefined;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -213,6 +220,14 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
   return (
     <div className="space-y-3">
       <h3 className={subTitle}>{t('transcodeTroubleshoot.jobsTitle')}</h3>
+      {focused && (
+        <div className="rounded-lg border border-focus bg-surface-2 p-4" data-testid="troubleshoot-focus" data-video-id={focused.videoId}>
+          <h4 className="mb-2 text-base font-medium">
+            <Link href={`/videos/${encodeURIComponent(focused.videoId)}`} className={linkClass}><bdi>{focused.title ?? t('transcodeTroubleshoot.untitled')}</bdi></Link>
+          </h4>
+          <FailureWhy failure={focused} t={t} link={false} />
+        </div>
+      )}
       {jobs?.transcoder === 'unbound' && <p className="text-sm text-fg-muted" data-testid="troubleshoot-transcoder-unbound">{t('transcodeTroubleshoot.transcoderUnbound')}</p>}
       {jobs?.transcoder === 'error' && <p className="text-sm text-danger-fg" data-testid="troubleshoot-transcoder-error">{t('transcodeTroubleshoot.transcoderError')}</p>}
       {error && <ErrorAlert testId="troubleshoot-action-error">{error}</ErrorAlert>}
@@ -223,6 +238,8 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
         <ul className="space-y-3" data-testid="troubleshoot-jobs" aria-label={t('transcodeTroubleshoot.jobsCaption')}>
           {orderJobs(jobs.items, focusVideo).map((job) => {
             const actions = jobActions(job);
+            // What to do: the job as it is now, with the file's name and whether an import sent it from the page's read
+            const why = job.state === 'failed' ? { importBatchId: failures[job.videoId]?.importBatchId ?? null, fileName: failures[job.videoId]?.fileName ?? null, ...explainTranscodeFailure(job) } : null;
             const source = job.source ? sourceLines(job.source, job.reason, t, locale) : null;
             const name = job.title ?? t('transcodeTroubleshoot.untitled');
             const times = [
@@ -263,10 +280,10 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                     </button>
                     {actions.retry && (
                       <ConfirmButton
-                        label={t('transcodeTroubleshoot.retryNow')}
+                        label={t(causedByFile(why) ? 'videoFailure.retryAnyway' : 'transcodeTroubleshoot.retryNow')}
                         title={t('transcodeTroubleshoot.retryNowTitle')}
-                        body={t('transcodeTroubleshoot.retryNowBody')}
-                        confirmLabel={t('transcodeTroubleshoot.retryNow')}
+                        body={t(causedByFile(why) ? 'videoFailure.retryBody' : 'transcodeTroubleshoot.retryNowBody')}
+                        confirmLabel={t(causedByFile(why) ? 'videoFailure.retryAnyway' : 'transcodeTroubleshoot.retryNow')}
                         busy={busy === `${job.videoId}:retry-now`}
                         disabled={busy !== null}
                         testId="troubleshoot-retry-now"
@@ -297,6 +314,18 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                         <div className="mt-1" data-testid="troubleshoot-job-source">
                           {!source.isReason && <p className="text-sm text-fg">{source.verdict}</p>}
                           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">{source.details.map((line, i) => <li key={`${i}:${line}`}>{line}</li>)}</ul>
+                        </div>
+                      )}
+                      {why && (
+                        <div className="mt-1 max-w-prose space-y-1" data-testid="troubleshoot-job-todo" data-step={why.step} data-cause={why.cause}>
+                          <p className="text-fg">
+                            <span className="font-medium">{t('videoFailure.todo')}</span> {t(failureStepLabel(why))}
+                          </p>
+                          {why.fileName && (
+                            <p className="text-xs text-fg-muted [overflow-wrap:anywhere]">
+                              {t('videoFailure.file')} <bdi dir="auto">{why.fileName}</bdi>
+                            </p>
+                          )}
                         </div>
                       )}
                       {job.error && (

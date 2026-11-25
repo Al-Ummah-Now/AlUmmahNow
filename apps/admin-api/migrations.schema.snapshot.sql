@@ -45,6 +45,7 @@
 --   apps/admin-api/migrations/0051_reports_live_chat.sql
 --   apps/admin-api/migrations/0052_reports_banned_user_idx.sql
 --   apps/admin-api/migrations/0053_reports_child_safety.sql
+--   apps/admin-api/migrations/0054_import_items_video.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -162,6 +163,7 @@ CREATE INDEX idx_import_batches_channel ON import_batches (channel_id, created_a
 CREATE INDEX idx_import_batches_created ON import_batches (created_at);
 CREATE INDEX idx_import_items_batch ON import_items (batch_id, created_at);
 CREATE UNIQUE INDEX idx_import_items_file ON import_items (channel_id, sha256);
+CREATE INDEX idx_import_items_video ON import_items (video_id) WHERE video_id IS NOT NULL;
 CREATE INDEX idx_modact_created ON moderation_actions(created_at DESC);
 CREATE INDEX idx_modact_signal ON moderation_actions(signal_id);
 CREATE INDEX idx_modact_subject ON moderation_actions(subject_type, subject_id);
