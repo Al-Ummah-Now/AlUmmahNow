@@ -13,11 +13,11 @@
 import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdminJob, AdminUserSearchItem } from '@/lib/api/content-types';
-import { readJob, searchTransferCandidates, transferChannel, type TransferOptions } from '@/lib/api/content';
+import type { TransferOptions, readJob, searchTransferCandidates, transferChannel } from '@/lib/api/content';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
-import { JobStatusChip } from '@/components/content/jobs';
+import { JobStatusChip } from '@/components/content/job-status-chip';
 import { SectionCard } from '@/components/content/parts';
 import { Autocomplete, type AutocompleteSource } from '@/components/search/Autocomplete';
 import type { AutocompleteItem } from '@/components/search/autocomplete-model';
@@ -31,6 +31,8 @@ const POLL_LIMIT_MS = 5 * 60 * 1000;
 
 interface Props {
   channel: { id: string; name: string; handle: string | null; ownerId: string | null; videos: number; playlists: number };
+  /** The server actions it calls (a test passes its own) */
+  actions: { search: typeof searchTransferCandidates; transfer: typeof transferChannel; readJob: typeof readJob };
 }
 
 interface Followed {
@@ -42,7 +44,7 @@ interface Followed {
 
 const done = (job: AdminJob) => job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled';
 
-export function ChannelTransfer({ channel }: Props) {
+export function ChannelTransfer({ channel, actions }: Props) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -56,7 +58,7 @@ export function ChannelTransfer({ channel }: Props) {
   const found = useRef(new Map<string, AdminUserSearchItem>());
   const source = useCallback<AutocompleteSource>(
     async (q) => {
-      const result = await searchTransferCandidates(channel.id, q, channel.ownerId ? [channel.ownerId] : []);
+      const result = await actions.search(channel.id, q, channel.ownerId ? [channel.ownerId] : []);
       if (!result.ok) {
         logger.warn('[ChannelTransfer] Search failed', { status: result.status, code: result.code });
         throw new Error(`Transfer search answered ${result.status}`);
@@ -64,7 +66,7 @@ export function ChannelTransfer({ channel }: Props) {
       for (const user of result.data.items) found.current.set(user.id, user);
       return { items: result.data.items.map((user): AutocompleteItem => transferItem(user, t)), next: null };
     },
-    [channel.id, channel.ownerId, t],
+    [actions, channel.id, channel.ownerId, t],
   );
 
   // Follow the started job until it finishes, then show the new owner: re-read
@@ -73,7 +75,7 @@ export function ChannelTransfer({ channel }: Props) {
   const [gaveUp, setGaveUp] = useState<string | null>(null);
   const readFollowed = useCallback(async () => {
     if (!jobId) return;
-    const result = await readJob(jobId).catch(() => null);
+    const result = await actions.readJob(jobId).catch(() => null);
     if (!result?.ok) {
       logger.warn('[ChannelTransfer] Job status read failed', { jobId, status: result?.status });
       setFollowed((f) => (f && f.job.id === jobId ? { ...f, unknown: true } : f));
@@ -84,7 +86,7 @@ export function ChannelTransfer({ channel }: Props) {
       if (result.data.status === 'failed') logger.warn('[ChannelTransfer] Transfer job failed', { jobId, error: result.data.lastError });
       router.refresh();
     }
-  }, [jobId, router]);
+  }, [actions, jobId, router]);
   useAdminLive(
     ['jobs'],
     (update) => {
@@ -107,19 +109,25 @@ export function ChannelTransfer({ channel }: Props) {
       return;
     }
     const to = target;
-    const result = await run('transfer', () => transferChannel(channel.id, to.id, reason, options));
+    const onFailure = ({ code }: { code?: string }) => {
+      if (code !== 'official_handle_confirm') return;
+      // They left the site team since the search, or the handle is another one now: ask, about the handle it has
+      setTarget((current) => (current?.id === to.id ? { ...current, isStaff: false } : current));
+      setOptions((o) => ({ ...o, officialHandle: null }));
+      router.refresh();
+    };
+    const result = await run('transfer', () => actions.transfer(channel.id, to.id, reason, { ...options, officialHandle: ticked ? channel.handle : null }), { onFailure });
     if (result?.job) {
       setFollowed({ job: result.job, to });
       setTarget(null);
       setOptions(NO_OPTIONS);
-    } else if (official) {
-      // Refused: they may have left the site team since the search, so the box shows from here on
-      setTarget((current) => (current?.id === to.id ? { ...current, isStaff: false } : current));
     }
   }
 
   const official = isOfficialHandle(channel.handle);
   const needsTick = needsOfficialTick(channel.handle, target);
+  // The tick is about one handle: another one, and it is asked again
+  const ticked = options.officialHandle !== null && options.officialHandle === channel.handle;
   const iso = (value: string) => bidiIsolate(value);
   // What the move changes besides the owner, in the dialog's own words (§3.4, §3.5)
   const consequences = [
@@ -128,7 +136,7 @@ export function ChannelTransfer({ channel }: Props) {
     t('channels.transferLiveKeys'),
     ...(official ? [t('channels.transferOfficialHandle', { handle: iso(`@${channel.handle}`) })] : []),
   ];
-  const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
+  const toggle = (key: 'keepPreviousOwnerAsAdmin' | 'keepContactEmail') => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
 
   const name = target ? userName(target) : '';
   const confirmValues = target ? transferConfirmValues(channel.handle, target.id) : [];
@@ -162,7 +170,7 @@ export function ChannelTransfer({ channel }: Props) {
             onChange={(id) => {
               setTarget(id ? (found.current.get(id) ?? null) : null);
               // The tick is about this person
-              setOptions((o) => ({ ...o, allowOfficialHandle: false }));
+              setOptions((o) => ({ ...o, officialHandle: null }));
               setError(null);
             }}
             disabled={!!busy}
@@ -173,7 +181,7 @@ export function ChannelTransfer({ channel }: Props) {
           <legend className="text-sm text-fg-muted mb-1">{t('channels.transferOptions')}</legend>
           <TransferOption id={`${ids}-keep-admin`} checked={options.keepPreviousOwnerAsAdmin} onChange={toggle('keepPreviousOwnerAsAdmin')} label={t('channels.transferKeepOldOwner')} testId="channel-transfer-keep-admin" />
           <TransferOption id={`${ids}-keep-contact`} checked={options.keepContactEmail} onChange={toggle('keepContactEmail')} label={t('channels.transferKeepContact')} testId="channel-transfer-keep-contact" />
-          {needsTick && <TransferOption id={`${ids}-official`} checked={options.allowOfficialHandle} onChange={toggle('allowOfficialHandle')} label={t('channels.transferAllowOfficial', { handle: iso(`@${channel.handle}`) })} testId="channel-transfer-official" />}
+          {needsTick && <TransferOption id={`${ids}-official`} checked={ticked} onChange={(e) => setOptions((o) => ({ ...o, officialHandle: e.target.checked ? channel.handle : null }))} label={t('channels.transferAllowOfficial', { handle: iso(`@${channel.handle}`) })} testId="channel-transfer-official" />}
         </fieldset>
         <div>
           <ConfirmButton
@@ -198,7 +206,7 @@ export function ChannelTransfer({ channel }: Props) {
                 : t('channels.transferTypeToConfirmNoHandle', { id: iso(target?.id ?? '') })
             }
             danger
-            disabled={!!busy || !target || confirmValues.length === 0 || (needsTick && !options.allowOfficialHandle)}
+            disabled={!!busy || !target || confirmValues.length === 0 || (needsTick && !ticked)}
             busy={busy === 'transfer'}
             testId="channel-transfer-submit"
             onConfirm={confirm}
@@ -209,7 +217,7 @@ export function ChannelTransfer({ channel }: Props) {
   );
 }
 
-const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false, allowOfficialHandle: false };
+const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false, officialHandle: null };
 
 function TransferOption({ id, checked, onChange, label, testId }: { id: string; checked: boolean; onChange: (e: ChangeEvent<HTMLInputElement>) => void; label: string; testId: string }) {
   return (
@@ -225,25 +233,27 @@ function TransferOption({ id, checked, onChange, label, testId }: { id: string; 
 function TransferStatus({ followed }: { followed: Followed }) {
   const { t, locale } = useLanguage();
   const { job, to, unknown } = followed;
-  const result = (job.result ?? {}) as { videos?: number; playlists?: number };
-  const key = (unknown && !done(job) ? 'channels.transferStatus.unknown' : `channels.transferStatus.${job.status}`) as MessageKey;
+  const result = (job.result ?? {}) as { videos?: number; playlists?: number; skipped?: string };
+  // Done, but nothing moved (the channel got an official handle, or is gone)
+  const skipped = job.status === 'succeeded' && !!result.skipped;
+  const key = (unknown && !done(job) ? 'channels.transferStatus.unknown' : skipped ? (result.skipped === 'official_handle' ? 'channels.transferStatus.keptHandle' : 'channels.transferStatus.skipped') : `channels.transferStatus.${job.status}`) as MessageKey;
   const text = t(key, {
     name: userName(to),
     error: job.lastError || t('content.none'),
     videos: formatNumber(Number(result.videos) || 0, locale),
     playlists: formatNumber(Number(result.playlists) || 0, locale),
   });
-  const tone = job.status === 'failed' ? 'border-danger-border bg-danger-bg text-danger-fg' : job.status === 'succeeded' ? 'border-border bg-surface-2 text-success-fg' : 'border-border bg-surface-2 text-fg';
+  const tone = job.status === 'failed' || skipped ? 'border-danger-border bg-danger-bg text-danger-fg' : job.status === 'succeeded' ? 'border-border bg-surface-2 text-success-fg' : 'border-border bg-surface-2 text-fg';
   return (
     <div
-      role={job.status === 'failed' ? 'alert' : 'status'}
+      role={job.status === 'failed' || skipped ? 'alert' : 'status'}
       aria-live="polite"
       className={`mb-3 flex flex-wrap items-center gap-2 rounded border px-3 py-2 text-sm ${tone}`}
       data-testid="channel-transfer-status"
-      data-status={job.status}
+      data-status={skipped ? 'skipped' : job.status}
       data-job-id={job.id}
     >
-      <JobStatusChip job={job} />
+      {!skipped && <JobStatusChip job={job} />}
       <span dir="auto">{text}</span>
     </div>
   );

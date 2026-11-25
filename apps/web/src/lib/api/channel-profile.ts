@@ -50,7 +50,7 @@ export interface ChannelProfileUpdate {
 
 export type ChannelProfileUpdateResult =
   | { ok: true; channel: Channel }
-  | { ok: false; error: string; reason?: HandleProblem; status: number };
+  | { ok: false; error: string; code?: string; reason?: HandleProblem; status: number };
 
 async function send(method: 'PUT' | 'DELETE', path: string, channelId: string, body?: unknown) {
   const auth = await getServerAuthContext();
@@ -115,7 +115,7 @@ export async function updateChannelProfile(channelId: string, data: ChannelProfi
       return { ok: true, channel: result.channel };
     }
     logger.warn('[updateChannelProfile] Rejected', { channelId, status, error: json.error, reason: json.reason });
-    return { ok: false, status, error: String(json.error || 'update_failed'), reason: json.reason as HandleProblem | undefined };
+    return { ok: false, status, error: String(json.error || 'update_failed'), code: typeof json.code === 'string' ? json.code : undefined, reason: json.reason as HandleProblem | undefined };
   } catch (error) {
     logger.error('[updateChannelProfile] Failed', { channelId, error });
     return { ok: false, status: 0, error: 'network_error' };

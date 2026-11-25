@@ -3,10 +3,13 @@
 import { useId, useState } from 'react';
 import {
   deleteChannel,
+  readJob,
   setChannelVerified,
   stopChannelMoveOffer,
   suspendChannel,
   unsuspendChannel,
+  searchTransferCandidates,
+  transferChannel,
   updateChannel,
   uploadChannelImage,
   type ChannelLabelEvent,
@@ -25,6 +28,8 @@ import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLab
 import { ChannelHandleTools } from './ChannelHandleTools';
 import { FileButton } from '@/components/FileButton';
 import { ChannelMoveOffers } from './ChannelMoveOffers';
+
+const TRANSFER_ACTIONS = { search: searchTransferCandidates, transfer: transferChannel, readJob };
 
 interface Props {
   channel: {
@@ -269,6 +274,7 @@ export function ChannelActions({ channel, permissions, labelHistory = [], moveOf
       {can('channels:transfer') && (
         <ChannelTransfer
           channel={{ id: channel.id, name: channel.name, handle: channel.handle, ownerId: channel.ownerId, videos: channel.videos, playlists: channel.playlists }}
+          actions={TRANSFER_ACTIONS}
         />
       )}
 

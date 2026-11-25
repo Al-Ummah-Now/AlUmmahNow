@@ -14,8 +14,9 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, useContentAction } from './actions';
-import { Chip, SectionCard } from './parts';
-import { isActiveJob, jobTargetHref, jobTone } from './job-helpers';
+import { SectionCard } from './parts';
+import { isActiveJob, jobTargetHref } from './job-helpers';
+import { JobStatusChip } from './job-status-chip';
 import { JobActionButtons, JobErrorText, JobLog, JobTiming, useJobCancel, useJobLog, type JobRef } from './job-parts';
 import { LocalTime } from '@/components/LocalTime';
 import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
@@ -33,17 +34,6 @@ const REFRESH_MS = 3000;
 export function useRefreshWhile(active: boolean) {
   const router = useRouter();
   useAdminLive(['jobs'], () => router.refresh(), { poll: () => router.refresh(), pollMs: REFRESH_MS, enabled: active, catchUpOnFirstLive: true });
-}
-
-export function JobStatusChip({ job }: { job: Pick<AdminJob, 'status'> }) {
-  const { t } = useLanguage();
-  const label = job.status === 'failed' ? t('jobs.failedRetry') : t(`jobs.statuses.${job.status}` as MessageKey);
-  return (
-    <Chip tone={jobTone(job.status)} testId="job-status">
-      {isActiveJob(job) && <span aria-hidden="true" className="me-1 inline-block h-2 w-2 rounded-full bg-current animate-pulse" />}
-      {label}
-    </Chip>
-  );
 }
 
 /**

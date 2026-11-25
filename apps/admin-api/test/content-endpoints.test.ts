@@ -193,13 +193,13 @@ describe('content endpoints: permissions', () => {
     const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', user: 'super-1', json: { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true } });
     assert.equal(res.status, 200);
     const transfer = calls.find((c) => c.path === '/channels/ch_1/transfer')!;
-    assert.deepEqual(transfer.body, { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true, keepContactEmail: false, allowOfficialHandle: false });
+    assert.deepEqual(transfer.body, { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true, keepContactEmail: false });
     assert.equal(transfer.actor, 'super-1');
     assert.equal(transfer.key, 'internal-key');
     assert.equal(log.length, 1);
     assert.deepEqual(JSON.parse(log[0].new_value), {
       action: 'transfer',
-      details: { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true, keepContactEmail: false, allowOfficialHandle: false },
+      details: { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true, keepContactEmail: false, officialHandle: null },
     });
     assert.deepEqual(JSON.parse(log[0].old_value!), { ownerId: 'usr_owner' });
   });
@@ -215,20 +215,21 @@ describe('content endpoints: permissions', () => {
       'GET /users/search': () => ({ body: { success: true, result: { items: [{ id: 'usr_mod' }, { id: 'usr_left' }, { id: 'usr_2' }] } } }),
     });
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
-    const sent = async (newOwnerId: string, tick?: unknown) => {
+    const sent = async (newOwnerId: string, officialHandle?: unknown) => {
       calls.length = 0;
-      const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId, reason: 'Owner asked by email', ...(tick === undefined ? {} : { allowOfficialHandle: tick }) } });
+      const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId, reason: 'Owner asked by email', anyOfficialHandle: true, ...(officialHandle === undefined ? {} : { officialHandle }) } });
       assert.equal(res.status, 200);
-      return (calls.find((c) => c.path === '/channels/ch_1/transfer')!.body as { allowOfficialHandle: boolean }).allowOfficialHandle;
+      const body = calls.find((c) => c.path === '/channels/ch_1/transfer')!.body as { officialHandle?: string; anyOfficialHandle?: boolean };
+      return [body.officialHandle, body.anyOfficialHandle];
     };
-    assert.equal(await sent('usr_2'), false);
-    assert.equal(await sent('usr_2', 'yes'), false, 'only a real tick');
-    assert.equal(await sent('usr_2', true), true);
-    assert.equal(await sent('usr_mod'), true, 'staff of any site role');
-    assert.equal(await sent('usr_left'), false, 'no longer staff');
+    assert.deepEqual(await sent('usr_2'), [undefined, undefined], 'never because the request says so');
+    for (const tick of [true, '', ' ', null, 7]) assert.deepEqual(await sent('usr_2', tick), [undefined, undefined], 'only a handle');
+    assert.deepEqual(await sent('usr_2', ' Ummah '), ['Ummah', undefined]);
+    assert.deepEqual(await sent('usr_mod'), [undefined, true], 'staff of any site role');
+    assert.deepEqual(await sent('usr_left'), [undefined, undefined], 'no longer staff');
     // The tick is in the audit log; being staff is not a tick
-    const details = (await db.prepare("SELECT new_value FROM site_settings_log WHERE key = 'content:channel:ch_1' ORDER BY rowid").all<{ new_value: string }>()).results.map((r) => (JSON.parse(r.new_value) as { details: { allowOfficialHandle: boolean } }).details.allowOfficialHandle);
-    assert.deepEqual(details, [false, false, true, false, false]);
+    const details = (await db.prepare("SELECT new_value FROM site_settings_log WHERE key = 'content:channel:ch_1' ORDER BY rowid").all<{ new_value: string }>()).results.map((r) => (JSON.parse(r.new_value) as { details: { officialHandle: string | null } }).details.officialHandle);
+    assert.deepEqual(details, [null, null, null, null, null, null, 'Ummah', null, null]);
     // The picker says who is staff
     const found = (await (await call('/api/content/users/search?q=a', { roles: 'super_admin' })).json()) as { result: { items: Array<{ id: string; isStaff?: boolean }> } };
     assert.deepEqual(found.result.items.map((i) => [i.id, i.isStaff]), [['usr_mod', true], ['usr_left', false], ['usr_2', false]]);
@@ -236,7 +237,7 @@ describe('content endpoints: permissions', () => {
     const broken = appFor({ VIDEOS: fetcher, REPORTS_DB: { ...db, prepare: (sql: string) => { if (sql.includes('admin_staff')) throw new Error('down'); return db.prepare(sql); } } });
     calls.length = 0;
     assert.equal((await broken('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId: 'usr_mod', reason: 'Owner asked by email' } })).status, 200);
-    assert.equal((calls.find((c) => c.path === '/channels/ch_1/transfer')!.body as { allowOfficialHandle: boolean }).allowOfficialHandle, false);
+    assert.ok(!('anyOfficialHandle' in (calls.find((c) => c.path === '/channels/ch_1/transfer')!.body as object)));
     const unread = (await (await broken('/api/content/users/search?q=a', { roles: 'super_admin' })).json()) as { result: { items: Array<{ isStaff?: boolean }> } };
     assert.ok(unread.result.items.every((i) => !i.isStaff));
   });

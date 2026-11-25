@@ -9,6 +9,7 @@ import { uploadFileDirect } from '@/lib/api/direct-upload';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { updateChannelProfile } from '@/lib/api/channel-profile';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
+import { channelSaveError } from '@/lib/channels/save-error';
 import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -145,7 +146,7 @@ function ChannelEditPage() {
       if (result.ok === false) {
         logger.warn('Channel update rejected', { channelId, status: result.status, error: result.error, reason: result.reason });
         if (result.reason) setHandleStatus({ state: 'unavailable', reason: result.reason });
-        setError(result.reason === 'taken' ? t.channel.handleTaken : t.channel.saveFailed);
+        setError(channelSaveError(result, t.channel, lang));
         setIsSaving(false);
         return;
       }

@@ -10,6 +10,8 @@ import R2Repository from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { openTransferJob } from '../../lib/admin/service';
+import { apiError } from '../../lib/api-error';
 import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseReplacedHandle, validateHandleFormat } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
 import { inBackground } from "../../lib/websocket-notify";
@@ -54,7 +56,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
                 },
             },
             "409": {
-                description: "The requested @handle is invalid, reserved or taken (error = handle_unavailable, reason = too_short | too_long | invalid_characters | reserved | taken)",
+                description: "The requested @handle is invalid, reserved or taken (error = handle_unavailable, reason = too_short | too_long | invalid_characters | reserved | taken), or the channel is being moved to another account (code = move_in_progress)",
                 content: {
                     "application/json": {
                         schema: ResponseError,
@@ -135,6 +137,10 @@ export class ChannelUpdate extends AuthenticatedRoute {
         // @handle claim/change (case-only changes keep the same index entry)
         let claimed: string | undefined;
         if (requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '')) {
+            // An open move was started for the handle the channel has (wiki AUN-CHANNEL-CLAIM §3.3)
+            if (await openTransferJob(c.env, id)) {
+                return apiError(c, 409, 'move_in_progress');
+            }
             const allowOfficial = canClaimOfficialHandles(c.get('auth')?.payload?.roles);
             const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel, { allowOfficial });
             if (claim.ok && allowOfficial && validateHandleFormat(claim.handle) === 'reserved') {

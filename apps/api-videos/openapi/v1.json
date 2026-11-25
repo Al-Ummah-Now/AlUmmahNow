@@ -6378,7 +6378,7 @@
             }
           },
           "409": {
-            "description": "The requested @handle is invalid, reserved or taken (error = handle_unavailable, reason = too_short | too_long | invalid_characters | reserved | taken)",
+            "description": "The requested @handle is invalid, reserved or taken (error = handle_unavailable, reason = too_short | too_long | invalid_characters | reserved | taken), or the channel is being moved to another account (code = move_in_progress)",
             "content": {
               "application/json": {
                 "schema": {

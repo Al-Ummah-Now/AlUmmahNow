@@ -34,7 +34,7 @@ export function useContentAction() {
   }
 
   /** Runs one change; returns its data, or null when it failed (the error is shown). */
-  async function run<T>(name: string, action: () => Promise<ActionResult<T>>, opts: { refresh?: boolean; success?: string } = {}): Promise<T | null> {
+  async function run<T>(name: string, action: () => Promise<ActionResult<T>>, opts: { refresh?: boolean; success?: string; onFailure?: (failure: { status: number; code?: string }) => void } = {}): Promise<T | null> {
     setBusy(name);
     setError(null);
     setMessage(null);
@@ -49,6 +49,7 @@ export function useContentAction() {
     if (!result.ok) {
       logger.warn('[content] Action failed', { name, status: result.status, code: result.code });
       setError(describe(result));
+      opts.onFailure?.({ status: result.status, code: result.code });
       return null;
     }
     if (opts.success) setMessage(opts.success);
