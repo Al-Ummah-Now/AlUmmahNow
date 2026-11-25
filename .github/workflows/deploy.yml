@@ -46,7 +46,7 @@ jobs:
       # rest at once on four vCPUs made a 0.4 s test file take 20 s here and tests that need 50 ms hit
       # jest's 5 s (#2016, #1993; LiveChat.test.tsx 20 to 22 s in passing runs)
       - name: Run tests (all packages)
-        run: pnpm exec turbo run test --concurrency=1
+        run: pnpm exec turbo run test --concurrency=2
         timeout-minutes: 15
 
   # Release gates (docs/deployment-guide.md, "Release gates"). Plain Node scripts
