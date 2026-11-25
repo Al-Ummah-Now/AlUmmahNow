@@ -347,7 +347,7 @@ export async function startProcessingLoop(
 	};
 	await queue.send(message, { delaySeconds: delay });
 	logger.debug('[ProcessingLoop] Loop started', { videoId, loopId, reason: opts.reason, delay });
-	await publishAdminLive(env, 'uploads', uploadLiveEvent(videoId, { uploadStatus: saved.uploadStatus, checking: true }));
+	if (!underTakedown(saved)) await publishAdminLive(env, 'uploads', uploadLiveEvent(videoId, { uploadStatus: saved.uploadStatus, checking: true }));
 	return { started: true, loopId };
 }
 
@@ -441,7 +441,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 		};
 		return true;
 	});
-	await publishAdminLive(env, 'uploads', uploadLiveEvent(message.videoId, {
+	if (!underTakedown(video)) await publishAdminLive(env, 'uploads', uploadLiveEvent(message.videoId, {
 		uploadStatus: result.ours?.uploadStatus,
 		encodeProgress: bunny?.encodeProgress,
 		outcome: decision.kind === 'done' ? decision.outcome : outcome,
@@ -450,6 +450,9 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	}));
 	return decision;
 }
+
+/** Every admin gets the live events: nothing about a video under a takedown (only super admins see those). */
+const underTakedown = (video: unknown): boolean => !!(video as { csamTakedown?: unknown } | null)?.csamTakedown;
 
 /** The admin:uploads live event of a processing step (docs/admin/LIVE_OPS.md): a hint, pages refetch. */
 export function uploadLiveEvent(

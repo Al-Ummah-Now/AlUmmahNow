@@ -1194,9 +1194,10 @@ export interface MediaLiveEnv extends MediaEnv {
 }
 
 /** The job as the admin pages show it. */
-export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'>): AdminLiveEvent | null {
+export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'> & { csamTakedown?: unknown }): AdminLiveEvent | null {
 	const r2 = video.r2;
-	if (!r2) return null;
+	// Every admin gets it: nothing about a video under a takedown (only super admins see those; their pages refetch)
+	if (!r2 || video.csamTakedown) return null;
 	const f = r2.failure;
 	return {
 		kind: 'job',
