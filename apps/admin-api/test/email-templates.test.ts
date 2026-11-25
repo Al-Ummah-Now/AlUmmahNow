@@ -170,6 +170,12 @@ describe('direction controls typed by people', () => {
     const mail = renderEmail({ locale: 'en', subject: 's', preheader: 'p', blocks: [{ kind: 'facts', rows: [[bad('From'), '\u2068Amina\u202e\u2069 <a@example.com>']] }], reason: 'r' });
     assert.match(mail.text, /From: \u2068Amina\u2069 <a@example\.com>/);
     assert.doesNotMatch(mail.html, /[\u202a-\u202e]/);
+    // A plain value whose isolates don't all close, or close more than they open, keeps none
+    for (const v of ['x\u2067y', 'x\u2069y', '\u2069x\u2068y', '\u2068x\u2069\u2069y']) {
+      const one = renderEmail({ locale: 'en', subject: 's', preheader: 'p', blocks: [{ kind: 'facts', rows: [['Page', v]] }], reason: 'r' });
+      assert.match(one.text, /Page: xy\n/);
+      assert.doesNotMatch(one.html, /[\u2066-\u2069]/);
+    }
   });
 
   it('in the emails that name people or quote them', () => {
