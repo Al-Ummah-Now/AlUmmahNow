@@ -100,14 +100,14 @@ export function VideoActions({ video, permissions }: Props) {
 
               const edit: Parameters<typeof updateVideo>[1] = {};
               if (titleChanged) {
-                const { plain, map } = userTextEdit(initialTitle, title, hasLanguages(video.titleLocalized));
-                edit.title = plain;
-                if (map) edit.titleLocalized = map;
+                const sent = userTextEdit(initialTitle, title, hasLanguages(video.titleLocalized));
+                if ('map' in sent) edit.titleLocalized = sent.map;
+                else edit.title = sent.plain;
               }
               if (descChanged) {
-                const { plain, map } = userTextEdit(initialDescription, description, hasLanguages(video.descriptionLocalized));
-                edit.description = plain;
-                if (map) edit.descriptionLocalized = map;
+                const sent = userTextEdit(initialDescription, description, hasLanguages(video.descriptionLocalized));
+                if ('map' in sent) edit.descriptionLocalized = sent.map;
+                else edit.description = sent.plain;
               }
               if (visChanged) edit.isPublic = isPublic;
               await run('edit', () => updateVideo(video.id, edit), { success: t('content.saved') });

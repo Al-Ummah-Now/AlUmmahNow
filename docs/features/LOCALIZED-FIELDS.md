@@ -11,6 +11,9 @@ video that has one language may leave it at one: the other is offered with Trans
 text nobody touched is not rewritten (a plain text without languages stays plain). A text that has both
 keeps both. A caller that knows only the plain field changes the language it shows and leaves the other
 (`apps/api-videos/src/lib/admin/localizedEdit.ts`, `apps/admin-web/src/lib/localized.ts`).
+An edit sends only the languages it changes and the API merges them into the fresh record, so edits of
+different languages both stay; translations in other languages stay too, until the whole text is cleared.
+Creating a channel over the API still takes a plain name, for the released Admin Tools app only (#1982).
 
 ## Behaviour
 

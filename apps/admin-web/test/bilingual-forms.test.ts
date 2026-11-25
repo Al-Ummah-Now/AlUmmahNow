@@ -187,9 +187,7 @@ describe('bilingual admin forms in a DOM', () => {
     assert.deepEqual(recorded.updateChannel[0], [
       'ch_1',
       {
-        name: 'New Name',
         nameLocalized: { en: 'New Name', ar: 'اسم جديد' },
-        description: 'New Desc',
         descriptionLocalized: { en: 'New Desc', ar: 'وصف جديد' },
       },
     ]);
@@ -276,7 +274,7 @@ describe('bilingual admin forms in a DOM', () => {
         assert.ok(m.container.textContent!.includes('One language is enough here'));
         await type(m.en(), 'Fixed');
         await m.save();
-        assert.deepEqual(m.sent(), [{ [E.keys.plain]: 'Fixed', ...(map ? { [E.keys.map]: { en: 'Fixed' } } : {}) }]);
+        assert.deepEqual(m.sent(), [map ? { [E.keys.map]: { en: 'Fixed' } } : { [E.keys.plain]: 'Fixed' }]);
         await m.unmount();
       }
     });
@@ -289,7 +287,7 @@ describe('bilingual admin forms in a DOM', () => {
       assert.deepEqual(m.sent(), [{ [E.keys.plain]: 'دروس جديدة' }]);
       await type(m.en(), 'New lessons');
       await m.save();
-      assert.deepEqual(m.sent()[1], { [E.keys.plain]: 'New lessons', [E.keys.map]: { en: 'New lessons', ar: 'دروس جديدة' } });
+      assert.deepEqual(m.sent()[1], { [E.keys.map]: { en: 'New lessons', ar: 'دروس جديدة' } });
       await m.unmount();
     });
 
@@ -306,7 +304,7 @@ describe('bilingual admin forms in a DOM', () => {
       await type(m.ar(), 'لغتان');
       await type(m.descAr(), '');
       await m.save();
-      assert.deepEqual(m.sent(), [{ description: '', descriptionLocalized: {} }]);
+      assert.deepEqual(m.sent(), [{ descriptionLocalized: { en: '', ar: '' } }]);
       await m.unmount();
     });
 
@@ -319,7 +317,7 @@ describe('bilingual admin forms in a DOM', () => {
       await type(m.en(), 'Old');
       await type(m.descAr(), 'نبذة');
       await m.save();
-      assert.deepEqual(m.sent(), [{ description: 'About', descriptionLocalized: { en: 'About', ar: 'نبذة' } }]);
+      assert.deepEqual(m.sent(), [{ descriptionLocalized: { ar: 'نبذة' } }]);
       await m.unmount();
     });
   }

@@ -180,51 +180,30 @@ const optionalLocalizedPair = (max: number) =>
 		.strict()
 		.refine((v) => (!v.en && !v.ar) || (!!v.en && !!v.ar), { message: 'Both en and ar are required when providing a localized value' });
 
-/** An edit of a user's text: one language is enough (lib/admin/localizedEdit.ts). */
-const editedPair = (max: number, required: boolean) =>
-	z
-		.object({ en: z.string().trim().max(max).optional(), ar: z.string().trim().max(max).optional() })
-		.strict()
-		.refine((v) => !required || !!v.en || !!v.ar, { message: 'en or ar is required' });
-const shownOf = (pair: { en?: string; ar?: string }) => pair.en || pair.ar || '';
+/** An edit of a user's text: the languages it changes (lib/admin/localizedEdit.ts judges the result on the fresh record). */
+const editedPair = (max: number) => z.object({ en: z.string().trim().max(max).optional(), ar: z.string().trim().max(max).optional() }).strict();
 
 const ChannelEdit = z
 	.object({
 		name: z.string().trim().min(1).max(100).optional(),
-		nameLocalized: editedPair(100, true).optional(),
+		nameLocalized: editedPair(100).optional(),
 		handle: z.string().trim().min(1).max(60).optional(),
 		description: z.string().max(5000).optional(),
-		descriptionLocalized: editedPair(5000, false).optional(),
+		descriptionLocalized: editedPair(5000).optional(),
 		avatarUrl: z.string().url().nullable().optional(),
 		coverUrl: z.string().url().nullable().optional(),
 	})
-	.strict()
-	.refine((v) => v.name === undefined || v.nameLocalized === undefined || v.name === shownOf(v.nameLocalized), {
-		message: 'name must match nameLocalized',
-		path: ['name'],
-	})
-	.refine((v) => v.description === undefined || v.descriptionLocalized === undefined || v.description.trim() === shownOf(v.descriptionLocalized), {
-		message: 'description must match descriptionLocalized',
-		path: ['description'],
-	});
+	.strict();
 
 const VideoEdit = z
 	.object({
 		title: z.string().trim().min(1).max(200).optional(),
-		titleLocalized: editedPair(200, true).optional(),
+		titleLocalized: editedPair(200).optional(),
 		description: z.string().max(10000).optional(),
-		descriptionLocalized: editedPair(10000, false).optional(),
+		descriptionLocalized: editedPair(10000).optional(),
 		isPublic: z.boolean().optional(),
 	})
-	.strict()
-	.refine((v) => v.title === undefined || v.titleLocalized === undefined || v.title === shownOf(v.titleLocalized), {
-		message: 'title must match titleLocalized',
-		path: ['title'],
-	})
-	.refine((v) => v.description === undefined || v.descriptionLocalized === undefined || v.description.trim() === shownOf(v.descriptionLocalized), {
-		message: 'description must match descriptionLocalized',
-		path: ['description'],
-	});
+	.strict();
 
 const UserEdit = z
 	.object({

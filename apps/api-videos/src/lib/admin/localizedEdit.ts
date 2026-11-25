@@ -37,48 +37,65 @@ export interface UserTextField {
 	required: boolean;
 }
 
-/** What an edit sends for one field: the plain text, the languages, or both (then they must agree). */
+/**
+ * What an edit sends for one field: the plain text, the languages it changes, or both (then they must agree).
+ * A language that is absent is left as it is; an empty one is taken away; an empty map clears the whole text.
+ */
 export interface UserTextEdit {
 	plain?: string;
 	map?: Record<string, string | undefined>;
 }
 
-/** Refuses a plain text that is not the map's own; call before anything is written. */
+/** Refuses texts that can never be saved (too long); the rest depends on the record (applyUserText). */
 export function checkUserText(field: UserTextField, edit: UserTextEdit): void {
-	if (edit.map === undefined) return;
-	const text = cleanLocalizedText(edit.map, field.max, field.map);
-	if (!text && field.required) throw new AdminError(400, 'invalid_request', `${field.map} requires en or ar`);
-	if (edit.plain !== undefined && edit.plain.trim() !== primaryOf(text)) {
-		throw new AdminError(400, 'invalid_request', `${field.plain} must match ${field.map}`);
-	}
+	if (edit.map !== undefined) cleanLocalizedText(edit.map, field.max, field.map);
 }
 
-/** Applies it to the fresh record (inside its conditional write). */
+/** A text stored without languages is in the one of its own script, as the admin's form shows it. */
+const languageOf = (plain: string): Lang => (/[\u0600-\u06FF]/.test(plain) ? 'ar' : 'en');
+
+/**
+ * Applies it to the fresh record (inside its conditional write), so edits of different languages both survive.
+ * Translations the record holds in other languages stay, unless the whole text is cleared.
+ */
 export function applyUserText(fresh: Row, field: UserTextField, edit: UserTextEdit): void {
 	const stored = fresh[field.map] && typeof fresh[field.map] === 'object' && !Array.isArray(fresh[field.map]) ? (fresh[field.map] as Record<string, unknown>) : undefined;
 	const before = cleanLocalizedText(stored);
+	const others = Object.fromEntries(Object.entries(stored ?? {}).filter(([lang]) => !(LANGS as readonly string[]).includes(lang)));
 	if (edit.map !== undefined) {
-		const text = cleanLocalizedText(edit.map, field.max, field.map);
-		if (!text) {
-			delete fresh[field.map];
-			fresh[field.plain] = '';
-			return;
+		const sent = cleanLocalizedText(edit.map, field.max, field.map) ?? {};
+		const plain = String(fresh[field.plain] ?? '').trim();
+		// The plain text of a record whose languages are all others is one of those, not English or Arabic
+		const merged: Record<string, string> = before ? { ...before } : plain && !Object.values(others).includes(plain) ? { [languageOf(plain)]: plain } : {};
+		for (const lang of LANGS) {
+			if (edit.map[lang] === undefined) continue;
+			if (sent[lang]) merged[lang] = sent[lang];
+			else delete merged[lang];
 		}
-		if (before?.en && before.ar && (!text.en || !text.ar)) {
+		const cleared = Object.keys(edit.map).length === 0 || (!merged.en && !merged.ar);
+		if (cleared && field.required) throw new AdminError(400, 'invalid_request', `${field.map} requires en or ar`);
+		if (!cleared && before?.en && before.ar && (!merged.en || !merged.ar)) {
 			throw new AdminError(400, 'invalid_request', `${field.map} has both languages and keeps both`);
 		}
-		fresh[field.map] = text;
-		fresh[field.plain] = primaryOf(text);
+		const shown = cleared ? '' : primaryOf(merged);
+		if (edit.plain !== undefined && edit.plain.trim() !== shown) {
+			throw new AdminError(400, 'invalid_request', `${field.plain} must match ${field.map}`);
+		}
+		if (cleared) delete fresh[field.map];
+		else fresh[field.map] = { ...others, ...merged };
+		fresh[field.plain] = shown;
 		return;
 	}
 	if (edit.plain === undefined) return;
-	// A caller that knows only the plain field changes the language that field shows; the other one stays
-	if (before) {
-		if (!edit.plain.trim()) delete fresh[field.map];
-		else if (edit.plain.trim() !== String(fresh[field.plain] ?? '').trim()) {
-			const lang: Lang = before.en ? 'en' : 'ar';
-			fresh[field.map] = { ...before, [lang]: edit.plain.trim() };
-		}
+	const text = edit.plain.trim();
+	if (!text) {
+		// The whole text goes
+		delete fresh[field.map];
+	} else if (stored && text !== String(fresh[field.plain] ?? '').trim()) {
+		// A caller that knows only the plain field changes the language that field shows; the others stay
+		const shown = String(fresh[field.plain] ?? '').trim();
+		const lang = before ? (before.en ? 'en' : 'ar') : Object.keys(others).find((l) => others[l] === shown);
+		if (lang) fresh[field.map] = { ...others, ...before, [lang]: text };
 	}
 	fresh[field.plain] = edit.plain;
 }

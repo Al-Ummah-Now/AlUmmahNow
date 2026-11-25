@@ -115,11 +115,11 @@ function cleanLocalizedMap(raw: unknown, max: number, field: string): Record<str
  * importing): the same object, default or chosen @handle and queue message as
  * POST /api/channels. The owner's first channel is their main one.
  *
- * Localization policy (wiki guides/localized-fields.md): channel names and
- * descriptions are creator/user content, so legacy callers omitting
- * `*Localized` remain accepted. Whenever `*Localized` is provided (as all
- * staff forms in admin-web and Tools do), both `en` and `ar` are required and
- * `name`/`description` must match the `.en` entry.
+ * Localization policy (wiki guides/localized-fields.md): staff who create a channel give its name in English and
+ * Arabic, and the admin's forms require both. A plain name or description without `*Localized` is still accepted
+ * here ON PURPOSE: the released Admin Tools app sends only those. Both become required once its bilingual version
+ * (AlUmmahNowTools#65) has shipped: issue #1982. Whenever `*Localized` is given, both `en` and `ar` are
+ * required and `name`/`description` must match the `.en` entry.
  */
 export async function createChannelFor(
 	env: AdminServiceEnv,
