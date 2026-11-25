@@ -13,8 +13,8 @@
  * seeks there once, the page never jumps and the mini player never flips. Runs in the mobile
  * projects (Pixel 7 Chrome, iPhone 15 Safari).
  */
-import { test, expect, type Locator, type Page } from '@playwright/test';
-import { openHarness } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { openHarness, test } from './harness';
 
 interface Counts { play: number; pause: number; seeking: number; volumechange: number; ratechange: number; fullscreen: number; mini: number }
 

@@ -4,7 +4,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Locator, type Page } from '@playwright/test';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 const TYPES: Record<string, string> = { '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.vtt': 'text/vtt', '.mp4': 'video/mp4', '.m4s': 'video/iso.segment' };
@@ -132,43 +132,89 @@ function themeCss(theme: string): string {
   return fs.readFileSync(path.join(THEMES_CSS, `${theme}.css`), 'utf8').replace(/:root\s*\{/g, ':root:root {');
 }
 
+/** `next dev`'s hot-reload socket: /_next/hmr since Next 16.4, /_next/webpack-hmr before */
+const HMR_SOCKET = /\/_next\/(webpack-)?hmr(\?|$)/;
 /**
- * next dev reloads open pages when another worker's request compiles a new entry, or when its hot
- * reload socket reconnects to a changed build. The page needs the socket's first sync to finish
- * loading; after that the specs want no hot reload, so later build messages never reach the page.
+ * next dev reloads open pages when another worker's request compiles a new entry, or when a "sync"
+ * names a changed build. No source changes during a run, so nothing the socket sends as text (sync,
+ * building, built, reloadPage, …) is for a spec; binary messages pass, React waits for its debug
+ * chunks before it hydrates (as in e2e/themes/harness.ts, #2014).
+ *
+ * In the page, not routeWebSocket: that evaluates in the page for every message, which WebKit counts
+ * as a user gesture, so a page could play with sound that no viewer let it.
+ *
+ * Returns the check for the end of the test: a dev page whose socket was not held, or a hot update
+ * that got through, fails it. From 2026-11-21 (Next 16.4 moved the socket) to 2026-11-25 the hold
+ * silently held nothing: the first two specs of every WebKit run lost their page to a reload in the
+ * middle of a measurement and passed on the retry. The state stays in the page until then: with a
+ * console listener Playwright forwards every console event, and React's dev build writes thousands per
+ * page (Firefox's run took 42 to 60 min instead of 35).
  */
-// Next names the message in `type` (older releases used `action`); see HMR_MESSAGE_SENT_TO_BROWSER
-const DEV_RELOAD_ACTIONS = new Set(['building', 'built', 'reloadPage', 'serverComponentChanges', 'clientChanges', 'serverOnlyChanges', 'middlewareChanges', 'addedPage', 'removedPage']);
-
-async function keepDevBuildStill(page: Page): Promise<void> {
-  let synced = false;
-  await page.routeWebSocket(/\/_next\/webpack-hmr/, (ws) => {
-    const server = ws.connectToServer();
-    server.onMessage((message) => {
-      let action: unknown;
+async function keepDevBuildStill(page: Page): Promise<() => Promise<void>> {
+  await page.addInitScript((socket) => {
+    const hmr = new RegExp(socket);
+    let held = false;
+    /** Flags that outlive the document: the reload an update ends in, and a spec that moves on */
+    const flag = (name: 'updated' | 'missed', set = false): boolean => {
       try {
-        if (typeof message === 'string') {
-          const parsed = JSON.parse(message) as { type?: unknown; action?: unknown };
-          action = parsed.type ?? parsed.action;
-        }
+        const key = `player-harness-${name}`;
+        if (set) window.sessionStorage.setItem(key, '1');
+        return window.sessionStorage.getItem(key) === '1';
       } catch {
-        action = undefined;
+        return set; // storage blocked
       }
-      if (action === 'sync') {
-        if (synced) return;
-        synced = true;
-      } else if (typeof action === 'string' && DEV_RELOAD_ACTIONS.has(action)) {
-        return;
+    };
+    const missed = () => {
+      // Next's dev entry chunk (a production build's carries a hash), and an app that runs: its socket is up
+      const dev = [...document.scripts].some((script) => /\/_next\/static\/chunks\/main-app\.js/.test(script.src));
+      const running = [...document.querySelectorAll('button')].some((button) => Object.keys(button).some((key) => key.startsWith('__reactProps$')));
+      return dev && running && !held;
+    };
+    window.addEventListener('pagehide', () => { if (missed()) flag('missed', true); });
+    (window as unknown as { __hold: () => Hold }).__hold = () => ({ missed: missed() || flag('missed'), updated: flag('updated') });
+    const log = console.log;
+    console.log = (...args: unknown[]) => {
+      if (typeof args[0] === 'string' && args[0].startsWith('[Fast Refresh] rebuilding')) flag('updated', true);
+      log.apply(console, args);
+    };
+    const Native = window.WebSocket;
+    window.WebSocket = class extends Native {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        if (!hmr.test(String(url))) return;
+        held = true;
+        // The first listener: stopping here keeps the message from the page's own
+        this.addEventListener('message', (event) => {
+          if (typeof event.data === 'string') event.stopImmediatePropagation();
+        });
       }
-      ws.send(message);
-    });
-  });
+    };
+  }, HMR_SOCKET.source);
+  return async () => {
+    if (page.isClosed()) return;
+    for (const frame of page.frames()) {
+      // A frame that goes meanwhile has nothing more to tell
+      const hold = await frame.evaluate(() => (window as unknown as { __hold?: () => Hold }).__hold?.()).catch(() => undefined);
+      expect(hold?.missed ?? false, 'the hot-reload hold holds nothing: next dev moved its socket (HMR_SOCKET)').toBe(false);
+      expect(hold?.updated ?? false, 'a hot update reached the page past the hold (keepDevBuildStill)').toBe(false);
+    }
+  };
 }
+
+interface Hold { missed: boolean; updated: boolean }
+
+/** Every player spec's `test`: the dev server's hot reload held, and the hold checked when the test ends. */
+export const test = base.extend<{ buildStill: void }>({
+  buildStill: [async ({ page }, use) => {
+    const check = await keepDevBuildStill(page);
+    await use();
+    await check();
+  }, { auto: true }],
+});
 
 export async function openHarness(page: Page, opts: HarnessOptions = {}): Promise<Locator> {
   await routeFixtures(page, opts.chapterTitles, opts.captions);
   await routeFeatures(page, opts.features ?? {});
-  await keepDevBuildStill(page);
   // A recorded consent choice keeps the consent banner out of the frame (lib/consent/consent-cookie.ts)
   const origin = new URL(process.env.PLAYER_BASE_URL || `http://localhost:${process.env.PLAYER_PORT || 3101}`).origin;
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: origin }]);

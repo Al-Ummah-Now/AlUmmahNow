@@ -11,8 +11,8 @@
  * the toggle switches the layouts and is remembered, and folding or unfolding (a resize) re-applies
  * the layout live. Runs in the mobile projects.
  */
-import { test, expect, devices, type Locator, type Page } from '@playwright/test';
-import { openHarness } from './harness';
+import { expect, devices, type Locator, type Page } from '@playwright/test';
+import { openHarness, test } from './harness';
 
 const SIDE_COLUMN_FROM = 1024;
 const PRESETS = {

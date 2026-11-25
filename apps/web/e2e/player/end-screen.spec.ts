@@ -9,8 +9,8 @@
  * stops it, Escape cancels, auto-advance at zero, reduced motion, no next video. Every layout at
  * device scale 1 and 2, left to right and right to left; 1px tolerance.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { inkBox, layoutBox, luminance, openHarness, pixels, startPlayback, type Box } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { inkBox, layoutBox, luminance, openHarness, pixels, startPlayback, test, type Box } from './harness';
 import { parseShownNumber } from '../test-utils/digits';
 
 const TOLERANCE = 1;

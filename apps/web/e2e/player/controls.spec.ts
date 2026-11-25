@@ -2,8 +2,8 @@
  * Behaviour of every control, in Chromium, Firefox and WebKit (docs/specs/VIDEO-PLAYER.md section 9).
  * State is read from the media element, so a control that only looks right still fails.
  */
-import { expect, test } from '@playwright/test';
-import { bar, layoutBox, mediaState, openHarness, pauseAt, rect, startPlayback } from './harness';
+import { expect } from '@playwright/test';
+import { bar, layoutBox, mediaState, openHarness, pauseAt, rect, startPlayback, test } from './harness';
 
 test.describe('player controls', () => {
   test('shows only the big play button before playback, then the bar', async ({ page }) => {

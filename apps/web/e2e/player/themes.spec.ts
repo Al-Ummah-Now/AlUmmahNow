@@ -9,8 +9,8 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { contrast, openHarness, pauseAt, pixels, PLAYER_THEMES, rect, startPlayback } from './harness';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { contrast, openHarness, pauseAt, pixels, PLAYER_THEMES, rect, startPlayback, test } from './harness';
 
 const THEMES_DIR = path.resolve(__dirname, '../../../../packages/fanous-tokens/themes');
 const tokensOf = (theme: string): Record<string, string> => JSON.parse(fs.readFileSync(path.join(THEMES_DIR, theme, 'player.json'), 'utf8')).player;
