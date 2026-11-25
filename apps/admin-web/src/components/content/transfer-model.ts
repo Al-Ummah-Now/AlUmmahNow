@@ -58,7 +58,6 @@ export function confirmMatches(typed: string, values: readonly string[]): boolea
  * in the other: "@handle" stays "@handle" and a parenthesised id does not split across the sentence. Direction
  * controls in the value go.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- callers still say the locale
-export function bidiIsolate(value: string, _locale?: string): string {
+export function bidiIsolate(value: string): string {
   return value ? isolateText(value) : '';
 }

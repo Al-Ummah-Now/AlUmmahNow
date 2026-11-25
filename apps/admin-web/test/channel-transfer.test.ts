@@ -69,13 +69,11 @@ describe('transfer search results as Autocomplete items', () => {
 
 describe('transfer text', () => {
   it('isolates a value inside a sentence, in either language', () => {
-    for (const locale of ['ar', 'en']) {
-      assert.equal(bidiIsolate('@nasheeds', locale), '\u2068@nasheeds\u2069');
-      assert.equal(bidiIsolate('', locale), '');
-      // A name can't end its isolate or reorder the text around it
-      assert.equal(bidiIsolate('\u202eAmina\u2069\nx', locale), '\u2068Amina x\u2069');
-    }
-    const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds', 'ar'), id: bidiIsolate('usr_1', 'ar') });
+    assert.equal(bidiIsolate('@nasheeds'), '\u2068@nasheeds\u2069');
+    assert.equal(bidiIsolate(''), '');
+    // A name can't end its isolate or reorder the text around it
+    assert.equal(bidiIsolate('\u202eAmina\u2069\nx'), '\u2068Amina x\u2069');
+    const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds'), id: bidiIsolate('usr_1') });
     assert.ok(label.includes('\u2068@nasheeds\u2069') && label.includes('\u2068usr_1\u2069'));
   });
 

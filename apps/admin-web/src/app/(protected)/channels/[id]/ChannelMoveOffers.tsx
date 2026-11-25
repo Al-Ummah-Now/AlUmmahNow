@@ -26,7 +26,7 @@ interface Props {
 }
 
 export function ChannelMoveOffers({ channelId, offers, stop }: Props) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const router = useRouter();
   const { run, busy, error, message } = useContentAction();
@@ -76,7 +76,7 @@ export function ChannelMoveOffers({ channelId, offers, stop }: Props) {
                     <ConfirmButton
                       label={t('channels.moveOffer.stop')}
                       title={t('channels.moveOffer.stopTitle')}
-                      body={t('channels.moveOffer.stopBody', { to: bidiIsolate(name(offer.to), locale) })}
+                      body={t('channels.moveOffer.stopBody', { to: bidiIsolate(name(offer.to)) })}
                       bullets={[t('channels.moveOffer.stopTold'), t('channels.moveOffer.stopAgain')]}
                       confirmLabel={t('channels.moveOffer.stop')}
                       withReason
