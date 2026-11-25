@@ -109,6 +109,8 @@ export const Video = z.object({
         kind: z.enum(['encode_failed', 'needs_reupload', 'stalled']),
         reason: z.string().optional(),
         at: z.string(),
+        // source_changed: other bytes arrived than were sent (lib/media/source-changed.ts)
+        code: z.enum(['source_changed']).optional(),
     }).optional(),
     // Terminal status whose result (uploader notification, subscriber fan-out)
     // is safely queued; the processing loop re-announces until it matches.

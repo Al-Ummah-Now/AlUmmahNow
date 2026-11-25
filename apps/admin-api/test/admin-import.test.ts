@@ -208,7 +208,7 @@ describe('/api/admin/import batches and items (TA-5)', () => {
   const SHA = 'f'.repeat(64);
   const FILE = { sha256: SHA, fileName: 'lesson-01.mp4', fileSize: 4096, mimeType: 'video/mp4', title: 'Lesson 1', fingerprint: { name: 'lesson-01.mp4', size: 4096, lastModified: 1, hash: 'c'.repeat(64) } };
 
-  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean; statusDown?: boolean; reupload?: boolean } = {}) {
+  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean; statusDown?: boolean; reupload?: boolean; otherVideo?: boolean } = {}) {
     const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
     let n = 0;
     const videos = new Map<string, string>();
@@ -229,10 +229,11 @@ describe('/api/admin/import batches and items (TA-5)', () => {
             if (opts.statusDown) return json(500, { success: false, code: 'internal_error', error: 'down' });
             return json(200, { success: true, result: { items: body.items.map((i: any) => ({ videoId: i.videoId, video: { title: `T ${i.videoId}`, processingStatus: 'completed', isDeleted: false, ...(opts.reupload ? { needsReupload: true } : {}) }, attach: null, captions: [] })) } });
           }
+          if (url.pathname.endsWith('/sidecars')) return json(202, { success: true, result: { jobId: 'job-1', status: 'queued' } });
           if (url.pathname === '/internal/admin/import/initiate') {
             if (opts.refuseInitiate) return json(409, { success: false, code: 'channel_suspended', error: 'The channel is suspended' });
             const key = body.fingerprint?.hash ?? String(++n);
-            const reused = videos.has(key);
+            const reused = videos.has(key) && !opts.otherVideo;
             if (!reused) videos.set(key, `vid-${videos.size + 1}`);
             return json(200, { success: true, result: { videoId: videos.get(key), tusSessionId: `sess-${++n}`, chunkSize: 1, resumable: true, reused } });
           }
@@ -349,6 +350,24 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     assert.deepEqual([again.body.result.item.id, again.body.result.item.state], [first.body.result.item.id, 'initiated']);
     const sent = h.calls.filter((x) => x.path === '/internal/admin/import/initiate');
     assert.deepEqual(sent.map((x) => x.body.sha256), [SHA, SHA]);
+    assert.deepEqual(sent.map((x) => x.body.videoId), [undefined, first.body.result.item.videoId]);
+  });
+
+  it('the attach job stays with its video and goes when the file gets another one', async () => {
+    const opts = { reupload: true, otherVideo: false };
+    const h = importSetup(opts);
+    const batch = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    const send = () => h.req(`/api/admin/import/batches/${batch}/items`, post(FILE));
+    const id = (await send()).body.result.item.id;
+    const attached = await h.req(`/api/admin/import/items/${id}/sidecars`, post({ chapters: '0:00 Start' }));
+    assert.equal(attached.status, 202);
+    const jobId = attached.body.result.jobId;
+    await h.req(`/api/admin/import/items/${id}/uploaded`, post({}));
+    assert.equal((await send()).body.result.item.attachJobId, jobId);
+    opts.otherVideo = true;
+    const other = (await send()).body.result.item;
+    assert.equal(other.attachJobId, null);
+    assert.equal((await h.req(`/api/admin/import/items/${id}/uploaded`, post({}))).body.result.item.attachJobId, null);
   });
 
   it('a refused initiate leaves the item failed with the reason and no audit row for it', async () => {

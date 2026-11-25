@@ -12,6 +12,7 @@
  */
 
 import { markPublished } from '../published';
+import { isSourceChanged, SOURCE_CHANGED_REASON } from '../media/source-changed';
 
 export interface BunnyVideoState {
 	guid?: string;
@@ -44,7 +45,7 @@ export interface SyncableVideo {
 	height?: number;
 	/** Bunny's auto thumbnail does not exist yet: clients show the placeholder */
 	thumbnailPending?: boolean;
-	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string };
+	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string; code?: 'source_changed' };
 	/** First time Bunny's playlist played (time to playable vs R2, epic #687) */
 	playableAt?: string;
 	/** Publish state (lib/published.ts): a public video that becomes ready is published then */
@@ -138,6 +139,8 @@ export function uploadStatusView(
 	message: string;
 } {
 	const encode = bunny?.encodeProgress ?? 0;
+	// Bunny encoded bytes that are not the file: failed until it is uploaded again
+	if (isSourceChanged(record)) return { status: 'failed', progress: 0, message: SOURCE_CHANGED_REASON };
 	switch (phase) {
 		case 'awaiting_upload':
 			// Bunny still waits for bytes, but the upload was given up on
@@ -223,6 +226,12 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 			patch.uploadStatus === 'ready' ? 'ready' : patch.uploadStatus === 'failed' ? 'failed' : null;
 		return { outcome, phase, patch, unset, reason, terminalTransition: terminal };
 	};
+
+	// Other bytes arrived than were sent: whatever Bunny made of them is never the video
+	if (isSourceChanged(video)) {
+		setStatus('failed');
+		return finish('needs_reupload', SOURCE_CHANGED_REASON);
+	}
 
 	if ((phase === 'ready' || phase === 'playable') && bunny) {
 		// Playable at the first encoded resolution: ready now (announced once,

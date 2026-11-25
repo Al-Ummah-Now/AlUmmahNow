@@ -5,18 +5,20 @@
 import { originalManifestKey, originalPrefix, partsCover, partsFromKeys, planOriginalRange, type OriginalManifest, type OriginalPart } from '@al-ummah/shared-types';
 import type { Env } from './env';
 
-const index = new Map<string, { at: number; size: number; parts: OriginalPart[] } | null>();
-const INDEX_TTL_MS = 10 * 60 * 1000;
+/** Parts by upload (a finished upload's parts never change; a re-upload is another upload id). */
+const index = new Map<string, { size: number; parts: OriginalPart[] }>();
 
 /** The original's parts, or null when there is no complete original (then Bunny is the source). */
 export async function originalIndex(env: Pick<Env, 'MEDIA_ORIGINALS'>, videoId: string): Promise<{ size: number; parts: OriginalPart[] } | null> {
 	const bucket = env.MEDIA_ORIGINALS;
 	if (!bucket) return null;
-	const hit = index.get(videoId);
-	if (hit !== undefined && hit && Date.now() - hit.at < INDEX_TTL_MS) return hit;
+	// Read every time: it names the upload that counts now
 	const m = await bucket.get(originalManifestKey(videoId));
 	if (!m) return null;
 	const manifest = (await m.json()) as OriginalManifest;
+	const key = `${videoId}/${manifest.uploadId}/${manifest.size}`;
+	const hit = index.get(key);
+	if (hit) return hit;
 	const objects: { key: string; size: number }[] = [];
 	let cursor: string | undefined;
 	do {
@@ -26,8 +28,8 @@ export async function originalIndex(env: Pick<Env, 'MEDIA_ORIGINALS'>, videoId: 
 	} while (cursor);
 	const parts = partsFromKeys(objects, videoId, manifest.uploadId);
 	if (!partsCover(parts, manifest.size).complete) return null;
-	const entry = { at: Date.now(), size: manifest.size, parts };
-	index.set(videoId, entry);
+	const entry = { size: manifest.size, parts };
+	index.set(key, entry);
 	if (index.size > 100) index.delete(index.keys().next().value!);
 	return entry;
 }

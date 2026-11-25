@@ -32,6 +32,7 @@ import {
 import { announceAndRecordProcessingResult, pendingProcessingResult } from '../../lib/notification-events';
 import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET, isStillFlagged, latestFlagged, type FlaggedThumbnails } from '../../lib/thumbnail/repair';
+import { isSourceChanged, SOURCE_CHANGED_REASON } from '../../lib/media/source-changed';
 import { readOwnershipDrift } from '../../lib/search/ownership';
 import { isOwnershipKind, ownershipRebuildJobs, startOwnershipRebuild, type OwnershipRebuildEnv } from '../../lib/search/ownershipRebuild';
 import { isSearchEntity, readSearchDrift, searchReconcileJobs, startSearchReconcile, type SearchReconcileEnv } from '../../lib/search/backfill';
@@ -403,7 +404,10 @@ export function createProcessingInternalRouter() {
 		for (const id of ids) {
 			try {
 				// Clear a stalled/failed flag so the loop decides again from Bunny's state
+				let changed = false;
 				await new R2Repository<HealthVideo>(c.env.videos).updateObject(id, (fresh) => {
+					changed = isSourceChanged(fresh);
+					if (changed) return false;
 					if (!fresh.processingIssue && fresh.uploadStatus !== 'failed') return false;
 					delete fresh.processingIssue;
 					if (fresh.uploadStatus === 'failed') {
@@ -413,6 +417,10 @@ export function createProcessingInternalRouter() {
 					}
 					return true;
 				});
+				if (changed) {
+					results.push({ videoId: id, started: false, why: SOURCE_CHANGED_REASON });
+					continue;
+				}
 				results.push({ videoId: id, ...(await startProcessingLoop(c.env, id, { reason: 'admin-retry', force: true, initialDelaySeconds: 0 })) });
 			} catch (error) {
 				results.push({ videoId: id, started: false, why: error instanceof Error ? error.message : String(error) });

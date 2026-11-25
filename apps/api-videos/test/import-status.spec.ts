@@ -86,6 +86,19 @@ describe('import status (Imports view)', () => {
 		assert.deepEqual(gone, { videoId: 'v9', video: null, attach: null, captions: [] });
 	});
 
+	it('says a file must come again only for a failed video that asked for it', async () => {
+		const { env: e } = env();
+		const ask = async (over: object) => {
+			await e.videos.put('v1', JSON.stringify({ id: 'v1', title: 't', userId: OWNER, channelId: 'ch1', ...over }));
+			return (await importStatus(e as never, [{ videoId: 'v1' }]))[0].video;
+		};
+		const issue = (kind: string) => ({ processingIssue: { kind, at: '2026-11-25T07:00:00Z' } });
+		assert.equal((await ask({ uploadStatus: 'failed', ...issue('needs_reupload') }))?.needsReupload, true);
+		for (const over of [{ uploadStatus: 'failed', ...issue('encode_failed') }, { uploadStatus: 'uploading', ...issue('needs_reupload') }, { uploadStatus: 'failed' }, { uploadStatus: 'ready' }]) {
+			assert.ok(!('needsReupload' in (await ask(over))!), JSON.stringify(over));
+		}
+	});
+
 	it('an attach job from before TA-8 has no list of what came: only what is done is known', async () => {
 		const { env: e } = env();
 		const job = await createJob(e as never, { kind: 'import.attach', targetKind: 'video', targetId: 'v1', params: { videoId: 'v1', key: 'k', done: ['playlist'], waits: 0, warnings: [] }, actorId: ADMIN });

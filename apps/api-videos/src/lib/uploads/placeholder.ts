@@ -12,6 +12,8 @@ import { bunnyLibraries, pickLibrary, type BunnyLibrariesEnv, type LibraryHints 
 import { bunnyPhase } from '../processing/sync';
 import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from '../bunny/tus';
 import { buildTusUploadId, type VideoTusUpload } from '../../endpoints/video/tus/tusProxy';
+import { isSourceChanged, withoutBunnyCopy } from '../media/source-changed';
+import { underHold } from '@al-ummah/shared-types';
 import type { ReuseVerdict } from './initiateOnce';
 
 export interface PlaceholderRecord {
@@ -24,7 +26,7 @@ export interface PlaceholderRecord {
 	abandoned?: unknown;
 	fileSize?: number;
 	tusUpload?: VideoTusUpload;
-	processingIssue?: { kind: string; reason?: string; at: string };
+	processingIssue?: { kind: string; reason?: string; at: string; code?: string };
 	[key: string]: unknown;
 }
 
@@ -39,16 +41,19 @@ export async function checkReusable(
 	env: Pick<ProcessingEnv, 'videos' | 'bunny-stream-key' | 'bunny_stream_library_id'>,
 	videoId: string,
 	/** The record's owner (the channel owner for a member's upload) and, for a member, the uploader (lib/channelAccess.ts uploadIdentity) */
-	who: { ownerId: string; uploadedBy?: string; channelId: string },
+	who: { ownerId: string; uploadedBy?: string; channelId: string; /** An importing admin goes on with another admin's file */ anyUploader?: boolean },
 ): Promise<ReuseVerdict> {
 	const object = await env.videos.get(videoId);
 	if (!object) return { kind: 'replace', why: 'deleted' };
 	const video = await object.json<PlaceholderRecord>();
-	if (video.userId !== who.ownerId || video.channelId !== who.channelId || (video.uploadedBy || undefined) !== (who.uploadedBy || undefined)) {
+	if (video.userId !== who.ownerId || video.channelId !== who.channelId || (!who.anyUploader && (video.uploadedBy || undefined) !== (who.uploadedBy || undefined))) {
 		return { kind: 'replace', why: 'different owner' };
 	}
 	if (video.isDeleted || video.abandoned) return { kind: 'replace', why: 'abandoned' };
 	if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return { kind: 'replace', why: 'finished' };
+	// Other bytes arrived than were sent: the same video takes the file again, whatever Bunny made of
+	// them (its copy goes, reuseFields). Under a hold that copy stays, so the video takes nothing
+	if (isSourceChanged(video)) return underHold(video) ? { kind: 'replace', why: 'held' } : { kind: 'reuse' };
 	// Bunny's id of the video (new videos: the stored GUID). None: the upload goes to our own
 	// target (lib/media/r2-tus.ts), which keeps its bytes until the video is removed
 	const bunnyId = bunnyRef(video as never);
@@ -78,7 +83,13 @@ export function reuseFields(
 ): Record<string, unknown> | false {
 	if (fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing' || fresh.isDeleted || fresh.abandoned) return false;
 	const fields: Record<string, unknown> = { ...metadata, uploadStatus: 'uploading', dateModified: nowIso, lastInitiateAt: nowIso };
-	if (fresh.processingIssue?.kind === 'needs_reupload') fields.processingIssue = undefined;
+	// The wrong bytes' copy at Bunny takes no second upload: this one goes to our own target
+	Object.assign(fields, withoutBunnyCopy(fresh, nowIso)?.fields);
+	if (fresh.processingIssue?.kind === 'needs_reupload') {
+		fields.processingIssue = undefined;
+		// The new attempt gets its own "ready" / "failed" announcement (lifecycle.ts clearUploadFlags)
+		fields.processingAnnounced = undefined;
+	}
 	return fields;
 }
 

@@ -502,7 +502,7 @@ app.post('/batches/:id/items', async (c) => {
   let initiated: Initiated;
   try {
     // The same file again resumes its video (api-videos' file claim on the fingerprint)
-    initiated = await videos<Initiated>(c, '/import/initiate', { method: 'POST', json: { ...upload, channelId: batch.channel_id, sha256 } });
+    initiated = await videos<Initiated>(c, '/import/initiate', { method: 'POST', json: { ...upload, channelId: batch.channel_id, sha256, ...(item.video_id ? { videoId: item.video_id } : {}) } });
   } catch (error) {
     await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
     const reason = error instanceof Error ? error.message.slice(0, 1000) : 'The upload could not be started';
@@ -510,9 +510,11 @@ app.post('/batches/:id/items', async (c) => {
     throw error;
   }
   await setAuditSubject(db, auditId, 'import', initiated.videoId).catch((e) => logger.warn('[AdminImport] Could not point the audit row at the video', { auditId, error: String(e) }));
-  await db.prepare("UPDATE import_items SET video_id = ?, state = 'initiated', error = NULL, updated_at = ? WHERE id = ?").bind(initiated.videoId, now(), item.id).run();
+  // Another video than before: the attach job was the earlier one's
+  const attachJobId = initiated.videoId === item.video_id ? item.attach_job_id ?? null : null;
+  await db.prepare("UPDATE import_items SET video_id = ?, attach_job_id = ?, state = 'initiated', error = NULL, updated_at = ? WHERE id = ?").bind(initiated.videoId, attachJobId, now(), item.id).run();
   logger.info('[AdminImport] Upload opened', { itemId: item.id, videoId: initiated.videoId, reused: !!initiated.reused, actorId: actorOf(c) });
-  return c.json({ success: true, result: { item: itemView({ ...item, video_id: initiated.videoId }), upload: initiated } }, existing ? 200 : 201);
+  return c.json({ success: true, result: { item: itemView({ ...item, video_id: initiated.videoId, attach_job_id: attachJobId }), upload: initiated } }, existing ? 200 : 201);
 });
 
 async function setItemState(c: C, state: 'uploaded' | 'failed', error: string | null) {

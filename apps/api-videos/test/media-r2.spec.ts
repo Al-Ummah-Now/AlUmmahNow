@@ -506,6 +506,52 @@ describe('failure details', () => {
 		assert.equal(record().processingIssue.kind, 'encode_failed');
 	});
 
+	it('other bytes on a video Bunny holds too: failed, kept failed, then a right transcode makes it ready', async () => {
+		const { requeueAfterBunnyReady } = await import('../src/lib/media/r2-delivery');
+		const { env, raw, videos } = setup({ uploadStatus: 'ready' });
+		const record = () => videos.read(ID);
+		const media = { providers: { bunny: { ref: 'b2859ed0-e618-4d04-8438-874a74a251dd', status: 'ready' }, r2: { ref: ID, status: 'pending' } } };
+		await raw.videos.put(ID, JSON.stringify({ ...record(), sourceSha256: SHA, media }));
+		await enqueueTranscode(env, ID, 'upload');
+		const fail = { type: 'failed' as const, error: 'source_changed', final: true };
+		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, fail));
+		assert.equal(record().uploadStatus, 'failed');
+		assert.equal(record().processingIssue.code, 'source_changed');
+		assert.equal((await requeueAfterBunnyReady(env, ID)).queued, false);
+		// An admin transcodes it again (Delivery panel) and the bytes are right after all
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage, { type: 'ready', result: RESULT }));
+		assert.equal(record().uploadStatus, 'ready');
+		assert.equal(record().processingIssue, undefined);
+		// A later transcode of a video with a rendition that plays does not take it down
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[2] as TranscodeJobMessage, fail));
+		assert.equal(record().uploadStatus, 'ready');
+	});
+
+	it('the Errors page offers no "Transcode again" for other bytes', async () => {
+		const bodies: any[] = [];
+		const real = globalThis.fetch;
+		globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+			if (init?.body) bodies.push(JSON.parse(String(init.body)));
+			return new Response('{}');
+		}) as typeof fetch;
+		try {
+			for (const error of ['source_changed', 'no_video_stream']) {
+				const { env, raw } = setup();
+				Object.assign(env, { ERRORS_INGEST_URL: 'https://errors.example.com/ingest', INTERNAL_API_KEY: 'k' });
+				await enqueueTranscode(env, ID, 'upload');
+				const waits: Promise<unknown>[] = [];
+				await applyJobEvent(env, { waitUntil: (p: Promise<unknown>) => void waits.push(p) } as never, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error, final: true }));
+				await Promise.all(waits);
+				const text = JSON.stringify(bodies.splice(0));
+				assert.equal(text.includes('Transcode again'), error !== 'source_changed', text);
+			}
+		} finally {
+			globalThis.fetch = real;
+		}
+	});
+
 	it('tells an audio file from a damaged one on the Errors page, without the hash', async () => {
 		const { failureDetails } = await import('../src/lib/media/r2-delivery');
 		const about = (f: object) => failureDetails({ videoId: ID, jobId: 'j', attempt: 1, error: 'no_video_stream', sourceFacts: { ...AUDIO, ...f } as never }, undefined);

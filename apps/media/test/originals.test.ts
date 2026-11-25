@@ -73,6 +73,18 @@ describe('serving a kept original', () => {
 		assert.equal(res!.headers.get('x-media-source'), 'original');
 		assert.equal(await res!.text(), 'efghijkl');
 	});
+	it('serves the re-upload as soon as its manifest names it', async () => {
+		const v = '3b3c2a1e-1111-2222-3333-444455556666';
+		const manifest = (uploadId: string) => JSON.stringify({ uploadId, size: 6, parts: 1, completedAt: 'x' });
+		const store: Record<string, string> = { [originalManifestKey(v)]: manifest('up1'), [originalPartKey(v, 'up1', 0)]: 'wrong!' };
+		const env = { MEDIA_ORIGINALS: bucket(store) as never };
+		assert.equal(await (await serveOriginal(env, v, 'bytes=0-5'))!.text(), 'wrong!');
+		// Same size, same video, same isolate: only the upload id is new
+		store[originalPartKey(v, 'up2', 0)] = 'right!';
+		assert.equal(await (await serveOriginal(env, v, 'bytes=0-5'))!.text(), 'wrong!', 'not finished yet');
+		store[originalManifestKey(v)] = manifest('up2');
+		assert.equal(await (await serveOriginal(env, v, 'bytes=0-5'))!.text(), 'right!');
+	});
 	it('gives null (use Bunny) without a manifest or with a gap', async () => {
 		const other = '2b3c2a1e-1111-2222-3333-444455556666';
 		assert.equal(await serveOriginal({ MEDIA_ORIGINALS: bucket({ [originalPartKey(other, 'up1', 0)]: 'abc' }) as never }, other, null), null);
