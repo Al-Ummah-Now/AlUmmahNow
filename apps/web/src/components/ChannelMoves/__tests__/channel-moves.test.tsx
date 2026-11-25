@@ -3,7 +3,7 @@
  * account is told it isn't its channel, the form offers the channel, and the offer page answers.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { apiErrorMessage } from '@al-ummah/shared-types';
 import MoveChannel from '../MoveChannel';
@@ -17,6 +17,8 @@ let lang: 'en' | 'ar' = 'en';
 const reloadChannels = jest.fn();
 
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: lang === 'ar' ? AR : EN, lang, dir: lang === 'ar' ? 'rtl' : 'ltr', isRTL: lang === 'ar' }) }));
+let mockProfile: Record<string, unknown> | null = null;
+jest.mock('@/hooks/useProfile', () => ({ useProfile: () => ({ profile: mockProfile }) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { id: 'u2', displayName: 'Omar Haddad', email: 'omar@example.com' }, reloadChannels }) }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }), usePathname: () => '/en' }));
 jest.mock('@/components/NotFoundPage', () => ({ __esModule: true, default: () => <div data-testid="not-found-page" /> }));
@@ -51,6 +53,7 @@ const move = (over: Partial<React.ComponentProps<typeof MoveChannel>> = {}) => r
 
 beforeEach(() => {
   lang = 'en';
+  mockProfile = null;
   jest.clearAllMocks();
   window.sessionStorage.clear();
   api.loadMoveState.mockResolvedValue({ offer: null, movableAt: null });
@@ -83,6 +86,12 @@ describe('Move channel', () => {
     expect(new URL(screen.getByTestId('move-other-account').getAttribute('href')!, 'https://x.test').searchParams.get('prompt')).toBe('login');
     expect(screen.queryByTestId('move-form')).toBeNull();
     expect(api.makeMoveOffer).not.toHaveBeenCalled();
+    cleanup();
+    // Once the profile loads, its name in the page's language, as in the header
+    lang = 'ar';
+    mockProfile = { displayName: 'Omar Haddad', displayNameLocalized: { ar: 'عمر حداد' } };
+    move({ authTime: now() - 3600 });
+    expect(await screen.findByTestId('move-not-yours')).toHaveTextContent(AR.channelMoves.notYours.signedInAs.replace('{name}', iso('عمر حداد')));
   });
 
   it('offers the channel to an admin picked from the list, with the handle typed', async () => {

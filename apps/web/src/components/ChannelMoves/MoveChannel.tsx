@@ -13,6 +13,7 @@ import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocompl
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { useProfile } from '@/hooks/useProfile';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { isFreshSignIn, isMoveError, isolate, loadMoveState, makeMoveOffer, moveErrorMessage, moveName, searchMoveReceivers, withdrawMove, type ChannelMoveState, type MoveOffer, type MoveReceiver } from '@/lib/channels/moves';
 import { userDisplayName } from '@/lib/display-name';
@@ -109,7 +110,9 @@ function NotYours({ channelId, locale }: { channelId: string; locale: string }) 
   const { t, lang } = useLanguage();
   const { user } = useMultiAccount();
   const n = t.channelMoves.notYours;
-  const name = user ? userDisplayName(user, lang, user.email) : '';
+  // As the header shows it: the profile's name in this language; until it loads, the session's
+  const { profile } = useProfile(user ?? null);
+  const name = user ? userDisplayName(profile, lang) || userDisplayName(user, lang, user.email) : '';
   return (
     <section className={`${CARD} space-y-3`} data-testid="move-not-yours">
       <h2 className={`text-lg font-semibold ${TEXT}`}>{n.title}</h2>
