@@ -48,7 +48,7 @@ export async function roleOnChannel(env: ChannelAccessEnv, channelId: string, us
  * it moves at once, whichever records still name the previous owner. Throws when the channel cannot
  * be read (callers refuse).
  */
-async function roleOnRecord(env: ChannelAccessEnv, record: { userId?: string | null; channelId?: string | null }, userId: string): Promise<ChannelRole | null> {
+export async function roleOnRecord(env: ChannelAccessEnv, record: { userId?: string | null; channelId?: string | null }, userId: string): Promise<ChannelRole | null> {
 	if (record.channelId && env.channels) {
 		const object = await env.channels.get(record.channelId);
 		if (object) {
