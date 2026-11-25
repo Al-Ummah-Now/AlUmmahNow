@@ -25,7 +25,6 @@ import {
   isMoneyRule,
   workflowDomainVisible,
   workflowFloorFor,
-  hasContentPermission,
   isWorkflowActionType,
   isFeatureKey,
   type WorkflowActionType,
@@ -36,7 +35,6 @@ import type { AdminBindings, AuthContext } from '../base/types';
 import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
 import { writeAudit } from '../lib/content/audit';
-import { hasAdminRole } from '../lib/roles';
 import { stepUpAnswer } from '../middleware/passkeys';
 import {
   WorkflowError,
@@ -65,6 +63,7 @@ import { registerTierExecutor } from '../lib/workflows/tier-actions';
 import { FEATURE_PRECONDITIONS } from '../lib/feature-preconditions';
 import type { WorkflowCtx, WorkflowEvent } from '../lib/workflows/types';
 import { enqueueWorkflowNotify } from '../lib/workflows/notify';
+import { mayReadWorkflows, readerSeesMoney } from '../lib/workflows/visibility';
 import type { D1Database } from '../lib/types';
 
 type Env = { Bindings: AdminBindings & { PLATFORM_OWNER_USER_IDS?: string }; Variables: { auth?: AuthContext } };
@@ -135,7 +134,7 @@ async function actorFor(c: C, ctx: WorkflowCtx): Promise<WorkflowActor> {
 /** Admins and finance-list members see the pages; money requests also need support:read or the finance list. */
 async function needRead(c: C, ctx: WorkflowCtx): Promise<WorkflowActor> {
   const actor = await actorFor(c, ctx);
-  if (!hasAdminRole(actor.roles) && !actor.financePermissions.length) throw new Refused(403, 'forbidden');
+  if (!mayReadWorkflows(actor)) throw new Refused(403, 'forbidden');
   return actor;
 }
 /** Money is decided by the finance list, never tech staff or the owner (the engine's money floor). */
@@ -146,7 +145,7 @@ const mayEditRule = (actor: WorkflowActor, type: WorkflowActionType, scope: stri
 /** May this person retry a failed apply? The same check as POST /requests/:id/retry. */
 const mayRetry = (actor: WorkflowActor, domain: string | undefined) => (domain === 'money' ? moneyPerson(actor) : actor.roles.includes('super_admin'));
 /** Who sees money requests: the finance list and support:read. */
-export const seesMoney = (c: { get(key: 'auth'): AuthContext | undefined }, actor: WorkflowActor) => actor.financePermissions.length > 0 || hasContentPermission(c.get('auth')?.roles, 'support:read');
+export const seesMoney = (c: { get(key: 'auth'): AuthContext | undefined }, actor: WorkflowActor) => readerSeesMoney({ ...actor, roles: c.get('auth')?.roles ?? [] });
 
 app.onError((error, c) => {
   if (error instanceof Refused) return apiError(c, error.status, error.code);
