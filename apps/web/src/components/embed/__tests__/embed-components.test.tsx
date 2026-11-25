@@ -20,6 +20,7 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useEffect } = require('react') as typeof import('react');
     useEffect(() => {
+      (globalThis as { __playerReady?: unknown }).__playerReady = props.onPlayerReady;
       const fake = (globalThis as { __fakePlayer?: unknown }).__fakePlayer;
       if (fake) (props.onPlayerReady as (p: unknown) => void)(fake);
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,6 +112,9 @@ afterEach(() => {
 
 /** Lets a gesture start's 1 ms timer (lib/video/start-playback.ts) and its play() promises run. */
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+
+/** The frame's player becomes ready now (a test that rendered without a fake player). */
+const readyLater = (player: unknown) => (globalThis as { __playerReady?: (p: unknown) => void }).__playerReady!(player);
 
 const video = (id: string, extra: Partial<EmbedVideo> = {}): EmbedVideo => ({
   id,
@@ -286,20 +290,50 @@ describe('EmbedPlayer', () => {
     expect(player.calls).toHaveLength(1);
   });
 
+  const hostCommand = (command: string) => act(() => {
+    const event = new MessageEvent('message', { data: { type: 'aun:v1:command', command }, origin: 'https://host.example' });
+    Object.defineProperty(event, 'source', { value: window.parent });
+    window.dispatchEvent(event);
+  });
+
   it("the host page's pause command before the source is attached cancels the start", async () => {
     embedInto('https://host.example/page');
     const player = fakePlayer(undefined, { state: { readyState: 0, paused: true } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
-    act(() => {
-      const event = new MessageEvent('message', { data: { type: 'aun:v1:command', command: 'pause' }, origin: 'https://host.example' });
-      Object.defineProperty(event, 'source', { value: window.parent });
-      window.dispatchEvent(event);
-    });
+    hostCommand('pause');
     await act(async () => player.fire('loadstart'));
     await settle();
     await act(async () => player.fire('loadedmetadata'));
+    await settle();
     expect(player.calls).toEqual([]);
+  });
+
+  it.each([
+    ['pause', []],
+    ['pause, play', [{ muted: false }]],
+  ])("the host page's commands before there is a player are remembered: %s", async (commands, calls) => {
+    embedInto('https://host.example/page');
+    const player = fakePlayer();
+    gesture(); // the player is not ready yet
+    for (const command of commands.split(', ')) hostCommand(command);
+    await act(async () => readyLater(player));
+    await settle();
+    expect(player.calls).toEqual(calls);
+  });
+
+  it('sound refused and the muted play refused too: no unmute control, and the sound is back', async () => {
+    const player = fakePlayer();
+    player.play = () => {
+      player.calls.push({ muted: player.muted() as boolean });
+      return Promise.reject(Object.assign(new Error('refused'), { name: 'NotAllowedError' }));
+    };
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    await settle();
+    expect(player.calls).toEqual([{ muted: false }, { muted: true }]);
+    expect(player.muted()).toBe(false);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
   });
 
   it('a mute remembered from another video does not silence a gesture start', async () => {

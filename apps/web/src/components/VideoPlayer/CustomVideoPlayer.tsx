@@ -52,7 +52,7 @@ import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
-import { beginStart } from '@/lib/video/start-playback';
+import { beginStart, type PlaybackStart } from '@/lib/video/start-playback';
 import { recoverStuckSeeks } from '@/lib/video/seek-recovery';
 import { playerAnalyticsContext } from '@/lib/analytics/traffic-source';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
@@ -245,6 +245,8 @@ export default function CustomVideoPlayer({
   // Starts playback the page asked for (set once the player is ready); the source swap of the next
   // video calls it again, since the player is not created anew
   const startAutoplayRef = useRef<(player: ExtendedPlayer) => void>(() => undefined);
+  // That start, while it may still play: the next video's start, or a pause, ends it
+  const pendingStartRef = useRef<PlaybackStart | null>(null);
   // The video the player last loaded (the source swap of a seamless next compares against it)
   const loadedVideoIdRef = useRef(videoId);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
@@ -689,14 +691,16 @@ export default function CustomVideoPlayer({
         startAutoplayRef.current = (extended: ExtendedPlayer) => {
           const attempt = () => Promise.resolve(extended.play());
           let retried = false;
+          pendingStartRef.current?.cancel();
           const pending = beginStart(extended);
+          pendingStartRef.current = pending;
           const start = () => {
-            if (extended.isDisposed()) return;
+            if (extended.isDisposed() || pending.cancelled()) return;
             attempt().catch((error: unknown) => {
               const name = (error as { name?: string } | null)?.name;
-              if (extended.isDisposed()) return;
-              // The source was still being attached (Firefox and WebKit abort that play): once more when
-              // it is, unless it was paused meanwhile
+              // Disposed, paused meanwhile, or the next video's start took over
+              if (extended.isDisposed() || pending.cancelled()) return;
+              // The source was still being attached (Firefox and WebKit abort that play): once more when it is
               if (name === 'AbortError' && !retried) {
                 retried = true;
                 pending.afterReload(start);
@@ -1017,7 +1021,8 @@ export default function CustomVideoPlayer({
       quartilesFiredRef.current.clear();
       lastProgressTrackRef.current = 0;
 
-      // Update player source
+      // Update player source (a start of the last video ends with it)
+      pendingStartRef.current?.cancel();
       player.src(sources);
 
       if (poster) {
