@@ -20,7 +20,13 @@ concurrency:
 
 jobs:
   check:
-    if: github.event_name == 'schedule' || github.event.workflow_run.conclusion == 'success'
+    # After a Release: only a successful production release, a v* tag pushed to this repository (a dispatch is stage-only)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v') &&
+       github.event.workflow_run.head_repository.id == github.event.repository.id)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -51,12 +57,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env production --hours 72 --sealed report.sealed.json --summary summary.json | tee "$GITHUB_STEP_SUMMARY"
       - name: Compare with the last run
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json
           mv next.json baseline.json
       - uses: actions/upload-artifact@v4
