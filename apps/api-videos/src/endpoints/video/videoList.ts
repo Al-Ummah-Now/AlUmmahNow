@@ -9,8 +9,10 @@ import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
-import { titleFilter, waitUntilOf } from "../../lib/search/ownership";
-import { channelVideosFromIndex, isIndexCursor } from "../../lib/search/channelVideoIndex";
+import { waitUntilOf } from "../../lib/search/ownership";
+import { publicSearchCandidateIds } from "../../lib/feedIndex";
+import { apiError } from "../../lib/api-error";
+import { INDEX_CURSOR_PREFIX, MAX_INDEX_PAGE, channelVideosFromIndex, indexOffset, isIndexCursor } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
 import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoListCache";
@@ -64,7 +66,7 @@ export class VideosList extends OptionalAuthRoute {
 				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
 				category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 				format: z.enum(["video", "short"]).optional().describe("Only Shorts (`short`) or everything but Shorts (`video`)"),
-				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it." }).max(200).optional(),
+				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it. With a channel: any part of the title, the caller's own videos that are not public included. Without a channel: a search of public videos only (the first 200 matches in list order), at least 2 characters, every word and the last one by its start; rate limited like `/api/videos/search`, 503 `search_unavailable` while the search index cannot answer." }).max(200).optional(),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -81,6 +83,22 @@ export class VideosList extends OptionalAuthRoute {
 			},
 			"400": {
 				description: "Bad request - invalid input data",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"429": {
+				description: "Too many title searches without a channel",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"503": {
+				description: "The search index cannot answer a title search without a channel",
 				content: {
 					"application/json": {
 						schema: ResponseError,
@@ -110,6 +128,12 @@ export class VideosList extends OptionalAuthRoute {
 
 		// Use channelId from query parameter if provided, otherwise from headers
 		const filterChannelId = queryChannelId || channelId;
+
+		// A title without a channel is a search: the same index, limits and budget as /api/videos/search
+		const searchesTitles = !!titleQuery && !filterChannelId;
+		if (searchesTitles && titleQuery.length < 2) {
+			return apiError(c, 400, "query_too_short", { error: "Search query must be at least 2 characters long" });
+		}
 
 		// The anonymous first page is the same for every visitor and costs an R2
 		// read per video, so it is reused briefly. Pages and channel views are not.
@@ -167,7 +191,8 @@ export class VideosList extends OptionalAuthRoute {
 			// Format and title filters (the playlist picker)
 			if (format === "short" && !isShort(video)) return false;
 			if (format === "video" && isShort(video)) return false;
-			if (titleQuery && !titleMatches(video, titleQuery)) return false;
+			// (a title without a channel is matched by the search index, Arabic spellings included)
+			if (titleQuery && !searchesTitles && !titleMatches(video, titleQuery)) return false;
 
 			// Apply type filter
 			if (filter === "public" && video.isPublic === false) return false;
@@ -199,6 +224,42 @@ export class VideosList extends OptionalAuthRoute {
 			}
 		};
 
+		/** Public videos whose title matches, from the search index; null when it cannot answer. Never the bucket. */
+		const searchTitles = async (): Promise<{ videos: VideoType[]; cursor: string } | null> => {
+			// The caller's own videos that are not public are found with channelId
+			const ids = filter === "private" ? [] : await publicSearchCandidateIds(c.env, titleQuery ?? undefined, {
+				titleOnly: true,
+				order: sort === "views" ? "views" : "date",
+				...(category ? { category } : {}),
+				...(format ? { format } : {}),
+				...(filter === "live" ? { liveOnly: true } : {}),
+			});
+			if (!ids) return null;
+			const size = Math.min(Math.max(Math.floor(Number(limit)) || 1, 1), MAX_INDEX_PAGE);
+			const load = async (id: string) => {
+				const video = await repository.getObject(id);
+				return video && isVisible(video) && isVideoListedFor(video, false) ? video : null;
+			};
+			const start = Math.min(indexOffset(cursor) ?? 0, ids.length);
+			// Title and likes have no index column: every match (at most 200) is loaded and sorted
+			const all = INDEX_SORT[sort as VideoSort] ? ids.slice(start) : ids;
+			const listed: VideoType[] = [];
+			let consumed = 0;
+			while (consumed < all.length && (all === ids || listed.length < size)) {
+				const batch = all.slice(consumed, consumed + (all === ids ? 25 : Math.max(size - listed.length, 4)));
+				for (const video of await Promise.all(batch.map((id) => load(id).catch(() => null)))) {
+					if (all !== ids && listed.length >= size) break;
+					consumed++;
+					if (video) listed.push(video);
+				}
+			}
+			if (all === ids) {
+				const end = start + size;
+				return { videos: listed.sort(compareVideos).slice(start, end), cursor: listed.length > end ? `${INDEX_CURSOR_PREFIX}${end}` : "" };
+			}
+			return { videos: listed, cursor: start + consumed < ids.length ? `${INDEX_CURSOR_PREFIX}${start + consumed}` : "" };
+		};
+
 		const filteredVideos: VideoType[] = [];
 		let nextCursor = cursor;
 		let source: "index" | "scan" = "scan";
@@ -207,10 +268,11 @@ export class VideosList extends OptionalAuthRoute {
 		// The bucket scan reads keys (random UUIDs) in order and sorts only the page
 		// it found: a channel's videos beyond the scanned window came back as empty
 		// pages, and the unfiltered list (home grid, "All videos") showed whichever
-		// keys came first instead of the newest videos (#1029). A category is a column of the index; a
-		// title without a channel is answered from the full-text index (a word of it, or its start).
+		// keys came first instead of the newest videos (#1029). A category is a column of the index.
 		// The scan below is only for an index that cannot answer (unbound, incomplete or failing).
-		const indexed = await channelVideosFromIndex<VideoType>(c.env as never, {
+		const searched = searchesTitles ? await searchTitles() : null;
+		if (searchesTitles && !searched) return apiError(c, 503, "search_unavailable", { error: "Search is not available right now" });
+		const indexed = searched ?? await channelVideosFromIndex<VideoType>(c.env as never, {
 			channelId: filterChannelId || null,
 			cursor,
 			limit,
@@ -220,7 +282,6 @@ export class VideosList extends OptionalAuthRoute {
 				...INDEX_FILTER[(filter || "all") as VideoFilter],
 				...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
 				...(category ? { category } : {}),
-				...(titleQuery && !filterChannelId ? { title: titleFilter(titleQuery) } : {}),
 			},
 			load: loadListed,
 			isListed: (video): video is VideoType => !!video,

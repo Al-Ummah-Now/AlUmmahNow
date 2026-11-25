@@ -39669,10 +39669,10 @@
             "schema": {
               "type": "string",
               "maxLength": 200,
-              "description": "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it."
+              "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it. With a channel: any part of the title, the caller's own videos that are not public included. Without a channel: a search of public videos only (the first 200 matches in list order), at least 2 characters, every word and the last one by its start; rate limited like `/api/videos/search`, 503 `search_unavailable` while the search index cannot answer."
             },
             "required": false,
-            "description": "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it.",
+            "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it. With a channel: any part of the title, the caller's own videos that are not public included. Without a channel: a search of public videos only (the first 200 matches in list order), at least 2 characters, every word and the last one by its start; rate limited like `/api/videos/search`, 503 `search_unavailable` while the search index cannot answer.",
             "name": "q",
             "in": "query"
           },
@@ -40158,8 +40158,58 @@
               }
             }
           },
+          "429": {
+            "description": "Too many title searches without a channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The search index cannot answer a title search without a channel",
             "content": {
               "application/json": {
                 "schema": {

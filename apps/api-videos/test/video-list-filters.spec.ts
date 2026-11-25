@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ownershipCompleteKey, ownershipUpsertStatement, projectOwnership, projectVideo, upsertSearchRow } from '@al-ummah/shared-types';
 import { VideosList } from '../src/endpoints/video/videoList';
 import R2Repository from '../src/lib/r2Repo';
@@ -8,7 +9,7 @@ import { SqliteD1 } from './search-sqlite-d1';
 
 /**
  * GET /api/videos with a category or a title and no channel read the videos bucket (up to 300 objects a
- * request) though the index can answer: the category is a column, a title is in the full-text index.
+ * request) though the indexes can answer: the category is a column, a title is a search.
  */
 const N = 2_000;
 const START = Date.parse('2026-01-01T00:00:00.000Z');
@@ -57,7 +58,7 @@ const list = async (env: unknown, query: string, user: string | null = null) => 
 };
 
 /** The plans of the list's own reads: an index for each, and never the whole table. */
-function plans(db: SqliteD1, sorted = true) {
+function plans(db: SqliteD1) {
 	const reads = db.trace!.filter((q) => /FROM content_ownership|search_videos_fts/.test(q.sql));
 	assert.ok(reads.length, 'the index was read');
 	for (const q of reads) {
@@ -108,8 +109,38 @@ describe('GET /api/videos by category, without a channel', () => {
 	});
 });
 
-describe('GET /api/videos by title, without a channel', () => {
-	it('comes from the full-text index: a word or its start, any language, newest first', async () => {
+describe('a category keeps what the unfiltered list keeps', () => {
+	it('the caller’s own scheduled, reviewed, premiere, private and processing videos; nobody else sees them', async () => {
+		const { db, bucket, env } = await seed();
+		const states: Record<string, Record<string, unknown>> = {
+			sched: { scheduledPublishStatus: 'scheduled' },
+			publishing: { scheduledPublishStatus: 'publishing' },
+			checking: { review: { status: 'checking' } },
+			inreview: { review: { status: 'in_review' } },
+			rejected: { review: { status: 'rejected' } },
+			appealed: { review: { status: 'appealed' } },
+			premiere: { premiereHold: true },
+			priv: { isPublic: false },
+			processing: { uploadStatus: 'processing' },
+			plain: {},
+		};
+		let n = 0;
+		for (const [id, state] of Object.entries(states)) {
+			const video = videoFixture({ id: `s-${id}`, title: 'Mine', userId: 'me', channelId: null, category: 'fiqh', isPublic: true, uploadStatus: 'ready', dateCreated: `2026-07-01T00:00:${String(n++).padStart(2, '0')}.000Z`, ...state });
+			await bucket.put(video.id, JSON.stringify(video));
+			await ownershipUpsertStatement(db as never, projectOwnership('video', video.id, video as never)!, Date.now(), Date.now()).run();
+		}
+		for (const user of ['me', 'someone', null]) {
+			const mine = (page: { data: Array<{ id: string }> }) => page.data.map((v) => v.id).filter((id) => id.startsWith('s-'));
+			const all = mine(await list(env, 'limit=40', user));
+			assert.deepEqual(mine(await list(env, 'limit=40&category=fiqh', user)), all, `${user}`);
+			assert.equal(all.length, user === 'me' ? Object.keys(states).length : 1, `${user}`);
+		}
+	});
+});
+
+describe('GET /api/videos by title, without a channel: a search of public videos', () => {
+	it('comes from the search index: every word, the last by its start, any language, newest first', async () => {
 		const { db, bucket, env } = await seed();
 		db.trace = [];
 		const before = bucket.calls;
@@ -121,24 +152,52 @@ describe('GET /api/videos by title, without a channel', () => {
 		assert.match(plans(db).join(), /VIRTUAL TABLE INDEX/);
 	});
 
-	it('pages without repeating or skipping, and combines with a category', async () => {
-		const { env } = await seed();
+	it('pages without repeating or skipping, sorts, and combines with a category, a format and a filter', async () => {
+		const { env, videos } = await seed();
 		const first = await list(env, 'q=tafsir&limit=2');
 		const second = await list(env, `q=tafsir&limit=2&cursor=${first.cursor}`);
 		assert.deepEqual([...first.data, ...second.data].map((v) => v.id), [1607, 1207, 807, 407].map(pad));
+		const views = (await list(env, 'q=tafsir&limit=9&sort=views')).data.map((v) => videos.find((x) => x.id === v.id).views);
+		assert.deepEqual(views, [...views].sort((a, b) => b - a));
+		assert.deepEqual((await list(env, 'q=tafsir&limit=2&sort=title')).data.map((v) => v.id), [1207, 1607].map(pad));
 		assert.deepEqual((await list(env, 'q=tafsir&category=fiqh&limit=9')).data, []);
+		assert.deepEqual((await list(env, 'q=tafsir&format=short&limit=9')).data, []);
+		assert.deepEqual((await list(env, 'q=tafsir&filter=private&limit=9', 'me')).data, []);
 	});
 
-	it('finds the caller’s own private videos, and never reads the bucket for text without words', async () => {
-		const { db, bucket, env } = await seed();
-		db.trace = [];
-		const mine = await list(env, 'q=tafsir&limit=9', 'me');
-		assert.ok(mine.data.some((v) => v.id === 'mine-priv'));
-		assert.ok(!mine.data.some((v) => v.id === 'theirs-priv'));
-		plans(db);
+	it('lists public videos only, the caller’s own included', async () => {
+		const { env } = await seed();
+		const page = await list(env, 'q=tafsir&limit=20', 'me');
+		assert.ok(page.data.length > 0 && page.data.every((v) => !v.id.endsWith('-priv')));
+	});
+
+	it('reads at most 200 matches however many there are, and the cursor ends there', async () => {
+		const { bucket, env } = await seed();
+		const before = bucket.calls;
+		const last = await list(env, 'q=lesson&limit=50&cursor=idx:150');
+		assert.equal(last.data.length, 50);
+		assert.equal(last.cursor, '');
+		assert.equal(bucket.calls - before, 50);
+		assert.deepEqual((await list(env, 'q=lesson&limit=50&cursor=idx:100000')).data, []);
+	});
+
+	it('never reads the bucket: text without words, one character, or no usable index', async () => {
+		const { bucket, env } = await seed();
+		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
 		const before = bucket.calls;
 		assert.deepEqual((await list(env, `q=${encodeURIComponent('"*()')}&limit=9`)).data, []);
-		assert.equal(bucket.calls - before, 0);
+		assert.equal((await app.request('/api/videos?q=a', {}, env as never)).status, 400);
+		for (const SEARCH_DB of [undefined, { prepare: () => { throw new Error('D1 is down'); } }]) {
+			const res = await app.request('/api/videos?q=tafsir', {}, { ...env, SEARCH_DB } as never);
+			assert.equal(res.status, 503);
+			assert.equal(((await res.json()) as { error: string }).error !== undefined, true);
+		}
+		assert.equal(bucket.calls, before);
+	});
+
+	it('shares the search rate limit, only without a channel', () => {
+		const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
+		assert.match(index, /c\.req\.query\('q'\)\?\.trim\(\) && !c\.req\.query\('channelId'\) && !c\.req\.header\('channelId'\) \? searchLimit/);
 	});
 });
 

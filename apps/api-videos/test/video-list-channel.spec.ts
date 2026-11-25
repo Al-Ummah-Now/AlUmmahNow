@@ -125,10 +125,12 @@ describe('GET /api/videos?channelId= (ownership index)', () => {
 		assert.deepEqual(page.ids, ['z-new', 'z-mid', 'z-old', 'z-live']);
 	});
 
-	it('keeps a category filter without a channel on the bucket scan (the index has no category column)', async () => {
+	it('answers a category filter without a channel from the index too', async () => {
 		const env = await indexedEnv();
 		const app = buildApp(routes, null);
-		const page = await ids(app, '/api/videos?limit=3&category=quran_recitation', env);
-		assert.ok(!page.cursor.startsWith('idx:'));
+		const before = env.videos.calls;
+		const page = await ids(app, '/api/videos?limit=3&category=fiqh', env);
+		assert.deepEqual(page, { ids: ['z-old'], cursor: '' });
+		assert.equal(env.videos.calls - before, 1, 'one read per video shown, no listing');
 	});
 });
