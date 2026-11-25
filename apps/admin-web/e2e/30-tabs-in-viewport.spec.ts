@@ -21,7 +21,7 @@ const STRIPS = [
   { path: '/operations', nav: 'ops-tabs', prefix: 'ops-tab-', ids: ['worker', 'd1', 'r2', 'queue', 'kv', 'do'] },
   { path: '/tier-requests', nav: 'tier-requests-tabs', prefix: 'tier-requests-tab-', ids: ['pending', 'approved', 'declined', 'all'] },
   // Buttons, not links: the current document's tab is pressed
-  { path: '/app-config', nav: 'app-config-tabs', prefix: 'app-config-tab-', ids: ['flags', 'config', 'versions'] },
+  { path: '/app-config', nav: 'app-config-tabs', prefix: 'app-config-tab-', ids: ['releases', 'flags', 'config', 'versions'] },
 ] as const;
 
 /** The row's tabs (id + box), the More button's box and the menu's ids; the menu is closed again */

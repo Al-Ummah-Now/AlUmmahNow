@@ -11,6 +11,7 @@
  * The documents are global, so the spec runs in the shared-state project and puts `flags` back
  * exactly as it found it.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { ADMIN_WEB_URL, RUN_TAG, storageStatePath } from './support/env';
@@ -32,6 +33,12 @@ async function flags(): Promise<unknown> {
 
 async function putFlags(value: unknown) {
   return adminApi('/api/app-config/flags', { method: 'PUT', token: superToken(), body: JSON.stringify({ value }) });
+}
+
+/** The page opens on Releases (AUN-APP-UPDATES §4.2) */
+async function openFlags(page: Page) {
+  await page.getByTestId('app-config-tab-flags').click();
+  await expect(page.getByTestId('app-config-panel')).toHaveAttribute('data-document', 'flags');
 }
 
 test.use({ storageState: storageStatePath('superadmin') });
@@ -59,7 +66,7 @@ test.describe('remote config', () => {
 
   test('APPCFG-02 a problem shows next to its field and nothing is saved', async ({ page }) => {
     await page.goto('/app-config');
-    await expect(page.getByTestId('app-config-panel')).toHaveAttribute('data-document', 'flags');
+    await openFlags(page);
     await page.getByTestId('app-config-add-flags').click();
     const rule = page.getByTestId('app-config-rule').last();
     await rule.getByTestId('app-config-rule-key').fill('Not A Key');
@@ -73,6 +80,7 @@ test.describe('remote config', () => {
 
   test('APPCFG-03 a new flag saves, is audited, and "Try it" evaluates it', async ({ page }) => {
     await page.goto('/app-config');
+    await openFlags(page);
     await page.getByTestId('app-config-add-flags').click();
     const rule = page.getByTestId('app-config-rule').last();
     await rule.getByTestId('app-config-rule-key').fill(flagKey);
@@ -97,6 +105,7 @@ test.describe('remote config', () => {
     expect(stored.find((r) => r.key === flagKey)).toMatchObject({ key: flagKey, enabled: true, platforms: ['ios'], minVersion: '2.0.0', value: true });
 
     await page.reload();
+    await openFlags(page);
     await expect(page.locator(`[data-testid="app-config-rule"][data-key="${flagKey}"]`)).toHaveCount(1);
     const history = page.getByTestId('app-config-history-entry').first();
     await expect(history).toBeVisible();
@@ -106,6 +115,7 @@ test.describe('remote config', () => {
 
   test('APPCFG-04 a change saved elsewhere is never overwritten', async ({ page }) => {
     await page.goto('/app-config');
+    await openFlags(page);
     const mine = page.locator(`[data-testid="app-config-rule"][data-key="${flagKey}"]`);
     await expect(mine).toHaveCount(1);
     // Someone else turns the flag off meanwhile
