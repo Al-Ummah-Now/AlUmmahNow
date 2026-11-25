@@ -220,7 +220,7 @@ describe('Features page render', () => {
   it('Arabic: right words, «،» in the status line, never «·»', () => {
     const html = render(all((k) => (k === 'newsletter' ? { updatedBy: { id: 'u', name: 'Yusuf Ali' }, updatedAt: '2026-11-22T15:28:00Z' } : {})), 'ar');
     assert.match(html, /الميزات/);
-    assert.match(html, /غيّرها <bdi>Yusuf Ali<\/bdi>، <time/);
+    assert.match(html, /آخر تغيير بواسطة <bdi>Yusuf Ali<\/bdi>، <time/);
     assert.doesNotMatch(html, /·/);
     const line = renderToStaticMarkup(React.createElement(Provider, { locale: 'ar', theme: 'dark' }, React.createElement(FeatureStatusLine, { featureKey: 'captionsTranscribe', item: { effective: true } })) as never);
     assert.match(line, /«التفريغ النصي» مفعّلة<span[^>]*>،<\/span>/, 'the comma touches the word before it');
