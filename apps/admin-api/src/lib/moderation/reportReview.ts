@@ -1,7 +1,7 @@
 /**
  * "Start review": a moderator marks an open report as under review, or puts it back (#2015). While a report
  * about a channel is under review its owner can't hand the channel over (routers/channelReports.router.ts,
- * wiki AUN-CHANNEL-CLAIM §7). A pending report alone blocks nothing: anyone can file one.
+ * wiki AUN-CHANNEL-CLAIM §5). A pending report alone blocks nothing: anyone can file one.
  */
 import { dropAudit, writeAudit, type ContentKind } from '../content/audit';
 import { DecisionError } from './reportDecision';
@@ -23,6 +23,7 @@ export async function setReportReview(db: D1Database, reportId: string, reviewin
   // As it is asked to be already (a second click, another moderator): nothing to change or record
   if (report.status === to) return report;
   const closed = () => new DecisionError(409, 'already_closed', 'Report is already closed');
+  if (report.status !== from) throw closed();
   const at = new Date().toISOString();
   const audit = await writeAudit(db as never, {
     kind: AUDIT_KIND[report.entity_type] ?? 'live-stream',

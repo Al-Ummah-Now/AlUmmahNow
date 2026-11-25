@@ -104,6 +104,12 @@ export type DetailView =
 /** A detail's value as text: strings as they are, everything else as compact JSON. */
 export const detailText = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value));
 
+/** A report's reason and status in words; every other value as it is. */
+export function detailValue(key: string, value: unknown, t: Translator): string {
+  if (typeof value === 'string' && (key === 'reason' || key === 'status') && Object.hasOwn(en[key], value)) return t(`${key}.${value}` as MessageKey);
+  return detailText(value);
+}
+
 /** The details of a row, with ids replaced by what they name. */
 export function detailViews(details: Record<string, unknown> | null | undefined, names: AdminNames | null | undefined, t: Translator): DetailView[] {
   if (!details) return [];
@@ -111,7 +117,7 @@ export function detailViews(details: Record<string, unknown> | null | undefined,
     .filter(([, v]) => v !== null && v !== undefined && v !== '')
     .map(([key, value]) => {
       const kind = auditRefKind(key, value);
-      return kind ? { key, type: 'ref' as const, item: itemView(kind, value as string, names, t) } : { key, type: 'text' as const, value: detailText(value) };
+      return kind ? { key, type: 'ref' as const, item: itemView(kind, value as string, names, t) } : { key, type: 'text' as const, value: detailValue(key, value, t) };
     });
 }
 

@@ -4,6 +4,7 @@ import { getStats } from '@/lib/api/admin';
 import { getI18n } from '@/i18n/server';
 import { formatStat, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
+import { openReports } from './openReports';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ export default async function AdminDashboard() {
   const statCards: { key: string; label: MessageKey; value: number; tone: string }[] = stats
     ? [
         { key: 'total', label: 'dashboard.totalReports', value: stats.total, tone: 'text-fg' },
-        { key: 'pending', label: 'dashboard.pending', value: stats.byStatus.pending, tone: 'text-warning-fg' },
+        { key: 'open', label: 'dashboard.open', value: openReports(stats.byStatus), tone: 'text-warning-fg' },
         { key: 'resolved', label: 'dashboard.resolved', value: stats.byStatus.resolved, tone: 'text-success-fg' },
         { key: 'dismissed', label: 'dashboard.dismissed', value: stats.byStatus.dismissed, tone: 'text-fg-muted' },
         { key: 'last24h', label: 'dashboard.last24Hours', value: stats.recentActivity.last24Hours, tone: 'text-info-fg' },
@@ -58,9 +59,9 @@ export default async function AdminDashboard() {
         <Link href="/moderation" className={cardLinkClass}>
           <h2 className="text-xl font-semibold text-fg mb-2">{t('dashboard.moderationTitle')}</h2>
           <p className="text-fg-muted">{t('dashboard.moderationDescription')}</p>
-          {stats && stats.byStatus.pending > 0 && (
+          {stats && openReports(stats.byStatus) > 0 && (
             <span className="inline-block mt-4 bg-chip-pending-bg text-chip-pending-fg px-3 py-1 rounded-full text-sm font-medium">
-              {t('dashboard.pendingBadge', { count: stats.byStatus.pending })}
+              {t('dashboard.openBadge', { count: openReports(stats.byStatus) })}
             </span>
           )}
         </Link>

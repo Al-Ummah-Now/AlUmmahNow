@@ -3,6 +3,7 @@ import { AdminRoute, AppContext } from '../../base';
 import { Str } from '../../lib/chanfana-params';
 import { apiError } from '../../lib/api-error';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { publishAdminLiveInBackground } from '../../lib/admin-live';
 import { logger } from '../../lib/logger';
 import { DecisionError } from '../../lib/moderation/reportDecision';
 import { setReportReview } from '../../lib/moderation/reportReview';
@@ -32,7 +33,9 @@ export class ReportReview extends AdminRoute {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
     const actorId = this.getUserId(c);
     try {
-      return { success: true, result: { report: await setReportReview(c.env.REPORTS_DB as never, params.reportId, body.reviewing, actorId, this.getRoles(c)) } };
+      const report = await setReportReview(c.env.REPORTS_DB as never, params.reportId, body.reviewing, actorId, this.getRoles(c));
+      publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'reports', queue: 'reports' });
+      return { success: true, result: { report } };
     } catch (err) {
       if (err instanceof DecisionError) return apiError(c, err.status, err.code, { error: err.message });
       logger.error('[Moderation] Report review failed', { reportId: params.reportId, reviewing: body.reviewing, actorId, error: err instanceof Error ? err.message : String(err) });
