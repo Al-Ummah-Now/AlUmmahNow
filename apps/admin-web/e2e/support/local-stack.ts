@@ -133,3 +133,16 @@ export function stackR2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: s
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+/** One key of a stack KV namespace by its binding: its value, or null. */
+export async function stackKvGet(binding: string, key: string): Promise<string | null> {
+  const res = await fetch(`${control()}/__stack/kv/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`);
+  if (!res.ok) throw new Error(`KV GET ${binding} ${key} -> ${res.status}`);
+  return ((await res.json()) as { value: string | null }).value;
+}
+
+/** Writes one key of a stack KV namespace; null deletes it. */
+export async function stackKvPut(binding: string, key: string, value: string | null): Promise<void> {
+  const res = await fetch(`${control()}/__stack/kv/${encodeURIComponent(binding)}/${encodeURIComponent(key)}`, value === null ? { method: 'DELETE' } : { method: 'PUT', body: value });
+  if (!res.ok) throw new Error(`KV write ${binding} ${key} -> ${res.status}`);
+}

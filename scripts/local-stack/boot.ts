@@ -531,6 +531,11 @@ async function main(): Promise<void> {
     const object = await bucket.get(key);
     return object ? { status: 200, body: await object.text() } : { status: 404 };
   });
+  const stackKv = async (binding: string) => {
+    const p = prepared.find((x) => ((x.local.config.kv_namespaces as Json[] | undefined) ?? []).some((k) => String(k.binding) === binding));
+    if (!p) throw new Error(`no KV namespace bound as ${binding}`);
+    return mf.getKVNamespace(binding, p.name);
+  };
   setStackHooks({
     leftovers: (marker, ids, limit) => scanLeftovers(mf, prepared, marker, ids, limit),
     queue: async (app, binding, body) => {
@@ -538,11 +543,9 @@ async function main(): Promise<void> {
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
       await (await mf.getQueueProducer(binding, p.name)).send(body);
     },
-    kvDelete: async (binding, key) => {
-      const p = prepared.find((x) => ((x.local.config.kv_namespaces as Json[] | undefined) ?? []).some((k) => String(k.binding) === binding));
-      if (!p) throw new Error(`no KV namespace bound as ${binding}`);
-      await (await mf.getKVNamespace(binding, p.name)).delete(key);
-    },
+    kvDelete: async (binding, key) => (await stackKv(binding)).delete(key),
+    kvGet: async (binding, key) => (await stackKv(binding)).get(key),
+    kvPut: async (binding, key, value) => (await stackKv(binding)).put(key, value),
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);

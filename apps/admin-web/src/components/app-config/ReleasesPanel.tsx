@@ -33,6 +33,8 @@ interface Props {
   initial: AppReleasesView | null;
   versions: AppConfigVersionsDocument;
   canEdit: boolean;
+  /** Opens the version editor on this row's entry (super admins) */
+  onEdit: (row: { app: string; platform: string; channel: 'stable' | 'beta' }) => void;
 }
 
 type Notice = { tone: 'ok' | 'error'; text: string } | null;
@@ -44,7 +46,10 @@ function minimumFor(versions: AppConfigVersionsDocument, app: string, platform: 
   return null;
 }
 
-export function ReleasesPanel({ initial, versions, canEdit }: Props) {
+/** The release index's reasons (api-videos lib/app-updates/releases.ts); any other code shows as it is. */
+const REASONS = ['too_large', 'missing_signature', 'bad_signature_file', 'unknown_key', 'bad_signature', 'bad_json', 'bad_manifest', 'wrong_repo', 'wrong_tag', 'wrong_channel', 'not_newer', 'below_floor', 'yanked'] as const;
+
+export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
   const { t, locale } = useLanguage();
   /** A version as read (٠–٩ in Arabic); typed versions elsewhere on the page stay as entered */
   const shown = (v: string) => localizeDigits(locale, v);
@@ -52,6 +57,17 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
   const [view, setView] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+
+  /** Why a request was refused, in the page's language */
+  const why = (status: number, fallback: MessageKey) =>
+    status === 401 ? t('errors.notAuthenticated')
+    : status === 403 ? t('appConfig.releases.forbidden')
+    : status === 400 ? t('appConfig.releases.invalid')
+    : status === 429 ? t('appConfig.releases.busy')
+    : status >= 502 ? t('appConfig.releases.unreachable')
+    : t(fallback);
+  const reason = (code: string): React.ReactNode =>
+    (REASONS as readonly string[]).includes(code) ? t(`appConfig.releases.reasons.${code}` as MessageKey) : <bdi dir="ltr" className="font-mono">{code}</bdi>;
 
   const byApp = useMemo(() => {
     const entries = Object.values(view?.entries ?? {});
@@ -71,7 +87,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
         setNotice({ tone: 'ok', text: t('appConfig.releases.refreshed') });
         router.refresh();
       } else {
-        setNotice({ tone: 'error', text: res.status === 429 ? t('appConfig.releases.busy') : t('appConfig.releases.refreshFailed') });
+        setNotice({ tone: 'error', text: why(res.status, 'appConfig.releases.refreshFailed') });
       }
     } catch (e) {
       logger.error('[app-config] Release refresh failed', { error: e instanceof Error ? e.message : String(e) });
@@ -91,7 +107,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
         setView((v) => (v ? { ...v, availability: res.data } : v));
         setNotice({ tone: 'ok', text: t('appConfig.releases.marked') });
       } else {
-        setNotice({ tone: 'error', text: t('appConfig.releases.markFailed') });
+        setNotice({ tone: 'error', text: why(res.status, 'appConfig.releases.markFailed') });
       }
     } catch (err) {
       logger.error('[app-config] Mark available failed', { id, error: err instanceof Error ? err.message : String(err) });
@@ -178,6 +194,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colSignature')}</th>
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colStores')}</th>
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colMinimum')}</th>
+                    {canEdit && <th scope="col" className="px-3 py-2"><span className="sr-only">{t('appConfig.releases.colActions')}</span></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -199,6 +216,19 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
                         </td>
                         <td className="px-3 py-2 text-fg">{stores(e)}</td>
                         <td className="px-3 py-2">{min ? <bdi dir="ltr" className="font-mono text-fg">{shown(min)}</bdi> : <span className="text-fg-subtle">{t('appConfig.releases.noMinimum')}</span>}</td>
+                        {canEdit && (
+                          <td className="px-3 py-2 text-end">
+                            <button
+                              type="button"
+                              className={smallButtonClass}
+                              onClick={() => onEdit({ app: e.app, platform: e.platform, channel: e.channel })}
+                              aria-label={t('appConfig.releases.editRow', { app: t(`appConfig.appNames.${e.app}` as MessageKey), platform: t(`appConfig.platformNames.${e.platform}` as MessageKey), channel: e.channel === 'beta' ? t('appConfig.releases.beta') : t('appConfig.releases.stable') })}
+                              data-testid="app-releases-edit"
+                            >
+                              {t('appConfig.releases.edit')}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -232,7 +262,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
                 {fillNodes(t('appConfig.releases.quarantinedRow'), {
                   tag: <bdi dir="ltr" className="font-mono">{q.tag}</bdi>,
                   source: <bdi dir="ltr">{q.source}</bdi>,
-                  reason: <bdi dir="ltr" className="font-mono">{q.reason}</bdi>,
+                  reason: reason(q.reason),
                 })}
               </li>
             ))}

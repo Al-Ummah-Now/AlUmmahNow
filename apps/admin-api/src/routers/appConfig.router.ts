@@ -99,11 +99,14 @@ app.put('/releases/available', async (c) => {
   if (!body || typeof body.app !== 'string' || typeof body.platform !== 'string' || (body.source !== 'testflight' && body.source !== 'amazon') || !(body.version === null || typeof body.version === 'string')) {
     return apiError(c, 400, 'bad_request', { error: 'app, platform, source (testflight or amazon) and version (or null) are required' });
   }
+  // The mark it replaces, for the audit row
+  const index = await callVideosInternal<{ availability?: Record<string, string> } | null>(c.env, `${INTERNAL}/releases`);
+  const previous = index?.availability?.[`${body.app}/${body.platform}/${body.source}`] ?? null;
   const db = c.env.REPORTS_DB;
   const id = crypto.randomUUID();
   await db
     .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, 'app-config:availability', null, JSON.stringify({ app: body.app, platform: body.platform, source: body.source, version: body.version }), actorOf(c), new Date().toISOString(), auditOriginJson())
+    .bind(id, 'app-config:availability', previous === null ? null : JSON.stringify({ app: body.app, platform: body.platform, source: body.source, version: previous }), JSON.stringify({ app: body.app, platform: body.platform, source: body.source, version: body.version }), actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   try {
     const result = await callVideosInternal<unknown>(c.env, `${INTERNAL}/releases/available`, { method: 'PUT', json: { app: body.app, platform: body.platform, source: body.source, version: body.version } });

@@ -154,6 +154,12 @@ describe('app versions and releases (wiki AUN-APP-UPDATES §4.2, #1434)', () => 
     assert.equal(rows.length, 1);
     assert.equal(rows[0].key, 'app-config:availability');
     assert.deepEqual(JSON.parse(rows[0].new_value), { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' });
+    assert.equal(rows[0].old_value, null, 'no mark before');
+    // The next change records the mark it replaces
+    owner.store.releases = { availability: { 'admin/ios/testflight': '1.4.0' } };
+    await owner.req('/api/app-config/releases/available', send('PUT', { app: 'admin', platform: 'ios', source: 'testflight', version: null }));
+    const cleared = (await owner.audit()).find((r: any) => JSON.parse(r.new_value).version === null);
+    assert.deepEqual(JSON.parse(cleared.old_value), { app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' });
   });
 
   it('a refused mark drops its audit row', async () => {

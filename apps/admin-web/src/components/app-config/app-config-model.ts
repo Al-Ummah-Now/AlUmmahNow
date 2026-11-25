@@ -242,14 +242,14 @@ export function versionsToDocument(drafts: VersionDraft[]): { value: AppConfigVe
     if (seen.has(target)) add('platform', 'duplicateTarget');
     seen.add(target);
     const min = d.minimumVersion.trim();
+    // Read-only, from older documents (the releases list says what is newest now); one the minimum has passed goes
     const latest = d.latestVersion.trim();
+    const keepLatest = APP_CONFIG_SEMVER.test(latest) && APP_CONFIG_SEMVER.test(min) && compareAppVersions(latest, min) >= 0;
     const url = d.storeUrl.trim();
     if (!APP_CONFIG_SEMVER.test(min)) add('minimumVersion', 'versionFormat');
-    if (latest && !APP_CONFIG_SEMVER.test(latest)) add('latestVersion', 'versionFormat');
-    else if (latest && APP_CONFIG_SEMVER.test(min) && compareAppVersions(latest, min) < 0) add('latestVersion', 'versionOrder');
     if (url && !isHttpsUrl(url)) add('storeUrl', 'urlFormat');
     const policy: AppConfigVersionPolicy = { minimumVersion: min };
-    if (latest) policy.latestVersion = latest;
+    if (keepLatest) policy.latestVersion = latest;
     if (url) policy.storeUrl = url;
     // The forced-screen message: both languages or neither (localized fields rule)
     const en = d.messageEn.trim();
@@ -277,6 +277,65 @@ export function versionsToDocument(drafts: VersionDraft[]): { value: AppConfigVe
   return problems.length ? { value: null, problems } : { value: doc, problems };
 }
 
+/** What the model needs of one release index entry. */
+export interface ReleaseVersion {
+  app: string;
+  platform: string;
+  channel: 'stable' | 'beta';
+  version: string;
+}
+
+/**
+ * The newest release an entry's target follows: its platform's (a beta target takes the newer of beta and stable);
+ * for every platform, the oldest of the platforms' newest. Null when none is known.
+ */
+export function latestFor(target: { app: string; platform: string; channel: '' | 'beta' }, releases: readonly ReleaseVersion[]): string | null {
+  const newest = new Map<string, string>();
+  for (const r of releases) {
+    if (r.app !== target.app || (target.platform !== '*' && r.platform !== target.platform)) continue;
+    if (target.channel !== 'beta' && r.channel === 'beta') continue;
+    const have = newest.get(r.platform);
+    if (!have || compareAppVersions(r.version, have) > 0) newest.set(r.platform, r.version);
+  }
+  return [...newest.values()].reduce<string | null>((a, b) => (a === null || compareAppVersions(b, a) < 0 ? b : a), null);
+}
+
+/** Drops notes of versions older than the target's newest release: no build is offered them any more (wiki §3.4). */
+export function dropOldNotes(doc: AppConfigVersionsDocument, releases: readonly ReleaseVersion[]): AppConfigVersionsDocument {
+  return Object.fromEntries(
+    Object.entries(doc).map(([key, policy]) => {
+      const [app, rest] = key.split('/');
+      const [platform, channel] = rest.split('#');
+      const latest = latestFor({ app, platform, channel: channel === 'beta' ? 'beta' : '' }, releases);
+      if (!latest || !policy.notesOverrides) return [key, policy];
+      const { notesOverrides, ...others } = policy;
+      const kept = Object.entries(notesOverrides).filter(([v]) => compareAppVersions(v, latest) >= 0);
+      return [key, kept.length ? { ...others, notesOverrides: Object.fromEntries(kept) } : others];
+    }),
+  );
+}
+
+/**
+ * The entry a Releases row edits: its own, or a new one that starts from the policy in force there
+ * (so a more specific entry doesn't silently drop the minimum, link or message it had).
+ */
+export function entryForRow(drafts: VersionDraft[], row: { app: string; platform: string; channel: 'stable' | 'beta' }): { drafts: VersionDraft[]; id: string } {
+  const channel = row.channel === 'beta' ? 'beta' : '';
+  const find = (platform: string, c: '' | 'beta') => drafts.find((d) => d.app === row.app && d.platform === platform && d.channel === c);
+  const own = find(row.platform, channel);
+  if (own) return { drafts, id: own.id };
+  // The server's order: app/platform, then app/*#channel, then app/*
+  const inForce = find(row.platform, '') ?? find('*', channel) ?? find('*', '');
+  const entry: VersionDraft = {
+    ...newVersion(),
+    ...(inForce ? { minimumVersion: inForce.minimumVersion, storeUrl: inForce.storeUrl, messageEn: inForce.messageEn, messageAr: inForce.messageAr, notesOverrides: inForce.notesOverrides.map((o) => ({ ...o, id: draftId('notes') })) } : {}),
+    app: row.app,
+    platform: row.platform,
+    channel,
+  };
+  return { drafts: [...drafts, entry], id: entry.id };
+}
+
 // ---------------------------------------------------------------------------
 // api-videos' problems
 // ---------------------------------------------------------------------------
@@ -291,12 +350,26 @@ export function serverProblems(problems: { problem: string; detail?: string }[] 
     const [head, field = ''] = problem.split(/\.(.*)/s);
     if (kind === 'versions') {
       const d = versionDrafts.find((v) => `${v.app}/${v.platform}${v.channel === 'beta' ? '#beta' : ''}` === head);
-      return { id: d?.id ?? '', field: d ? field : '', code: 'server' as const, detail };
+      return { id: d?.id ?? '', field: d ? versionField(d, field) : '', code: 'server' as const, detail };
     }
     const index = /^\d+$/.test(head) ? Number(head) : -1;
     const d = index >= 0 ? drafts[index] : undefined;
     return { id: d?.id ?? '', field: d ? field.split('.')[0] : '', code: 'server' as const, detail };
   });
+}
+
+/** The editor's field for a path inside a versions entry (`message.en`, `notesOverrides.1.0.0.ar`); '' for the entry itself. */
+function versionField(d: VersionDraft, path: string): string {
+  if (path === 'message' || path === 'message.en') return 'messageEn';
+  if (path === 'message.ar') return 'messageAr';
+  if (path.startsWith('notesOverrides')) {
+    const rest = path.slice('notesOverrides.'.length);
+    const lang = /\.(en|ar)$/.exec(rest)?.[1];
+    const version = lang ? rest.slice(0, -3) : rest;
+    const note = d.notesOverrides.find((o) => o.version.trim() === version);
+    return note ? `notes.${note.id}.${lang ?? 'version'}` : 'notesOverrides';
+  }
+  return ['minimumVersion', 'storeUrl', 'platform'].includes(path) ? path : '';
 }
 
 /** The problems of one draft and field. */

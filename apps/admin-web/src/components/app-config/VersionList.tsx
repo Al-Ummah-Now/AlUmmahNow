@@ -2,7 +2,8 @@
 
 /**
  * The `versions` document (issue #413): one entry per app and platform (or every platform of an
- * app) with its minimum version, latest version and store link, each problem under its field.
+ * app) with its minimum version, store link, message and notes, each problem under its field. The latest version
+ * comes from the releases list; one stored by an older document is shown read-only.
  */
 import { useId } from 'react';
 import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS } from '@al-ummah/shared-types';
@@ -31,6 +32,7 @@ export function VersionList({ drafts, onChange, problems, disabled }: Props) {
   };
   return (
     <div className="space-y-3" data-testid="app-config-versions">
+      <FieldProblems problems={problems.filter((p) => p.id === '')} id="app-config-versions-problem" />
       {drafts.length === 0 && <p className="rounded border border-dashed border-border p-4 text-sm text-fg-muted">{t('appConfig.empty.versions')}</p>}
       <ol className="space-y-3">
         {drafts.map((d, i) => (
@@ -48,7 +50,7 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled }: { 
   const { t } = useLanguage();
   const ids = useId();
   const describedBy = (name: string, hint: boolean) => [hint ? `${ids}-${name}-hint` : '', problemsFor(problems, d.id, name).length ? `${ids}-${name}-problem` : ''].filter(Boolean).join(' ') || undefined;
-  const text = (name: 'minimumVersion' | 'latestVersion' | 'storeUrl', hint: MessageKey) => {
+  const text = (name: 'minimumVersion' | 'storeUrl', hint: MessageKey) => {
     const found = problemsFor(problems, d.id, name);
     return (
       <label className="flex min-w-0 flex-col gap-1 text-sm">
@@ -127,7 +129,13 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled }: { 
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {text('minimumVersion', 'appConfig.minimumHint')}
-          {text('latestVersion', 'appConfig.latestHint')}
+          {d.latestVersion && (
+            <div className="flex min-w-0 flex-col gap-1 text-sm" data-testid="app-config-version-latest">
+              <span className="text-fg-muted">{t('appConfig.latestVersion')}</span>
+              <bdi dir="ltr" className="py-2 font-mono text-fg">{d.latestVersion}</bdi>
+              <span className="text-xs text-fg-subtle">{t('appConfig.latestHint')}</span>
+            </div>
+          )}
         </div>
         {text('storeUrl', 'appConfig.storeUrlHint')}
         <div className="grid gap-4 sm:grid-cols-2">
@@ -185,7 +193,7 @@ function NotesOverrides({ items, disabled, problems, onChange }: { items: NotesO
         <div key={o.id} className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)_auto]" data-testid="app-config-version-notes-row">
           <label className="flex min-w-0 flex-col gap-1 text-sm">
             <span className="text-fg-muted">{t('appConfig.notesVersion')}</span>
-            <input value={o.version} onChange={(e) => update(o.id, { version: e.target.value })} disabled={disabled} dir="ltr" spellCheck={false} autoComplete="off" className={`${fieldClass} w-full font-mono`} aria-invalid={at(o, 'version').length > 0 || undefined} />
+            <input value={o.version} onChange={(e) => update(o.id, { version: e.target.value })} disabled={disabled} dir="ltr" spellCheck={false} autoComplete="off" className={`${fieldClass} w-full font-mono`} aria-invalid={at(o, 'version').length > 0 || undefined} aria-describedby={at(o, 'version').length ? `${o.id}-version-problem` : undefined} data-testid="app-config-version-notes-version" />
             <FieldProblems problems={at(o, 'version')} id={`${o.id}-version-problem`} />
           </label>
           <LocalizedArea id={`${o.id}-en`} label={t('appConfig.notesEn')} value={o.en} dir="ltr" lang="en" disabled={disabled} problems={at(o, 'en')} onChange={(v) => update(o.id, { en: v })} testId="app-config-version-notes-en" />

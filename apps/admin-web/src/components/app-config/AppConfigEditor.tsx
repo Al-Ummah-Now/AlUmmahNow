@@ -17,8 +17,9 @@ import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import {
   draftsToDocument,
+  dropOldNotes,
+  entryForRow,
   rulesToDrafts,
-
   serverProblems,
   versionsToDocument,
   versionsToDrafts,
@@ -96,12 +97,15 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
       setNoticeFor(key, { tone: 'ok', text: t('appConfig.unchanged') });
       return;
     }
+    // Notes of versions older than the latest release go on this save (wiki §3.4)
+    const value = key === 'versions' ? dropOldNotes(doc.value as AppConfigVersionsDocument, Object.values(releases?.entries ?? {})) : doc.value;
     setBusy(key);
     setNoticeFor(key, null);
     try {
-      const res = await saveAppConfigDocument(key, doc.value, baseline[key] ?? null);
+      const res = await saveAppConfigDocument(key, value, baseline[key] ?? null);
       if (res.ok) {
         setBaseline((b) => ({ ...b, [key]: res.data.value }));
+        if (key === 'versions') replaceDrafts(key, res.data.value);
         setNoticeFor(key, { tone: 'ok', text: t('appConfig.saved') });
         router.refresh();
       } else if (res.status === 409) {
@@ -144,6 +148,18 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
     clearServer(key);
     setChecked((c) => ({ ...c, [key]: false }));
     setNoticeFor(key, null);
+  }
+
+  /** The Releases tab's Edit: that row's entry, open and ready to type in */
+  function editRow(row: { app: string; platform: string; channel: 'stable' | 'beta' }) {
+    const { drafts, id } = entryForRow(versions, row);
+    if (drafts !== versions) setVersions(drafts);
+    setTab('versions');
+    window.setTimeout(() => {
+      const field = document.getElementById(`${id}-minimumVersion`);
+      field?.scrollIntoView({ block: 'center' });
+      field?.focus();
+    }, 0);
   }
 
   // The drafts for "Try it": every document, or null when one still has problems (they are then shown)
@@ -191,7 +207,7 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
             releasesFailed ? (
               <p className="text-sm text-danger-fg" data-testid="app-releases-error">{t('appConfig.releases.loadFailed')}</p>
             ) : (
-              <ReleasesPanel initial={releases} versions={(baseline.versions ?? {}) as AppConfigVersionsDocument} canEdit={canEditVersions} />
+              <ReleasesPanel initial={releases} versions={(baseline.versions ?? {}) as AppConfigVersionsDocument} canEdit={canEditVersions} onEdit={editRow} />
             )
           ) : tab === 'versions' ? (
             <>

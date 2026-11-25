@@ -9,8 +9,12 @@ import { sameAppConfigDocument, type AppConfigRule } from '@al-ummah/shared-type
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import {
+  APP_TEXT_MAX,
   draftToRule,
   draftsToDocument,
+  dropOldNotes,
+  entryForRow,
+  latestFor,
   moveItem,
   newRule,
   newVersion,
@@ -101,7 +105,7 @@ describe('app config versions', () => {
     assert.deepEqual(back, { value: { 'viewer/ios': { minimumVersion: '1.2.0' } }, problems: [] });
   });
 
-  it('refuses a second entry for one app and platform, a bad version, a lower latest and a non-https link', () => {
+  it('refuses a second entry for one app and platform, a bad version and a non-https link; an old latest below the minimum is dropped', () => {
     const a = { ...newVersion(), minimumVersion: '1.0.0' };
     const b = { ...newVersion(), minimumVersion: '1', latestVersion: '', storeUrl: 'http://example.com' };
     const c = { ...newVersion(), app: 'tools', minimumVersion: '2.0.0', latestVersion: '1.0.0' };
@@ -109,7 +113,8 @@ describe('app config versions', () => {
     assert.equal(doc.value, null);
     assert.deepEqual(codes(problemsFor(doc.problems, b.id, 'platform')), ['platform:duplicateTarget']);
     assert.deepEqual(codes(doc.problems.filter((p) => p.id === b.id)), ['minimumVersion:versionFormat', 'platform:duplicateTarget', 'storeUrl:urlFormat']);
-    assert.deepEqual(codes(doc.problems.filter((p) => p.id === c.id)), ['latestVersion:versionOrder']);
+    assert.deepEqual(codes(doc.problems.filter((p) => p.id === c.id)), []);
+    assert.deepEqual(versionsToDocument([c]).value, { 'tools/*': { minimumVersion: '2.0.0' } });
   });
 
   it('round-trips beta entries, the forced-screen message and version notes (AUN-APP-UPDATES §3.4)', () => {
@@ -154,6 +159,73 @@ describe("api-videos' problems", () => {
     const versions = versionsToDrafts({ 'viewer/ios': { minimumVersion: '1.0.0' } });
     const [p] = serverProblems([{ problem: 'viewer/ios.storeUrl', detail: 'x' }], [], 'versions', versions);
     assert.deepEqual(p, { id: versions[0].id, field: 'storeUrl', code: 'server', detail: 'x' });
+  });
+});
+
+describe('releases and the version entries (AUN-APP-UPDATES §3.4, §4.2)', () => {
+  const releases = [
+    { app: 'tools', platform: 'windows', channel: 'stable' as const, version: '2026.11.24' },
+    { app: 'tools', platform: 'macos', channel: 'stable' as const, version: '2026.11.22' },
+    { app: 'tools', platform: 'windows', channel: 'beta' as const, version: '2026.11.25' },
+  ];
+
+  it('the newest release a target follows', () => {
+    assert.equal(latestFor({ app: 'tools', platform: 'windows', channel: '' }, releases), '2026.11.24');
+    assert.equal(latestFor({ app: 'tools', platform: 'windows', channel: 'beta' }, releases), '2026.11.25');
+    assert.equal(latestFor({ app: 'tools', platform: '*', channel: '' }, releases), '2026.11.22', 'every platform: the oldest newest');
+    assert.equal(latestFor({ app: 'studio', platform: '*', channel: '' }, releases), null);
+  });
+
+  it('a save drops notes of versions older than the latest release, and only those', () => {
+    const note = { en: 'e', ar: 'ع' };
+    const doc = { 'tools/windows': { minimumVersion: '0.0.0', notesOverrides: { '2026.11.22': note, '2026.11.24': note } }, 'tools/*': { minimumVersion: '0.0.0', notesOverrides: { '2026.11.20': note } }, 'studio/*': { minimumVersion: '0.0.0', notesOverrides: { '1.0.0': note } } };
+    assert.deepEqual(dropOldNotes(doc, releases), {
+      'tools/windows': { minimumVersion: '0.0.0', notesOverrides: { '2026.11.24': note } },
+      'tools/*': { minimumVersion: '0.0.0' },
+      'studio/*': { minimumVersion: '0.0.0', notesOverrides: { '1.0.0': note } },
+    });
+  });
+
+  it('Edit opens the row’s own entry, or a new one that keeps the policy in force', () => {
+    const drafts = versionsToDrafts({ 'tools/*': { minimumVersion: '2026.11.01', message: { en: 'Old.', ar: 'قديم.' } }, 'tools/windows': { minimumVersion: '2026.11.10' } });
+    const own = entryForRow(drafts, { app: 'tools', platform: 'windows', channel: 'stable' });
+    assert.equal(own.drafts, drafts);
+    assert.equal(own.id, drafts[1].id);
+    const mac = entryForRow(drafts, { app: 'tools', platform: 'macos', channel: 'stable' });
+    const added = mac.drafts.find((d) => d.id === mac.id)!;
+    assert.deepEqual([added.app, added.platform, added.channel, added.minimumVersion, added.messageAr], ['tools', 'macos', '', '2026.11.01', 'قديم.']);
+    const beta = entryForRow(drafts, { app: 'tools', platform: 'windows', channel: 'beta' });
+    assert.deepEqual(beta.drafts.at(-1)!.channel, 'beta');
+    assert.equal(beta.drafts.at(-1)!.minimumVersion, '2026.11.10');
+    assert.equal(entryForRow([], { app: 'studio', platform: 'linux', channel: 'stable' }).drafts[0].minimumVersion, '');
+  });
+
+  it('texts longer than the server takes are refused on their field', () => {
+    const long = 'x'.repeat(APP_TEXT_MAX + 1);
+    const d = { ...newVersion(), minimumVersion: '1.0.0', messageEn: long, messageAr: long, notesOverrides: [{ id: 'n1', version: '1.1.0', en: long, ar: 'ع' }] };
+    assert.deepEqual(codes(versionsToDocument([d]).problems), ['messageAr:textTooLong', 'messageEn:textTooLong', 'notes.n1.en:textTooLong']);
+    const ok = 'x'.repeat(APP_TEXT_MAX);
+    assert.deepEqual(versionsToDocument([{ ...d, messageEn: ok, messageAr: ok, notesOverrides: [] }]).problems, []);
+  });
+
+  it('api-videos’ problems land on the beta entry, the message and the note they name', () => {
+    const drafts = versionsToDrafts({ 'viewer/ios': { minimumVersion: '1.0.0' }, 'viewer/ios#beta': { minimumVersion: '1.0.0', message: { en: 'a', ar: 'ب' }, notesOverrides: { '1.1.0': { en: 'a', ar: 'ب' } } } });
+    const beta = drafts[1];
+    const at = (problem: string) => serverProblems([{ problem, detail: 'x' }], [], 'versions', drafts)[0];
+    const note = beta.notesOverrides[0].id;
+    for (const [path, field] of [['minimumVersion', 'minimumVersion'], ['message.en', 'messageEn'], ['message.ar', 'messageAr'], ['notesOverrides.1.1.0.ar', `notes.${note}.ar`], ['notesOverrides.1.1.0', `notes.${note}.version`], ['notesOverrides', 'notesOverrides'], ['notesOverrides.9.9.9.en', 'notesOverrides'], ['latestVersion', '']]) {
+      assert.deepEqual(at(`viewer/ios#beta.${path}`), { id: beta.id, field, code: 'server', detail: 'x' }, path);
+    }
+    assert.equal(at('viewer/ios.minimumVersion').id, drafts[0].id);
+    assert.equal(at('studio/ios.minimumVersion').id, '', 'an entry that is gone: the whole document');
+  });
+
+  it('every refusal reason has words in both languages', () => {
+    const words = (m: unknown) => (m as { appConfig: { releases: { reasons: Record<string, string> } } }).appConfig.releases.reasons;
+    for (const code of ['missing_signature', 'bad_signature', 'unknown_key', 'bad_manifest', 'wrong_tag', 'yanked']) {
+      assert.ok(words(en)[code], code);
+      assert.match(words(ar)[code], /[؀-ۿ]/, code);
+    }
   });
 });
 
