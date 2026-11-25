@@ -178,18 +178,22 @@ async function actions(env: EnvName, since: Date): Promise<void> {
 }
 
 async function costRuns(env: EnvName, since: Date): Promise<void> {
+	// Both tables or nothing: half a read is not "0 failed runs"
+	let failures: number | null = 0;
 	p('## Cost collector: failed runs');
 	for (const [name, sql] of [['collector_runs', COLLECTOR_RUNS_SQL], ['cost_job_runs', COST_JOB_RUNS_SQL]] as const) {
 		const r = await d1(env, sql, [since.toISOString()], COSTS_D1[env]);
 		p(`### ${name}`);
 		if (!r.ok) {
 			p(`- not readable: ${r.error}`);
+			failures = null;
 			continue;
 		}
 		p(`${r.rows.length} rows`);
-		data.collectorFailures = (data.collectorFailures ?? 0) + r.rows.length;
+		if (failures !== null) failures += r.rows.length;
 		for (const row of r.rows) p(`- ${JSON.stringify(row)}`);
 	}
+	data.collectorFailures = failures;
 	p();
 }
 

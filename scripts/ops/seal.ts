@@ -37,8 +37,9 @@ export function unseal(sealed: SealedReport, privateKey: KeyLike): string {
 	if (sealed.v !== 1 || sealed.alg !== ALG) throw new Error('not a sealed ops report');
 	const key = privateDecrypt(oaep(privateKey), Buffer.from(sealed.key, 'base64'));
 	const tag = Buffer.from(sealed.tag, 'base64');
-	if (tag.length !== 16) throw new Error('not a sealed ops report');
-	const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(sealed.iv, 'base64'), { authTagLength: 16 });
+	const iv = Buffer.from(sealed.iv, 'base64');
+	if (tag.length !== 16 || iv.length !== 12) throw new Error('not a sealed ops report');
+	const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
 	decipher.setAAD(Buffer.from(ALG));
 	decipher.setAuthTag(tag);
 	return Buffer.concat([decipher.update(Buffer.from(sealed.data, 'base64')), decipher.final()]).toString('utf8');
