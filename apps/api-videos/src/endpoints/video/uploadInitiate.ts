@@ -1,3 +1,4 @@
+import { apiError } from '../../lib/api-error';
 import { uploadIdentity } from "../../lib/channelAccess";
 import { categoryRefusal } from "../../lib/categories";
 import { reportServerError, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
@@ -404,7 +405,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 		// An import item's unfinished video takes its file again, whichever admin sends it
 		const continues = who.continueVideoId ? await checkReusable(c.env as never, who.continueVideoId, { ownerId, uploadedBy, channelId, anyUploader: true }) : null;
 		if (continues?.kind === 'replace' && continues.why === 'held') {
-			return c.json({ success: false, code: 'video_held', error: 'This video is under a hold and takes no new upload' }, 409);
+			return apiError(c, 409, 'video_held');
 		}
 		if (who.continueVideoId && continues?.kind === 'reuse') {
 			videoId = who.continueVideoId;
