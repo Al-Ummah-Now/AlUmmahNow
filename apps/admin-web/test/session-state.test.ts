@@ -24,25 +24,43 @@ const BEFORE = LEGACY_TOKEN_ISSUED_BEFORE_SECONDS - 3600;
 const legacy = jwt(BEFORE, BEFORE + 30 * 86400);
 const fresh = jwt(LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 60, LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 960);
 
+/** While `fresh` is valid */
+const NOW = LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 120;
+
 describe('verifySessionTokens', () => {
   it('a verified 15-minute token gives the session with the role from the token', async () => {
-    const verdict = await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verifyOk);
+    const verdict = await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verifyOk, NOW);
     assert.deepEqual(verdict, { kind: 'valid', user: { id: 'usr_a', email: 'a@example.com', role: 'super_admin' } });
   });
 
   it('a verified legacy 30-day token is refreshed, not used (its roles may be revoked)', async () => {
-    assert.deepEqual(await verifySessionTokens({ accessToken: legacy, refreshToken: 'r' }, verifyOk), { kind: 'refresh', reason: 'legacy' });
+    assert.deepEqual(await verifySessionTokens({ accessToken: legacy, refreshToken: 'r' }, verifyOk, NOW), { kind: 'refresh', reason: 'legacy' });
     // Nothing to refresh with: signed out (sign-in page), not an error
-    assert.deepEqual(await verifySessionTokens({ accessToken: legacy, refreshToken: '' }, verifyOk), { kind: 'signed-out' });
+    assert.deepEqual(await verifySessionTokens({ accessToken: legacy, refreshToken: '' }, verifyOk, NOW), { kind: 'signed-out' });
   });
 
   it('a long-lived token from a local issuer after the cutover is used (no refresh loop)', async () => {
     const local = jwt(LEGACY_TOKEN_ISSUED_BEFORE_SECONDS, LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 30 * 86400);
-    assert.equal((await verifySessionTokens({ accessToken: local, refreshToken: 'r' }, verifyOk)).kind, 'valid');
+    assert.equal((await verifySessionTokens({ accessToken: local, refreshToken: 'r' }, verifyOk, NOW)).kind, 'valid');
   });
 
   it('a token that fails verification is refreshed when a refresh token is there', async () => {
-    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verifyFails), { kind: 'refresh', reason: 'invalid' });
-    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: '' }, verifyFails), { kind: 'signed-out' });
+    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verifyFails, NOW), { kind: 'refresh', reason: 'invalid' });
+    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: '' }, verifyFails, NOW), { kind: 'signed-out' });
+  });
+
+  it('an expired token is refreshed without being verified (a tab left open, every 15 minutes)', async () => {
+    let verified = 0;
+    const verify = async () => {
+      verified++;
+      return admin;
+    };
+    const after = LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 960;
+    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verify, after), { kind: 'refresh', reason: 'expired' });
+    assert.deepEqual(await verifySessionTokens({ accessToken: fresh, refreshToken: '' }, verify, after + 5), { kind: 'signed-out' });
+    assert.equal(verified, 0);
+    assert.equal((await verifySessionTokens({ accessToken: fresh, refreshToken: 'r' }, verify, after - 1)).kind, 'valid');
+    // Unreadable: verified as before
+    assert.equal((await verifySessionTokens({ accessToken: 'x', refreshToken: 'r' }, verifyFails, after)).kind, 'refresh');
   });
 });
