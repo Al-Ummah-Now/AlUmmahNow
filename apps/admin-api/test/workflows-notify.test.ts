@@ -66,6 +66,7 @@ describe('rendering', () => {
     assert.match(e.subject, /^موافقة مطلوبة: /);
     assert.match(e.text, /الموافقات: ١ من ٢/);
     assert.match(e.text, /ينتظر حتى ٣٠ نوفمبر ٢٠٢٦.* UTC\./);
+    assert.match(e.text, /أو لأن إحدى قواعد الموافقة تُبلغك بها\./);
     assert.match(plain(e.text), /٪٢٫٩ ← ٪١٫٩/);
     assert.match(plain(e.text), /بطاقة، محفظة/);
     const prose = e.text.split('\n').filter((l) => !/https?:\/\//.test(l) && !/PayGood|USD/.test(l));

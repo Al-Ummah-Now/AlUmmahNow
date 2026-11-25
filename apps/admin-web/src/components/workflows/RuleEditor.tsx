@@ -12,7 +12,7 @@ import { formatNumber, type MessageKey } from '@/i18n/translate';
 import type { ActionResult } from '@/lib/api/errors';
 import type { WorkflowProposeResult } from '@/lib/api/workflows';
 import { logger } from '@/lib/logger-client';
-import { MONEY_PERMISSION_KEYS, permissionLabel } from '@/lib/workflows';
+import { MONEY_PERMISSION_KEYS, permissionLabel, ruleFeatures } from '@/lib/workflows';
 
 interface Props {
   type: WorkflowActionType;
@@ -27,18 +27,21 @@ interface Props {
   scopeText?: { text: string; named: boolean } | null;
   /** Who can be named for the emails (lib/api/workflows searchWorkflowRecipients) */
   recipients: (query: string) => Promise<{ items: AdminSuggestion[] }>;
+  /** A new rule for one feature: the features that already have one. `rule` is then the rule for all of them, and `scope` is chosen in the dialog */
+  forFeature?: readonly string[];
 }
 
 const STEP_UPS: WorkflowStepUp[] = ['none', 'approve', 'propose_and_approve'];
-const PROBLEMS = ['approvals_out_of_range', 'approvers_empty', 'approvers_invalid', 'recipients_invalid', 'expiry_out_of_range', 'below_floor_approvals', 'below_floor_step_up', 'below_floor_money_approvers', 'below_floor_money_exclusions', 'below_floor_subject', 'invalid_shape', 'not_connected'];
+const PROBLEMS = ['approvals_out_of_range', 'approvers_empty', 'approvers_invalid', 'recipients_invalid', 'expiry_out_of_range', 'below_floor_approvals', 'below_floor_step_up', 'below_floor_money_approvers', 'below_floor_money_exclusions', 'below_floor_subject', 'invalid_shape', 'scope_unknown', 'not_connected'];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /**
  * Edit one approval rule in the in-app dialog (wiki AUN-WORKFLOWS §4.1, §10). Values below the rule's
  * minimum are disabled with the reason; money rules keep the finance list as the only approvers and
  * always exclude tech staff and the owner. Saving asks for approval: the change is a request.
+ * With `forFeature` it makes a rule for one feature, chosen first.
  */
-export function RuleEditor({ type, scope, actionName, rule, floor, propose, names, scopeText, recipients }: Props) {
+export function RuleEditor({ type, scope, actionName, rule, floor, propose, names, scopeText, recipients, forFeature }: Props) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
@@ -46,6 +49,8 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<WorkflowRuleConfig>(() => clone(rule));
   const [reason, setReason] = useState('');
+  const [feature, setFeature] = useState('');
+  const ruleScope = forFeature ? feature : scope;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const perm = permissionLabel(t);
@@ -91,13 +96,18 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
     },
     [recipients, named],
   );
+  const taken = forFeature?.join(',') ?? '';
+  const featureSource: AutocompleteSource = useCallback(
+    async (q) => ({ items: ruleFeatures(taken.split(','), q, locale).map((f) => ({ ...f, kind: 'feature' as const, secondary: null, imageUrl: null })), next: null }),
+    [taken, locale],
+  );
   const ex = (key: keyof WorkflowRuleConfig['exclusions'], on: boolean) => setDraft((d) => ({ ...d, exclusions: { ...d.exclusions, [key]: on } }));
 
   async function submit() {
     setBusy(true);
     setMessage(null);
     try {
-      const result = await propose(type, scope, draft, reason);
+      const result = await propose(type, ruleScope, draft, reason);
       if (result.ok) {
         setMessage({ tone: 'ok', text: result.data.status === 'applied' ? t('workflows.rules.applied') : t('workflows.rules.sent') });
         setOpen(false);
@@ -105,13 +115,13 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
         router.refresh();
       } else {
         const problem = result.problems?.[0]?.problem;
-        if (result.status >= 500) logger.error('[approval-rules] Propose failed', { type, scope, status: result.status, code: result.code });
+        if (result.status >= 500) logger.error('[approval-rules] Propose failed', { type, scope: ruleScope, status: result.status, code: result.code });
         // A known problem reads best in the page's words; otherwise admin-api's own sentence (already in the admin's language)
         const known = problem && PROBLEMS.includes(problem);
         setMessage({ tone: 'error', text: known ? t(`workflows.rules.problems.${problem}` as MessageKey, problemParams(problem)) : result.status < 500 && result.error ? result.error : t('workflows.failed') });
       }
     } catch (e) {
-      logger.error('[approval-rules] Propose request failed', { type, scope, error: e instanceof Error ? e.message : String(e) });
+      logger.error('[approval-rules] Propose request failed', { type, scope: ruleScope, error: e instanceof Error ? e.message : String(e) });
       setMessage({ tone: 'error', text: t('workflows.failed') });
     } finally {
       setBusy(false);
@@ -133,12 +143,13 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
         className={`${secondaryButtonClass} min-h-11 sm:min-h-0`}
         onClick={() => {
           setDraft(clone(rule));
+          setFeature('');
           setMessage(null);
           setOpen(true);
         }}
-        data-testid={`approval-rule-edit-${type}${scope ? `-${scope}` : ''}`}
+        data-testid={forFeature ? 'approval-rule-for-feature' : `approval-rule-edit-${type}${scope ? `-${scope}` : ''}`}
       >
-        {t('workflows.rules.edit')}
+        {t(forFeature ? 'workflows.rules.forFeature' : 'workflows.rules.edit')}
       </button>
       {message && !open && (
         <p role="status" className={`basis-full text-end text-sm ${message.tone === 'error' ? 'text-danger-fg' : 'text-fg-muted'}`} data-testid="approval-rule-message">
@@ -163,13 +174,40 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
           }}
         >
           <h2 id={`${ids}-title`} className="text-lg font-semibold">
-            {t('workflows.rules.editTitle', { action: actionName })}
+            {t(forFeature ? 'workflows.rules.forFeatureTitle' : 'workflows.rules.editTitle', { action: actionName })}
             {scope && (
               <span className="ms-2 inline-block text-sm font-normal text-fg-muted" dir={scopeText?.named ? undefined : 'ltr'}>
                 {scopeText?.text ?? scope}
               </span>
             )}
           </h2>
+
+          {forFeature && (
+            <Autocomplete
+              // Opened again: nothing is chosen
+              key={open ? 'open' : 'closed'}
+              kind="feature"
+              mode="pick"
+              label={t('workflows.rules.forFeaturePick')}
+              placeholder={t('workflows.rules.forFeaturePlaceholder')}
+              hint={t('workflows.rules.forFeatureStart')}
+              source={featureSource}
+              allowIds={false}
+              showIds={false}
+              popup="inline"
+              chosen="card"
+              changeLabel={t('workflows.rules.forFeatureChange')}
+              messages={{
+                recent: (count) => t('workflows.rules.featureCount', { count }),
+                emptyList: t('workflows.rules.featuresEmpty'),
+                noMatches: (query) => t('workflows.rules.featuresNoMatch', { query }),
+                count: (count) => t('workflows.rules.featureCount', { count }),
+              }}
+              onChange={(id) => setFeature(id)}
+              showStatus
+              testId="approval-rule-feature"
+            />
+          )}
 
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-n`} className="text-sm font-medium">{t('workflows.rules.approvalsNeeded')}</label>
@@ -336,7 +374,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
             <button type="button" className={`${secondaryButtonClass} min-h-11 sm:min-h-0`} onClick={() => setOpen(false)} data-testid="approval-rule-cancel">
               {t('workflows.rules.cancel')}
             </button>
-            <button type="submit" className={`${primaryButtonClass} min-h-11 sm:min-h-0`} disabled={busy || !reason.trim() || draft.approvers.length === 0} data-testid="approval-rule-submit">
+            <button type="submit" className={`${primaryButtonClass} min-h-11 sm:min-h-0`} disabled={busy || !reason.trim() || draft.approvers.length === 0 || (!!forFeature && !feature)} data-testid="approval-rule-submit">
               {t('workflows.rules.submit')}
             </button>
           </div>

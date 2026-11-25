@@ -4,9 +4,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORKFLOW_ACTIONS, WORKFLOW_STATUSES, type WorkflowField } from '@al-ummah/shared-types';
+import { FEATURE_REGISTRY, WORKFLOW_ACTIONS, WORKFLOW_STATUSES, type WorkflowField } from '@al-ummah/shared-types';
 import { createTranslator } from '../src/i18n/translate';
-import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, pendingFor, permissionLabel, ruleSummary, scopeName, sentNoticeEnds, statusLabel, workflowPeople, workflowValue } from '../src/lib/workflows';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, pendingFor, permissionLabel, ruleSummary, ruleFeatures, scopeName, sentNoticeEnds, statusLabel, workflowPeople, workflowValue } from '../src/lib/workflows';
 
 const en = createTranslator('en');
 const ar = createTranslator('ar');
@@ -105,5 +105,17 @@ describe('rule scope names (rules page)', () => {
     assert.equal(scopeName('workflows.rule.set', 'money', 'ar')?.text, 'قواعد المال');
     assert.deepEqual(scopeName('features.set', 'somethingElse', 'en'), { text: 'somethingElse', named: false });
     assert.equal(scopeName('tiers.change', '', 'en'), null);
+  });
+});
+
+describe('features a rule can be made for', () => {
+  it('all but those with one, by name in the page language, matched in either language', () => {
+    const all = ruleFeatures([], '', 'en');
+    assert.equal(all.length, FEATURE_REGISTRY.length);
+    assert.deepEqual(all.map((f) => f.label), [...all.map((f) => f.label)].sort((a, b) => a.localeCompare(b, 'en')));
+    assert.ok(!ruleFeatures(['live'], '', 'en').some((f) => f.id === 'live'));
+    const name = FEATURE_REGISTRY.find((f) => f.key === 'live')!.name;
+    for (const q of [name.en.toUpperCase(), name.ar, ' live ']) assert.ok(ruleFeatures([], q, 'ar').some((f) => f.id === 'live' && f.label === name.ar), q);
+    assert.deepEqual(ruleFeatures([], 'no such feature', 'en'), []);
   });
 });

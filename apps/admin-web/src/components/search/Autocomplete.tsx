@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
-import type { AdminSuggestion, AdminSuggestKind } from '@al-ummah/shared-types';
+import type { AdminSuggestion } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
@@ -57,14 +57,16 @@ import {
   suggestUrl,
   typed,
   type AutocompleteItem,
+  type AutocompleteKind,
   type AutocompleteMode,
   type AutocompleteOption,
   type AutocompleteState,
   type InitialList,
+  type SourceItem,
 } from './autocomplete-model';
 
 export interface AutocompleteProps {
-  kind: AdminSuggestKind;
+  kind: AutocompleteKind;
   mode: AutocompleteMode;
   label: string;
   /** search: the query parameter (usually q). pick: the hidden input carrying the id. Omit for an action field. */
@@ -105,7 +107,7 @@ export interface AutocompleteProps {
   popup?: 'overlay' | 'inline';
 }
 
-export type AutocompleteSource = (query: string, cursor: string | null, signal: AbortSignal) => Promise<{ items: AutocompleteItem[]; next?: string | null }>;
+export type AutocompleteSource = (query: string, cursor: string | null, signal: AbortSignal) => Promise<{ items: SourceItem[]; next?: string | null }>;
 
 export interface AutocompleteMessages {
   /** The opening list has items */
@@ -118,7 +120,7 @@ export interface AutocompleteMessages {
   count?: (count: number) => string;
 }
 
-const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
+const KIND_LABEL: Record<AutocompleteKind, MessageKey> = {
   channel: 'autocomplete.kinds.channel',
   user: 'autocomplete.kinds.user',
   video: 'autocomplete.kinds.video',
@@ -129,7 +131,11 @@ const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
   error: 'autocomplete.kinds.error',
   invite: 'autocomplete.kinds.invite',
   report: 'autocomplete.kinds.report',
+  feature: 'autocomplete.kinds.feature',
 };
+
+/** An own source's answer. Only a feature box lists features, and its items go nowhere else: the rest of the box keeps the suggest API's kinds. */
+const ask = (source: AutocompleteSource, query: string, cursor: string | null, signal: AbortSignal) => source(query, cursor, signal) as Promise<{ items: AutocompleteItem[]; next?: string | null }>;
 
 type Envelope<T> = { success?: boolean; result?: T };
 
@@ -197,7 +203,7 @@ export function Autocomplete({
       initialRef.current = loading;
       setInitial(loading);
       if (!cursor) setState((s) => showInitial(s, loading));
-      (source ? source('', cursor, controller.signal) : getJson<{ items: AdminSuggestion[]; next?: string | null }>(initialUrl(kind, cursor), controller.signal))
+      (source ? ask(source, '', cursor, controller.signal) : getJson<{ items: AdminSuggestion[]; next?: string | null }>(initialUrl(kind, cursor), controller.signal))
         .then(({ items, next }) => {
           const list = addPage(initialRef.current, { items, next: next ?? null }, !!cursor);
           initialRef.current = list;
@@ -255,7 +261,7 @@ export function Autocomplete({
     if (q.length < MIN_QUERY) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      (source ? source(q, null, controller.signal) : getJson<{ items: AdminSuggestion[] }>(suggestUrl(kind, q), controller.signal))
+      (source ? ask(source, q, null, controller.signal) : getJson<{ items: AdminSuggestion[] }>(suggestUrl(kind, q), controller.signal))
         .then(({ items }) => setState((s) => received(s, mode, q, items, { allowIds })))
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
@@ -378,7 +384,7 @@ export function Autocomplete({
       {mode === 'pick' && name !== undefined && <input ref={hiddenRef} type="hidden" name={name} value={picked?.id ?? ''} />}
 
       {showChip && chosen === 'card' ? (
-        <PickedCard picked={picked} showIds={showIds} label={changeLabel ?? t('autocomplete.change')} buttonRef={changeRef} disabled={disabled} onChange={() => {
+        <PickedCard picked={picked} kind={kind} showIds={showIds} label={changeLabel ?? t('autocomplete.change')} buttonRef={changeRef} disabled={disabled} onChange={() => {
             flushSync(() => setEditing(true));
             inputRef.current?.focus();
           }} testId={testId} />
@@ -574,7 +580,7 @@ function Thumb({ suggestion }: { suggestion: Pick<AdminSuggestion, 'kind' | 'ima
   );
 }
 
-function OptionContent({ option, kind, current, showIds = true }: { option: AutocompleteOption; kind: AdminSuggestKind; current?: string; showIds?: boolean }) {
+function OptionContent({ option, kind, current, showIds = true }: { option: AutocompleteOption; kind: AutocompleteKind; current?: string; showIds?: boolean }) {
   const { t } = useLanguage();
   if (option.type === 'searchAll') {
     return (
@@ -597,7 +603,7 @@ function OptionContent({ option, kind, current, showIds = true }: { option: Auto
   const s = option.suggestion;
   return (
     <>
-      <Thumb suggestion={s} />
+      {kind !== 'feature' && <Thumb suggestion={s} />}
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-fg" dir="auto">
@@ -631,6 +637,7 @@ function OptionContent({ option, kind, current, showIds = true }: { option: Auto
 /** The chosen item as a card: picture, name, secondary line and facts, and one button to choose again. */
 function PickedCard({
   picked,
+  kind,
   label,
   buttonRef,
   disabled,
@@ -639,6 +646,7 @@ function PickedCard({
   showIds = true,
 }: {
   picked: { id: string; item: AutocompleteItem | null; missing: boolean };
+  kind: AutocompleteKind;
   label: string;
   buttonRef: React.Ref<HTMLButtonElement>;
   disabled: boolean;
@@ -655,7 +663,7 @@ function PickedCard({
       data-id={id}
     >
       <span className="flex min-w-0 items-center gap-3">
-        {item ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
+        {item && kind !== 'feature' ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate font-medium text-fg" dir="auto">
