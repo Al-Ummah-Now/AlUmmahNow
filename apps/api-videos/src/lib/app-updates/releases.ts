@@ -60,6 +60,9 @@ export const APP_STORE_BUNDLES: readonly { app: AppConfigApp; platforms: readonl
 	{ app: 'studio', platforms: ['ios', 'ipados'], bundleId: 'net.alummahnow.studio' },
 ];
 
+/** The App Store is asked once a day. */
+export const APP_STORE_EVERY_MS = 24 * 3600_000 - 10 * 60_000;
+
 export interface ReleaseHistoryItem {
 	version: string;
 	tag: string;
@@ -122,6 +125,8 @@ export interface ReleasesDocument {
 	entries: Record<string, ReleaseEntry>;
 	/** bundle id → what users can install from the App Store now */
 	appStore: Record<string, AppStoreStatus>;
+	/** When the App Store was last asked (at most daily) */
+	appStoreAskedAt?: string;
 	/** Tags already looked at, newest first, per source (`github:<repo>`, `admin:<repo>`) */
 	seen: Record<string, string[]>;
 	/** Repos a root key was ever configured for: they never go back to the unsigned notice */
@@ -454,6 +459,7 @@ export async function readReleases(kv: KVNamespace | undefined): Promise<Release
 		updatedAt: raw.updatedAt ?? new Date(0).toISOString(),
 		entries: raw.entries ?? {},
 		appStore: raw.appStore ?? {},
+		...(raw.appStoreAskedAt ? { appStoreAskedAt: raw.appStoreAskedAt } : {}),
 		seen: raw.seen ?? {},
 		keys: raw.keys ?? {},
 		rooted: raw.rooted ?? [],
@@ -469,6 +475,8 @@ export interface IndexOptions {
 	onProblem?: (p: IndexProblem) => void;
 	/** Skip the "already running" marker */
 	force?: boolean;
+	/** The bundle ids set in the Mobile apps settings; the App Store is asked about these only (none: not at all) */
+	appStoreBundles?: readonly string[];
 }
 
 /**
@@ -574,7 +582,15 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 			doc.seen[source.id] = seen.slice(0, SEEN_PER_SOURCE);
 		}
 		if (dropYanked(doc)) changed = true;
-		for (const b of APP_STORE_BUNDLES) {
+		// At most daily, and only for the bundles that are set up: Apple refuses more from a Worker (HTTP 403)
+		const bundles = APP_STORE_BUNDLES.filter((b) => opts.appStoreBundles?.includes(b.bundleId));
+		const askedAt = Date.parse(doc.appStoreAskedAt ?? '');
+		const due = bundles.length > 0 && !(now().getTime() - askedAt < APP_STORE_EVERY_MS);
+		if (due) {
+			doc.appStoreAskedAt = now().toISOString();
+			changed = true;
+		}
+		for (const b of due ? bundles : []) {
 			try {
 				const hit = await lookupAppStore(fetchImpl, b.bundleId, b.mac === true);
 				result.appStoreChecked++;

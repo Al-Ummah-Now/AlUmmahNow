@@ -323,7 +323,7 @@ describe('CSAM URLs (shared-types)', () => {
 	});
 
 	it('knows every page of the site, with and without a locale', () => {
-		const site = 'https://videos.alummahnow.net';
+		const site = 'https://videos.stage.alummahnow.net';
 		const video = (page: string) => ({ kind: 'page', page, id: 'vid-synth-01' });
 		const cases: Array<[string, unknown]> = [
 			['/video/vid-synth-01', video('video')],
@@ -365,7 +365,7 @@ describe('CSAM URLs (shared-types)', () => {
 	});
 
 	it('a comment URL names the comment, never what it is on', () => {
-		const site = 'https://videos.alummahnow.net';
+		const site = 'https://videos.stage.alummahnow.net';
 		const onVideo = { kind: 'comment', on: 'video', parentId: 'vid-synth-01', commentId: 'cmt-synth-01' };
 		for (const path of ['/en/video/vid-synth-01#comment-cmt-synth-01', '/video/vid-synth-01?comment=cmt-synth-01', '/ar/shorts/vid-synth-01?commentId=cmt-synth-01', '/en/video?vid=vid-synth-01&lc=cmt-synth-01', '/embed/comments/vid-synth-01#comment-cmt-synth-01', '/en/video/vid-synth-01#comment%3Dcmt-synth-01']) assert.deepEqual(parseCsamUrl(site + path), onVideo, path);
 		for (const path of ['/en/post/post-synth-01?comment=cmt-synth-01', '/channels/chan-synth-01?post=post-synth-01#comment-cmt-synth-01', '/en/@synthetic?post=post-synth-01#comment-cmt-synth-01']) {
@@ -408,7 +408,7 @@ describe('CSAM URLs (shared-types)', () => {
 	});
 
 	it('a page that names two items maps to neither', () => {
-		const site = 'https://videos.alummahnow.net';
+		const site = 'https://videos.stage.alummahnow.net';
 		for (const path of ['/en/video/vid-synth-01?vid=vid-synth-02', '/en/video/vid-synth-01?post=post-synth-01', '/en/shorts/vid-synth-01?post=post-synth-01', '/en/post/post-synth-01?post=post-synth-02', '/embed/v/vid-synth-01?vid=vid-synth-02', '/en/video?vid=vid-synth-01&vid=vid-synth-02', '/en/video?vid=vid-synth-01&VID=vid-synth-02', '/en/channels/chan-synth-01?post=post-synth-01&post=post-synth-02', '/en/live/live-synth-01?vid=vid-synth-02', '/en/live/live-synth-01?Post=post-synth-01', '/en/post/post-synth-01?vid=vid-synth-02', '/en/channels/chan-synth-01?vid=vid-synth-02', '/en/@synthetic?post=post-synth-01&vid=vid-synth-02', '/thumb/vid-synth-01.jpg?vid=vid-synth-02']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
 		assert.equal(parseCsamUrl('https://alummahnow.link/v/vid-synth-01?vid=vid-synth-02')?.kind, 'other');
 		assert.equal((parseCsamUrl('https://scholar.alummahnow.org/en/watch/vid-synth-01?vid=vid-synth-02') as any)?.item, null);
@@ -542,7 +542,7 @@ describe('mapping a matched URL', () => {
 	it('finds posts by id alone, by handle and on scholar sites; an item the page did not show is left for a person', async () => {
 		const { env } = setup();
 		const post = { ok: true, resolution: { kind: 'post_image', channelId: 'chan-synth-01', postId: 'post-synth-01', uploaderId: OWNER } };
-		const site = 'https://videos.alummahnow.net';
+		const site = 'https://videos.stage.alummahnow.net';
 		for (const url of [`${site}/en/post/post-synth-01`, 'https://alummahnow.link/p/post-synth-01', `${site}/en/@synthetic?post=post-synth-01`, `${site}/channels/chan-synth-01?post=post-synth-01`, 'https://synth.alummahnow.org/en/posts/post-synth-01/', 'https://scholar.example/ar/posts/post-synth-01']) {
 			assert.deepEqual(await resolveCsamUrl(env as never, url), post, url);
 		}
@@ -563,7 +563,7 @@ describe('mapping a matched URL', () => {
 
 	it('finds a comment and its author, and a live stream by its page or its media', async () => {
 		const { env, db } = setup();
-		const site = 'https://videos.alummahnow.net';
+		const site = 'https://videos.stage.alummahnow.net';
 		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/video/vid-synth-02#comment-cmt-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: 'usr_commenter' } });
 		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/video/vid-synth-02?comment=rep-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'rep-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: 'usr_replier' } });
 		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/post/post-synth-01?comment=pcm-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'pcm-synth-01', commentOn: 'post', commentParentId: 'post-synth-01', uploaderId: 'usr_commenter' } });

@@ -10,7 +10,7 @@
  * channel's index) and announced with CommunityPostCreated (notifications and the scholar reference
  * outbox). A marker whose post was deleted, published by hand or rescheduled is dropped.
  */
-import { PostStatus, type CommunityPost } from '@al-ummah/shared-types';
+import { PostStatus, withStorageRetry, type CommunityPost } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
@@ -51,7 +51,7 @@ export interface ScheduledEnv {
 }
 
 export async function publishDuePosts(env: ScheduledEnv, now = new Date()): Promise<{ published: number; dropped: number }> {
-	const listed = await env.community_posts.list({ prefix: SCHEDULED_PREFIX, limit: SCHEDULED_BATCH });
+	const listed = await withStorageRetry('list', () => env.community_posts.list({ prefix: SCHEDULED_PREFIX, limit: SCHEDULED_BATCH }));
 	const out = { published: 0, dropped: 0 };
 	const nowIso = now.toISOString();
 	for (const obj of listed.objects) {

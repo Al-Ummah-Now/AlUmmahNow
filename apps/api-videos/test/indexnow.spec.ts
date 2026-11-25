@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { syncSearchDocument } from '@al-ummah/shared-types';
-import { flushIndexNow, indexNowUrls, INDEXNOW_ENDPOINT, INDEXNOW_KEY, INDEXNOW_MAX_URLS } from '../src/lib/indexnow';
+import { flushIndexNow, indexNowUrls, indexNowWaitSeconds, INDEXNOW_ENDPOINT, INDEXNOW_KEY, INDEXNOW_MAX_URLS } from '../src/lib/indexnow';
 import { SqliteD1 } from './search-sqlite-d1';
 import { videoFixture } from './helpers';
 
@@ -174,6 +174,29 @@ describe('IndexNow flush', () => {
 			throw new Error('offline');
 		}) as never);
 		assert.equal(pending(db).length, 1);
+	});
+
+	it('after a 429 stays away for hours, keeps the rows, then sends them in one POST', async () => {
+		const db = new SqliteD1();
+		await write(db, 'v1', videoFixture({ id: 'v1' }));
+		const kv = new Map<string, string>();
+		let ttl = 0;
+		const APP_CONFIG = { get: async (k: string) => kv.get(k) ?? null, put: async (k: string, v: string, o: { expirationTtl: number }) => ((ttl = o.expirationTtl), void kv.set(k, v)) } as never;
+		const env = { ...prodEnv(db), APP_CONFIG };
+		const { calls, fetcher } = recorder(429);
+		await flushIndexNow(env, fetcher);
+		assert.equal(ttl, 6 * 3600);
+		await write(db, 'v2', videoFixture({ id: 'v2' }));
+		assert.deepEqual(await flushIndexNow(env, fetcher), { sent: 0, videos: 0, waiting: true });
+		assert.equal(calls.length, 1);
+		kv.clear();
+		const later = recorder(202);
+		await flushIndexNow(env, later.fetcher);
+		assert.equal(later.calls.length, 1);
+		assert.deepEqual(pending(db), []);
+		assert.equal(indexNowWaitSeconds('43200'), 12 * 3600);
+		assert.equal(indexNowWaitSeconds('999999'), 24 * 3600);
+		assert.equal(indexNowWaitSeconds('soon'), 6 * 3600);
 	});
 
 	it('a video queued again after the read stays queued', async () => {

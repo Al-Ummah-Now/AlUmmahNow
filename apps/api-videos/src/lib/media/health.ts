@@ -20,6 +20,7 @@ import {
 	nextProviderHealth,
 	reportNeedsAction,
 	resolveNeedsAction,
+	withStorageRetry,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type MediaHealthSnapshot,
@@ -99,7 +100,8 @@ export async function readHealth(env: Pick<HealthEnv, 'global_settings'>, fresh 
 	if (!fresh && cache && Date.now() - cache.at < HEALTH_TTL_MS) return cache.value;
 	let value: MediaHealthSnapshot | null = null;
 	try {
-		value = ((await (await env.global_settings?.get(HEALTH_KEY))?.json<MediaHealthSnapshot>()) ?? null);
+		const object = await withStorageRetry('get', async () => env.global_settings?.get(HEALTH_KEY));
+		value = (await object?.json<MediaHealthSnapshot>()) ?? null;
 	} catch (error) {
 		logger.warn('[Media] Could not read provider health', { error: error instanceof Error ? error.message : String(error) });
 	}

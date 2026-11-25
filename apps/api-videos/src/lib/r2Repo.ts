@@ -1,4 +1,4 @@
-import { isInternalVideoKey } from '@al-ummah/shared-types';
+import { isInternalVideoKey, withStorageRetry } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 
@@ -9,6 +9,9 @@ export interface PaginationResponse<T> {
 
 /** Attempts before `updateObject` gives up on a key under constant contention. */
 export const DEFAULT_CAS_ATTEMPTS = 10;
+
+/** Two more tries of a read, about 100 and 200 ms apart. Writes are not retried here: their outcome may be unknown. */
+const READ_RETRY = { retries: 2, baseDelayMs: 100 };
 
 /** R2 precondition that only lets a put through when the key does not exist. */
 export const CREATE_ONLY: R2Conditional = { etagDoesNotMatch: '*' };
@@ -94,7 +97,8 @@ class R2Repository<T> {
   async getObject(id: string): Promise<T | null> {
     if (this.foreign(id)) return null;
     try {
-      const object = await this.bucket.get(id);
+      // R2 sometimes fails a read that succeeds a moment later (10001): retried twice, then thrown
+      const object = await withStorageRetry('get', () => this.bucket.get(id), READ_RETRY);
 
       // Check if object exists before trying to parse it
       if (!object) {
@@ -152,7 +156,7 @@ class R2Repository<T> {
     if (this.foreign(id)) return null;
     const maxAttempts = opts.maxAttempts ?? DEFAULT_CAS_ATTEMPTS;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const object = await this.bucket.get(id);
+      const object = await withStorageRetry('get', () => this.bucket.get(id), READ_RETRY);
       if (!object && !opts.initial) return null;
       const data = object ? await object.json<T>() : opts.initial!();
       if (mutate(data) === false) return data;
