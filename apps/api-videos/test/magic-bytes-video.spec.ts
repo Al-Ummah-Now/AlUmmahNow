@@ -15,6 +15,13 @@ const iso = (brand: string, compatible: string[] = []): Uint8Array =>
 	pad([0, 0, 0, 16 + compatible.length * 4, ...ascii('ftyp'), ...ascii(brand.padEnd(4, ' ')), 0, 0, 2, 0, ...compatible.flatMap((b) => ascii(b.padEnd(4, ' ')))]);
 /** An EBML header with its DocType element */
 const ebml = (docType: string): Uint8Array => pad([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x80 + docType.length, ...ascii(docType)]);
+/** An ASF header object with a stream properties object of the given type (video or audio) */
+const asf = (video: boolean): Uint8Array =>
+	pad([0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11, 0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c, 0x80, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 2,
+		// a File Properties-sized gap, then the stream type GUID
+		...new Array(100).fill(0),
+		...(video ? [0xc0, 0xef, 0x19, 0xbc, 0x4d, 0x5b, 0xcf, 0x11, 0xa8, 0xfd, 0x00, 0x80, 0x5f, 0x5c, 0x44, 0x2b] : [0x40, 0x9e, 0x69, 0xf8, 0x4d, 0x5b, 0xcf, 0x11, 0xa8, 0xfd, 0x00, 0x80, 0x5f, 0x5c, 0x44, 0x2b])], 256);
+const flv = (): Uint8Array => pad([...ascii('FLV'), 1, 5, 0, 0, 0, 9, 0, 0, 0, 0], 64);
 const riff = (kind: string): Uint8Array => pad([...ascii('RIFF'), 0x24, 0, 0, 0, ...ascii(kind)]);
 
 describe('validateVideoMagicBytes', () => {
@@ -26,6 +33,8 @@ describe('validateVideoMagicBytes', () => {
 		['WebM', ebml('webm'), 'video/webm', 'video/webm'],
 		['MKV', ebml('matroska'), 'video/x-matroska', 'video/x-matroska'],
 		['AVI', riff('AVI '), 'video/x-msvideo', 'video/x-msvideo'],
+		['WMV', asf(true), 'video/x-ms-wmv', 'video/x-ms-wmv'],
+		['FLV', flv(), 'video/x-flv', 'video/x-flv'],
 	];
 
 	for (const [name, bytes, browserType, detected] of accepted) {
@@ -77,6 +86,17 @@ describe('validateVideoMagicBytes', () => {
 	it('refuses an ISO file with an unknown brand and no video brand, and one with no brand list at all', () => {
 		assert.equal(validateVideoMagicBytes(iso('ZZZZ')).isValid, false);
 		assert.equal(validateVideoMagicBytes(iso('ZZZZ', ['mif1', 'heic'])).isValid, false);
+	});
+
+	it('takes the other names for WMV and FLV as the same format', () => {
+		assert.equal(validateVideoMagicBytes(asf(true), 'video/x-ms-asf').mimeTypeMismatch, false);
+		assert.equal(validateVideoMagicBytes(asf(true), 'video/wmv').mimeTypeMismatch, false);
+		assert.equal(validateVideoMagicBytes(flv(), 'video/flv').mimeTypeMismatch, false);
+	});
+
+	it('refuses an ASF file with no video stream (WMA audio) and an FLV signature with another version', () => {
+		assert.equal(validateVideoMagicBytes(asf(false)).isValid, false);
+		assert.equal(validateVideoMagicBytes(pad([...ascii('FLV'), 2, 5, 0, 0, 0, 9, 0, 0, 0, 0], 64)).isValid, false);
 	});
 
 	it('refuses other RIFF files (WAV, WebP), which the old check took for AVI', () => {

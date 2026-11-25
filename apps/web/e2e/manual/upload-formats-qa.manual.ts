@@ -14,9 +14,10 @@
  * format in a temp folder. A throwaway run account named …-media-gate (the one account api-videos
  * transcodes, so our own encoder is tried as well as Bunny) signs up on QA, is made a Creator, makes
  * a channel and uploads each clip through /upload (the single form), the same way a creator does.
- * WMV and FLV are not on the web list, so the form refuses them; they go through the same API calls
- * the form makes (initiate, TUS, complete) to learn whether Bunny and our transcoder take them: if
- * Bunny does, they can be added to the website as they are in Desktop Studio.
+ * Every format on the web list goes through the form. A format the form does not take yet (`viaApi`) goes
+ * through the same API calls the form makes (initiate, TUS, complete) to learn whether Bunny and our
+ * transcoder take it before it is added to the website; none is probed at the moment (WMV and FLV, probed
+ * this way on QA in run 45531275468, are on the list now).
  * For each format it records the type the browser reported, what the form did, Bunny's encode result
  * and our R2 transcode result, and prints a table at the end. 10 Bunny uploads (the run's cap), 10 R2 transcodes.
  *
@@ -111,8 +112,8 @@ const FORMATS: Format[] = [
   { label: 'WebM (VP9)', file: 'clip-vp9.webm', args: ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-deadline', 'realtime', '-cpu-used', '8', '-c:a', 'libopus', '-b:a', '48k'] },
   { label: 'MKV (H.264)', file: 'clip-h264.mkv', args: H264 },
   { label: 'AVI (MPEG-4)', file: 'clip-mpeg4.avi', args: ['-c:v', 'mpeg4', '-q:v', '8', '-c:a', 'libmp3lame', '-b:a', '64k'] },
-  { label: 'WMV (not on the web list)', file: 'clip-wmv2.wmv', args: ['-c:v', 'wmv2', '-q:v', '8', '-c:a', 'wmav2', '-b:a', '64k'], viaApi: 'video/x-ms-wmv' },
-  { label: 'FLV (not on the web list)', file: 'clip-flv1.flv', args: ['-c:v', 'flv', '-q:v', '8', '-c:a', 'libmp3lame', '-b:a', '64k', '-ar', '44100'], viaApi: 'video/x-flv' },
+  { label: 'WMV', file: 'clip-wmv2.wmv', args: ['-c:v', 'wmv2', '-q:v', '8', '-c:a', 'wmav2', '-b:a', '64k'] },
+  { label: 'FLV', file: 'clip-flv1.flv', args: ['-c:v', 'flv', '-q:v', '8', '-c:a', 'libmp3lame', '-b:a', '64k', '-ar', '44100'] },
 ];
 
 interface Outcome {
@@ -342,6 +343,6 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
       fs.writeFileSync(process.env.FORMATS_SUMMARY_FILE, `${md}\n`);
     }
   }
-  // A format on the web list that failed is a failure of the check; WMV and FLV are probes, their table row is the answer
+  // A format on the web list that failed is a failure of the check; a `viaApi` probe's table row is its answer
   expect(outcomes.filter((o) => o.error && !FORMATS.find((f) => f.file === o.file)?.viaApi), 'formats on the web list that failed').toEqual([]);
 });
