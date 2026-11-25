@@ -2,7 +2,7 @@
  * Read-only report of the errors one environment recorded (production or stage).
  *
  *   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node --experimental-strip-types scripts/ops/prod-errors.ts \
- *     --env production [--hours 72] [--paths /passkeys/,/account/passkeys] [--sealed report.sealed.json]
+ *     --env production [--hours 72] [--paths /passkeys/,/account/passkeys] [--sealed report.sealed.json] [--summary summary.json]
  *
  * --paths: also list every request whose path contains one of the
  * comma-separated substrings (time, method, path without query, status,
@@ -24,7 +24,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { publicErrors, type ErrorsData } from './public-report.ts';
+import { publicErrors, publicSummary, type ErrorsData } from './public-report.ts';
 import { clip, scrub } from './scrub.ts';
 import { seal } from './seal.ts';
 
@@ -313,6 +313,8 @@ async function main(): Promise<void> {
 	if (needles.length) for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await pathTrace(app, s, needles, logSince, until);
 	const sealedPath = arg('sealed', '');
 	if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(out.join('\n') + '\n')));
+	const summaryPath = arg('summary', '');
+	if (summaryPath) writeFileSync(summaryPath, JSON.stringify(publicSummary(data)));
 	process.stdout.write(publicErrors({ env, since, until, ...data }).join('\n') + '\n');
 }
 

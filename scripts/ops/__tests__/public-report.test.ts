@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { publicErrors, publicMedia, publicRoute } from '../public-report.ts';
+import { publicErrors, publicMedia, publicRoute, publicSummary } from '../public-report.ts';
 
 /** A value for every field that must not come through, in every field. */
 const NASTY = [
@@ -46,6 +46,10 @@ test('a nasty fixture prints nothing but the allow list', () => {
 				logs: [{ app: v, warn: v, error: v, readable: true }, { app: v, warn: 0, error: 0, readable: false }],
 			}),
 		);
+		const summary = publicSummary({ groups: [{ id: v, app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }, { id: 'eg_0123456789abcdef', app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }], actions: [{ app: v, source: v, item_type: v }] });
+		assert.deepEqual(summary.groups!.map((g) => g.id), ['eg_0123456789abcdef']);
+		assert.match(summary.groups![0]!.line, /^[a-z-]+ [a-z]+ [A-Za-z0-9]+ (–|(\/(:other|:id|:locale|[a-z-]+))+) status (\d{3}|–) count (\d+|–)$/);
+		assert.doesNotMatch(JSON.stringify(summary), LEAK);
 		const n = typeof x === 'number' ? x : 0;
 		check(publicMedia({ env: v, since: v, until: date, deployments: Number.isFinite(n) && n >= 0 ? Math.min(n, 1e6) : null, backlog: { queue: 3, dlq: null }, containers: 1, starts: null, logs: [{ app: v, warn: v, error: v, readable: true }] }));
 	}
@@ -81,7 +85,9 @@ test('the scripts print the public part only, and a pull request reads stage onl
 		assert.deepEqual([...src.matchAll(/process\.stdout\.write\((\w+)/g)].map((m) => m[1]), [f === 'prod-errors' ? 'publicErrors' : 'publicMedia'], f);
 		assert.deepEqual([...src.matchAll(/process\.stderr\.write\((.)/g)].map((m) => m[1]), ["'"], f);
 		assert.equal(src.match(/writeFileSync\(sealedPath, JSON\.stringify\(seal\(/g)?.length, 2, f);
-		assert.equal(src.match(/writeFileSync\(/g)?.length, 2, f);
+		// The summary is the allow list too (publicSummary)
+		assert.equal(src.match(/writeFileSync\(/g)?.length, f === 'prod-errors' ? 3 : 2, f);
+		if (f === 'prod-errors') assert.match(src, /writeFileSync\(summaryPath, JSON\.stringify\(publicSummary\(data\)\)\)/);
 		const yml = readFileSync(new URL(`../../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
 		const steps = yml.split(/\n      - /).slice(1);
 		for (const step of steps.filter((x) => x.includes('secrets.'))) {
