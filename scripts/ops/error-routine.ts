@@ -1,7 +1,8 @@
 /**
- * The daily and after-release check of the recorded production errors (.github/workflows/prod-errors-routine.yml).
+ * The daily check, and the one 45 minutes after a production release, of the recorded production errors (.github/workflows/prod-errors-routine.yml).
  *
- *   node --experimental-strip-types scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json
+ *   node --experimental-strip-types scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json --release <run id or empty>
+ *   node --experimental-strip-types scripts/ops/error-routine.ts --due --baseline baseline.json   (is a run due? for $GITHUB_OUTPUT)
  *
  * Compares this run's public summary (prod-errors.ts --summary: group ids, allow-listed words and counts only) with
  * the last run's baseline. One GitHub issue is opened, or updated while open, only when there is an error group that
@@ -22,6 +23,34 @@ export interface Baseline {
 	v: 1;
 	known: string[];
 	actions: Record<string, number>;
+	/** The last production release this check has run after (its Release run id) */
+	release?: string;
+}
+
+/** A release must have been live this long: the check needs errors of the new version to see. */
+export const RELEASE_LIVE_MS = 45 * 60 * 1000;
+/** Later than this the daily check has seen it. */
+const RELEASE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export interface ReleaseRun {
+	id: number;
+	event: string;
+	conclusion: string | null;
+	head_branch: string | null;
+	updated_at: string;
+	repository?: { id: number };
+	head_repository?: { id: number } | null;
+}
+
+/** The newest production release (a v* tag pushed to this repository, succeeded) that is due and not checked yet. */
+export function dueRelease(runs: ReleaseRun[], last: string | undefined, now: number): string | null {
+	const ended = (r: ReleaseRun) => Date.parse(r.updated_at);
+	const newest = runs
+		.filter((r) => r.event === 'push' && r.conclusion === 'success' && /^v\d/.test(r.head_branch ?? '') && r.repository && r.head_repository?.id === r.repository.id)
+		.sort((a, b) => ended(b) - ended(a))[0];
+	if (!newest || String(newest.id) === last) return null;
+	const age = now - ended(newest);
+	return age >= RELEASE_LIVE_MS && age <= RELEASE_MAX_AGE_MS ? String(newest.id) : null;
 }
 
 export interface Findings {
@@ -43,7 +72,7 @@ export function compare(prev: Baseline | null, now: ErrorSummary): { findings: F
 		actions: prev ? Object.entries(actions).map(([kind, n]) => ({ kind, before: prev.actions[kind] ?? 0, now: n })).filter((a) => a.now > a.before) : [],
 	};
 	const next = [...new Set([...groups.map((g) => g.id), ...(prev?.known ?? [])])].slice(0, MAX_KNOWN);
-	return { findings, next: { v: 1, known: next, actions } };
+	return { findings, next: { v: 1, known: next, actions, ...(prev?.release ? { release: prev.release } : {}) } };
 }
 
 export const hasFindings = (f: Findings) => f.groups.length > 0 || f.actions.length > 0;
@@ -80,14 +109,21 @@ export async function publish(f: Findings, runUrl: string, gh = github): Promise
 
 async function main(): Promise<void> {
 	const arg = (name: string) => process.argv[process.argv.indexOf(`--${name}`) + 1]!;
-	const summary = JSON.parse(readFileSync(arg('summary'), 'utf8')) as ErrorSummary;
 	const prev = existsSync(arg('baseline')) ? (JSON.parse(readFileSync(arg('baseline'), 'utf8')) as Baseline) : null;
+	if (process.argv.includes('--due')) {
+		const { workflow_runs } = (await (await github('/actions/workflows/release.yml/runs?event=push&status=success&per_page=20')).json()) as { workflow_runs: ReleaseRun[] };
+		const release = dueRelease(workflow_runs, prev?.release, Date.now());
+		process.stdout.write(`due=${process.env.DAILY === 'true' || release !== null}\nrelease=${release ?? ''}\n`);
+		return;
+	}
+	const summary = JSON.parse(readFileSync(arg('summary'), 'utf8')) as ErrorSummary;
 	const { findings, next } = compare(prev, summary);
 	const runUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 	const did = hasFindings(findings) ? await publish(findings, runUrl) : 'nothing new';
 	// Only after the issue: a failed run leaves the old baseline, and the next one finds the same again
 	if (!next) throw new Error('The first run could not read the whole report: no baseline written');
-	writeFileSync(arg('next'), JSON.stringify(next));
+	const release = arg('release');
+	writeFileSync(arg('next'), JSON.stringify(release ? { ...next, release } : next));
 	process.stdout.write(`${prev ? did : 'first run: baseline written'}\n`);
 }
 

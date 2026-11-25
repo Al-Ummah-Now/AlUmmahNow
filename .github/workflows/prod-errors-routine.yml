@@ -1,15 +1,15 @@
 name: Prod errors routine
 
-# Every morning and after each release: the production error report (scripts/ops/prod-errors.ts, read-only), compared
-# with the last run (scripts/ops/error-routine.ts). One issue is opened or commented on only when there is a new error
-# group or more items that need action. The log, the issue and the baseline artifact hold the allow list of
-# scripts/ops/public-report.ts only; the full report is the sealed artifact (scripts/ops/seal.ts).
+# Every morning, and once after each production release when it has been live for 45 minutes: the production error
+# report (scripts/ops/prod-errors.ts, read-only), compared with the last run (scripts/ops/error-routine.ts). One issue
+# is opened or commented on only when there is a new error group or more items that need action. The log, the issue
+# and the baseline artifact hold the allow list of scripts/ops/public-report.ts only; the full report is the sealed
+# artifact (scripts/ops/seal.ts).
+# The hourly run only asks GitHub whether a release is due and ends in seconds when none is: no runner waits.
 on:
   schedule:
     - cron: '7 10 * * *'
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+    - cron: '37 * * * *'
 
 permissions:
   contents: read
@@ -20,13 +20,6 @@ concurrency:
 
 jobs:
   check:
-    # After a Release: only a successful production release, a v* tag pushed to this repository (a dispatch is stage-only)
-    if: >-
-      github.event_name == 'schedule' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       startsWith(github.event.workflow_run.head_branch, 'v') &&
-       github.event.workflow_run.head_repository.id == github.event.repository.id)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -52,7 +45,16 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > baseline.zip
             unzip -q -o baseline.zip baseline.json
           fi
+      - name: Due?
+        id: due
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DAILY: ${{ github.event.schedule == '7 10 * * *' }}
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --due --baseline baseline.json >> "$GITHUB_OUTPUT"
       - name: Report
+        if: steps.due.outputs.due == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -60,19 +62,22 @@ jobs:
           set -euo pipefail
           node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env production --hours 72 --sealed report.sealed.json --summary summary.json | tee "$GITHUB_STEP_SUMMARY"
       - name: Compare with the last run
+        if: steps.due.outputs.due == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.due.outputs.release }}
         run: |
           set -euo pipefail
-          node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json
+          node --experimental-strip-types --no-warnings scripts/ops/error-routine.ts --summary summary.json --baseline baseline.json --next next.json --release "$RELEASE"
           mv next.json baseline.json
       - uses: actions/upload-artifact@v4
+        if: steps.due.outputs.due == 'true'
         with:
           name: prod-errors-baseline
           path: baseline.json
           retention-days: 90
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.due.outputs.due == 'true' }}
         with:
           name: prod-errors-production
           path: report.sealed.json
