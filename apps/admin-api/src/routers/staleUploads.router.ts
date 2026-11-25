@@ -19,6 +19,7 @@ import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callUploads, UploadsApiError, type UploadsClientEnv } from '../lib/uploads/videosUploads';
 import { logger } from '../lib/logger';
+import { withoutHiddenVideos } from '../lib/moderation/takedown';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
 
@@ -99,8 +100,11 @@ const itemKeys = (ids: string[]) => ids.map((id) => `${STALE_UPLOAD_AUDIT_PREFIX
 
 /** Abandoned placeholders and orphans with Bunny status and age; reaper mode, last sweep, recent deletes, dead letters. */
 app.get('/', async (c) => {
-  const result = await callUploads(c.env, '/stale', { query: { status: c.req.query('status'), limit: c.req.query('limit') } });
-  return c.json({ success: true, result });
+  const result = await callUploads<{ items?: { videoId: string }[]; audit?: { videoId: string }[]; deadLetters?: { videoId?: string }[] }>(c.env, '/stale', { query: { status: c.req.query('status'), limit: c.req.query('limit') } });
+  // Only the videos the reader's lists show (fails closed: an unreadable check is an error, not everything)
+  const shown = <T>(rows: T[] | undefined, id: (row: T) => string | null | undefined) => withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, rows ?? [], id);
+  const [items, audit, deadLetters] = await Promise.all([shown(result.items, (i) => i.videoId), shown(result.audit, (a) => a.videoId), shown(result.deadLetters, (d) => d.videoId)]);
+  return c.json({ success: true, result: { ...result, items, audit, deadLetters } });
 });
 
 /** Recent admin actions on stale uploads (audit), newest first. */
@@ -111,7 +115,7 @@ app.get('/audit', async (c) => {
     .prepare("SELECT id, key, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC LIMIT ?")
     .bind('uploads:', 'uploads;', limit)
     .all<{ id: string; key: string; new_value: string; actor_id: string; created_at: string }>();
-  const entries = results.map((row) => {
+  const all = results.map((row) => {
     let value: { action?: string; details?: unknown } = {};
     try {
       value = JSON.parse(row.new_value);
@@ -121,6 +125,7 @@ app.get('/audit', async (c) => {
     const videoId = row.key.startsWith(STALE_UPLOAD_AUDIT_PREFIX) ? row.key.slice(STALE_UPLOAD_AUDIT_PREFIX.length) : null;
     return { id: row.id, videoId, action: value.action ?? 'unknown', details: value.details ?? null, actorId: row.actor_id, createdAt: row.created_at };
   });
+  const entries = await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, all, (e) => e.videoId);
   return c.json({ success: true, result: { entries } });
 });
 
