@@ -10,7 +10,8 @@ import { fitToViewport } from '../../../../packages/fanous-tokens/nav/menu-fit.j
  * videos site's components/ui/PriorityStrip): as many tabs as fit, measured at run time, the rest
  * in a "More ▾" menu at the row's end, and the current tab always in the row (when it would be in
  * the menu it takes the row's last slot). The menu is the shared header menu (aun-menu: frosted,
- * kept on screen), a real menu for keyboards and screen readers.
+ * kept on screen), a real menu for keyboards and screen readers. It hangs from More on phones too, where a header
+ * menu is a sheet under the header.
  */
 
 /**
@@ -249,7 +250,7 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
             <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
           </button>
           {open && menuTabs.length > 0 && (
-            <ul ref={menuRef} id={menuId} role="menu" aria-label={t('common.moreTabsMenu')} onKeyDown={onMenuKey} className="aun-menu" style={{ width: 'max-content', minWidth: '12rem', maxWidth: 'calc(100vw - 16px)', paddingTop: 4 }} data-testid={testId ? `${testId}-menu` : undefined}>
+            <ul ref={menuRef} id={menuId} role="menu" aria-label={t('common.moreTabsMenu')} onKeyDown={onMenuKey} className="aun-menu" style={{ position: 'absolute', insetInlineStart: 'auto', insetInlineEnd: 0, insetBlockStart: 'calc(100% + 4px)', width: 'max-content', minWidth: '12rem', maxWidth: 'calc(100vw - 16px)', paddingTop: 4 }} data-testid={testId ? `${testId}-menu` : undefined}>
               {menuTabs.map((tab) => (
                 <li key={tab.id} role="none">
                   {tab.href ? (

@@ -106,6 +106,11 @@ describe('saved views tab strip', () => {
     assert.doesNotMatch(src, /flex-wrap|overflow-x-auto|min-w-max/);
   });
 
+  it('More opens its menu under itself, also on a phone (a header menu is a sheet there)', () => {
+    const src = readFileSync(new URL('../src/components/PriorityTabs.tsx', import.meta.url), 'utf8');
+    assert.match(src, /className="aun-menu" style=\{\{ position: 'absolute', insetInlineStart: 'auto', insetInlineEnd: 0, insetBlockStart: 'calc\(100% \+ 4px\)'/);
+  });
+
   it('every list\'s strip of views is the same one', () => {
     for (const page of ['category-suggestions', 'deleted', 'imports/[id]', 'jobs', 'moderation/review', 'stale-uploads', 'approvals', 'tier-requests']) {
       assert.match(readFileSync(new URL(`../src/app/(protected)/${page}/page.tsx`, import.meta.url), 'utf8'), /<PriorityTabs/, page);
