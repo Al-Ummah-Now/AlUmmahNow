@@ -6,6 +6,7 @@
  * them in the viewer's language.
  */
 
+import { lineText } from './bidi';
 import { isShort, type VideoFormatInput } from './video-format';
 import type { NotificationQuietHours, NotificationQuietHoursUpdate } from './notification-quiet-hours';
 import { isMadeForKids, type ContentFlagFields } from './content-flags';
@@ -190,6 +191,14 @@ export const NOTIFICATION_READ_CAP = 500;
 export const NOTIFICATION_UNREAD_CAP = 1000;
 
 export type NotificationParams = Record<string, string | number>;
+
+/**
+ * The params as a notice shows them: names and other text people typed are one line without direction
+ * controls, so they can't end the isolate a text puts around them or reorder the rest of it. Applied when
+ * a notice is stored and pushed (processor), and again wherever a stored one is read or rendered.
+ */
+export const lineParams = (params?: NotificationParams | null): NotificationParams =>
+  Object.fromEntries(Object.entries(params ?? {}).map(([name, value]) => [name, typeof value === 'string' ? lineText(value) : value]));
 
 /** Queue payload of MessageType.NotificationCreate. */
 export interface NotificationCreatePayload {

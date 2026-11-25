@@ -113,6 +113,31 @@ describe('notification center (processor)', () => {
     expect(pushedTo()).toEqual(['user:owner']);
   });
 
+  it('names and titles are one line without direction controls, stored, in realtime and in pushes', async () => {
+    const bad = (text: string) => `\u202e${text}\u2069\n\u2067x`;
+    const clean = (text: string) => `${text} x`;
+    await processor().processMessage(
+      message(MessageType.NotificationCreate, { notificationId: 'n1', recipientUserId: 'owner', notificationKey: 'channelMovedIn', params: { channel: bad('Corner'), channel_ar: bad('الركن'), count: 2 } }),
+      env(),
+    );
+    await processor().processMessage(
+      message(MessageType.NotificationFanout, { kind: 'new_video', channelId: 'ch1', entityId: 'v1', isHighlight: true, actorUserId: 'up', params: { channelName: bad('C') }, actionUrl: '/video/v1' }),
+      env(),
+    );
+    await processor().processMessage(message(MessageType.VideoProcessingCompleted, { videoId: 'v2', userId: 'up', title: bad('T') }), env());
+    const texts = [
+      ...rows('SELECT params_json FROM notifications').map((r) => JSON.parse(r.params_json as string)),
+      ...fetchMock.mock.calls
+        .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+        .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
+        .filter((b) => b.message.type === 'notification')
+        .map((b) => b.message.data.params),
+    ];
+    for (const params of texts) expect(JSON.stringify(params)).not.toMatch(/[\u202a-\u202e\u2066-\u2069]|\\n/);
+    expect(texts).toContainEqual({ channel: clean('Corner'), channel_ar: clean('الركن'), count: 2 });
+    expect(texts.filter((p) => p.videoTitle === clean('T'))).toHaveLength(2);
+  });
+
   it('does not push again when the producer already sent the realtime event', async () => {
     await processor().processMessage(
       message(MessageType.NotificationCreate, { notificationId: 'n1', recipientUserId: 'u', notificationKey: 'newSubscriber', realtimeSent: true }),

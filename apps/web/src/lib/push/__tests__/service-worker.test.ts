@@ -70,12 +70,15 @@ describe('push service worker', () => {
       ['accountWarning', { reason: 'unknown-code', count: 1 }],
       ['commentReply', { actorName: 'A', videoTitle: 'T' }],
       ['reviewRejected', { videoTitle: 'T', reason: 'x' }],
+      // A name can't end its isolate or break the line
+      ['channelMoveOffered', { owner: '\u202eAmina\u2069\r\nx', channel: 'Corner\u2067\u2029\u0085', channel_ar: '\u2066الركن' }],
     ];
     for (const [lang, t] of [['en', EN_TRANSLATIONS], ['ar', AR_TRANSLATIONS]] as const) {
       for (const [key, params] of cases) {
         sw.shown.length = 0;
         await sw.push({ kind: 'notification', notificationId: 'n', key, lang, params });
         const expected = resolveNotificationText(event(key, params), t, lang);
+        if (key === 'channelMoveOffered') expect(expected.message.match(/[\u202a-\u202e\u2066-\u2069\n\r\u2029\u0085]/g)!.join('')).toBe('\u2068\u2069\u2068\u2069');
         expect({ key, lang, title: sw.shown[0]!.title, body: sw.shown[0]!.options.body }).toEqual({ key, lang, title: expected.title, body: expected.message });
       }
     }

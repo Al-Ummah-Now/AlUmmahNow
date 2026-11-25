@@ -13,6 +13,7 @@
  * `params`, and the web client renders them through i18n.
  */
 
+import { lineParams } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 export type ApiKeyBinding = string | { get: () => Promise<string> } | { text: () => Promise<string> } | undefined;
@@ -175,7 +176,7 @@ export async function notifyVideoProcessing(
         userId,
         notificationType: 'upload',
         notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',
-        params: { videoTitle: data.title || '' },
+        params: lineParams({ videoTitle: data.title || '' }),
         actionUrl: uploadResultActionUrl(videoId, status),
       }));
     }

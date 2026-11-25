@@ -9,7 +9,7 @@ import { apiErrorMessage } from '@al-ummah/shared-types';
 import MoveChannel from '../MoveChannel';
 import MoveOffers from '../MoveOffers';
 import OfferPage from '../OfferPage';
-import { isFreshSignIn, MoveApiError, moveErrorMessage } from '@/lib/channels/moves';
+import { isFreshSignIn, isolate, MoveApiError, moveErrorMessage } from '@/lib/channels/moves';
 
 const EN = jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS;
 const AR = jest.requireActual('@/lib/i18n/translations/ar').AR_TRANSLATIONS;
@@ -58,6 +58,10 @@ beforeEach(() => {
   window.sessionStorage.clear();
   api.loadMoveState.mockResolvedValue({ offer: null, movableAt: null });
   api.searchMoveReceivers.mockResolvedValue([{ userId: 'u2', name: 'Omar Haddad', nameLocalized: { ar: 'عمر حداد' }, avatarUrl: null }]);
+});
+
+it('a name in a sentence can’t reorder it or end its isolate', () => {
+  expect(isolate('\u202eAmina\u2069\nx')).toBe('\u2068Amina x\u2069');
 });
 
 describe('Move channel', () => {

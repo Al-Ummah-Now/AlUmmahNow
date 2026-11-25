@@ -34,11 +34,13 @@ function localizeParams(params, lang) {
 // Numbers like locale-format: Arabic ٠–٩ (ar-u-nu-arab), English 0–9, pinned in every browser
 // Arabic is never grouped, as in locale-format (owner 2026-11-21): ICU's «٬» looks like the decimal «٫»
 const NUMBER = { ar: new Intl.NumberFormat('ar-u-nu-arab', { useGrouping: false }), en: new Intl.NumberFormat('en-u-nu-latn') }; // locale-format: machine (worker script, no imports)
+// lineText (shared-types bidi): what people typed is one line without direction controls
+const line = (text) => String(text).replace(/[\u202a-\u202e\u2066-\u2069]/g, '').replace(/[\n\r\u001c-\u001e\u0085\u2029]+/g, ' ');
 const fill = (template, params, lang) =>
   String(template || '').replace(/\{(\w+)\}/g, (_, name) => {
     const value = params[name];
     if (value === undefined || value === null) return '';
-    return typeof value === 'number' ? NUMBER[lang === 'ar' ? 'ar' : 'en'].format(value) : String(value);
+    return typeof value === 'number' ? NUMBER[lang === 'ar' ? 'ar' : 'en'].format(value) : line(value);
   });
 
 function renderNotification(data) {
