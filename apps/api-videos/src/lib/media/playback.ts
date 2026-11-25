@@ -91,17 +91,20 @@ export function parseExclude(value: string | string[] | undefined | null): Media
 	return out;
 }
 
+/** What every choice needs besides the video: one read each, at once (kept per isolate). Never throws. */
+export const readPlaybackInputs = (env: PlaybackEnv) => Promise.all([readMediaSettings(env), readHealth(env)]);
+
 export async function choosePlayback(
 	env: PlaybackEnv,
 	video: ProviderVideo,
 	opts: { exclude?: MediaProviderId | MediaProviderId[]; reason?: PlaybackFallbackReason; context?: string; draw?: () => number; nowSeconds?: number } = {},
 ): Promise<PlaybackChoice> {
-	const settings = await readMediaSettings(env);
+	const [settings, health] = await readPlaybackInputs(env);
 	const rules = effectiveRules(settings, video.channelId ? settings.channels[video.channelId] : undefined, video.mediaOverride);
 	const records = videoProviderRecords(video);
 	const ready = records.filter((r) => r.status === 'ready').map((r) => r.provider);
 	const enabled = MEDIA_PROVIDER_IDS.filter((p) => settings.providers[p].enabled);
-	const unhealthy = unhealthyProviders(await readHealth(env), settings.health);
+	const unhealthy = unhealthyProviders(health, settings.health);
 	const exclude = opts.exclude === undefined ? [] : Array.isArray(opts.exclude) ? opts.exclude : [opts.exclude];
 	const bucket = playBucket(rules, video.id, opts.draw ?? drawBucket);
 	// Extra audio tracks play only from R2's demuxed package (wiki AUN-MULTI-AUDIO MA4): R2 goes first
@@ -112,17 +115,22 @@ export async function choosePlayback(
 
 	const sources: ResolvedSource[] = [];
 	const failed: MediaProviderId[] = [];
-	for (const id of plan.order) {
-		const record = records.find((r) => r.provider === id)!;
-		try {
-			const urls = await provider(id).playback(env, video, record, { nowSeconds: opts.nowSeconds });
-			if (urls) sources.push({ provider: id, ...urls });
-			else failed.push(id);
-		} catch (error) {
-			failed.push(id);
-			logger.warn('[Media] Could not build playback URLs; trying the next provider', { videoId: video.id, provider: id, error: error instanceof Error ? error.message : String(error) });
-		}
-	}
+	// Each provider's URLs at once (signing keys are read from secrets on a cold isolate), in the plan's order
+	const built = await Promise.all(
+		plan.order.map(async (id) => {
+			try {
+				return await provider(id).playback(env, video, records.find((r) => r.provider === id)!, { nowSeconds: opts.nowSeconds });
+			} catch (error) {
+				logger.warn('[Media] Could not build playback URLs; trying the next provider', { videoId: video.id, provider: id, error: error instanceof Error ? error.message : String(error) });
+				return null;
+			}
+		}),
+	);
+	plan.order.forEach((id, i) => {
+		const urls = built[i];
+		if (urls) sources.push({ provider: id, ...urls });
+		else failed.push(id);
+	});
 	// Nothing playable yet: the label names the provider the video is on (the view keeps its stored URLs)
 	const holder = rules.order.find((p) => records.some((r) => r.provider === p)) ?? records[0]?.provider ?? 'bunny';
 	const reason: DecisionReason = exclude.length ? `excluded:${opts.reason ?? 'other'}` : !sources.length && failed.length ? 'url_failed' : plan.reason;

@@ -1,6 +1,6 @@
 import { privateAnswer } from '../../lib/private-answer';
 import { kidsRulesApply } from '../../lib/contentFlags';
-import { withPlayback } from '../../lib/media/playback';
+import { readPlaybackInputs, withPlayback } from '../../lib/media/playback';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -84,7 +84,9 @@ export class VideoFetch extends OptionalAuthRoute {
 		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
-		let video = await repository.getObject(id);
+		// The playback settings and health don't depend on the video: read beside it, not after it
+		const forEdit = request.query?.for === 'edit';
+		const [video] = await Promise.all([repository.getObject(id), forEdit ? null : readPlaybackInputs(c.env as never)]);
 
 		const exists = video !== null;
 
@@ -172,7 +174,6 @@ export class VideoFetch extends OptionalAuthRoute {
 		// Transform to view model for response with channel data
 		// R2 beside Bunny (epic #687): the API picks the source; playUrl/thumbnailUrl are that source's
 		// and delivery.source labels it (lib/media/playback.ts). Players never choose.
-		const forEdit = request.query?.for === 'edit';
 		const videoView = forEdit
 			? Object.assign(transformVideoToView(video, channel), { delivery: { source: 'bunny' as const } })
 			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');

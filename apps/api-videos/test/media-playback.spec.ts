@@ -184,6 +184,42 @@ describe('the API orders the sources', () => {
 		assert.equal(typeof a.decision.bucket, 'number');
 	});
 
+	it('a cold read of a video asks for the record, the settings and the health at once, each once', async () => {
+		const { raw, get } = setup();
+		const waiting: { key: string; go: () => void }[] = [];
+		const asked: string[] = [];
+		const gate = (bucket: MemoryBucket) => {
+			const original = bucket.get.bind(bucket);
+			bucket.get = (async (key: string, ...rest: unknown[]) => {
+				asked.push(key);
+				await new Promise<void>((go) => waiting.push({ key, go }));
+				return (original as (...args: unknown[]) => unknown)(key, ...rest);
+			}) as never;
+		};
+		gate(raw.videos);
+		gate(raw.global_settings);
+		const answer = get(`/api/videos/${ID}`);
+		await new Promise((done) => setTimeout(done, 20));
+		// Nothing has answered yet: all three were asked
+		assert.ok(asked.includes(ID) && asked.includes(HEALTH_KEY), JSON.stringify(asked));
+		assert.equal(asked.length, 3, JSON.stringify(asked));
+		const open = setInterval(() => waiting.splice(0).forEach((w) => w.go()), 1);
+		const res = await answer;
+		clearInterval(open);
+		assert.equal(res.status, 200);
+		assert.ok((res.body.sources as unknown[]).length > 0);
+		assert.equal(new Set(asked).size, asked.length, `read twice: ${JSON.stringify(asked)}`);
+	});
+
+	it('a provider whose URLs cannot be built leaves the others in the plan\'s order', async () => {
+		const { env } = setup();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
+		const priv = { ...READY, access: 'priv' };
+		const choice = await choosePlayback({ ...(env as object), MEDIA_SIGN_KEY: { get: async () => { throw new Error('secret store down'); } } } as never, { id: ID, r2: priv as never });
+		assert.deepEqual(choice.sources.map((x) => x.provider), ['bunny']);
+		assert.deepEqual(choice.decision.failed, ['r2']);
+	});
+
 	it('a channel override and then a video override win over the global order', async () => {
 		const { env } = setup();
 		await saveMediaSettings(env, { ...DEFAULT_MEDIA_SETTINGS, playback: { ...DEFAULT_MEDIA_SETTINGS.playback, order: ['bunny', 'r2'] }, channels: { ch_1: { order: ['r2', 'bunny'] } } }, 'admin-1');
