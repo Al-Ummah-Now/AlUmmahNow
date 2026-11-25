@@ -3641,7 +3641,7 @@ const en = {
         console: 'an admin or status page: paste the page or file people see',
         port: 'our sites have no address with a port',
       },
-      shapes: 'Accepted: pages of a video, Short, live stream, post or comment (a comment’s link ends in ?comment= and its ID), short links, embeds, scholar sites, and image and media files. Other pages of ours open a case to map by hand.',
+      shapes: 'Accepted: pages of a video, Short, live stream, post or comment (a comment’s link ends in ⁦?⁠comment=⁩ and its ID), short links, embeds, scholar sites, and image and media files. Other pages of ours open a case to map by hand.',
       none: 'No case was opened.',
       unmapped: 'not matched to an item yet: map it on the case page',
     },
