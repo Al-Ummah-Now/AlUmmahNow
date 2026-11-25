@@ -21,10 +21,15 @@ on:
         description: Only log lines containing this text (empty = all warn/error lines)
         type: string
         default: ''
+      originals:
+        description: "Only check the stored originals of uploads that failed with no_video_stream (at most 10; production or stage)"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - scripts/ops/media-diagnostics.ts
       - scripts/ops/scrub.ts
+      - scripts/ops/upload-originals.ts
       - .github/workflows/media-diagnostics.yml
 
 permissions:
@@ -45,7 +50,23 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Tests
+        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/upload-originals.test.ts scripts/ops/__tests__/scrub.test.ts
+      # Reads the failed originals' bytes from R2 into a temporary folder, prints sizes, hash equality and stream
+      # types only (scripts/ops/upload-originals.ts). A PR run reads stage.
+      - name: Originals of failed uploads
+        if: inputs.originals || github.event_name == 'pull_request'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENV_NAME: ${{ inputs.env || 'stage' }}
+          HOURS: ${{ inputs.hours || '48' }}
+        run: |
+          set -o pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null
+          node --experimental-strip-types --no-warnings scripts/ops/upload-originals.ts --env "$ENV_NAME" --hours "$HOURS" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Diagnostics
+        if: ${{ !inputs.originals }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
