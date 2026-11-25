@@ -20,7 +20,7 @@ test('stage names carry the -stage suffix', () => {
 });
 
 test('scrub drops signed URL queries and credentials', async () => {
-	const { scrub } = await import('../media-diagnostics.ts');
+	const { scrub } = await import('../scrub.ts');
 	assert.equal(scrub('src https://vz-1.b-cdn.net/a/play_720p.mp4?token=abc&expires=1 ok'), 'src https://vz-1.b-cdn.net/a/play_720p.mp4?… ok');
 	assert.doesNotMatch(scrub('Authorization: Bearer abc.def'), /abc/);
 	assert.match(scrub('{"apiKey":"s3cr3t","videoId":"v1"}'), /"apiKey":"…","videoId":"v1"/);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ALL_SQL, REPORTS_D1, originLine, pathOf, scriptsFor, scrub, topFrames, uaFamily } from '../prod-errors.ts';
+import { ALL_SQL, REPORTS_D1, originLine, pathOf, scriptsFor, topFrames, uaFamily } from '../prod-errors.ts';
 
 test('every statement is a bounded SELECT on indexed columns, no LIKE', () => {
 	for (const sql of ALL_SQL) {
@@ -18,11 +18,6 @@ test('stage scripts carry -stage, production none', () => {
 	for (const s of Object.values(scriptsFor('production')).flat()) assert.doesNotMatch(s, /stag/);
 	for (const [app, s] of Object.entries(scriptsFor('stage'))) assert.ok(s.every((x) => /-stag(e|ing)$/.test(x)), app);
 	assert.ok(scriptsFor('production').auth!.includes('al-ummah-now-auth'));
-});
-
-test('scrub drops emails, tokens and query strings', () => {
-	const s = scrub('user a.b+c@example.com token=abc123 https://x.y/z?sig=1 Bearer eyJabc');
-	assert.doesNotMatch(s, /example\.com|abc123|sig=1|eyJabc/);
 });
 
 test('topFrames prefers app frames', () => {
