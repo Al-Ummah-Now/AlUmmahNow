@@ -77,6 +77,8 @@ class R2Repository<T> {
     const objects = await Promise.all(
       listResult.objects.map(async (object) => {
         if (!object.key) return null;
+        // Records are top-level keys; under a path are files (web's share cards in the videos bucket), never read as records
+        if (!prefix && object.key.includes('/')) return null;
 
         const bodyContent = await this.getObject(object.key);
         return bodyContent;
