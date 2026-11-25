@@ -1,6 +1,6 @@
 import { Bool, DateTime, Str } from "./chanfana-params";
 import { z } from "zod";
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, type VideoMediaProviders, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, UPLOAD_ISSUE_CODES, type VideoMediaProviders, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
@@ -109,8 +109,8 @@ export const Video = z.object({
         kind: z.enum(['encode_failed', 'needs_reupload', 'stalled']),
         reason: z.string().optional(),
         at: z.string(),
-        // source_changed: other bytes arrived than were sent (lib/media/source-changed.ts)
-        code: z.enum(['source_changed']).optional(),
+        // What the file is (shared-types UPLOAD_ISSUE_CODES); source_changed: lib/media/source-changed.ts
+        code: z.enum(UPLOAD_ISSUE_CODES).optional(),
     }).optional(),
     // Terminal status whose result (uploader notification, subscriber fan-out)
     // is safely queued; the processing loop re-announces until it matches.

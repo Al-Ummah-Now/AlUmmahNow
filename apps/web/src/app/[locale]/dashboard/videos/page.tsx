@@ -25,7 +25,7 @@ import { ProcessingProgress } from '@/components/video/ProcessingProgress';
 import VideoThumbnail from '@/components/VideoThumbnail';
 import Link from '@/components/common/AppLink';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
-import { needsReupload, reuploadHref } from '@/lib/dashboard/reupload';
+import { canReupload, needsReupload, reuploadHref, uploadIssueText } from '@/lib/dashboard/reupload';
 import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';
 import {
   AlertDialog,
@@ -673,20 +673,20 @@ export default function VideoDashboardPage() {
                       className="mt-3 rounded-lg border border-destructive bg-destructive/10 p-3"
                       data-testid="dashboard-video-needs-reupload"
                     >
-                      <p className="text-sm font-medium text-destructive">{t.upload.needsReupload}</p>
-                      {video.processingIssue?.reason && (
+                      <p className="text-sm font-medium text-destructive">{video.processingIssue?.kind === 'encode_failed' ? t.upload.processingFailed : t.upload.needsReupload}</p>
+                      {uploadIssueText(video, t.upload.issue) && (
                         <p className="mt-1 text-xs text-foreground" data-testid="dashboard-video-issue-reason">
-                          {video.processingIssue.reason}
+                          {uploadIssueText(video, t.upload.issue)}
                         </p>
                       )}
-                      <Link
+                      {canReupload(video) && <Link
                         href={reuploadHref(lang, video)}
                         data-testid="dashboard-video-reupload"
                         className="mt-2 inline-flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
                       >
                         <RotateCcw size={14} aria-hidden="true" />
                         {t.upload.reupload}
-                      </Link>
+                      </Link>}
                     </div>
                   )}
 

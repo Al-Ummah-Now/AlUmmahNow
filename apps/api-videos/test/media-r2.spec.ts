@@ -595,6 +595,26 @@ describe('failure details', () => {
 		}
 	});
 
+	it('a failed video says what its file is, as a code its creator\'s app words', async () => {
+		const { uploaderProcessingIssue } = await import('../src/lib/transformations');
+		const codeOf = async (sourceFacts: unknown) => {
+			const { env, raw, videos } = setup({ uploadStatus: 'processing', media: { providers: { r2: { ref: ID, status: 'pending' } } } });
+			await enqueueTranscode(env, ID, 'upload');
+			await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error: 'no_video_stream', final: true, sourceFacts } as never));
+			assert.equal(videos.read(ID).processingIssue.kind, 'encode_failed');
+			return videos.read(ID).processingIssue.code;
+		};
+		assert.equal(await codeOf(AUDIO), 'audio_only');
+		assert.equal(await codeOf({ ...AUDIO, zeroEndPercent: 80 }), 'half_written');
+		assert.equal(await codeOf({ ...AUDIO, streams: [] }), 'unreadable');
+		assert.equal(await codeOf({ ...AUDIO, streams: [{ kind: 'video', codec: 'h264' }] }), undefined);
+		assert.equal(await codeOf(undefined), undefined);
+		const video = (code: string) => ({ userId: 'u1', processingIssue: { kind: 'encode_failed', code } });
+		assert.equal(uploaderProcessingIssue(video('audio_only'), null, 'u1').processingIssue?.code, 'audio_only');
+		assert.equal(uploaderProcessingIssue(video('x'), null, 'u1').processingIssue?.code, undefined);
+		assert.deepEqual(uploaderProcessingIssue(video('audio_only'), null, 'u2'), {});
+	});
+
 	it('tells an audio file from a damaged one on the Errors page, without the hash', async () => {
 		const { failureDetails } = await import('../src/lib/media/r2-delivery');
 		const about = (f: object) => failureDetails({ videoId: ID, jobId: 'j', attempt: 1, error: 'no_video_stream', sourceFacts: { ...AUDIO, ...f } as never }, undefined);

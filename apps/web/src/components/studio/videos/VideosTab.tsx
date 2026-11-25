@@ -44,6 +44,7 @@ import { logger } from '@/lib/logger-client';
 import { isLimitRefusal, limitRefusalMessage, type LimitRefusal } from '@/lib/studio/limits';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { studioReuploadHref, studioUploadHref } from '@/lib/studio/links';
+import { canReupload, uploadIssueText } from '@/lib/dashboard/reupload';
 import { MAX_BULK_EDIT_SELECTION, MAX_BULK_SELECTION, parseVideosQuery, rowActions, studioVideoTitle, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
 import { isShortOrFlag } from '@al-ummah/shared-types';
 
@@ -498,7 +499,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true, uploadOn, !!video.premiere);
+                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true, uploadOn && canReupload(video), !!video.premiere);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (
@@ -531,6 +532,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
                             {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>
+                          {query.status === 'failed' && uploadIssueText(video, t.upload.issue) && <span className="mt-1 block text-xs text-muted-foreground" data-testid="studio-video-issue">{uploadIssueText(video, t.upload.issue)}</span>}
                           <ReviewLine review={(video as StudioVideo & { review?: CreatorReviewView }).review} queueMinutes={reviewQueueMinutes} />
                         </div>
                       </div>

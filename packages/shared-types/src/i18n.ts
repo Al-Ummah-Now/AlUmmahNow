@@ -1,3 +1,4 @@
+import type { UploadIssueCode } from './media-delivery';
 import type { LibraryTranslations, NotificationCenterTranslations } from './i18n-library';
 import type { BulkEditTranslations } from './i18n-bulk-edit';
 import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
@@ -1151,6 +1152,8 @@ export interface AppTranslations {
     sessionMissing: string;
     reconnecting: string;
     needsReupload: string;
+    /** Why a video failed, for its creator: the file's code, else the kind of failure */
+    issue: Record<UploadIssueCode | 'needs_reupload' | 'encode_failed', string>;
     reupload: string;
     reuploadBanner: string;
     reuploadAlreadyDone: string;
