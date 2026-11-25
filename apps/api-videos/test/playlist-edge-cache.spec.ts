@@ -35,7 +35,7 @@ function setup() {
 
 async function get(env: unknown, userId: string | null, path = '/api/playlists/pl?includeVideos=true') {
 	const res = await buildApp((r: any) => r.get('/api/playlists/:id', PlaylistFetch), userId ? { userId } : null).request(path, {}, env as never);
-	return { status: res.status, body: (await res.json()) as { title?: string; channelName?: string; videoItems?: { id: string; title: string }[] } };
+	return { status: res.status, cache: res.headers.get('cache-control'), body: (await res.json()) as { title?: string; channelName?: string; videoItems?: { id: string; title: string }[] } };
 }
 
 describe('anonymous expanded playlist edge cache', () => {
@@ -55,6 +55,7 @@ describe('anonymous expanded playlist edge cache', () => {
 		const env = setup();
 		const first = await get(env, null);
 		assert.equal(first.status, 200);
+		assert.equal(first.cache, 'private, no-store', 'the stored entry is shared, the answer is not');
 		assert.deepEqual(first.body.videoItems?.map((v) => v.title), ['One', 'Two']);
 		assert.equal(first.body.channelName, 'Channel');
 		await new Promise((r) => setTimeout(r, 0));
@@ -69,6 +70,7 @@ describe('anonymous expanded playlist edge cache', () => {
 		env.videos.store.set('v1', JSON.stringify(videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch', title: 'Renamed' })));
 		const second = await get(env, null);
 		assert.equal(second.status, 200);
+		assert.equal(second.cache, 'private, no-store');
 		assert.deepEqual(second.body.videoItems?.map((v) => v.title), ['One', 'Two']);
 		assert.equal(second.body.channelName, 'Channel');
 	});

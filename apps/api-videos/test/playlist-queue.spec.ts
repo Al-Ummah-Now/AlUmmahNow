@@ -103,7 +103,7 @@ describe('GET /api/playlists/:id/queue', () => {
 		assert.equal(first.body.result.playlist.channelHandle, 'lessons');
 		assert.equal(first.body.result.items[0].channelName, 'Lessons channel');
 		assert.equal(first.body.result.items[0].playUrl, 'https://cdn.example/v0003/playlist.m3u8', 'players that play in place get the stream');
-		assert.equal(first.headers.get('cache-control'), 'private, no-cache');
+		assert.equal(first.headers.get('cache-control'), 'private, no-store');
 
 		const reordered = await call(env, OWNER, 'PUT', '/api/playlists/pl/videos/order', { videoIds: ['v0000', 'v0002', 'v0003', 'v0001'] }, { channelId: 'ch' });
 		assert.equal(reordered.status, 200, JSON.stringify(reordered.body));

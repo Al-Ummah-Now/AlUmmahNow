@@ -421,10 +421,10 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
       );
     }
 
-    // Add rate limit info to response headers
-    c.header('X-RateLimit-Remaining-Minute', String(result.remaining.minute));
-    c.header('X-RateLimit-Remaining-Hour', String(result.remaining.hour));
-    c.header('X-RateLimit-Remaining-Day', String(result.remaining.day));
+    // Add rate limit info to response headers (on c.res: a plain-object answer takes over nothing else)
+    c.res.headers.set('X-RateLimit-Remaining-Minute', String(result.remaining.minute));
+    c.res.headers.set('X-RateLimit-Remaining-Hour', String(result.remaining.hour));
+    c.res.headers.set('X-RateLimit-Remaining-Day', String(result.remaining.day));
 
     try {
       await next();

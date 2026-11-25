@@ -317,6 +317,10 @@ describe('signed URLs', () => {
 		assert.equal(created.status, 200, JSON.stringify(created));
 		assert.equal(created.cache, 'private, no-store');
 		assert.match(created.result.stream.playbackUrl, /\/hls\/[^/]+\/m\.\d{10}\.[0-9a-f]{40}\//);
+		// A stream open to everyone: its answer is the caller's alone too (a recording's URL may be signed)
+		const anyone = await setup();
+		const shown = await buildApp((r) => r.get('/api/live-streams/:id', LiveStreamGet), null).request('/api/live-streams/s1', {}, anyone.env as never);
+		assert.equal(shown.headers.get('cache-control'), 'private, no-store');
 		// Nothing is signed for a stream that is open to everyone
 		const open = await setup();
 		const list2 = await app.request('/api/live-streams', {}, open.env as never);

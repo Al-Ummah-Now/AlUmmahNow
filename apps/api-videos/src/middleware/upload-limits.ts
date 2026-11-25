@@ -217,8 +217,8 @@ function limitHit(c: Context, result: RateLimitResult, limits: RateLimitConfig) 
 }
 
 function setRemainingHeaders(c: Context, result: RateLimitResult) {
-  c.header('X-RateLimit-Remaining-Hour', String(result.remaining.hour));
-  c.header('X-RateLimit-Remaining-Day', String(result.remaining.day));
+  c.res.headers.set('X-RateLimit-Remaining-Hour', String(result.remaining.hour));
+  c.res.headers.set('X-RateLimit-Remaining-Day', String(result.remaining.day));
 }
 
 interface GateOptions {

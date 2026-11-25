@@ -181,6 +181,8 @@ export class LiveStreamGet extends OptionalAuthRoute {
 		if (stream instanceof Response) return stream;
 		const manages = await canManageLiveStream(c.env as never, stream, userId);
 		const view = publicStream(stream, manages);
+		// Its recording's URL may be signed for this request
+		privateAnswer(c);
 		const eventType = shownEventType(stream, await switchOn(c, 'liveEvents'));
 		const reminderCount = (await reminderCounts(c, [stream.id])).get(stream.id) ?? 0;
 		return { success: true, result: { stream: { ...view, eventType, reminderCount, playbackUrl: await forManager(c, stream, manages, view.playbackUrl ?? null), vodUrl: await forManager(c, stream, manages, await signVod(c, (view.vodUrl as string | null) ?? null)) } } };
