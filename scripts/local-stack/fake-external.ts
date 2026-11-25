@@ -502,6 +502,9 @@ export interface StackHooks {
   scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
   /** Deletes one key of a stack KV namespace by its binding (teardowns remove a run's sign-up residue). */
   kvDelete?: (binding: string, key: string) => Promise<void>;
+  /** Reads (null: none) or writes one key of a stack KV namespace (a spec seeds a document no route writes). */
+  kvGet?: (binding: string, key: string) => Promise<string | null>;
+  kvPut?: (binding: string, key: string, value: string) => Promise<void>;
 }
 const hooks: StackHooks = {};
 export function setStackHooks(next: StackHooks): void {
@@ -537,7 +540,8 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
- * - DELETE /__stack/kv/<binding>/<key>: one KV key (run-teardown.ts removes an abandoned sign-up's code-sink entry)
+ * - GET | PUT | DELETE /__stack/kv/<binding>/<key>: one KV key (run-teardown.ts removes an abandoned sign-up's code-sink
+ *   entry; a spec seeds a document no route writes, and puts back what was there)
  * - GET /__stack/leftovers?marker=<run id>: every row, object, key or fake video that still holds the
  *   marker or the id of a run user (leftovers.ts)
  * - POST /__stack/queue/<app>/<binding> with a JSON message: sends it through that worker's queue
@@ -578,8 +582,13 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (url.pathname.startsWith('/__stack/kv/')) {
     const [binding, ...rest] = url.pathname.slice('/__stack/kv/'.length).split('/');
     const key = decodeURIComponent(rest.join('/'));
-    if (req.method !== 'DELETE' || !hooks.kvDelete || !binding || !key) return json({ error: 'DELETE /__stack/kv/<binding>/<key> once the stack is up' }, 405);
+    if (!['GET', 'PUT', 'DELETE'].includes(req.method ?? '') || !hooks.kvDelete || !hooks.kvGet || !hooks.kvPut || !binding || !key) return json({ error: 'GET, PUT or DELETE /__stack/kv/<binding>/<key> once the stack is up' }, 405);
     try {
+      if (req.method === 'GET') return json({ value: await hooks.kvGet(decodeURIComponent(binding), key) });
+      if (req.method === 'PUT') {
+        await hooks.kvPut(decodeURIComponent(binding), key, await readBody(req));
+        return json({ stored: key });
+      }
       await hooks.kvDelete(decodeURIComponent(binding), key);
       return json({ deleted: key });
     } catch (error) {
