@@ -361,6 +361,8 @@ export function Autocomplete({
   // A later page failed too: its items stay, with Retry
   const initialFailed = showingInitial && initial?.status === 'error';
   const emptyInitial = showingInitial && !state.query.trim() && state.status === 'ready' && suggestionCount === 0;
+  // A typed query with nothing to choose: the list says so, or the status line under the box does (no empty list then)
+  const none = !showingInitial && state.status === 'ready' && state.options.length === 0;
   const announcement = !expanded
     ? ''
     : state.status === 'loading' && state.options.length === 0
@@ -444,7 +446,7 @@ export function Autocomplete({
           />
           <div
             ref={popupRef}
-            hidden={!expanded}
+            hidden={!expanded || (none && showStatus)}
             // Scrolling, it would be a tab stop before Retry
             tabIndex={-1}
             className={`aun-glass-panel ${popup === 'inline' ? 'relative' : 'absolute start-0 top-full z-30 min-w-72'} mt-1 w-full overflow-y-auto !rounded-[var(--aun-radius-menu)]`}
@@ -509,7 +511,12 @@ export function Autocomplete({
           </ul>
           {emptyInitial && (
             <p className="px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-empty` : undefined}>
-              {t('autocomplete.emptyList')}
+              {messages?.emptyList ?? t('autocomplete.emptyList')}
+            </p>
+          )}
+          {none && !showStatus && (
+            <p className="px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-none` : undefined}>
+              {messages?.noMatches?.(state.query.trim()) ?? t('autocomplete.noMatches')}
             </p>
           )}
           {showingInitial && initial?.status === 'more' && (
@@ -663,7 +670,7 @@ function PickedCard({
       data-id={id}
     >
       <span className="flex min-w-0 items-center gap-3">
-        {item && kind !== 'feature' ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
+        {kind === 'feature' ? null : item ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate font-medium text-fg" dir="auto">

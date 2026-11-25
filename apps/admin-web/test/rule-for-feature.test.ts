@@ -52,6 +52,20 @@ describe('a rule for one feature', () => {
     assert.equal(ids.length, FEATURE_REGISTRY.length - 1);
     assert.ok(ids.includes('live') && !ids.includes('newsletter'));
 
+    // Nothing matches: the list says so
+    const box = q('[data-testid="approval-rule-feature-input"]') as HTMLInputElement;
+    const type = async (text: string) => {
+      await run(() => {
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(box, text);
+        box.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      });
+      await React.act(async () => void (await new Promise((r) => setTimeout(r, 400))));
+    };
+    await type('qqq');
+    assert.match(q('[data-testid="approval-rule-feature-none"]')!.textContent!, /No feature without a rule of its own matches “qqq”/);
+    await type('');
+    assert.ok(!q('[data-testid="approval-rule-feature-none"]'));
+
     const why = q('[data-testid="approval-rule-reason"]') as HTMLTextAreaElement;
     await run(() => {
       Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value')!.set!.call(why, 'Live needs a second person.');

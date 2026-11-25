@@ -204,7 +204,6 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
                 count: (count) => t('workflows.rules.featureCount', { count }),
               }}
               onChange={(id) => setFeature(id)}
-              showStatus
               testId="approval-rule-feature"
             />
           )}
