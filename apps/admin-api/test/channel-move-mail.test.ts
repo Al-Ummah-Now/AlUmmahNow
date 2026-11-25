@@ -29,6 +29,7 @@ function setup(which: keyof typeof MAILS | null, contact: Partial<AccountEmailCo
   const ingest: unknown[] = [];
   const paths: string[] = [];
   const states: string[] = [];
+  const keepFails = { on: false };
   const delays: Array<number | undefined> = [];
   const env = {
     REPORTS_DB: sqliteD1(),
@@ -42,6 +43,7 @@ function setup(which: keyof typeof MAILS | null, contact: Partial<AccountEmailCo
       async fetch(input: string, init?: RequestInit) {
         const path = new URL(input).pathname.replace('/internal/admin', '');
         if (path.endsWith('/delivery')) {
+          if (keepFails.on) return answer(500, { success: false });
           states.push(`${path.split('/')[2]} ${(JSON.parse(String(init?.body)) as { status: string }).status}`);
           return answer(200, { success: true, result: { recorded: true } });
         }
@@ -52,7 +54,7 @@ function setup(which: keyof typeof MAILS | null, contact: Partial<AccountEmailCo
       },
     },
   };
-  return { env, queued, ingest, paths, states, delays };
+  return { env, queued, ingest, paths, states, delays, keepFails };
 }
 
 function msg(event: ChannelMoveMailEvent, attempts = 1) {
@@ -168,6 +170,15 @@ describe('channel move emails', () => {
     assert.ok(s.delays[0]! > 0, 'the item is marked as retrying before the email can end');
     assert.deepEqual(s.queued, [{ v: 1, kind: 'channel_move', event: 'moved_out', id: 'id_1' }]);
     assert.equal((await BUILTIN_RETRIES['channel-move-mail'](s.env as never, { event: 'other', id: 'x' }, 'a1')).ok, false);
+  });
+
+  it('an email that was sent is never flagged as failed because that could not be kept', async () => {
+    const s = setup('moved_out');
+    s.keepFails.on = true;
+    assert.equal(await processChannelMoveMailJob(s.env as never, msg('moved_out', 1)), 'retry', 'tried again, with the same key');
+    assert.equal(await processChannelMoveMailJob(s.env as never, msg('moved_out', MAX_ATTEMPTS)), 'done');
+    assert.deepEqual([s.ingest, s.states], [[], []]);
+    assert.deepEqual(sent.map((email) => email.key), Array(2).fill('channel-move-moved_out-id_1'));
   });
 
   it('the item on the Errors page is resolved when the email ends, and stays while it fails', async () => {

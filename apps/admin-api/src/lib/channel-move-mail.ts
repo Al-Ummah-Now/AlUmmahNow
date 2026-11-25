@@ -266,6 +266,7 @@ export async function processChannelMoveMailJob(env: AdminBindings & VideosClien
 
 async function send(env: AdminBindings & VideosClientEnv, msg: QueueMessageLike<ChannelMoveMailJob>): Promise<Outcome> {
   const job = msg.body;
+  let delivered = false;
   const fail = async (reason: string): Promise<Outcome> => {
     logger.error('[ChannelMoveMail] Email failed for good', { alert: 'channel_move_email_failed', event: job.event, id: job.id, attempts: msg.attempts, reason });
     await record(env, job, 'failed').catch(() => undefined);
@@ -292,6 +293,7 @@ async function send(env: AdminBindings & VideosClientEnv, msg: QueueMessageLike<
     const email = renderChannelMoveEmail({ to: decision.to, name: contact.displayName, locale: decision.locale, mail, origin: videosWebOrigin(env), environment: env.ENVIRONMENT });
     const result = await sendContactEmail(env, email, { idempotencyKey: `channel-move-${job.event}-${job.id}` });
     if (result.status !== 'failed') {
+      delivered = true;
       await record(env, job, result.status === 'sunk' ? 'sunk' : 'sent');
       return 'done';
     }
@@ -302,6 +304,11 @@ async function send(env: AdminBindings & VideosClientEnv, msg: QueueMessageLike<
     if (msg.attempts < MAX_ATTEMPTS) {
       logger.warn('[ChannelMoveMail] Job errored; will retry', { event: job.event, id: job.id, attempts: msg.attempts, error: reason });
       return 'retry';
+    }
+    // It was sent; only keeping that failed. Not a failed email, and nothing to send again
+    if (delivered) {
+      logger.error('[ChannelMoveMail] Sent, but that could not be kept', { event: job.event, id: job.id, attempts: msg.attempts, error: reason });
+      return 'done';
     }
     return fail(reason);
   }

@@ -2782,6 +2782,9 @@ describe('channel actions', () => {
 			await ended('offered', offer.id, status);
 			await nothing('offered', offer.id);
 		}
+		// Ended for good: a late or overlapping failure never reopens it
+		await ended('offered', offer.id, 'failed');
+		await nothing('offered', offer.id);
 		assert.equal((await call('POST', `/channel-move-mails/offered/${offer.id}/delivery`, { status: 'x' })).status, 400);
 		assert.equal((await call('POST', `/channel-move-mails/elsewhere/${offer.id}/delivery`, { status: 'sent' })).status, 404);
 		await nothing('offered', 'nope');
@@ -2826,6 +2829,7 @@ describe('channel actions', () => {
 		await nothing('moved_in', moved.id);
 		assert.deepEqual([(await says('moved_out', moved.id)).reason, (await says('moved_out', moved.id)).keptAsAdmin], ['Asked by email', true]);
 		await ended('moved_out', moved.id, 'sent');
+		await ended('moved_out', moved.id, 'failed');
 		await nothing('moved_out', moved.id);
 		assert.deepEqual(JSON.parse((db.db.prepare('SELECT params FROM admin_jobs WHERE id = ?').get(moved.id) as { params: string }).params).emails, { moved_in: 'sent', moved_out: 'sent' });
 		// A person who is gone has no name; a deleted channel emails nobody
