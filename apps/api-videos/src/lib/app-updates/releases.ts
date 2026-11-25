@@ -46,6 +46,8 @@ const FETCH_TIMEOUT_MS = 10_000;
 const KEY_LIST_MAX_BYTES = 16 * 1024;
 const SIG_MAX_BYTES = 4096;
 const SUMS_MAX_BYTES = 64 * 1024;
+const FEED_MAX_BYTES = 2 * 1024 * 1024;
+const LOOKUP_MAX_BYTES = 256 * 1024;
 /** Bump to look at every tag again (2: tags whose release had no manifest were marked seen before) */
 const INDEX_REV = 2;
 /** Repos whose staff-only admin builds are published to the private bucket */
@@ -181,7 +183,8 @@ export function rootKeys(raw: string | undefined): Partial<Record<AppReleaseRepo
 
 /**
  * Repos with no root key at all: their releases may feed the unsigned notice (wiki §5.5). Fails closed:
- * a variable that isn't a JSON object, or a repo with any value but an empty list, counts as configured.
+ * a variable that isn't a JSON object or names an unknown repo, or a repo with any value but an empty list, counts as
+ * configured.
  */
 export function noKeyRepos(doc: Pick<ReleasesDocument, 'keys' | 'rooted'>, raw: string | undefined): Set<AppReleaseRepo> {
 	let configured: Record<string, unknown> = {};
@@ -190,6 +193,8 @@ export function noKeyRepos(doc: Pick<ReleasesDocument, 'keys' | 'rooted'>, raw: 
 			const parsed: unknown = JSON.parse(raw);
 			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Set();
 			configured = parsed as Record<string, unknown>;
+			// A name that is no repo of ours is probably a typo of one that has a key
+			if (Object.keys(configured).some((k) => !(APP_RELEASE_REPOS as readonly string[]).includes(k))) return new Set();
 		} catch {
 			return new Set();
 		}
@@ -274,7 +279,9 @@ function githubSource(fetchImpl: typeof fetch, repo: AppReleaseRepo): Source {
 		async tags() {
 			const res = await fetchWithTimeout(fetchImpl, `https://github.com/Al-Ummah-Now/${repo}/releases.atom`);
 			if (!res.ok) throw Object.assign(new Error(`feed HTTP ${res.status}`), { status: res.status });
-			return tagsFromAtom(await res.text(), repo);
+			const xml = await body(res, FEED_MAX_BYTES);
+			if (xml === 'too_large') throw Object.assign(new Error('feed too large'), { status: 'too_large' });
+			return tagsFromAtom(decode(xml), repo);
 		},
 		file: (tag, name, max) => get(`https://github.com/Al-Ummah-Now/${repo}/releases/download/${encodeURIComponent(tag)}/${name}`, max),
 		keyFile: (name, max) => get(`https://github.com/Al-Ummah-Now/${repo}/releases/download/update-keys/${name}`, max),
@@ -430,7 +437,9 @@ export async function lookupAppStore(fetchImpl: typeof fetch, bundleId: string, 
 	const url = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(bundleId)}${mac ? '&entity=macSoftware' : ''}`;
 	const res = await fetchWithTimeout(fetchImpl, url);
 	if (!res.ok) throw new Error(`App Store lookup ${bundleId}: HTTP ${res.status}`);
-	const json = (await res.json()) as { results?: { version?: unknown; trackId?: unknown; trackViewUrl?: unknown; bundleId?: unknown }[] };
+	const raw = await body(res, LOOKUP_MAX_BYTES);
+	if (raw === 'too_large') throw new Error(`App Store lookup ${bundleId}: too large`);
+	const json = JSON.parse(decode(raw)) as { results?: { version?: unknown; trackId?: unknown; trackViewUrl?: unknown; bundleId?: unknown }[] };
 	const hit = json.results?.find((r) => r.bundleId === bundleId);
 	if (!hit || typeof hit.version !== 'string' || typeof hit.trackId !== 'number') return null;
 	const trackUrl = typeof hit.trackViewUrl === 'string' && hit.trackViewUrl.startsWith('https://apps.apple.com/') ? hit.trackViewUrl : `https://apps.apple.com/app/id${hit.trackId}`;
@@ -528,7 +537,7 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 			try {
 				tags = await source.tags();
 			} catch (error) {
-				const status = (error as { status?: number }).status;
+				const status = (error as { status?: number | string }).status;
 				result.feedErrors.push({ source: source.id, status: status ?? (error instanceof Error ? error.message : String(error)) });
 				continue;
 			}
