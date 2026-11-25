@@ -228,3 +228,25 @@ test('every domain but money is open; a domain nobody named is not', () => {
   for (const d of ['', 'finance', 'MONEY']) assert.equal(w.workflowDomainVisible(d, false), false);
   for (const d of [...w.WORKFLOW_DOMAINS, 'finance']) assert.equal(w.workflowDomainVisible(d, true), true);
 });
+
+test('extra recipients: known groups and people, each once, 20 people at most', () => {
+  const rule = (extra: unknown) => ({ ...clone(w.WORKFLOW_ACTIONS['features.set'].defaultRule), notify: { email: true, extra } });
+  const ok = w.validateWorkflowRule('features.set', rule([{ kind: 'role', role: 'admin' }, { kind: 'people', userIds: ['a', 'b'] }, { kind: 'role', role: 'admin' }, { kind: 'finance' }, { kind: 'people', userIds: ['b', 'c'] }]));
+  assert.ok(ok.ok);
+  assert.deepEqual((ok as Extract<typeof ok, { ok: true }>).rule.notify.extra, [{ kind: 'role', role: 'admin' }, { kind: 'finance' }, { kind: 'people', userIds: ['a', 'b', 'c'] }]);
+  const many = (n: number, from = 0) => Array.from({ length: n }, (_, i) => `u${from + i}`);
+  for (const bad of [[{ kind: 'role', role: 'moderator' }], [{ kind: 'role', role: 'owner' }], [{ kind: 'finance', permission: 'support:read' }], [{ kind: 'people', userIds: [] }], [{ kind: 'people', userIds: [1] }], [{ kind: 'team' }], 'all', undefined, [{ kind: 'people', userIds: many(15) }, { kind: 'people', userIds: many(15, 15) }]]) {
+    const res = w.validateWorkflowRule('features.set', rule(bad));
+    assert.ok(!res.ok && (res as { problems: string[] }).problems.includes('recipients_invalid'), JSON.stringify(bad));
+  }
+});
+
+test('every group has a name in both languages, and a scope its own', () => {
+  const sets = [{ kind: 'role', role: 'super_admin' }, { kind: 'role', role: 'admin' }, { kind: 'finance' }, ...w.WORKFLOW_FINANCE_PERMISSIONS.map((permission) => ({ kind: 'finance', permission }))];
+  for (const set of sets) {
+    const label = w.WORKFLOW_SET_LABELS[w.workflowSetKey(set as never)];
+    assert.ok(label?.en && /[\u0600-\u06ff]/.test(label.ar), JSON.stringify(set));
+  }
+  assert.equal(w.workflowScopeLabel('features.set', 'live')?.en, 'Live streaming');
+  assert.equal(w.workflowScopeLabel('features.set', 'nope'), null);
+});

@@ -9,6 +9,7 @@
  * effect at approval: there are no scheduled effective dates (owner, WF-D6). The engine lives in
  * admin-api (lib/workflows); the tables in the search D1.
  */
+import { featureDefinition, isFeatureKey } from './feature-registry';
 import type { SupportPermission } from './support';
 
 /**
@@ -84,6 +85,7 @@ export interface WorkflowRuleConfig {
   stepUp: WorkflowStepUp;
   /** Hours a pending request stays open (1 hour – 30 days). */
   expiryHours: number;
+  /** `extra`: who else gets the emails, besides the approvers and the proposer. */
   notify: { email: boolean; extra: WorkflowApproverSet[] };
 }
 
@@ -282,8 +284,28 @@ const SCOPE_LABELS: Readonly<Partial<Record<WorkflowActionType, Readonly<Record<
   'workflows.rule.set': { [WORKFLOW_RULE_CHANGE_MONEY_SCOPE]: { en: 'Money rules', ar: 'قواعد المال' } },
 });
 
+/** What each money permission is called. */
+export const FINANCE_PERMISSION_LABELS: Readonly<Record<string, WorkflowLocalized>> = Object.freeze({
+  'support:refund': { en: 'Refunds', ar: 'الاستردادات' },
+  'support:disputes': { en: 'Disputes', ar: 'النزاعات' },
+  'support:payouts': { en: 'Payouts', ar: 'التحويلات' },
+  'support:ledger': { en: 'Ledger', ar: 'السجل المالي' },
+  'support:providers': { en: 'Providers and fees', ar: 'المزوّدون والرسوم' },
+});
+
+/** What each group of approvers or recipients is called, by `workflowSetKey`. */
+export const WORKFLOW_SET_LABELS: Readonly<Record<string, WorkflowLocalized>> = Object.freeze({
+  'role:super_admin': { en: 'Super admins', ar: 'كبار المشرفين' },
+  'role:admin': { en: 'Admins and super admins', ar: 'المشرفون وكبار المشرفين' },
+  finance: { en: 'The finance list', ar: 'قائمة المالية' },
+  ...Object.fromEntries(
+    Object.entries(FINANCE_PERMISSION_LABELS).map(([p, l]) => [`finance:${p}`, { en: `The finance list with ${l.en}`, ar: `قائمة المالية بصلاحية ${l.ar}` }]),
+  ),
+});
+
 /** A scope's name for people (null: show the scope as it is, such as a feature switch named elsewhere). */
 export function workflowScopeLabel(type: WorkflowActionType, scope: string): WorkflowLocalized | null {
+  if (type === 'features.set' && isFeatureKey(scope)) return featureDefinition(scope).name;
   return SCOPE_LABELS[type]?.[scope] ?? null;
 }
 
@@ -346,6 +368,7 @@ export type WorkflowRuleProblem =
   | 'approvals_out_of_range'
   | 'approvers_empty'
   | 'approvers_invalid'
+  | 'recipients_invalid'
   | 'expiry_out_of_range'
   | 'below_floor_approvals'
   | 'below_floor_step_up'
@@ -374,6 +397,19 @@ function cleanApproverSet(v: unknown): WorkflowApproverSet | null {
   return null;
 }
 
+/** The same groups and people, each once: one set per group, and one for all the named people. */
+export function mergeApproverSets(sets: readonly WorkflowApproverSet[]): WorkflowApproverSet[] {
+  const people = workflowSetPeople(sets);
+  const groups = new Map(sets.filter((s) => s.kind !== 'people').map((s) => [workflowSetKey(s), s]));
+  return [...groups.values(), ...(people.length ? [{ kind: 'people' as const, userIds: people }] : [])];
+}
+
+/** The named people in some sets, each once. */
+export const workflowSetPeople = (sets: readonly WorkflowApproverSet[]): string[] => [...new Set(sets.flatMap((s) => (s.kind === 'people' ? s.userIds : [])))];
+
+/** A group's key in a diff (WORKFLOW_SET_LABELS names it); people are listed by name instead. */
+export const workflowSetKey = (s: WorkflowApproverSet): string => (s.kind === 'role' ? `role:${s.role}` : s.kind === 'finance' ? `finance${s.permission ? `:${s.permission}` : ''}` : 'people');
+
 /**
  * Validates a rule from the rules page against its shape, the limits and the action's floor.
  * `minApprovals` raises the floor for this call (payout batches and ledger adjustments: MEM-D24, WF-D3).
@@ -392,8 +428,9 @@ export function validateWorkflowRule(type: WorkflowActionType, input: unknown, o
   const approvers = input.approvers.map(cleanApproverSet);
   if (approvers.some((a) => a === null)) problems.add('approvers_invalid');
   if (!approvers.length) problems.add('approvers_empty');
-  const extra = Array.isArray(notify.extra) ? notify.extra.map(cleanApproverSet) : [null];
-  if (extra.some((a) => a === null)) problems.add('approvers_invalid');
+  const extraSets = Array.isArray(notify.extra) ? notify.extra.map(cleanApproverSet) : [null];
+  const extra = extraSets.some((a) => a === null) ? null : mergeApproverSets(extraSets as WorkflowApproverSet[]);
+  if (!extra || workflowSetPeople(extra).length > WORKFLOW_LIMITS.maxNamedPeople) problems.add('recipients_invalid');
 
   if (!(WORKFLOW_STEP_UP as readonly string[]).includes(input.stepUp)) problems.add('invalid_shape');
   const expiryHours = input.expiryHours;

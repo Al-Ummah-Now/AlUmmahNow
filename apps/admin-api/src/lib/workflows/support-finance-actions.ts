@@ -11,18 +11,10 @@
  * Removing someone from the list and marking tech staff stay immediate and one-person: they only take
  * access away (§3).
  */
-import { FINANCE_ONLY_SUPPORT_PERMISSIONS, type SupportPermission, type WorkflowField } from '@al-ummah/shared-types';
+import { FINANCE_ONLY_SUPPORT_PERMISSIONS, FINANCE_PERMISSION_LABELS, type SupportPermission, type WorkflowField } from '@al-ummah/shared-types';
 import { FinanceError, financeMember, isTechStaff } from '../support-finance';
 import { registerWorkflowExecutor, WorkflowError } from './engine';
 import type { WorkflowExecutor } from './types';
-
-const PERMISSION_LABELS: Record<string, { en: string; ar: string }> = {
-  'support:refund': { en: 'Refunds', ar: 'الاستردادات' },
-  'support:disputes': { en: 'Disputes', ar: 'النزاعات' },
-  'support:payouts': { en: 'Payouts', ar: 'التحويلات' },
-  'support:ledger': { en: 'Ledger', ar: 'السجل المالي' },
-  'support:providers': { en: 'Providers and fees', ar: 'المزوّدون والرسوم' },
-};
 
 export interface FinanceAddPayload {
   userId: string;
@@ -63,7 +55,7 @@ export const financeAddExecutor: WorkflowExecutor<FinanceAddPayload, { userId: s
         kind: 'list',
         before: current,
         after: p.permissions,
-        enumLabels: PERMISSION_LABELS,
+        enumLabels: { ...FINANCE_PERMISSION_LABELS },
       },
     ];
     return {

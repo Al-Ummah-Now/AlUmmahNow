@@ -1,9 +1,9 @@
 'use client';
 
-import { useId, useRef, useState, useEffect } from 'react';
+import { useCallback, useId, useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { WORKFLOW_LIMITS, stepUpAtLeast, type WorkflowActionType, type WorkflowApproverSet, type WorkflowFloor, type WorkflowRuleConfig, type WorkflowStepUp } from '@al-ummah/shared-types';
-import { Autocomplete } from '@/components/search/Autocomplete';
+import { WORKFLOW_LIMITS, stepUpAtLeast, type AdminSuggestion, type WorkflowActionType, type WorkflowApproverSet, type WorkflowFloor, type WorkflowRuleConfig, type WorkflowStepUp } from '@al-ummah/shared-types';
+import { Autocomplete, type AutocompleteSource } from '@/components/search/Autocomplete';
 import { Select } from '@/components/select/Select';
 import { NumberField } from '@/components/forms/NumberField';
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -23,10 +23,14 @@ interface Props {
   propose: (type: WorkflowActionType, scope: string, config: WorkflowRuleConfig, reason: string) => Promise<ActionResult<WorkflowProposeResult>>;
   /** Names of the people already named in the rule (never their ids) */
   names: Record<string, string>;
+  /** The scope's name in the page language */
+  scopeText?: { text: string; named: boolean } | null;
+  /** Who can be named for the emails (lib/api/workflows searchWorkflowRecipients) */
+  recipients: (query: string) => Promise<{ items: AdminSuggestion[] }>;
 }
 
 const STEP_UPS: WorkflowStepUp[] = ['none', 'approve', 'propose_and_approve'];
-const PROBLEMS = ['approvals_out_of_range', 'approvers_empty', 'approvers_invalid', 'expiry_out_of_range', 'below_floor_approvals', 'below_floor_step_up', 'below_floor_money_approvers', 'below_floor_money_exclusions', 'below_floor_subject', 'invalid_shape', 'not_connected'];
+const PROBLEMS = ['approvals_out_of_range', 'approvers_empty', 'approvers_invalid', 'recipients_invalid', 'expiry_out_of_range', 'below_floor_approvals', 'below_floor_step_up', 'below_floor_money_approvers', 'below_floor_money_exclusions', 'below_floor_subject', 'invalid_shape', 'not_connected'];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /**
@@ -34,7 +38,7 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
  * minimum are disabled with the reason; money rules keep the finance list as the only approvers and
  * always exclude tech staff and the owner. Saving asks for approval: the change is a request.
  */
-export function RuleEditor({ type, scope, actionName, rule, floor, propose, names }: Props) {
+export function RuleEditor({ type, scope, actionName, rule, floor, propose, names, scopeText, recipients }: Props) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
@@ -45,8 +49,10 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const perm = permissionLabel(t);
-  const problemParams = (problem: string) =>
-    problem === 'expiry_out_of_range'
+  const problemParams = (problem: string): Record<string, string> =>
+    problem === 'recipients_invalid'
+      ? { max: formatNumber(WORKFLOW_LIMITS.maxNamedPeople, locale) }
+      : problem === 'expiry_out_of_range'
       ? { min: formatNumber(WORKFLOW_LIMITS.minExpiryHours, locale), max: formatNumber(WORKFLOW_LIMITS.maxExpiryHours, locale) }
       : { min: formatNumber(0, locale), max: formatNumber(WORKFLOW_LIMITS.maxApprovals, locale) };
   const [labels, setLabels] = useState<Record<string, string>>(names);
@@ -65,6 +71,23 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
   const set = (patch: Partial<WorkflowRuleConfig>) => setDraft((d) => ({ ...d, ...patch }));
   const toggleSet = (match: (a: WorkflowApproverSet) => boolean, on: boolean, add: WorkflowApproverSet) =>
     setDraft((d) => ({ ...d, approvers: on ? [...d.approvers.filter((a) => !match(a)), add] : d.approvers.filter((a) => !match(a)) }));
+  // Who else gets the emails: the same groups, and people by name
+  const extraFinance = draft.notify.extra.find((a): a is Extract<WorkflowApproverSet, { kind: 'finance' }> => a.kind === 'finance');
+  const extraPeople = draft.notify.extra.find((a): a is Extract<WorkflowApproverSet, { kind: 'people' }> => a.kind === 'people');
+  const extraRole = (role: 'super_admin' | 'admin') => draft.notify.extra.some((a) => a.kind === 'role' && a.role === role);
+  const toggleExtra = (match: (a: WorkflowApproverSet) => boolean, on: boolean, add: WorkflowApproverSet) =>
+    setDraft((d) => ({ ...d, notify: { ...d.notify, extra: on ? [...d.notify.extra.filter((a) => !match(a)), add] : d.notify.extra.filter((a) => !match(a)) } }));
+  const recipientSource: AutocompleteSource = useCallback(
+    async (q) => {
+      try {
+        return { items: (await recipients(q)).items, next: null };
+      } catch (error) {
+        logger.warn('[approval-rules] Recipient search failed', { error: error instanceof Error ? error.message : String(error) });
+        throw error;
+      }
+    },
+    [recipients],
+  );
   const ex = (key: keyof WorkflowRuleConfig['exclusions'], on: boolean) => setDraft((d) => ({ ...d, exclusions: { ...d.exclusions, [key]: on } }));
 
   async function submit() {
@@ -139,8 +162,8 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
           <h2 id={`${ids}-title`} className="text-lg font-semibold">
             {t('workflows.rules.editTitle', { action: actionName })}
             {scope && (
-              <span className="ms-2 text-sm font-normal text-fg-muted" dir="ltr">
-                {scope}
+              <span className="ms-2 inline-block text-sm font-normal text-fg-muted" dir={scopeText?.named ? undefined : 'ltr'}>
+                {scopeText?.text ?? scope}
               </span>
             )}
           </h2>
@@ -197,26 +220,15 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
                   }}
                   testId="approval-rule-people"
                 />
-                {people && people.userIds.length > 0 && (
-                  <ul className="mt-2 flex flex-wrap gap-2" data-testid="approval-rule-people-list">
-                    {people.userIds.map((uid) => (
-                      <li key={uid} className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs">
-                        <span dir="auto">{nameOf(uid)}</span>
-                        <button
-                          type="button"
-                          className="min-h-6 min-w-6 rounded-full text-fg-muted hover:text-fg"
-                          aria-label={t('workflows.rules.peopleRemove', { name: nameOf(uid) })}
-                          onClick={() => {
-                            const rest = people.userIds.filter((x) => x !== uid);
-                            toggleSet((a) => a.kind === 'people', rest.length > 0, { kind: 'people', userIds: rest });
-                          }}
-                        >
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <PeopleChips
+                  ids={people?.userIds ?? []}
+                  nameOf={nameOf}
+                  testId="approval-rule-people-list"
+                  onRemove={(uid) => {
+                    const rest = (people?.userIds ?? []).filter((x) => x !== uid);
+                    toggleSet((a) => a.kind === 'people', rest.length > 0, { kind: 'people', userIds: rest });
+                  }}
+                />
               </div>
             )}
           </fieldset>
@@ -257,6 +269,49 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
 
           {checkbox(`${ids}-em`, t('workflows.rules.notifyEmail'), draft.notify.email, (on) => setDraft((d) => ({ ...d, notify: { ...d.notify, email: on } })), false, 'approval-rule-email')}
 
+          <fieldset className="space-y-1" data-testid="approval-rule-recipients">
+            <legend className="text-sm font-medium">{t('workflows.rules.alsoTell')}</legend>
+            <p className="text-xs text-fg-subtle">{t(draft.notify.email ? 'workflows.rules.alsoTellHint' : 'workflows.rules.alsoTellOff')}</p>
+            {checkbox(`${ids}-esa`, t('workflows.rules.roleSuper'), extraRole('super_admin'), (on) => toggleExtra((a) => a.kind === 'role' && a.role === 'super_admin', on, { kind: 'role', role: 'super_admin' }), false, 'approval-rule-extra-super')}
+            {checkbox(`${ids}-ead`, t('workflows.rules.roleAdmin'), extraRole('admin'), (on) => toggleExtra((a) => a.kind === 'role' && a.role === 'admin', on, { kind: 'role', role: 'admin' }), false, 'approval-rule-extra-admin')}
+            {checkbox(`${ids}-efi`, t('workflows.rules.financeAny'), !!extraFinance, (on) => toggleExtra((a) => a.kind === 'finance', on, { kind: 'finance' }), false, 'approval-rule-extra-finance')}
+            <div className="pt-2">
+              <Autocomplete
+                key={extraPeople?.userIds.join(',') ?? 'none'}
+                kind="user"
+                mode="pick"
+                label={t('workflows.rules.alsoTellAdd')}
+                source={recipientSource}
+                allowIds={false}
+                showIds={false}
+                initialResults
+                popup="inline"
+                messages={{
+                  recent: (count) => t('workflows.rules.recipientCount', { count }),
+                  emptyList: t('workflows.rules.recipientsEmpty'),
+                  noMatches: (query) => t('workflows.rules.recipientsNoMatch', { query }),
+                  count: (count) => t('workflows.rules.recipientCount', { count }),
+                }}
+                onChange={(uid, item) => {
+                  if (!uid) return;
+                  if (item?.label) setLabels((l) => ({ ...l, [uid]: item.label }));
+                  const next = [...new Set([...(extraPeople?.userIds ?? []), uid])].slice(0, WORKFLOW_LIMITS.maxNamedPeople);
+                  toggleExtra((a) => a.kind === 'people', true, { kind: 'people', userIds: next });
+                }}
+                testId="approval-rule-extra-people"
+              />
+              <PeopleChips
+                ids={extraPeople?.userIds ?? []}
+                nameOf={nameOf}
+                testId="approval-rule-extra-people-list"
+                onRemove={(uid) => {
+                  const rest = (extraPeople?.userIds ?? []).filter((x) => x !== uid);
+                  toggleExtra((a) => a.kind === 'people', rest.length > 0, { kind: 'people', userIds: rest });
+                }}
+              />
+            </div>
+          </fieldset>
+
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-why`} className="text-sm font-medium">{t('workflows.rules.reason')}</label>
             <textarea id={`${ids}-why`} className={`${fieldClass} min-h-20`} value={reason} required maxLength={WORKFLOW_LIMITS.maxReasonLength} dir="auto" onChange={(e) => setReason(e.target.value)} data-testid="approval-rule-reason" />
@@ -284,5 +339,23 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
         </form>
       </dialog>
     </>
+  );
+}
+
+/** The named people of a rule, each with its remove button. */
+function PeopleChips({ ids, nameOf, onRemove, testId }: { ids: readonly string[]; nameOf: (id: string) => string; onRemove: (id: string) => void; testId: string }) {
+  const { t } = useLanguage();
+  if (!ids.length) return null;
+  return (
+    <ul className="mt-2 flex flex-wrap gap-2" data-testid={testId}>
+      {ids.map((uid) => (
+        <li key={uid} className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs">
+          <span dir="auto">{nameOf(uid)}</span>
+          <button type="button" className="min-h-6 min-w-6 rounded-full text-fg-muted hover:text-fg" aria-label={t('workflows.rules.peopleRemove', { name: nameOf(uid) })} onClick={() => onRemove(uid)}>
+            ×
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

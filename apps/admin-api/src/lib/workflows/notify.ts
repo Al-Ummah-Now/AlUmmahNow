@@ -90,6 +90,7 @@ const COPY = {
     no: 'No',
     none: '—',
     someone: 'Someone',
+    deleted: 'Deleted account',
     andMore: (names: string, n: number) => `${names} and ${n} more`,
     system: 'Al Ummah Now',
     replaced: 'Replaced',
@@ -127,6 +128,7 @@ const COPY = {
     no: 'لا',
     none: '—',
     someone: 'أحد المشرفين',
+    deleted: 'حساب محذوف',
     andMore: (names: string, n: number) => `${names} و${arDigits(n)} غيرهم`,
     system: 'الأمة الآن',
     replaced: 'استُبدل',
@@ -260,11 +262,14 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
     const recipients = [...new Set([...job.recipients, ...extra])].filter((u) => u !== job.actor && u !== 'system');
 
     const names = new Map<string, string>();
+    const gone = new Set<string>();
     const people = new Set<string>([job.actor, ...workflowFieldPeople(request.fields, EMAIL_PEOPLE)]);
     for (const id of people) {
       if (id === 'system') continue;
-      const contact = await contactOf(env, id).catch(() => null);
+      const contact = await contactOf(env, id).catch(() => undefined);
       if (contact?.displayName) names.set(id, contact.displayName);
+      // No such account any more (a failed lookup is not that: it shows as "a team member")
+      else if (contact === null) gone.add(id);
     }
     let sent = 0;
     for (const userId of recipients) {
@@ -272,8 +277,9 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
       const to = contact?.email?.trim();
       if (!contact || !to || !to.includes('@')) continue;
       const locale: EmailLocale = contact.locale === 'ar' ? 'ar' : 'en';
-      const actorName = job.actor === 'system' ? COPY[locale].system : (names.get(job.actor) ?? COPY[locale].someone);
-      const email = renderWorkflowEmail({ to, locale, event: job.event, request, actorName, names, adminUrl: env.ADMIN_WEB_URL, environment: env.ENVIRONMENT });
+      const named = new Map([...names, ...[...gone].map((id): [string, string] => [id, COPY[locale].deleted])]);
+      const actorName = job.actor === 'system' ? COPY[locale].system : (named.get(job.actor) ?? COPY[locale].someone);
+      const email = renderWorkflowEmail({ to, locale, event: job.event, request, actorName, names: named, adminUrl: env.ADMIN_WEB_URL, environment: env.ENVIRONMENT });
       // One key per request, event, actor and recipient: a retried job never sends anyone a second copy
       const result = await sendContactEmail(env as never, email, { idempotencyKey: `workflow-${job.requestId}-${job.event}-${job.actor}-${userId}` });
       if (result.status === 'failed') {
