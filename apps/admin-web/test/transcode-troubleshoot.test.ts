@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { ADMIN_JOB_KINDS, TRANSCODE_REASONS, TROUBLESHOOT_STATES, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootStatus } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
-import { API_ERROR_LABEL, REASON_LABEL, STATE_LABEL, filterProblem, jobActions, orderJobs, statusNote } from '../src/app/(protected)/delivery/troubleshoot-view';
+import { API_ERROR_LABEL, REASON_LABEL, SOURCE_VERDICT_LABEL, STATE_LABEL, filterProblem, jobActions, orderJobs, sourceLines, statusNote } from '../src/app/(protected)/delivery/troubleshoot-view';
 import { JOB_KIND_LABEL } from '../src/lib/admin-jobs';
 import { JOB_STATUS_LABEL } from '../src/app/(protected)/delivery/metrics';
 
@@ -17,7 +17,7 @@ const lookup = (messages: unknown, key: string) => key.split('.').reduce<any>((n
 
 const status = (over: Partial<TroubleshootStatus> = {}): TroubleshootStatus => ({ at: '2026-11-15T12:00:00Z', token: 'ok', containers: null, queues: null, waiting: null, ...over });
 const job = (videoId: string, state: TroubleshootJob['state'] = 'queued'): TroubleshootJob => ({
-  videoId, jobId: `job-${videoId}`, title: null, state, attempt: 1, maxAttempts: 8, queuedAt: null, startedAt: null, nextRetryAt: null, lastSeenAt: null, progress: null, reason: null, error: null, instance: null,
+  videoId, jobId: `job-${videoId}`, title: null, state, attempt: 1, maxAttempts: 8, queuedAt: null, startedAt: null, nextRetryAt: null, lastSeenAt: null, progress: null, reason: null, error: null, source: null, instance: null,
 });
 
 describe('job actions', () => {
@@ -56,11 +56,30 @@ describe('status note', () => {
   });
 });
 
+describe('what the file is', () => {
+  const source = { bytes: 13_654_915, container: 'mp4', zeroStartPercent: 1.2, zeroEndPercent: 0, format: 'mov,mp4', streams: [{ kind: 'audio', codec: 'aac' }, { kind: 'cover', codec: 'mjpeg' }], durationSeconds: 812 } as const;
+  const words = (messages: unknown) => ((key: string, params: Record<string, string> = {}) => String(lookup(messages, key)).replace(/\{(\w+)\}/g, (_m, k) => params[k] ?? '')) as never;
+
+  it('says it in plain words, with size, length, streams and empty bytes', () => {
+    const out = sourceLines({ ...source, streams: [...source.streams] }, words(en), 'en');
+    assert.equal(out.verdict, 'The file has sound only, no picture.');
+    assert.deepEqual(out.details.slice(2), ['Sound: \u2068aac\u2069', 'Cover image: \u2068mjpeg\u2069', 'Empty bytes: 1.2% of the first MB, 0% of the last MB']);
+  });
+
+  it('in Arabic with Arabic digits and words', () => {
+    const out = sourceLines({ ...source, streams: [], zeroEndPercent: 100 }, words(ar), 'ar');
+    assert.equal(out.verdict, ar.transcodeTroubleshoot.source.halfWritten);
+    assert.match(out.details.join(' '), /[٠-٩]/);
+    assert.doesNotMatch(out.details.join(' '), /[0-9]/);
+  });
+});
+
 describe('strings', () => {
   const keys = [
     ...TROUBLESHOOT_STATES.map((s) => STATE_LABEL[s]),
     ...TRANSCODE_REASONS.map((r) => REASON_LABEL[r]),
     ...Object.values(API_ERROR_LABEL),
+    ...Object.values(SOURCE_VERDICT_LABEL),
     ...TROUBLESHOOT_TOKEN_CHECKS.map((c) => `transcodeTroubleshoot.checks.${c}`),
     JOB_KIND_LABEL['media.transcode-retry'],
     JOB_KIND_LABEL['media.transcode-cancel'],

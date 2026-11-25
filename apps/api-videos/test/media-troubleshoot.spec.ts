@@ -84,6 +84,15 @@ describe('job state', () => {
 		// an older job on the transcoder says nothing about this one
 		assert.equal(troubleshootState(row, view({ jobId: 'other-job-id-1234' }), null), 'queued');
 	});
+	it('a failed job says what its source is, without the hash; anything malformed is nothing', () => {
+		const facts = { bytes: 10, container: 'mp4', zeroStartPercent: 0, zeroEndPercent: 0, sha256: 'a'.repeat(64), streams: [{ kind: 'audio', codec: 'aac' }] };
+		const of = (source_facts: string | null, status = 'failed') => toTroubleshootJob({ video_id: ID, job_id: JOB, status, attempts: 1, queued_at: iso(T), started_at: iso(T), failed_at: iso(T), error: 'no_video_stream', updated_at: iso(T), source_facts }, null, null, false).source;
+		const { sha256, ...rest } = facts;
+		assert.deepEqual(of(JSON.stringify(facts)), rest);
+		assert.ok(!JSON.stringify(of(JSON.stringify(facts))).includes(sha256));
+		for (const bad of [null, '{', '{}', JSON.stringify({ ...facts, sha256: 'x' })]) assert.equal(of(bad), null);
+		assert.equal(of(JSON.stringify(facts), 'cancelled'), null);
+	});
 	it('marks the transcoder as unavailable when it was asked and did not answer', () => {
 		const job = toTroubleshootJob({ video_id: ID, job_id: JOB, status: 'transcoding', attempts: 1, queued_at: iso(T), started_at: iso(T), failed_at: null, error: null, updated_at: iso(T) }, null, null, true);
 		assert.equal(job.transcoderUnavailable, true);

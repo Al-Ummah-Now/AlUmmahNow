@@ -7,6 +7,8 @@
  * admin-api / admin-web (the panel). Pure: no I/O.
  */
 
+import type { TranscodeSourceFacts } from './media-delivery';
+
 // ---------------------------------------------------------------------------
 // Raw errors → one reason code (the admin translates the code; the raw text stays for details)
 // ---------------------------------------------------------------------------
@@ -125,6 +127,9 @@ export interface TranscoderJobView {
   error: string | null;
 }
 
+/** The source's SHA-256 stays on the server. */
+export type TroubleshootSource = Omit<TranscodeSourceFacts, 'sha256'>;
+
 export interface TroubleshootJob {
   videoId: string;
   jobId: string;
@@ -141,6 +146,8 @@ export interface TroubleshootJob {
   reason: TranscodeReason | null;
   /** The raw last error, scrubbed of URLs' query strings and credentials */
   error: string | null;
+  /** What the container saw in the source of a failed job */
+  source: TroubleshootSource | null;
   /** The container instance is named by the video id; its Durable Object id matches the Containers API */
   instance: { name: string; durableObjectId: string | null; state: string | null } | null;
   /** The transcoder could not be asked (no binding locally, or it failed): what api-videos knows only */
