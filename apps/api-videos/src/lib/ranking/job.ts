@@ -66,12 +66,28 @@ export const ONLY_LANGUAGE_RAILS: readonly RailId[] = ['trending:day', 'trending
 /** Admin pin targets (discovery_pins.rail) → the rails they apply to. */
 export const PIN_RAILS = ['featured', 'trending', 'popular', 'new', 'explore'] as const;
 
-/** Accounts whose uploads never rank: E2E run accounts and production throwaways. */
+/** Accounts whose uploads never rank: E2E run accounts and production throwaways (seedOwners: the exception). */
 const TEST_OWNER = /(@e2e\.alummahnow\.net|@delivered\.resend\.dev)$/i;
 
 export function isTestOwnerEmail(email: unknown): boolean {
 	return typeof email === 'string' && TEST_OWNER.test(email.trim());
 }
+
+/**
+ * The seed accounts whose videos rank anyway: exact addresses in RANK_SEED_OWNERS (QA and stage, whose
+ * whole public library belongs to the seed's creator; without them every rail there is empty).
+ * Empty, and refused, in production.
+ */
+export function seedOwners(env: Pick<DiscoveryEnv, 'ENVIRONMENT' | 'RANK_SEED_OWNERS'>): ReadonlySet<string> {
+	if ((env.ENVIRONMENT ?? '').toLowerCase() === 'production') return new Set();
+	const listed = (env.RANK_SEED_OWNERS ?? '').split(',').map((email) => email.trim().toLowerCase());
+	// An address, never a domain or a pattern
+	return new Set(listed.filter((email) => /^[^\s@*]+@[^\s@*]+$/.test(email)));
+}
+
+/** Whether videos of this owner stay off every rail. */
+const neverRanks = (email: unknown, seeds: ReadonlySet<string>): boolean =>
+	isTestOwnerEmail(email) && !seeds.has(String(email).trim().toLowerCase());
 
 interface Statement {
 	bind(...values: unknown[]): Statement;
@@ -86,6 +102,9 @@ interface Db {
 
 export interface DiscoveryEnv extends JobEnv {
 	NOTIFICATIONS_DB?: unknown;
+	ENVIRONMENT?: string;
+	/** Exact seed addresses whose videos rank outside production (seedOwners) */
+	RANK_SEED_OWNERS?: string;
 }
 
 const db = (env: DiscoveryEnv) => env.SEARCH_DB as unknown as Db | undefined;
@@ -137,7 +156,7 @@ function timeOf(value: string | number | null | undefined): number | null {
 }
 
 /** Pure: one index row → the ranking's view of the video. */
-export function toRankVideo(row: VideoRow): RankVideo {
+export function toRankVideo(row: VideoRow, seeds: ReadonlySet<string> = new Set()): RankVideo {
 	const publishedAt = timeOf(row.created_at);
 	const language = row.language || null;
 	// Both site languages: the title itself is in `language`, titleLocalized adds others
@@ -158,17 +177,17 @@ export function toRankVideo(row: VideoRow): RankVideo {
 		hasDescription: row.has_desc === 1,
 		hasCaptions: row.captions === 1 || row.captions === (true as unknown as number),
 		channelVerified: row.verified === 1,
-		excluded: row.excluded === 1 || isTestOwnerEmail(row.owner_email),
+		excluded: row.excluded === 1 || neverRanks(row.owner_email, seeds),
 	};
 }
 
 /** Every listed video, in keyset pages (no cap). */
-export async function loadRankVideos(database: Db, pageSize = READ_PAGE): Promise<RankVideo[]> {
+export async function loadRankVideos(database: Db, seeds: ReadonlySet<string> = new Set(), pageSize = READ_PAGE): Promise<RankVideo[]> {
 	const out: RankVideo[] = [];
 	let after = 0;
 	for (;;) {
 		const { results = [] } = await database.prepare(VIDEO_SQL).bind(after, pageSize).all<VideoRow>();
-		for (const row of results) out.push(toRankVideo(row));
+		for (const row of results) out.push(toRankVideo(row, seeds));
 		if (results.length < pageSize) break;
 		after = Number(results[results.length - 1].rid);
 	}
@@ -381,7 +400,7 @@ export async function runDiscoveryRank(env: DiscoveryEnv, now = Date.now()): Pro
 	const database = db(env);
 	if (!database) throw new Error('SEARCH_DB is not bound');
 	const started = Date.now();
-	const [videos, engagement, pins] = await Promise.all([loadRankVideos(database), loadEngagement(env, now), loadPins(database, now)]);
+	const [videos, engagement, pins] = await Promise.all([loadRankVideos(database, seedOwners(env)), loadEngagement(env, now), loadPins(database, now)]);
 	const featuredChannels = new Set(pins.filter((p) => p.kind === 'channel').map((p) => p.target_id));
 	const inputs: RankInputs = { videos, engagement, ctx: { now, featuredChannels } };
 	const rails = buildAllRails(inputs, pins);

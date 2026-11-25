@@ -337,6 +337,8 @@
     "LIVE_PUBLIC_HOST": "live.qa.alummahnow.net",
     // White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
     "SITES_ENV": "qa",
+    // Discovery ranking (lib/ranking/job.ts seedOwners): the seed's creator (apps/web/e2e/seed) owns the public library here, so it ranks
+    "RANK_SEED_OWNERS": "qa-creator@delivered.resend.dev",
     "VIDEOS_WEB_URL": "https://videos.qa.alummahnow.net",
     "VIDEOS_API_URL": "https://videos.api.qa.alummahnow.net",
     // The test payment provider (lib/billing/fake.ts): moves no money; never set in production or stage
