@@ -2445,6 +2445,8 @@ const en = {
       succeeded: '{name} now owns this channel ({videos} videos and {playlists} playlists moved).',
       failed: 'The transfer to {name} failed: {error}. Retry it from the jobs panel.',
       unknown: 'Transfer to {name} queued. Its status could not be read; see the jobs panel.',
+      keptHandle: 'The channel was not moved to {name}: it got an official handle meanwhile. Transfer it again.',
+      skipped: 'The channel was not moved to {name}: it changed meanwhile. Reload the page to see it as it is.',
     },
     dangerTitle: 'Delete',
     deleteBody: 'Hides the channel and every video in it at once. It can be restored from Recently deleted for {#30} days; then it is deleted permanently from Bunny, storage, search and notifications.',

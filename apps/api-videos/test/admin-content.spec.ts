@@ -877,11 +877,11 @@ describe('channel actions', () => {
 	it('a channel with an official handle moves only when that is allowed, also when it got the handle meanwhile (§3.5)', async () => {
 		const { raw, call, jobOf } = await setup({ channels: { ch1: channel('ch1', { handle: 'LamaHat' }) } });
 		const move = (body: Record<string, unknown> = {}) => call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, ...body });
-		for (const body of [{}, { allowOfficialHandle: false }]) {
+		for (const body of [{}, { anyOfficialHandle: false }, { officialHandle: 'ummah' }, { officialHandle: 'lamahatx' }]) {
 			const refused = await move(body);
 			assert.deepEqual([refused.status, refused.body.code], [409, 'official_handle_confirm']);
 		}
-		assert.equal((await move({ allowOfficialHandle: 'yes' })).status, 400);
+		for (const body of [{ anyOfficialHandle: 'yes' }, { officialHandle: true }, { officialHandle: '' }]) assert.equal((await move(body)).status, 400);
 		// A plain handle, made official after the first read: refused under the lock, which is released
 		const channelNow = () => JSON.parse(raw.channels.store.get('ch1')!);
 		raw.channels.store.set('ch1', JSON.stringify({ ...channelNow(), handle: 'ch1' }));
@@ -890,12 +890,64 @@ describe('channel actions', () => {
 			raw.channels.store.set('ch1', JSON.stringify({ ...channelNow(), handle: 'ummah' }));
 			return get(...args);
 		}) as typeof raw.profiles.get;
-		assert.equal((await move()).body.code, 'official_handle_confirm');
+		assert.equal((await move({ officialHandle: 'LamaHat' })).body.code, 'official_handle_confirm', 'the tick was for another handle');
 		raw.profiles.get = get as typeof raw.profiles.get;
 		assert.equal(channelNow().userId, OWNER);
-		const job = await jobOf(await move({ allowOfficialHandle: true }));
+		const job = await jobOf(await move({ officialHandle: 'Ummah' }));
 		assert.equal(job.status, 'succeeded');
 		assert.deepEqual([channelNow().userId, channelNow().handle], [OTHER, 'ummah']);
+		// Staff take it whatever it is
+		const staff = await setup({ channels: { ch1: channel('ch1', { handle: 'LamaHat' }) } });
+		assert.equal((await staff.jobOf(await staff.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, anyOfficialHandle: true }))).status, 'succeeded');
+	});
+
+	it('a queued move does not take an official handle the channel got meanwhile, and frees the channel (§3.5)', async () => {
+		const run = async (body: Record<string, unknown>, from: string, to: string) => {
+			const t = await setup({ channels: { ch1: channel('ch1', { handle: from }) } });
+			const now = () => JSON.parse(t.raw.channels.store.get('ch1')!);
+			const res = await t.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, ...body }, { hold: true });
+			assert.equal(res.status, 200, JSON.stringify(res.body));
+			t.raw.channels.store.set('ch1', JSON.stringify({ ...now(), handle: to }));
+			await t.jobs.drain(t.env);
+			const job = await t.jobOf(res);
+			return { job, now, t };
+		};
+		for (const [body, from] of [[{}, 'ch1'], [{ officialHandle: 'lamahat' }, 'lamahat']] as const) {
+			const { job, now, t } = await run(body, from, 'Ummah');
+			assert.deepEqual([job.status, job.result.skipped, job.result.changedHands], ['succeeded', 'official_handle', false]);
+			assert.deepEqual([now().userId, now().handle], [OWNER, 'Ummah']);
+			assert.equal(await openTransferJob(t.env as never, 'ch1'), null);
+			assert.ok(!t.raw.queue.messages.some((m: any) => /^channelMoved/.test(m.payload?.notificationKey ?? '')), 'nobody is told of a move');
+		}
+		for (const [body, from] of [[{ anyOfficialHandle: true }, 'ch1'], [{ officialHandle: 'ummah' }, 'ummah']] as const) {
+			const { job, now } = await run(body, from, 'Ummah');
+			assert.equal(job.status, 'succeeded');
+			assert.equal(now().userId, OTHER);
+		}
+	});
+
+	it('the handle cannot be changed while a move is open: not by an admin edit, not by the owner (§3.3)', async () => {
+		const { raw, call, db, env } = await setup();
+		const app = buildApp((router) => {
+			router.put('/channels/:id', ChannelUpdate);
+		}, { userId: OWNER, roles: ['super_admin'] });
+		const put = async (body: unknown) => {
+			const res = await app.request('/channels/ch1', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, env as never);
+			return { status: res.status, code: ((await res.json()) as { code?: string }).code };
+		};
+		const lock = () => db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(new Date().toISOString());
+		lock();
+		const admin = await call('PATCH', '/channels/ch1', { handle: 'plainname' });
+		assert.deepEqual([admin.status, admin.body.code], [409, 'transfer_in_progress']);
+		for (const handle of ['plainname', 'ummah']) assert.deepEqual(await put({ handle }), { status: 409, code: 'move_in_progress' });
+		assert.deepEqual([...raw.channel_tabs.store.keys()].filter((k) => k.startsWith('channel-handles/')), [], 'nothing claimed');
+		// Everything else is still saved, the handle it has among it
+		assert.equal((await put({ name: 'New name', handle: 'ch1' })).status, 200);
+		assert.equal((await call('PATCH', '/channels/ch1', { name: 'Newer name' })).status, 200);
+		db.db.prepare('DELETE FROM channel_transfer_locks').run();
+		assert.equal((await put({ handle: 'ummah' })).status, 200, 'a super admin owner takes an official one when no move is open');
+		lock();
+		assert.equal((await call('POST', '/channels/ch1/handle/take', { handle: 'lamahat' })).body.code, 'transfer_in_progress');
 	});
 
 	it('a plain channel edit refuses an official handle and points to the take-back tool (CC-4)', async () => {

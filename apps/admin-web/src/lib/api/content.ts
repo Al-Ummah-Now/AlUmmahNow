@@ -136,8 +136,8 @@ export async function unsuspendChannel(id: string): Promise<ActionResult<JobResu
 export interface TransferOptions {
   keepPreviousOwnerAsAdmin: boolean;
   keepContactEmail: boolean;
-  /** The second tick: an official handle to an account that isn't on the site team (§3.5) */
-  allowOfficialHandle: boolean;
+  /** The official handle ticked to go to an account that isn't on the site team (§3.5) */
+  officialHandle: string | null;
 }
 
 export async function transferChannel(id: string, newOwnerId: string, reason: string, options: TransferOptions): Promise<ActionResult<JobResult>> {

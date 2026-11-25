@@ -341,6 +341,8 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	let claimed: string | null = null;
 	if (edit.handle !== undefined && normalizeHandleInput(edit.handle) !== (existing.handle || '')) {
 		if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
+		// An open move was started for the handle the channel has (§3.3); the take-back tool checks before it takes
+		if (!options.officialTakeBack && (await openTransferJob(env, id))) throw new AdminError(409, 'transfer_in_progress');
 		// Official (reserved) handles are given only by the take-back tool (super admins, a reason, the
 		// holder told); a plain channel edit refuses them
 		if (!options.officialTakeBack && OFFICIAL_HANDLES.has(normalizeHandleInput(edit.handle).toLowerCase())) {
@@ -573,8 +575,10 @@ export interface TransferOptions {
 	keepContactEmail?: boolean;
 	/** The admin's reason, shown to the previous owner with the notice (CC-D11) */
 	reason?: string;
-	/** A channel with an official handle may go to this receiver: they are staff, or the admin ticked it (§3.5) */
-	allowOfficialHandle?: boolean;
+	/** The official handle the admin ticked to give with the channel; only that one (§3.5) */
+	officialHandle?: string;
+	/** Whatever official handle it has: the receiver is staff, or it goes back to the owner it came from */
+	anyOfficialHandle?: boolean;
 	/** Move only from this owner (an accepted offer): refused with owner_changed when someone else owns it by then */
 	expectedOwnerId?: string;
 	/** The accepted offer this move carries out; asked under the lock whether it still stands */
@@ -582,8 +586,11 @@ export interface TransferOptions {
 	confirm?: () => Promise<boolean>;
 }
 
-/** Whether the channel holds an official handle; it goes only to staff, or with the admin's own tick (wiki AUN-CHANNEL-CLAIM §3.5). */
-const holdsOfficialHandle = (channel: Row): boolean => OFFICIAL_HANDLES.has(String(channel.handle ?? '').toLowerCase());
+/** Whether the channel's handle keeps it: an official one, not for this receiver without the admin's tick of that handle (wiki AUN-CHANNEL-CLAIM §3.5). */
+function keptByOfficialHandle(channel: Row, options: Pick<TransferOptions, 'officialHandle' | 'anyOfficialHandle'>): boolean {
+	const handle = String(channel.handle ?? '').toLowerCase();
+	return OFFICIAL_HANDLES.has(handle) && options.anyOfficialHandle !== true && options.officialHandle?.toLowerCase() !== handle;
+}
 
 export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
@@ -616,14 +623,14 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 		if (options.expectedOwnerId && fresh.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
 		if (fresh.userId === newOwnerId) throw new AdminError(409, 'already_owner');
 		// Under the lock too: the channel may have been given the handle meanwhile
-		if (holdsOfficialHandle(fresh) && !options.allowOfficialHandle) throw new AdminError(409, 'official_handle_confirm');
+		if (keptByOfficialHandle(fresh, options)) throw new AdminError(409, 'official_handle_confirm');
 		if (options.confirm && !(await options.confirm())) throw new AdminError(404, 'offer_not_found');
 		job = await createJob(env, {
 			kind: 'channel.transfer',
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
-			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}), ...(options.offerId ? { offerId: options.offerId } : {}) },
+			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}), ...(options.offerId ? { offerId: options.offerId } : {}), ...(options.officialHandle ? { officialHandle: options.officialHandle } : {}), ...(options.anyOfficialHandle ? { anyOfficialHandle: true } : {}) },
 		});
 	} catch (error) {
 		await releaseTransferLock(env, id, '', lockedAt);
@@ -1356,7 +1363,9 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 async function transferSteps(env: AdminServiceEnv, job: AdminJob, state: MoveState): Promise<JobOutcome> {
 	const id = job.targetId;
 	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin, offerId } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean; offerId?: string };
+	const handles = job.params as Pick<TransferOptions, 'officialHandle' | 'anyOfficialHandle'>;
 	let stopped = false;
+	let kept = false;
 	// An owner's move: whether its offer still stands, read before the channel. The mark covers what changes after
 	const stands = offerId ? offerStands((await env.SEARCH_DB!.prepare('SELECT status FROM channel_move_offers WHERE id = ?').bind(offerId).first<{ status: string }>())?.status) : true;
 	// Stopped (an erasure of one of its people, lib/channelMoveData.ts), or no longer the channel of the owner who offered it
@@ -1392,8 +1401,14 @@ async function transferSteps(env: AdminServiceEnv, job: AdminJob, state: MoveSta
 	}
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		stopped = false;
+		kept = false;
 		if (fresh.isDeleted) return false;
 		if (fresh.userId === newOwnerId) return false;
+		// Given an official handle since the move was queued
+		if (keptByOfficialHandle(fresh, handles)) {
+			kept = true;
+			return false;
+		}
 		// The mark stays until another move, so this job run again (a retry, a second delivery) stops again
 		if (stops(fresh)) {
 			stopped = true;
@@ -1419,6 +1434,7 @@ async function transferSteps(env: AdminServiceEnv, job: AdminJob, state: MoveSta
 	});
 	if (saved && state.changedHands === null) state.changedHands = saved.userId === newOwnerId;
 	if (stopped) return skip('stopped');
+	if (kept) return skip('official_handle');
 	if (!saved || saved.isDeleted) return skip(saved ? 'channel_deleted' : 'channel_not_found');
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
 		const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];

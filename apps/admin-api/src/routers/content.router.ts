@@ -274,14 +274,14 @@ app.post('/channels/:id/transfer', async (c) => {
   const options = {
     keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true,
     keepContactEmail: input.keepContactEmail === true,
-    allowOfficialHandle: input.allowOfficialHandle === true,
+    // The official handle the admin ticked: that one goes with the channel, no other
+    officialHandle: typeof input.officialHandle === 'string' && input.officialHandle.trim() ? input.officialHandle.trim().slice(0, 60) : null,
   };
-  // An official handle goes to a non-staff account only with the admin's own tick (§3.5); api-videos refuses without it
+  // To staff whatever handle it has (§3.5); api-videos refuses anyone else without the tick
   const staff = await getActiveStaff(c.env.REPORTS_DB, newOwnerId, STAFF_ROLES).catch((error: unknown) => {
     logger.warn('[Content] Could not read the staff list', { error: error instanceof Error ? error.message : String(error) });
     return null;
   });
-  const allowOfficialHandle = options.allowOfficialHandle || !!staff;
   const current = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
   let started: unknown;
   try {
@@ -289,7 +289,7 @@ app.post('/channels/:id/transfer', async (c) => {
       videos(c, `/channels/${encodeURIComponent(id)}/transfer`, {
         method: 'POST',
         // The reason reaches the previous owner with the notice (CC-D11)
-        json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail, allowOfficialHandle },
+        json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail, ...(options.officialHandle ? { officialHandle: options.officialHandle } : {}), ...(staff ? { anyOfficialHandle: true } : {}) },
       }));
   } catch (error) {
     // A refusal changed nothing, so its audit row was dropped; keep a row of the refused request (wiki AUN-CHANNEL-CLAIM §3.7)

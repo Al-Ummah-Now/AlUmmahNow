@@ -17,7 +17,8 @@ import { LocalTime } from '@/components/LocalTime';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Chip, cardTable, thClass, type ChipTone } from '@/components/content/parts';
 import { fillNodes } from '@/components/audit/fill';
-import { JobStatusChip, useRefreshWhile } from '@/components/content/jobs';
+import { JobStatusChip } from '@/components/content/job-status-chip';
+import { useRefreshWhile } from '@/components/content/jobs';
 import { JobActionButtons, JobErrorText, JobTiming, useJobCancel } from '@/components/content/job-parts';
 import { isActiveJob } from '@/components/content/job-helpers';
 
