@@ -116,6 +116,15 @@ html.dark {
 }
 
 /*
+  The scrim behind every dialog: the shared one (packages/fanous-tokens/surfaces), dark in both modes.
+  Native dialogs have it from here, with no class of their own; a hand-made overlay uses
+  bg-[var(--aun-scrim)]. Never the foreground or background colour, which turn over in dark mode (#1992).
+*/
+dialog::backdrop {
+  background: var(--aun-scrim);
+}
+
+/*
   The shared account menu's colours, set per mode with the admin's own html.dark class. The shared
   stylesheet uses light-dark(), which this build (Tailwind v4, Lightning CSS) rewrites into a
   two-variable fallback; on production the menu came out see-through (no background, no lines;

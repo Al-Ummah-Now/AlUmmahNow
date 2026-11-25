@@ -140,7 +140,7 @@ export function CommandPalette({ open, onClose, items, access }: { open: boolean
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-bg/70 px-4 pt-[10vh] backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-start justify-center bg-[var(--aun-scrim)] px-4 pt-[10vh] backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

@@ -58,7 +58,7 @@ export function ScholarLabelDialog({ open, mode, currentKind, onCancel, onConfir
       }}
       aria-labelledby={`${ids}-title`}
       aria-describedby={`${ids}-body`}
-      className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))] backdrop:bg-fg/50"
+      className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))]"
       data-testid="scholar-label-dialog"
     >
       <form

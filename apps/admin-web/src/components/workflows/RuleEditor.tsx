@@ -152,7 +152,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
           if (e.target === e.currentTarget) setOpen(false);
         }}
         aria-labelledby={`${ids}-title`}
-        className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(40rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] backdrop:bg-fg/50"
+        className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(40rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)]"
         data-testid="approval-rule-dialog"
       >
         <form

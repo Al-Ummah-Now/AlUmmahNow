@@ -225,7 +225,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
           aria-label={t('nav.close')}
           tabIndex={-1}
           onClick={() => setDrawerOpen(false)}
-          className="fixed inset-0 z-40 bg-bg/70 md:hidden"
+          className="fixed inset-0 z-40 bg-[var(--aun-scrim)] md:hidden"
         />
       )}
 

@@ -49,7 +49,7 @@ export function TierChangeDialog({ open, title, body, warning, confirmLabel, dan
       }}
       aria-labelledby={`${ids}-title`}
       aria-describedby={`${ids}-body`}
-      className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))] backdrop:bg-fg/50"
+      className="m-auto bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))]"
       data-testid={`${testId}-dialog`}
     >
       {/* No <form>: the dialog also opens inside the tier editor's form, and forms cannot nest */}

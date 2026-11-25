@@ -48,7 +48,7 @@ export function FeatureConfirmDialog({ content, onCancel, onConfirm }: { content
       }}
       aria-labelledby={`${ids}-title`}
       aria-describedby={`${ids}-help`}
-      className="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-0 text-fg shadow-2xl backdrop:bg-fg/50"
+      className="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-0 text-fg shadow-2xl"
       data-testid="feature-confirm-dialog"
       data-key={content?.key ?? ''}
       data-next={content ? String(content.next) : ''}
