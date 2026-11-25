@@ -37,12 +37,14 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
 async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void> {
   const header = page.locator('header.ah');
   await expect(header.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
-  // The header re-renders when the session's channels change (a channel just made in the account menu):
-  // wait until its parts are shown, then measure them in one go, so no part is read mid-render
+  // The app mounts the header anew after a channel is made in the account menu (the whole element is
+  // replaced, complete: #1058). So wait until its parts are shown, then find the header and measure
+  // them inside the page in one step: an element found beforehand may already be gone, with 0x0 boxes
   await expect(header.locator('.aun-brand')).toBeVisible();
   await expect(header.getByTestId('header-upload')).toBeVisible();
   await expect(header.locator('.ah-search-wrap .ah-search').or(header.getByTestId('header-search-open')).first()).toBeVisible();
-  const { logo, upload, search } = await header.evaluate((el) => {
+  const { logo, upload, search } = await page.evaluate(() => {
+    const el = document.querySelector('header.ah')!;
     const box = (node: Element | null) => {
       const r = node?.getBoundingClientRect();
       return r && r.width > 0 && r.height > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
@@ -55,7 +57,7 @@ async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void
       search: box(inputShown ? el.querySelector('.ah-search-wrap .ah-search') : el.querySelector('[data-testid="header-search-open"]')),
     };
   });
-  expect(logo && upload && search, 'the logo, Upload and the search are all shown').toBeTruthy();
+  expect({ logo: !!logo, upload: !!upload, search: !!search }, 'the logo, Upload and the search are all shown').toEqual({ logo: true, upload: true, search: true });
   if (!logo || !upload || !search) return;
   const rtl = locale === 'ar';
   const fromSearch = rtl ? search.x - (upload.x + upload.width) : upload.x - (search.x + search.width);
