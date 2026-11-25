@@ -12,7 +12,7 @@ import type { Report } from '../types';
 /** The item whose history keeps it. */
 const AUDIT_KIND: Record<Report['entity_type'], ContentKind> = { video: 'video', channel: 'channel', playlist: 'playlist', post: 'post', comment: 'comment', livestream: 'live-stream', live_chat: 'live-stream' };
 
-export async function setReportReview(db: D1Database, reportId: string, reviewing: boolean, actorId: string, roles?: readonly unknown[]): Promise<Report> {
+export async function setReportReview(db: D1Database, reportId: string, reviewing: boolean, actorId: string, roles?: readonly unknown[]): Promise<{ report: Report; changed: boolean }> {
   const read = () => db.prepare('SELECT * FROM reports WHERE id = ?').bind(reportId).first<Report>();
   const report = await read();
   if (!report) throw new DecisionError(404, 'not_found', 'Report not found');
@@ -21,7 +21,7 @@ export async function setReportReview(db: D1Database, reportId: string, reviewin
   }
   const [from, to] = reviewing ? (['pending', 'reviewing'] as const) : (['reviewing', 'pending'] as const);
   // As it is asked to be already (a second click, another moderator): nothing to change or record
-  if (report.status === to) return report;
+  if (report.status === to) return { report, changed: false };
   const closed = () => new DecisionError(409, 'already_closed', 'Report is already closed');
   if (report.status !== from) throw closed();
   const at = new Date().toISOString();
@@ -43,11 +43,11 @@ export async function setReportReview(db: D1Database, reportId: string, reviewin
     if (((moved.meta as { changes?: number } | undefined)?.changes ?? 0) === 0) {
       // Another moderator's change came first: theirs is recorded
       await dropAudit(db as never, audit);
-      if (now?.status === to) return now;
+      if (now?.status === to) return { report: now, changed: false };
       throw closed();
     }
     logger.info('[Moderation] Report review', { reportId, entityType: report.entity_type, entityId: report.entity_id, status: to, actorId });
-    return now!;
+    return { report: now!, changed: true };
   } catch (error) {
     if (!(error instanceof DecisionError)) await dropAudit(db as never, audit).catch(() => undefined);
     throw error;

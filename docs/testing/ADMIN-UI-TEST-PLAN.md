@@ -76,7 +76,7 @@ Legend: P = pass, F = fail, S = skipped by design.
 | ID | Case | chromium | webkit | mobile |
 | --- | --- | --- | --- | --- |
 | DASH-01 | Stat cards are labelled and consistent with admin-api stats | P | P | P |
-| DASH-02 | A newly filed report increases the total; pending badge shown | P | P | P |
+| DASH-02 | A newly filed report increases the total; open badge shown | P | P | P |
 | DASH-03 | Cards link to moderation, translations and indices | P | P | P |
 | DASH-04 | Moderator sees the dashboard without errors | P | P | P |
 

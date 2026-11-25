@@ -12,7 +12,7 @@ test.describe('dashboard', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Admin Dashboard' })).toBeVisible();
     for (const [key, label] of [
       ['total', 'Total Reports'],
-      ['pending', 'Pending'],
+      ['open', 'Open'],
       ['resolved', 'Resolved'],
       ['dismissed', 'Dismissed'],
       ['last24h', 'Last 24 Hours'],
@@ -22,7 +22,7 @@ test.describe('dashboard', () => {
 
     const ui = {
       total: await statValue(page, 'total'),
-      pending: await statValue(page, 'pending'),
+      open: await statValue(page, 'open'),
       resolved: await statValue(page, 'resolved'),
       dismissed: await statValue(page, 'dismissed'),
     };
@@ -43,8 +43,8 @@ test.describe('dashboard', () => {
     }
     expect(inRange, reading).toBe(true);
     // The first render must be internally consistent
-    expect(ui.pending + ui.resolved + ui.dismissed).toBeLessThanOrEqual(ui.total);
-    expect(ui.pending).toBeGreaterThanOrEqual(0);
+    expect(ui.open + ui.resolved + ui.dismissed).toBeLessThanOrEqual(ui.total);
+    expect(ui.open).toBeGreaterThanOrEqual(0);
   });
 
   test('DASH-02 a newly filed report is counted', async ({ page, makeReport }) => {
@@ -57,7 +57,7 @@ test.describe('dashboard', () => {
         return statValue(page, 'total');
       })
       .toBeGreaterThan(before);
-    await expect(page.getByText(/\d+ pending/)).toBeVisible();
+    await expect(page.getByText(/\d+ open/)).toBeVisible();
   });
 
   test('DASH-03 cards link to the moderation, translations and indices pages', async ({ page }) => {
