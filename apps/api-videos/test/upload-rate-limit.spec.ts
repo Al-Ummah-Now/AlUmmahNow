@@ -8,6 +8,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
+import { OpenAPIRoute, fromHono } from 'chanfana';
 import {
   checkRateLimit,
   pruneRateLimits,
@@ -44,6 +45,30 @@ describe('D1 upload rate limiter (AV-14)', () => {
     const next = await Promise.all(Array.from({ length: 50 }, () => checkRateLimit(db, 'alice', 'op', limits, 1, clock + 60_000)));
     assert.equal(next.filter((r) => r.allowed).length, 5);
     assert.ok(next.filter((r) => !r.allowed).every((r) => r.limitExceeded === 'hour'));
+  });
+
+  it('says what is left on every answer, also one chanfana builds from a plain object', async () => {
+    class Plain extends OpenAPIRoute {
+      schema = {};
+      async handle() {
+        return { ok: true };
+      }
+    }
+    const env = { SEARCH_DB: new SqliteD1() };
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'alice' as never);
+      await next();
+    });
+    app.use('*', rateLimitMiddleware('plain_op', { limits: () => ({ perMinute: 5, perHour: 10, perDay: 20, maxConcurrent: 5 }) }));
+    fromHono(app).get('/plain', Plain);
+    app.get('/json', (c) => c.json({ ok: true }));
+    const left = async (path: string) => {
+      const res = await app.request(path, {}, env as never);
+      return ['Minute', 'Hour', 'Day'].map((w) => res.headers.get(`X-RateLimit-Remaining-${w}`));
+    };
+    assert.deepEqual(await left('/plain'), ['4', '9', '19']);
+    assert.deepEqual(await left('/json'), ['3', '8', '18']);
   });
 
   it('holds at most maxConcurrent requests in flight, and frees the slots when they finish', async () => {

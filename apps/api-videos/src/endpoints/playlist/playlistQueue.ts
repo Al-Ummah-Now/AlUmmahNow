@@ -105,7 +105,7 @@ export class PlaylistQueue extends OptionalAuthRoute {
 		const items = await queueItems(c.env, window, userId, videos, (channelIds) => channelNamesByIds(c.env.channels, channelIds));
 
 		logger.debug("[PlaylistQueue] Served", { list: alias ?? params.id, total: window.total, exact, position: window.position, returned: items.length });
-		// Per viewer (private items, aliases): never shared by a cache
+		// Per viewer (private items, aliases): never kept by a cache
 		return c.json({
 			success: true,
 			result: {
@@ -119,6 +119,6 @@ export class PlaylistQueue extends OptionalAuthRoute {
 				prevOffset: window.prevOffset,
 				nextOffset: window.nextOffset,
 			},
-		}, 200, { "Cache-Control": "private, no-cache" });
+		}, 200, { "Cache-Control": "private, no-store" });
 	}
 }

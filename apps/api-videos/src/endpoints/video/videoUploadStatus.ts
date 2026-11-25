@@ -1,3 +1,4 @@
+import { privateAnswer } from '../../lib/private-answer';
 import { bunnyRef } from '../../lib/media/providers';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
@@ -237,6 +238,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			...(await ownerR2Field(c.env, video)),
 		};
 
+		privateAnswer(c);
 		return {
 			success: true,
 			result: uploadStatus,
