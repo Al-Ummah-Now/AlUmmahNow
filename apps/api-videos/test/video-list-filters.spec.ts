@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ownershipCompleteKey, ownershipUpsertStatement, projectOwnership, projectVideo, upsertSearchRow } from '@al-ummah/shared-types';
+import { API_ERROR_CATALOGUE, buildErrorEnvelope, ownershipCompleteKey, ownershipUpsertStatement, projectOwnership, projectVideo, upsertSearchRow } from '@al-ummah/shared-types';
 import { VideosList } from '../src/endpoints/video/videoList';
 import R2Repository from '../src/lib/r2Repo';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
@@ -178,7 +178,14 @@ describe('GET /api/videos by title, without a channel: a search of public videos
 		assert.equal(last.data.length, 50);
 		assert.equal(last.cursor, '');
 		assert.equal(bucket.calls - before, 50);
-		assert.deepEqual((await list(env, 'q=lesson&limit=50&cursor=idx:100000')).data, []);
+		for (const sort of ['date', 'views', 'title', 'likes']) {
+			const calls = bucket.calls;
+			for (const offset of [200, 100_000]) {
+				const page = await list(env, `q=lesson&limit=50&sort=${sort}&cursor=idx:${offset}`);
+				assert.deepEqual([page.data, page.cursor], [[], ''], `${sort} ${offset}`);
+			}
+			assert.equal(bucket.calls, calls, `${sort}: a cursor past the end reads nothing`);
+		}
 	});
 
 	it('never reads the bucket: text without words, one character, or no usable index', async () => {
@@ -186,7 +193,11 @@ describe('GET /api/videos by title, without a channel: a search of public videos
 		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
 		const before = bucket.calls;
 		assert.deepEqual((await list(env, `q=${encodeURIComponent('"*()')}&limit=9`)).data, []);
-		assert.equal((await app.request('/api/videos?q=a', {}, env as never)).status, 400);
+		const short = await app.request('/api/videos?q=a', {}, env as never);
+		assert.equal(short.status, 400);
+		const body = (await short.json()) as { code: string };
+		assert.equal(body.code, 'query_too_short');
+		for (const lang of ['en', 'ar'] as const) assert.equal(buildErrorEnvelope(body, { status: 400, lang }).message, API_ERROR_CATALOGUE.query_too_short[lang]);
 		for (const SEARCH_DB of [undefined, { prepare: () => { throw new Error('D1 is down'); } }]) {
 			const res = await app.request('/api/videos?q=tafsir', {}, { ...env, SEARCH_DB } as never);
 			assert.equal(res.status, 503);

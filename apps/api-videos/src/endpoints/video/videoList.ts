@@ -240,7 +240,9 @@ export class VideosList extends OptionalAuthRoute {
 				const video = await repository.getObject(id);
 				return video && isVisible(video) && isVideoListedFor(video, false) ? video : null;
 			};
-			const start = Math.min(indexOffset(cursor) ?? 0, ids.length);
+			const start = indexOffset(cursor) ?? 0;
+			// Past the last match: nothing to load, whatever the order
+			if (start >= ids.length) return { videos: [], cursor: "" };
 			// Title and likes have no index column: every match (at most 200) is loaded and sorted
 			const all = INDEX_SORT[sort as VideoSort] ? ids.slice(start) : ids;
 			const listed: VideoType[] = [];
