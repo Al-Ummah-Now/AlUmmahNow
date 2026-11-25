@@ -135,11 +135,34 @@ describe('rule changes', () => {
 
   it('admins (not super admins) cannot change rules; bad values are refused', async () => {
     const t = await setup();
-    assert.equal((await t.as('adm', ['admin'])('POST', '/rules/features.set', { scope: 'x', config: featureRule(1), reason: 'r' })).body.code, 'propose_not_allowed');
-    const bad = await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'x', config: { ...featureRule(1), expiryHours: 0 }, reason: 'r' });
+    assert.equal((await t.as('adm', ['admin'])('POST', '/rules/features.set', { scope: 'live', config: featureRule(1), reason: 'r' })).body.code, 'propose_not_allowed');
+    const bad = await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config: { ...featureRule(1), expiryHours: 0 }, reason: 'r' });
     assert.equal(bad.status, 400);
     assert.equal(bad.body.code, 'rule_invalid');
-    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'x', config: featureRule(1) })).status, 400, 'a reason is required');
+    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config: featureRule(1) })).status, 400, 'a reason is required');
+  });
+
+  it('a rule is made only for something that is there; one already stored can still be changed', async () => {
+    const t = await setup();
+    const propose = (type: string, scope: string) => t.as('sa1', ['super_admin'])('POST', `/rules/${type}`, { scope, config: featureRule(1), reason: 'r' });
+    for (const [type, scope] of [['features.set', 'notAFeature'], ['features.set', 'assign'], ['tiers.change', 'live']] as const) {
+      const res = await propose(type, scope);
+      assert.equal(res.status, 400, `${type} ${scope}`);
+      assert.deepEqual([res.body.code, res.body.problems], ['rule_invalid', ['scope_unknown']]);
+    }
+    for (const [type, scope] of [['features.set', 'live'], ['features.set', ''], ['tiers.change', 'assign']] as const) assert.equal((await propose(type, scope)).status, 202, `${type} ${scope}`);
+    // A feature that left the registry after it was given a rule
+    t.search.raw.prepare("INSERT INTO workflow_rules (id, action_type, scope, version, config, request_id, created_by, created_at) VALUES ('wfrule_gone', 'features.set', 'goneFeature', 1, ?, NULL, 'sa1', ?)").run(JSON.stringify(featureRule(1)), at);
+    assert.equal((await propose('features.set', 'goneFeature')).status, 202);
+  });
+
+  it('a rule for one feature leaves the rule for all of them alone, and lists after it', async () => {
+    const t = await setup();
+    const config = featureRule(2);
+    const { id } = (await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config, reason: 'r' })).body.result.request;
+    assert.equal((await t.as('sa2', ['super_admin'])('POST', `/requests/${id}/approve`, {})).status, 200);
+    const action = ((await t.as('sa1', ['super_admin'])('GET', '/actions')).body.result.actions as { type: string; rules: { scope: string; config: { approvalsNeeded: number } }[] }[]).find((a) => a.type === 'features.set')!;
+    assert.deepEqual(action.rules.map((r) => [r.scope, r.config.approvalsNeeded]), [['', WORKFLOW_ACTIONS['features.set'].defaultRule.approvalsNeeded], ['live', 2]]);
   });
 });
 
@@ -187,7 +210,7 @@ describe('money rules', () => {
   it('money requests are left out of lists for people who cannot see money', async () => {
     const t = await setup();
     await t.as('fin1', [])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'r' });
-    await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'x', config: featureRule(1), reason: 'r' });
+    await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config: featureRule(1), reason: 'r' });
     const admin = (await t.as('adm', ['admin'])('GET', '/requests?view=open')).body.result.items as { type: string }[];
     assert.deepEqual(admin.map((i) => i.type), ['workflows.rule.set']);
     assert.equal(admin.length, 1);

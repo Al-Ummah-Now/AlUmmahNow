@@ -29,6 +29,11 @@ export interface AutocompleteItem extends AdminSuggestion {
   disabled?: boolean;
 }
 
+/** What a box lists: the suggest API's kinds, and features (from the registry, always with an own source). */
+export type AutocompleteKind = AdminSuggestKind | 'feature';
+/** An own source's item: also a feature. */
+export type SourceItem = Omit<AutocompleteItem, 'kind'> & { kind: AutocompleteKind };
+
 /** Options of a box that change its rules. allowIds: offer "Use this ID" for a pasted id (default yes). */
 export interface AutocompleteRules {
   allowIds?: boolean;
@@ -151,11 +156,11 @@ export function hrefFor(s: Pick<AdminSuggestion, 'kind' | 'id' | 'parentId'>): s
   }
 }
 
-export const suggestUrl = (kind: AdminSuggestKind, query: string): string => `/api/suggest/${kind}?q=${encodeURIComponent(query.trim())}`;
+export const suggestUrl = (kind: AutocompleteKind, query: string): string => `/api/suggest/${kind}?q=${encodeURIComponent(query.trim())}`;
 /** A picker's page before anything is typed (null cursor: the first). */
-export const initialUrl = (kind: AdminSuggestKind, cursor: string | null): string =>
+export const initialUrl = (kind: AutocompleteKind, cursor: string | null): string =>
   `/api/suggest/${kind}?q=${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
-export const resolveUrl = (kind: AdminSuggestKind, id: string): string => `/api/suggest/${kind}/${encodeURIComponent(id)}`;
+export const resolveUrl = (kind: AutocompleteKind, id: string): string => `/api/suggest/${kind}/${encodeURIComponent(id)}`;
 
 // ---------------------------------------------------------------------------
 // State changes

@@ -363,6 +363,7 @@ export const stepUpAtLeast = (a: WorkflowStepUp, b: WorkflowStepUp) => STEP_UP_R
 
 export type WorkflowRuleProblem =
   | 'invalid_shape'
+  | 'scope_unknown'
   | 'approvals_out_of_range'
   | 'approvers_empty'
   | 'approvers_invalid'

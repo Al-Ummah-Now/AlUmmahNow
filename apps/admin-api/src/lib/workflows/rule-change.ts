@@ -10,6 +10,7 @@ import {
   isWorkflowActionType,
   validateWorkflowRule,
   WORKFLOW_SET_LABELS,
+  workflowScopeKnown,
   workflowScopeName,
   workflowSetKey,
   workflowSetPeople,
@@ -82,6 +83,9 @@ export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: 
     const scope = typeof i.scope === 'string' ? i.scope.trim() : '';
     if (scope && !def.scoped) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
     if (!/^[A-Za-z0-9._:-]{0,64}$/.test(scope)) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
+    // A rule for something that isn't there would never apply. One already stored can still be changed
+    // (a feature may leave the registry)
+    if (!workflowScopeKnown(i.type, scope) && (await ruleInForce(ctx, i.type, scope)).scope !== scope) throw new WorkflowError(400, 'rule_invalid', { problems: ['scope_unknown'] });
     // A rule only means something once its action is connected: until then it can't be changed, so the
     // rules page never shows approvers that nothing enforces
     if (!hasWorkflowExecutor(i.type)) throw new WorkflowError(409, 'rule_invalid', { problems: ['not_connected'] });

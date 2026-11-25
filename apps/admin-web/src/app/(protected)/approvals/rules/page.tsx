@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { WORKFLOW_DOMAINS, workflowSetPeople, type WorkflowActionType, type WorkflowDomain } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
 import { LocalTime } from '@/components/LocalTime';
@@ -66,11 +67,15 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
           <section key={domain} className={cardClass} aria-labelledby={`rules-${domain}`} data-testid={`approval-rules-${domain}`}>
             <h2 id={`rules-${domain}`} className="text-lg font-semibold text-fg">{translateDynamic(t, 'workflows.domain', domain)}</h2>
             <ul className="mt-3 divide-y divide-border">
-              {byDomain.get(domain)!.map(({ action, rule }) => {
+              {byDomain.get(domain)!.map(({ action, rule }, i, rows) => {
                 const key = `${action.type}|${rule.scope}`;
                 const name = locale === 'ar' ? action.label.ar : action.label.en;
+                const forAll = action.rules.find((r) => r.scope === '');
+                // After the action's last row: a rule for one feature
+                const addFeature = action.type === 'features.set' && action.connected !== false && forAll?.canEdit === true && rows[i + 1]?.action.type !== action.type;
                 return (
-                  <li key={key} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between" data-testid="approval-rule-row" data-action={action.type} data-scope={rule.scope}>
+                  <Fragment key={key}>
+                  <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between" data-testid="approval-rule-row" data-action={action.type} data-scope={rule.scope}>
                     <div className="min-w-0">
                       <h3 className="font-medium text-fg">
                         {name}
@@ -103,6 +108,15 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
                       )}
                     </div>
                   </li>
+                  {addFeature && (
+                    <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between" data-testid="approval-rule-feature-row">
+                      <p className="text-sm text-fg-muted">{t('workflows.rules.forFeatureHint')}</p>
+                      <div className="flex shrink-0 flex-wrap justify-end gap-2 ms-auto">
+                        <RuleEditor type={action.type} scope="" actionName={name} rule={forAll.config} floor={forAll.floor} propose={proposeWorkflowRule} recipients={searchWorkflowRecipients} names={names} forFeature={action.rules.map((r) => r.scope).filter(Boolean)} />
+                      </div>
+                    </li>
+                  )}
+                  </Fragment>
                 );
               })}
             </ul>

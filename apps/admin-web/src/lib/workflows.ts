@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, formatMoney, isolateText, workflowFieldChanged, workflowScopeName, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { FEATURE_REGISTRY, currencyExponent, formatMoney, isolateText, workflowFieldChanged, workflowScopeName, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -113,6 +113,17 @@ export function scopeName(type: WorkflowActionType, scope: string, locale: Local
   const label = workflowScopeName(type, scope);
   if (label) return { text: label[locale], named: true };
   return { text: scope, named: false };
+}
+
+/**
+ * Features that can be given a rule of their own (every feature but those in `taken`), by name in the page
+ * language; a query matches the name in either language.
+ */
+export function ruleFeatures(taken: readonly string[], query: string, locale: Locale): { id: string; label: string }[] {
+  const q = query.trim().toLowerCase();
+  return FEATURE_REGISTRY.filter((f) => !taken.includes(f.key) && (!q || [f.name.en, f.name.ar, f.key].some((x) => x.toLowerCase().includes(q))))
+    .map((f) => ({ id: f.key, label: f.name[locale] }))
+    .sort((a, b) => a.label.localeCompare(b.label, locale));
 }
 
 /** A target's open request on a page: its id, `undefined` when it has none, `null` when the page couldn't read it. */
