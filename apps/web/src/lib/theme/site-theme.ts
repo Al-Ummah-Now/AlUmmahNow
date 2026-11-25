@@ -29,16 +29,24 @@ export interface ActiveSiteTheme {
 
 const fallback: ActiveSiteTheme = { id: DEFAULT_SITE_THEME, css: null };
 
+/** For a page that is not worth a read (the not-found page of a missing file). */
+export const defaultSiteTheme: ActiveSiteTheme = fallback;
+
 let lastGood: { theme: ActiveSiteTheme; at: number } | null = null;
+/** Reads in a row that did not answer in time. One slow answer (a cold admin-api) is expected and invisible. */
+let slowReads = 0;
+const SLOW_READS_BEFORE_WARNING = 3;
 const packages = new Map<string, string>();
 
 /** Forgets the isolate's last theme and package CSS (tests). */
 export function resetSiteThemeCache(): void {
   lastGood = null;
+  slowReads = 0;
   packages.clear();
 }
 
 function rendered(theme: ActiveSiteTheme): ActiveSiteTheme {
+  slowReads = 0;
   lastGood = { theme, at: Date.now() };
   return theme;
 }
@@ -46,7 +54,10 @@ function rendered(theme: ActiveSiteTheme): ActiveSiteTheme {
 /** A read that did not answer (slow, down, or not OK): the last theme while recent, else the default. */
 function unanswered(what: string, detail: unknown): ActiveSiteTheme {
   const recent = lastGood && Date.now() - lastGood.at < LAST_GOOD_MS ? lastGood.theme : null;
-  logger.warn('[site-theme] read failed: rendering the last theme or the default', { what, detail: String(detail), rendering: (recent ?? fallback).id });
+  const slow = (detail as { name?: unknown } | null)?.name === 'TimeoutError';
+  slowReads = slow ? slowReads + 1 : 0;
+  const log = slow && slowReads < SLOW_READS_BEFORE_WARNING ? logger.info : logger.warn;
+  log.call(logger, '[site-theme] read failed: rendering the last theme or the default', { what, detail: String(detail), rendering: (recent ?? fallback).id });
   return recent ?? fallback;
 }
 

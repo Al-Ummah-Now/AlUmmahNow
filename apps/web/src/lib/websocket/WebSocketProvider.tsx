@@ -5,7 +5,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { WebSocketConnectionState, WebSocketConfig, WebSocketEventType } from '@/interfaces/websocket';
 import { User } from '@/interfaces';
-import { getRealtimeAccessToken } from '@/lib/actions/realtime';
+import { fetchRealtimeToken } from '@/lib/auth/client-token';
 
 interface WebSocketContextType {
   wsManager: WebSocketManager | null;
@@ -61,7 +61,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
       defaultConfig.userId = user.id;
       // The server verifies this OpenAuth access token and derives the user from it;
       // the manager fetches a fresh one on every (re)connect (#228).
-      defaultConfig.getAuthToken = getRealtimeAccessToken;
+      defaultConfig.getAuthToken = fetchRealtimeToken;
     }
     let cancelled = false;
     const manager = new WebSocketManager(defaultConfig);

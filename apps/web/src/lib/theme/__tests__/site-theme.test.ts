@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { logger } from '@/lib/logger';
 import { getSiteTheme, resetSiteThemeCache } from '../site-theme';
 
 describe('getSiteTheme', () => {
@@ -89,6 +90,28 @@ describe('getSiteTheme', () => {
     // A definite answer still wins
     answer({ theme: 'nahas' });
     await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+  });
+
+  it('a slow answer or two is not a warning; a third in a row, or a refusal, is', async () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const slow = () => jest.spyOn(global, 'fetch').mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+    for (let i = 0; i < 2; i++) {
+      slow();
+      await expect(getSiteTheme()).resolves.toEqual(fawanees);
+    }
+    expect(warn).not.toHaveBeenCalled();
+    slow();
+    await getSiteTheme();
+    expect(warn).toHaveBeenCalledTimes(1);
+    // An answer starts the count again
+    answer({ theme: 'nahas' });
+    await getSiteTheme();
+    slow();
+    await getSiteTheme();
+    expect(warn).toHaveBeenCalledTimes(1);
+    answer({}, false);
+    await getSiteTheme();
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it('reads a package version\'s CSS once', async () => {

@@ -43,7 +43,8 @@ import { CONSENT_COOKIE, parseConsent } from "@/lib/consent/consent-cookie";
 import SkipLinks from "@/components/SkipLinks";
 import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
-import { getSiteTheme } from "@/lib/theme/site-theme";
+import { defaultSiteTheme, getSiteTheme } from "@/lib/theme/site-theme";
+import { STATIC_FILE_HEADER } from "@/lib/http/static-file";
 import { MODE_MIGRATE_SCRIPT } from "@/lib/theme/color-mode";
 // The lantern street picks its tile variant for this load before first paint (shared street module)
 import { STREET_VARIANT_SCRIPT } from "../../../../packages/fanous-tokens/street/fanous-street.js";
@@ -222,7 +223,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   // Per-request CSP nonce set by middleware (production only).
   const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
 
-  const { id: theme, css: themeCss } = await getSiteTheme();
+  const { id: theme, css: themeCss } = requestHeaders.has(STATIC_FILE_HEADER) ? defaultSiteTheme : await getSiteTheme();
 
   if (requestHeaders.get(EMBED_REQUEST_HEADER) === '1') {
     return <EmbedDocument locale={locale} nonce={nonce} theme={theme} themeCss={themeCss}>{children}</EmbedDocument>;

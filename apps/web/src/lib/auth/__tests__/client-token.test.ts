@@ -8,6 +8,7 @@ import {
   getClientAuthToken,
   getClientAuthHeaders,
   clearClientAuthToken,
+  fetchRealtimeToken,
 } from '../client-token';
 
 const mockFetch = (status: number, body: unknown) =>
@@ -30,6 +31,19 @@ describe('client-token', () => {
     expect(f).toHaveBeenCalledTimes(1);
     expect(f).toHaveBeenCalledWith('/api/auth/token', expect.objectContaining({ credentials: 'same-origin' }));
     expect(getClientAuthToken()).toBe('tok');
+  });
+
+  it('gives the realtime server a fresh token from the route handler, and null when the read fails', async () => {
+    const f = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'one', channelId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'two', channelId: null }) })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    global.fetch = f as unknown as typeof fetch;
+
+    expect(await fetchRealtimeToken()).toBe('one');
+    expect(await fetchRealtimeToken()).toBe('two');
+    expect(await fetchRealtimeToken()).toBeNull();
+    expect(f.mock.calls.every(([url]) => url === '/api/auth/token')).toBe(true);
   });
 
   it('does not reuse a cached token that is about to expire', async () => {

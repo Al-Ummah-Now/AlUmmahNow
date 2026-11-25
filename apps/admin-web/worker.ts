@@ -19,6 +19,7 @@ import { asServiceUnavailable } from './src/lib/seo/unavailable';
 import { asGoneIfPurged } from './src/lib/seo/gone';
 import { rootLocaleRedirect } from './src/lib/seo/root-locale';
 import { appAssociationResponse } from './src/lib/well-known/app-association';
+import { markStaticFile } from './src/lib/http/static-file';
 import { withWholeBody } from './src/lib/http/whole-body';
 
 interface Handler {
@@ -42,7 +43,7 @@ const worker: Handler = {
     const summarise = !STATIC_PATH.test(route);
     const base = { method: request.method, route, ray: request.headers.get('cf-ray') || undefined };
     try {
-      const response = await (openNext as Handler).fetch(withPublicHost(request), env, ctx);
+      const response = await (openNext as Handler).fetch(markStaticFile(withPublicHost(request)), env, ctx);
       if (summarise) logger.request({ ...base, status: response.status, durationMs: Date.now() - startedAt });
       // Share images with a Content-Length (lib/http/whole-body.ts)
       return withWholeBody(request, await asGoneIfPurged(request, asServiceUnavailable(request, response), env));

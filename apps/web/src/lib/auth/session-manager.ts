@@ -786,7 +786,9 @@ export class SessionManager {
         {
           method: 'GET',
           url: buildApiUrl('/api/profile'),
-          functionName: 'SessionManager.loadUserProfile'
+          functionName: 'SessionManager.loadUserProfile',
+          // No profile yet: a first sign-in
+          expectedStatuses: [404]
         },
         async () => ({
           userId: account.userId,

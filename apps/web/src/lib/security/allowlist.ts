@@ -97,6 +97,13 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'aun:player-seek',
   // Accepting or declining a channel invitation refreshes the account menu's count (lib/channels/invites-count.ts)
   'aun:channel-invites-changed',
+  // A channel moved or a role changed: the account provider reloads the channel list (lib/notifications/channel-access.ts)
+  'aun:channel-access-changed',
+  // The unread count changed (lib/notifications/render.ts), the account menu opens (lib/navigation/account-menu-events.ts),
+  // the identity tour starts (lib/help/tour-events.ts)
+  'aun:notifications-unread',
+  'aun:account-menu',
+  'aun:identity-tour',
   // Radix DismissableLayer re-renders open layers through this document event;
   // without it a dialog's content keeps pointer-events: none (dialogs can't be clicked)
   'dismissableLayer.update',
