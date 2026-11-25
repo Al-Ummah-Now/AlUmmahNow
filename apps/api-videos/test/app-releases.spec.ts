@@ -132,7 +132,7 @@ describe('release index', () => {
 			[lookup('net.alummahnow.viewer.mac', true)]: { status: 200, body: JSON.stringify({ resultCount: 0, results: [] }) },
 			[lookup('net.alummahnow.studio')]: { status: 200, body: JSON.stringify({ resultCount: 0, results: [] }) },
 		};
-		const r = await indexReleases(env(kv), { fetchImpl: fakeFetch(routes, calls), now: () => new Date('2026-11-23T19:00:00Z') });
+		const r = await indexReleases(env(kv), { fetchImpl: fakeFetch(routes, calls), now: () => new Date('2026-11-23T19:00:00Z'), appStoreBundles: ['net.alummahnow.viewer', 'net.alummahnow.viewer.mac', 'net.alummahnow.studio'] });
 		assert.deepEqual(r.keyLists, [{ repo: TOOLS, serial: 1 }]);
 		assert.deepEqual(r.added, [{ source: `github:${TOOLS}`, repo: TOOLS, tag: 'v2026.11.23', signed: true }]);
 		assert.deepEqual(r.problems, []);
@@ -215,9 +215,26 @@ describe('release index', () => {
 		await kv.put(RELEASES_KEY, JSON.stringify(doc));
 		const r = await indexReleases(keyless(kv), {
 			fetchImpl: fakeFetch({ [feed()]: { status: 200, body: 'x'.repeat(3 * 1024 * 1024) }, [lookup('net.alummahnow.viewer')]: { status: 200, body: ' '.repeat(300 * 1024) } }),
+			appStoreBundles: ['net.alummahnow.viewer'],
 		});
 		assert.deepEqual(r.feedErrors.find((e) => e.source === `github:${TOOLS}`), { source: `github:${TOOLS}`, status: 'too_large' });
 		assert.equal((await readReleases(kv as unknown as KVNamespace)).appStore['net.alummahnow.viewer'].version, '1.2.0');
+	});
+
+	it('asks the App Store at most daily, and only about the bundles that are set up', async () => {
+		const kv = new MemoryKV();
+		const asked: string[] = [];
+		const run = (at: string, bundles?: string[]) => indexReleases(keyless(kv), { fetchImpl: fakeFetch({ [feed()]: { status: 200, body: atom(TOOLS, []) }, [lookup('net.alummahnow.viewer')]: { status: 403, body: '' } }, asked), now: () => new Date(at), ...(bundles ? { appStoreBundles: bundles } : {}) });
+		const lookups = () => asked.filter((u) => new URL(u).hostname === 'itunes.apple.com');
+		await run('2026-11-23T00:00:00Z');
+		await run('2026-11-23T00:15:00Z', []);
+		assert.deepEqual(lookups(), []);
+		await run('2026-11-23T00:30:00Z', ['net.alummahnow.viewer']);
+		await run('2026-11-23T00:45:00Z', ['net.alummahnow.viewer']);
+		await run('2026-11-23T23:00:00Z', ['net.alummahnow.viewer']);
+		assert.deepEqual(lookups(), [lookup('net.alummahnow.viewer')], 'a refusal counts as asked');
+		await run('2026-11-24T00:30:00Z', ['net.alummahnow.viewer']);
+		assert.equal(lookups().length, 2);
 	});
 
 	it('a file above its limit is refused without being read whole', async () => {

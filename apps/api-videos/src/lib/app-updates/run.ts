@@ -3,11 +3,15 @@
  * refused key list becomes one needs-action item per source and tag (wiki AUN-APP-UPDATES §3.2).
  */
 import { reportNeedsAction, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { loadMobileAppsSettings, type AttestationEnv } from '../attestation/service';
 import { indexReleases, type IndexResult, type ReleasesEnv } from './releases';
 
-export async function runReleaseIndex(env: ReleasesEnv & ErrorReporterEnv, ctx: ExecutionContext | undefined, opts: { force?: boolean; fetchImpl?: typeof fetch } = {}): Promise<IndexResult> {
+export async function runReleaseIndex(env: ReleasesEnv & ErrorReporterEnv & AttestationEnv, ctx: ExecutionContext | undefined, opts: { force?: boolean; fetchImpl?: typeof fetch } = {}): Promise<IndexResult> {
+	// No Team ID in Settings → Mobile apps: no app is in the App Store yet
+	const { apple } = await loadMobileAppsSettings(env);
 	return indexReleases(env, {
 		...opts,
+		appStoreBundles: apple.teamId ? apple.apps.map((a) => a.bundleId) : [],
 		onProblem: (p) =>
 			reportNeedsAction('api-videos', env, ctx, {
 				key: `app-release:${p.source}:${p.tag}`,

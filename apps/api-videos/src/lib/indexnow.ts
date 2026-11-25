@@ -34,6 +34,7 @@ export interface IndexNowEnv {
 	ENVIRONMENT?: string;
 	CORS_ORIGINS?: string;
 	SEARCH_DB?: D1Database;
+	APP_CONFIG?: KVNamespace;
 }
 
 /**
@@ -58,10 +59,23 @@ function settled(status: number): boolean {
 	return (status >= 200 && status < 300) || (status >= 400 && status < 500 && status !== 429);
 }
 
+/** Set while the engines asked us to wait (429); the value is when that was. */
+export const INDEXNOW_WAIT_KEY = 'indexnow:wait';
+const WAIT_MIN_SECONDS = 6 * 3600;
+const WAIT_MAX_SECONDS = 24 * 3600;
+
+/** How long to stay away after a 429: Retry-After when it is longer, between 6 and 24 hours. */
+export function indexNowWaitSeconds(retryAfter: string | null): number {
+	const s = /^\d+$/.test(retryAfter ?? '') ? Number(retryAfter) : Math.ceil((Date.parse(retryAfter ?? '') - Date.now()) / 1000);
+	return Math.min(WAIT_MAX_SECONDS, Math.max(WAIT_MIN_SECONDS, Number.isFinite(s) ? s : 0));
+}
+
 export interface FlushResult {
 	sent: number;
 	videos: number;
 	status?: number;
+	/** Not sent: the engines asked us to wait. */
+	waiting?: true;
 	/** Rows emptied without a ping (not production). */
 	cleared?: number;
 }
@@ -78,6 +92,8 @@ export async function flushIndexNow(env: IndexNowEnv, fetcher: typeof fetch = fe
 		const out = (await db.prepare('DELETE FROM indexnow_pending').run()) as { meta?: { changes?: number } };
 		return { sent: 0, videos: 0, cleared: Number(out?.meta?.changes ?? 0) };
 	}
+	// Asked to wait: the rows stay queued and go together in one POST later
+	if (await env.APP_CONFIG?.get(INDEXNOW_WAIT_KEY).catch(() => null)) return { sent: 0, videos: 0, waiting: true };
 	const { results } = await db
 		.prepare('SELECT video_id, is_short, queued_at FROM indexnow_pending ORDER BY queued_at LIMIT ?')
 		.bind(INDEXNOW_MAX_VIDEOS)
@@ -95,6 +111,12 @@ export async function flushIndexNow(env: IndexNowEnv, fetcher: typeof fetch = fe
 				body: JSON.stringify({ host: new URL(origin).host, key: INDEXNOW_KEY, keyLocation: `${origin}/${INDEXNOW_KEY}.txt`, urlList }),
 			});
 			status = res.status;
+			if (status === 429) {
+				const seconds = indexNowWaitSeconds(res.headers.get('retry-after'));
+				await env.APP_CONFIG?.put(INDEXNOW_WAIT_KEY, new Date().toISOString(), { expirationTtl: seconds }).catch(() => undefined);
+				logger.info('[IndexNow] Asked to wait; the pages stay queued', { urls: urlList.length, hours: Math.round(seconds / 3600) });
+				return { sent: 0, videos: rows.length, status };
+			}
 		} catch (error) {
 			logger.warn('[IndexNow] Ping failed; retried next run', { urls: urlList.length, error: error instanceof Error ? error.message : String(error) });
 			return { sent: 0, videos: rows.length };
