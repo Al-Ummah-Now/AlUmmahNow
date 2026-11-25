@@ -150,6 +150,54 @@ describe('TUS proxy resilience', () => {
 		assert.equal(sent.VideoId, 'vid');
 	});
 
+	it('a PATCH that finds no session answers a plain 404 and logs why, with the ray id (#1957)', async () => {
+		const logged: Array<Record<string, unknown>> = [];
+		const keep = { log: console.log, warn: console.warn, error: console.error };
+		const capture = (...args: unknown[]) => {
+			for (const a of args) if (a && typeof a === 'object' && String((a as { msg?: unknown }).msg).includes('PATCH found no session')) logged.push(a as Record<string, unknown>);
+		};
+		console.log = console.warn = console.error = capture as typeof console.log;
+		try {
+			const h = harness();
+			const first = await created(h);
+			// The KV entry has not reached this location and the isolate has no cache: only the video record is left
+			clearTusSessionCache();
+			h.kv.data.delete(`tus:upload:${first.split('.')[0]}`);
+			assert.equal((await h.patch(first, 0)).status, 204, 'the record alone serves the upload');
+
+			// A second create for the same video replaces the record's session: the first id is nowhere
+			const second = await h.post();
+			assert.equal(second.status, 201);
+			clearTusSessionCache();
+			h.kv.data.delete(`tus:upload:${second.headers.get('Location')!.split('/').pop()!.split('.')[0]}`);
+			h.kv.data.delete(`tus:upload:${first.split('.')[0]}`);
+			const lost = await h.request(`/api/videos/tus/${first}`, {
+				method: 'PATCH',
+				body: new Uint8Array(CHUNK),
+				headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(CHUNK), 'Tus-Resumable': '1.0.0', 'cf-ray': '8f1a2b3c4d5e6f70-AMS' },
+			});
+			// The answer says nothing about which store held what: a caller not yet checked as the owner learns nothing
+			assert.equal(lost.status, 404);
+			assert.deepEqual(await lost.json(), { error: 'Upload not found' });
+			assert.equal(lost.headers.get('X-Upload-Not-Found'), null);
+			assert.equal(logged.length, 1);
+			assert.equal(logged[0]!.why, 'session store: empty; video record: another session on the record');
+			assert.equal(logged[0]!.ray, '8f1a2b3c4d5e6f70-AMS');
+
+			// An id for a video with no record at all
+			const unknown = await h.patch('00000000-0000-4000-8000-000000000000.nothere', 0);
+			assert.equal(unknown.status, 404);
+			assert.deepEqual(await unknown.json(), { error: 'Upload not found' });
+			assert.equal(logged[1]!.why, 'session store: empty; video record: no video record');
+			// HEAD answers 404 with no body and no reason header
+			const headLost = await h.head(first);
+			assert.equal(headLost.status, 404);
+			assert.equal(headLost.headers.get('X-Upload-Not-Found'), null);
+		} finally {
+			Object.assign(console, keep);
+		}
+	});
+
 	it('HEAD answers from Bunny while KV is down (durable copy on the video record)', async () => {
 		const h = harness();
 		const id = await created(h);

@@ -16,7 +16,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { can } from '@al-ummah/shared-types';
+import { can, requestIdOf } from '@al-ummah/shared-types';
 import { roleOnRecord } from '../../../lib/channelAccess';
 import { getAuthContext } from '../../../middleware/auth';
 import { bunnyTusRequestHeaders, getTusSessionKey, parseTusMetadata, tusUploadIndexKey, type TusProxySession } from '../../../lib/bunny/tus';
@@ -134,7 +134,8 @@ export function clearTusSessionCache(): void {
 
 type SessionLookup =
   | { kind: 'found'; session: TusUploadSession }
-  | { kind: 'missing' }
+  /** `why`: where the session was looked for and what was there (categories only; for the server log, never the answer: #1957) */
+  | { kind: 'missing'; why: string }
   | { kind: 'unavailable' };
 
 /**
@@ -216,24 +217,30 @@ export class TusProxy {
    */
   private async resolveSession(uploadId: string): Promise<SessionLookup> {
     const parsed = parseTusUploadId(uploadId);
-    if (!parsed) return { kind: 'missing' };
+    if (!parsed) return { kind: 'missing', why: 'upload id is not session.video' };
     const { sessionId, videoId } = parsed;
 
     const cached = cachedSession(sessionId);
     if (cached && (!videoId || cached.videoId === videoId)) return { kind: 'found', session: cached };
 
     let storeFailed = false;
+    // What each store held, for the server log of a PATCH that finds no session (#1957: a PATCH answered 404 right after its upload was created)
+    let kvState = 'not read';
+    let recordState = videoId ? 'not read' : 'no video id in the upload id';
     try {
       const raw = await this.getSessionStore().get(this.getSessionKey(sessionId));
+      kvState = raw ? 'found' : 'empty';
       if (raw) {
         const session: TusUploadSession = JSON.parse(raw);
         if (!videoId || session.videoId === videoId) {
           cacheSession(sessionId, session);
           return { kind: 'found', session };
         }
+        kvState = 'for another video';
       }
     } catch (error) {
       storeFailed = true;
+      kvState = 'failed';
       logger.warn('[TUS Proxy] KV session read failed, trying the video record', {
         uploadId,
         error: error instanceof Error ? error.message : String(error),
@@ -247,6 +254,7 @@ export class TusProxy {
         const object = await this.env.videos.get(videoId);
         const video = object ? await object.json() as (z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }) : null;
         const durable = video?.tusUpload;
+        recordState = !video ? 'no video record' : !durable ? 'no session on the record' : durable.sessionId !== sessionId ? 'another session on the record' : !(durable.bunnyUploadUrl || durable.target === 'r2') ? 'session without a target' : 'found';
         if (video && durable && durable.sessionId === sessionId && (durable.bunnyUploadUrl || durable.target === 'r2')) {
           const session: TusUploadSession = {
             videoId,
@@ -265,6 +273,7 @@ export class TusProxy {
         }
       } catch (error) {
         storeFailed = true;
+        recordState = 'failed';
         logger.warn('[TUS Proxy] Video record read failed', {
           uploadId,
           error: error instanceof Error ? error.message : String(error),
@@ -272,7 +281,7 @@ export class TusProxy {
       }
     }
 
-    return storeFailed ? { kind: 'unavailable' } : { kind: 'missing' };
+    return storeFailed ? { kind: 'unavailable' } : { kind: 'missing', why: `session store: ${kvState}; video record: ${recordState}` };
   }
 
   /**
@@ -718,7 +727,13 @@ export class TusProxy {
 
       const lookup = await this.resolveSession(uploadId);
       if (lookup.kind === 'unavailable') return this.retryLater('Session store unavailable, retry');
-      if (lookup.kind === 'missing') return c.json({ error: 'Upload not found' }, 404);
+      if (lookup.kind === 'missing') {
+        // The answer stays "Upload not found": a reason would tell a caller who has not been checked as the owner
+        // whether a record exists. The cause goes to the log with the request's ray id, which the caller's response
+        // also carries (cf-ray), so a PATCH that fails right after its create can be traced (#1957).
+        logger.warn('[TUS Proxy] PATCH found no session for the upload', { uploadId, why: lookup.why, ray: requestIdOf(c.req.raw) });
+        return c.json({ error: 'Upload not found' }, 404);
+      }
       const session = lookup.session;
 
       // Verify ownership

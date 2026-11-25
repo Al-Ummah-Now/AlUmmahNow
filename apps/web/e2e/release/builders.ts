@@ -392,7 +392,7 @@ export class DataScope {
         'Upload-Metadata': [`tusSessionId ${b64(tusSessionId)}`, `videoId ${b64(id)}`, `filename ${b64(CLIPS[clip].file)}`, `filetype ${b64('video/mp4')}`].join(','),
       },
     });
-    expect(create.status, `TUS create: ${await create.clone().text()}`).toBeLessThan(300);
+    if (create.status >= 300) throw new Error(`TUS create answered ${create.status}: ${(await create.text()).slice(0, 400)}`);
     const location = create.headers.get('Location');
     expect(location, 'TUS create returned no Location').toBeTruthy();
     const patch = await fetch(new URL(location as string, target().api), {
@@ -400,7 +400,9 @@ export class DataScope {
       headers: { Authorization: `Bearer ${user.accessToken}`, 'Tus-Resumable': '1.0.0', 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
       body: new Uint8Array(bytes),
     });
-    expect(patch.status, `TUS PATCH: ${await patch.clone().text()}`).toBeLessThan(300);
+    // Thrown, not expect(...): the matcher's message did not show in the logs (#1957). The answer's body says nothing
+    // more than "Upload not found" on purpose; the cf-ray finds the request in the Worker's logs, which say why
+    if (patch.status >= 300) throw new Error(`TUS PATCH answered ${patch.status} (cf-ray ${patch.headers.get('cf-ray') ?? 'none'}): ${(await patch.text()).slice(0, 200)}`);
     await ok(await apiFetch(user, '/api/videos/upload/complete', json({ videoId: id, fileSize: bytes.length, duration: CLIPS[clip].duration }, channelId)), 'POST /api/videos/upload/complete');
 
     if (opts.chapters) {
