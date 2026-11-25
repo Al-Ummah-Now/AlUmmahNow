@@ -4271,6 +4271,7 @@ const ar: Messages = {
       attempt_timeout: 'طالت المحاولة كثيرًا فأُوقفت.',
       container_silent: 'توقفت الحاوية عن إرسال التقدّم.',
       no_video_stream: 'لا يحتوي الملف على مرئي.',
+      source_changed: 'الملف المرفوع غير الملف الذي قرأه المستورد. يلزم رفعه من جديد.',
       encode_failed: 'تعذّر ترميز الملف.',
       upload_failed: 'تعذّر حفظ النسخ في R2.',
       cancelled: 'ألغاه مشرف.',

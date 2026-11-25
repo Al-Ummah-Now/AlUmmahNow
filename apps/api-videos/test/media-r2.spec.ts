@@ -487,6 +487,25 @@ describe('failure details', () => {
 		assert.equal(await stored(), null);
 	});
 
+	it('an import carries its SHA-256 to the transcode; other bytes ask for the file again', async () => {
+		const { env, raw, videos } = setup();
+		const record = () => videos.read(ID);
+		await raw.videos.put(ID, JSON.stringify({ ...record(), sourceSha256: SHA, media: { v: 1, primary: 'r2', providers: { r2: { ref: ID, status: 'processing' } } }, uploadStatus: 'processing' }));
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		assert.equal(job.sha256, SHA);
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', error: 'source_changed', final: true, failure: { stage: 'probe', error: 'source_changed', attempt: 1, elapsedMs: 10, at: '2026-11-25T07:00:00Z' } }));
+		assert.equal(record().uploadStatus, 'failed');
+		assert.equal(record().processingIssue.kind, 'needs_reupload');
+		// Any other failure keeps its own kind, and a malformed hash is not sent
+		await raw.videos.put(ID, JSON.stringify({ ...record(), sourceSha256: 'x', uploadStatus: 'processing', processingIssue: undefined }));
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const next = raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage;
+		assert.equal(next.sha256, undefined);
+		await applyJobEvent(env, undefined, ev(next, { type: 'failed', error: 'no_video_stream', final: true }));
+		assert.equal(record().processingIssue.kind, 'encode_failed');
+	});
+
 	it('tells an audio file from a damaged one on the Errors page, without the hash', async () => {
 		const { failureDetails } = await import('../src/lib/media/r2-delivery');
 		const about = (f: object) => failureDetails({ videoId: ID, jobId: 'j', attempt: 1, error: 'no_video_stream', sourceFacts: { ...AUDIO, ...f } as never }, undefined);

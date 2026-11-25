@@ -89,6 +89,18 @@ describe('/internal/admin/import/initiate', () => {
 		assert.equal(created.length <= 1, true);
 	});
 
+	it('keeps the importer\'s SHA-256 on the server only', async () => {
+		const { publicVideoFields } = await import('../src/lib/transformations');
+		const h = harness();
+		await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: OWNER }));
+		const sha256 = 'd'.repeat(64);
+		const res = await h.initiate({ fingerprint: FP, sha256 });
+		const video = JSON.parse(h.env.videos.store.get(res.body.result.videoId)!);
+		assert.equal(video.sourceSha256, sha256);
+		assert.ok(!JSON.stringify(publicVideoFields(video)).includes(sha256));
+		assert.equal((await h.initiate({ sha256: 'short' })).status, 400);
+	});
+
 	it('the same file again reuses its unfinished video', async () => {
 		const h = harness();
 		await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: OWNER }));

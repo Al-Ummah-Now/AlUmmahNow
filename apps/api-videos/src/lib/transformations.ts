@@ -25,7 +25,7 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
 /** Stored fields no video view returns (server-only state). */
 type PrivateVideoField =
     | 'processingCheck' | 'processingIssue' | 'thumbnailPending' | 'reviewShadow'
-    | 'r2' | 'media' | 'mediaOverride' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck' | 'audioPackage' | 'audioDetected';
+    | 'r2' | 'media' | 'mediaOverride' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck' | 'audioPackage' | 'audioDetected' | 'sourceSha256';
 
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, PrivateVideoField> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     // Review internals (hold cause, ids, the shadow marker) never leave the server; the creator-safe
@@ -36,7 +36,7 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
     // play the signed `sources` / playUrl the API adds, never a provider id.
     const {
         processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow,
-        r2: _r2, media: _media, mediaOverride: _override, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, lastInitiateAt: _initiate,
+        r2: _r2, media: _media, mediaOverride: _override, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, sourceSha256: _sha, lastInitiateAt: _initiate,
         abandoned: _abandoned, processingAnnounced: _announced, thumbnailCheck: _thumbCheck,
         // Extra audio tracks (wiki AUN-MULTI-AUDIO): viewers get only the tracks the package plays
         // (id, language, label, kind, default); uploads, jobs and review stay in the Studio view

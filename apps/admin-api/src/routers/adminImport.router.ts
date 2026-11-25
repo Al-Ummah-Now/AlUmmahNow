@@ -455,6 +455,13 @@ async function batchPage(c: C, batch: ImportBatchRow) {
   });
 }
 
+/** The file's video asked to be uploaded again (its bytes did not arrive as sent): the same file may come again. */
+async function needsReupload(c: C, videoId: string | null): Promise<boolean> {
+  if (!videoId) return false;
+  const { items } = await videos<{ items: AdminImportItemStatus[] }>(c, '/import/status', { method: 'POST', json: { items: [{ videoId, attachJobId: null }] } });
+  return items[0]?.video?.needsReupload === true;
+}
+
 type Initiated = { videoId: string; tusSessionId: string; tusUploadId?: string; chunkSize: number; resumable: boolean; expiresAt?: string; reused?: boolean };
 
 app.post('/batches/:id/items', async (c) => {
@@ -465,7 +472,7 @@ app.post('/batches/:id/items', async (c) => {
   const { sha256, fileName, fileSize, upload } = parsed.value;
   const db = c.env.REPORTS_DB;
   const existing = await db.prepare('SELECT * FROM import_items WHERE channel_id = ? AND sha256 = ?').bind(batch.channel_id, sha256).first<ImportItemRow>();
-  if (existing?.state === 'uploaded') {
+  if (existing?.state === 'uploaded' && !(await needsReupload(c, existing.video_id))) {
     return c.json({ success: false, code: 'already_imported', error: 'This file is already in this channel', item: itemView(existing) }, 409);
   }
   const t = now();
@@ -495,7 +502,7 @@ app.post('/batches/:id/items', async (c) => {
   let initiated: Initiated;
   try {
     // The same file again resumes its video (api-videos' file claim on the fingerprint)
-    initiated = await videos<Initiated>(c, '/import/initiate', { method: 'POST', json: { ...upload, channelId: batch.channel_id } });
+    initiated = await videos<Initiated>(c, '/import/initiate', { method: 'POST', json: { ...upload, channelId: batch.channel_id, sha256 } });
   } catch (error) {
     await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
     const reason = error instanceof Error ? error.message.slice(0, 1000) : 'The upload could not be started';

@@ -94,6 +94,8 @@ export interface JobState {
 	reviewPrefix?: string;
 	/** D11: the creator's pre-encoded renditions to verify (and their MEDIA_PRIVATE staging prefix) */
 	prebuilt?: { stagingId: string; rungs: string[]; prefix: string };
+	/** What the kept original must hash to (an import) */
+	sha256?: string;
 }
 
 const iso = (ms: number | undefined) => (ms && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
@@ -151,6 +153,7 @@ export function newJob(msg: TranscodeJobMessage, now: number): JobState {
 		lastSeenAt: now,
 		progress: 0,
 		priorSeconds: 0,
+		...(msg.sha256 ? { sha256: msg.sha256 } : {}),
 		...(msg.review ? { review: msg.review, reviewPrefix: reviewMediaPrefix(msg.videoId, msg.rev) } : {}),
 		...(msg.prebuilt ? { prebuilt: { ...msg.prebuilt, prefix: prebuiltStagingPrefix(msg.videoId, msg.prebuilt.stagingId) } } : {}),
 	};

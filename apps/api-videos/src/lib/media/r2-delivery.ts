@@ -29,6 +29,7 @@ import {
 	compactRungs,
 	sanitizeFailure,
 	sanitizeSourceFacts,
+	SOURCE_SHA256,
 	sourceVerdict,
 	sanitizeRungs,
 	scrubMediaText,
@@ -269,6 +270,7 @@ export async function enqueueTranscode(
 				queuedAt: now.toISOString(),
 				reason,
 				...(review ? { review } : {}),
+				...(SOURCE_SHA256.test((video as { sourceSha256?: string }).sourceSha256 ?? '') ? { sha256: (video as { sourceSha256?: string }).sourceSha256 } : {}),
 			};
 			// D11: renditions the creator pre-encoded in desktop Studio go with the first transcode, to verify
 			const pre = (video as MediaVideo & { prebuilt?: PrebuiltUploadState }).prebuilt;
@@ -558,7 +560,10 @@ export async function applyJobEvent(
 				const v = video as SoleCopyVideo;
 				if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
 					v.uploadStatus = 'failed';
-					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
+					// The bytes that arrived are not the file: sending it again is what helps
+					v.processingIssue = /^source_changed\b/.test(r2.error ?? '')
+						? { kind: 'needs_reupload', reason: 'The uploaded file is not the file that was sent', at: ev.at }
+						: { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
 					transition = 'failed';
 				}
 			}
