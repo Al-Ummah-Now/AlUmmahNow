@@ -97,3 +97,17 @@ describe('results', () => {
 		assert.equal(e.queue.messages.filter((m: any) => m.type === MessageType.CommunityPostCreated).length, 0);
 	});
 });
+
+describe('a post under a takedown', () => {
+	it('refuses every result: nothing changes and nobody is told', async () => {
+		const e = env();
+		const was = { ...e.community_posts.read('posts/ch1/p1.json'), status: 'deleted', csamTakedown: { caseId: 'c1', at: 'x' } };
+		e.community_posts.store.set('posts/ch1/p1.json', JSON.stringify(was));
+		for (const result of ['approve', 'hold', 'reject'] as const) {
+			const r = await applyImageResult(e as never, { subject: 'post', subjectId: 'ch1/p1', reviewId: 'r1', result, reviewerId: 'rev1' });
+			assert.deepEqual(r, { applied: false, status: 409, why: 'not the current review' });
+		}
+		assert.deepEqual(e.community_posts.read('posts/ch1/p1.json'), was);
+		assert.equal(e.queue.messages.length, 0);
+	});
+});

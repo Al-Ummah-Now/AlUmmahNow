@@ -46,6 +46,7 @@
 --   apps/admin-api/migrations/0052_reports_banned_user_idx.sql
 --   apps/admin-api/migrations/0053_reports_child_safety.sql
 --   apps/admin-api/migrations/0054_import_items_video.sql
+--   apps/admin-api/migrations/0055_csam_cases_profile_image_idx.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -138,6 +139,7 @@ CREATE UNIQUE INDEX csam_cases_open_url ON csam_cases (url_key) WHERE status != 
 CREATE INDEX csam_cases_retention ON csam_cases (reported_at) WHERE evidence_deleted_at IS NULL AND legal_hold = 0;
 CREATE INDEX csam_cases_status ON csam_cases (status, created_at);
 CREATE INDEX idx_csam_cases_item ON csam_cases(item_type, item_id) WHERE item_id IS NOT NULL;
+CREATE INDEX idx_csam_cases_profile_image ON csam_cases(uploader_id) WHERE item_kind = 'profile_image';
 CREATE INDEX idx_entitlement_overrides_key ON entitlement_overrides(key, subject_type, created_at);
 CREATE INDEX idx_erased_users_erased_at ON erased_users (erased_at);
 CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);

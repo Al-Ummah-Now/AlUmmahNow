@@ -360,6 +360,22 @@ describe('review of a track (MA8)', () => {
 		assert.equal(t.sent<AudioPackageJobMessage>('audio_package').length, 1);
 	});
 
+	it('a track of a video under a takedown refuses every decision', async () => {
+		const t = await setup({ review: 'enforce' });
+		const track = await uploadedTrack(t, {});
+		await prepared(t, track.id);
+		const reviewId = t.read().audioTracks![1]!.review!.reviewId;
+		await applyAudioTrackOutcome(t.asEnv as never, 'v1', track.id, { reviewId, mode: 'enforce', routing: { route: 'hold', reasons: [] } } as never);
+		t.env.videos.store.set('v1', JSON.stringify({ ...t.read(), csamTakedown: { caseId: 'c1', at: 'x' } }));
+		const was = t.read();
+		for (const body of [{ decision: 'approve' }, { decision: 'reject', reasonCode: 'hate' }]) {
+			const r = await applyAudioTrackDecision(t.asEnv as never, 'v1', track.id, { reviewId, reviewerId: 'rev-1', decidedAt: new Date().toISOString(), ...body } as never);
+			assert.deepEqual(r, { applied: false, status: 409, why: 'not the current review' });
+		}
+		assert.deepEqual(t.read(), was);
+		assert.equal(t.sent('audio_package').length, 0);
+	});
+
 	it('a rejected track leaves the package and gives the default back to the original', async () => {
 		const t = await setup({ review: 'enforce' });
 		const track = await uploadedTrack(t, { isDefault: true });

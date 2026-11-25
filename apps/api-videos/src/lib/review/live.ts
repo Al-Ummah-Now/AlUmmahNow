@@ -33,7 +33,7 @@ import { enqueueNotification, type NotificationsEnv } from '../notifications';
 import { streamKey, type LiveStreamRecord } from '../live/streams';
 import { openReviewIds } from '../live/access';
 import { signReviewVodUrl, type VodSignEnv } from '../live/vod-sign';
-import { decisionTransition, outcomeTransition } from './apply';
+import { TAKEN, decisionTransition, outcomeTransition } from './apply';
 import { reviewExtractionFor, type ReviewScanEnv } from './scan';
 
 export type LiveReviewEnv = ReviewScanEnv & VodSignEnv & NotificationsEnv & { TRANSCODE_QUEUE?: { send(message: unknown): Promise<unknown> } };
@@ -180,7 +180,7 @@ async function write(env: LiveReviewEnv, streamId: string, mutate: (s: ReviewedS
 	let refusal: { status: 404 | 409 | 400; why: string } | null = null;
 	const saved = await repo(env).updateObject(streamKey(streamId), (stream) => {
 		refusal = null;
-		const verdict = mutate(stream);
+		const verdict = (stream as { csamTakedown?: unknown }).csamTakedown ? TAKEN : mutate(stream);
 		if ('why' in verdict) {
 			refusal = { status: verdict.status, why: verdict.why };
 			return false;

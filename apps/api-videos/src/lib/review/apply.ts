@@ -49,10 +49,15 @@ interface ReviewedVideo {
 	width?: number;
 	height?: number;
 	review?: VideoReviewState;
+	/** Under a takedown (lib/csam/contain.ts): nothing about its review changes */
+	csamTakedown?: unknown;
 	dateModified?: string;
 }
 
 export type ApplyResult = { applied: true; review: VideoReviewState } | { applied: false; status: 404 | 409 | 400; why: string };
+
+/** What a review's routes answer for an item under a takedown: the same as for a review that is not the current one. */
+export const TAKEN = { ok: false, status: 409, why: 'not the current review' } as const;
 
 const repo = (env: ReviewApplyEnv) => new R2Repository<ReviewedVideo>(env.videos);
 
@@ -75,7 +80,7 @@ async function write(
 	const saved = await repo(env).updateObject(videoId, (video) => {
 		before = structuredClone(video);
 		refusal = null;
-		const verdict = mutate(video);
+		const verdict = video.csamTakedown ? TAKEN : mutate(video);
 		if ('why' in verdict) {
 			refusal = { status: verdict.status, why: verdict.why };
 			return false;

@@ -23,7 +23,7 @@ import {
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
-import { decisionTransition, outcomeTransition } from './apply';
+import { TAKEN, decisionTransition, outcomeTransition } from './apply';
 import { reviewGateFor } from './gate';
 import type { ReviewScanEnv } from './scan';
 import type { AudioTracksEnv } from '../audio-tracks/service';
@@ -97,7 +97,7 @@ async function write(
 			return false;
 		}
 		before = isAudibleTrack(t);
-		const verdict = mutate(t.review);
+		const verdict = (fresh as { csamTakedown?: unknown }).csamTakedown ? TAKEN : mutate(t.review);
 		if ('why' in verdict) {
 			refusal = { status: verdict.status, why: verdict.why };
 			return false;

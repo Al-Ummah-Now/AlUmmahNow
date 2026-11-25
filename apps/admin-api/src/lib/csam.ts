@@ -467,8 +467,8 @@ export const noCaseAboutReviewSql = (a: string): string =>
      AND tc.item_type = CASE ${a}.subject_type WHEN 'audio_track' THEN 'video' WHEN 'avatar' THEN 'channel' WHEN 'banner' THEN 'channel' ELSE ${a}.subject_type END
      AND tc.item_id = CASE ${a}.subject_type WHEN 'audio_track' THEN substr(${a}.subject_id, 1, instr(${a}.subject_id, ':') - 1) WHEN 'post' THEN substr(${a}.subject_id, instr(${a}.subject_id, '/') + 1) ELSE ${a}.subject_id END
      AND ${hides('tc')})
-   AND NOT (${a}.subject_type IN ('profile_picture', 'profile_banner') AND EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY csam_cases_status
-     WHERE tc.status IN ('containing', 'contained', 'containment_failed', 'reported') AND tc.item_kind = 'profile_image' AND tc.uploader_id = ${a}.subject_id))`;
+   AND NOT (${a}.subject_type IN ('profile_picture', 'profile_banner') AND EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_profile_image
+     WHERE tc.item_kind = 'profile_image' AND tc.uploader_id = ${a}.subject_id AND tc.status <> 'closed'))`;
 
 /** Starts the takedown of a mapped case and freezes its uploader. */
 async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolution, actorId: string): Promise<void> {

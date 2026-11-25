@@ -101,6 +101,14 @@ describe('the automated check', () => {
     expect(t.sent.filter((m) => m.type === MessageType.NotificationCreate)).toHaveLength(0);
   });
 
+  it('a hold that api-videos does not apply alerts nobody', async () => {
+    const t = setup({ videosStatus: 409 });
+    t.db.raw.prepare('INSERT INTO review_alert_subscribers (user_id, senior, created_at, updated_at) VALUES (?, ?, ?, ?)').run('rev1', 0, 'x', 'x');
+    const r = await handleVideoReviewScan(t.payload('Clip [review-fixture:nsfw_frame@42000]'), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(r).toEqual({ status: 'done', route: 'hold' });
+    expect(t.sent).toHaveLength(0);
+  });
+
   it('an NSFW frame holds with its timestamp, and reviewers are alerted (VR2, VR6)', async () => {
     const t = setup();
     t.db.raw.prepare('INSERT INTO review_alert_subscribers (user_id, senior, created_at, updated_at) VALUES (?, ?, ?, ?)').run('rev1', 0, 'x', 'x');

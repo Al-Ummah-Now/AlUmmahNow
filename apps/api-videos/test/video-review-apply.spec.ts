@@ -229,3 +229,41 @@ describe('API views never carry review internals', () => {
 		assert.equal(view.reviewShadow, undefined);
 	});
 });
+
+describe('a video under a takedown', () => {
+	it('refuses every decision, outcome, appeal and new check: nothing changes and nobody is told', async () => {
+		for (const status of ['in_review', 'rejected'] as const) {
+			const e = env({ isHidden: true, csamTakedown: { caseId: 'c1', at: 'x' }, review: { status, reviewId: 'r1', timing: 'pre', since: 'x', ...(status === 'rejected' ? { previousStatus: 'in_review', decidedAt: new Date().toISOString() } : {}) } });
+			const was = e.videos.read('v1');
+			const refused = [
+				await applyReviewDecision(e as never, 'v1', { reviewId: 'r1', decision: 'approve', reviewerId: 'rev1' } as never),
+				await applyReviewDecision(e as never, 'v1', { reviewId: 'r1', decision: 'reject', reasonCode: 'hate', reviewerId: 'rev1' } as never),
+				await applyReviewDecision(e as never, 'v1', { reviewId: 'r1', decision: 'undo', reviewerId: 'rev1' } as never),
+				await applyReviewOutcome(e as never, 'v1', outcome('approve')),
+				await applyReviewOutcome(e as never, 'v1', outcome('hold')),
+				await appealReview(e as never, 'v1', 'please'),
+				await resubmitReview(e as never, 'v1'),
+			];
+			// The same answer as for a review that is not the current one
+			for (const r of refused) assert.deepEqual(r, { applied: false, status: 409, why: 'not the current review' });
+			assert.deepEqual(e.videos.read('v1'), was);
+			assert.deepEqual([e.queue.messages.length, e.MODERATION_QUEUE.messages.length], [0, 0]);
+		}
+	});
+
+	it('refuses one that is taken down while the decision is written', async () => {
+		const e = env({ review: { status: 'in_review', reviewId: 'r1', timing: 'pre', since: 'x' } });
+		const put = e.videos.put.bind(e.videos);
+		let raced = false;
+		e.videos.put = (async (key: string, value: string, options?: unknown) => {
+			if (!raced) {
+				raced = true;
+				await put('v1', JSON.stringify({ ...e.videos.read('v1'), isHidden: true, csamTakedown: { caseId: 'c1', at: 'x' } }));
+			}
+			return put(key, value as never, options as never);
+		}) as never;
+		const r = await applyReviewDecision(e as never, 'v1', { reviewId: 'r1', decision: 'approve', reviewerId: 'rev1' } as never);
+		assert.deepEqual(r, { applied: false, status: 409, why: 'not the current review' });
+		assert.deepEqual([e.videos.read('v1').review.status, e.queue.messages.length], ['in_review', 0]);
+	});
+});
