@@ -19,8 +19,8 @@ import type { AdminJob } from '@al-ummah/shared-types';
 
 type Json = Record<string, any>;
 
-/** video: streams too. post: `<channelId>/<postId>`. user: profile images. */
-export type TargetKind = 'video' | 'channel' | 'user' | 'post';
+/** video: streams too. post: `<channelId>/<postId>`. user: profile images. comment: a case's own, `<video|post>:<id>/<commentId>` (holdComment). */
+export type TargetKind = 'video' | 'channel' | 'user' | 'post' | 'comment';
 export interface EraseTarget {
 	kind: TargetKind;
 	id: string;
@@ -211,6 +211,25 @@ export async function holdTargets(db: D1Database, targets: readonly EraseTarget[
 			db.prepare('INSERT INTO media_erase_targets (target_kind, target_id, job_id, held_by) VALUES (?1, ?2, ?3, ?3) ON CONFLICT (target_kind, target_id, job_id) DO UPDATE SET held_by = excluded.held_by').bind(t.kind, t.id, caseJob.id),
 		),
 	);
+}
+
+/**
+ * A comment as the case found it, until the evidence has it: a comment is text in a record, which its author's
+ * or the record's erasure (or any other removal) takes away at once. The first one written stays.
+ */
+export async function holdComment(db: D1Database, id: string, caseJob: Pick<AdminJob, 'id'>, comment: Json): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO media_erase_targets (target_kind, target_id, job_id, held_by, media) VALUES ('comment', ?1, ?2, ?2, ?3)
+			 ON CONFLICT (target_kind, target_id, job_id) DO NOTHING`,
+		)
+		.bind(id, caseJob.id, JSON.stringify(comment))
+		.run();
+}
+
+/** The evidence has it. */
+export async function releaseComment(db: D1Database, caseJobId: string): Promise<void> {
+	await db.prepare("DELETE FROM media_erase_targets WHERE job_id = ? AND target_kind = 'comment'").bind(caseJobId).run();
 }
 
 /** The case's job is done. */

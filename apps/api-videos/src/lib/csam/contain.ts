@@ -42,9 +42,9 @@ import { readBan } from '../admin/bans';
 import { accessDrift, purgeCdn, purgeVideoRenditions, queueMediaMove, type CdnPurge, type MediaEnv } from '../media/r2-delivery';
 import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
-import { copyStep, keepJson, listNameOf, planEvidence, readKeptJson, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
+import { commentTarget, copyStep, keepJson, storedComment, listNameOf, planEvidence, readKeptJson, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
 import { forgetImageOwner, lookupImageOwner } from './imageOwners';
-import { erasedRecord, erasedTargets, erasureNote, holdTargets, releaseHolds, type EraseTarget } from '../privacy/erase-targets';
+import { erasedRecord, erasedTargets, erasureNote, holdComment, holdTargets, releaseComment, releaseHolds, type EraseTarget } from '../privacy/erase-targets';
 import { deleteImageFile } from '../media/imageFiles';
 import { findStoredComment, type StoredComment } from '../comments';
 import { locatePostComment } from '../channelComments/moderation';
@@ -81,7 +81,7 @@ const imageUrlOf = (path: string) => `https://${IMAGES_HOST}${path.split('/').ma
 const HIDE_FIRST_SECONDS = 15;
 
 /** The snapshot of each target's record (evidence.ts planEvidence). */
-const RECORD_SNAPSHOT = { video: 'record-video.json', channel: 'record-channel.json', user: 'record-uploader-profile.json', post: 'record-post.json' } as const;
+const RECORD_SNAPSHOT = { video: 'record-video.json', channel: 'record-channel.json', user: 'record-uploader-profile.json', post: 'record-post.json', comment: 'record-comment.json' } as const;
 
 export const CONTAIN_PHASES = ['plan', 'copy-public', 'purge-public', 'copy-source', 'purge', 'ban'] as const;
 export type ContainPhase = (typeof CONTAIN_PHASES)[number];
@@ -392,6 +392,15 @@ async function heldTargets(env: ContainEnv, r: CsamResolution, caseId: string): 
 	return [{ kind: targetKind, id: targetId }, ...(r.postId && r.channelId ? [{ kind: 'post' as const, id: `${r.channelId}/${r.postId}` }] : [])];
 }
 
+/** Holds the case's media, and a comment's text, from every erasure. Before anything is hidden. */
+async function hold(env: ContainEnv, r: CsamResolution, caseId: string, job: Pick<AdminJob, 'id'>): Promise<EraseTarget[]> {
+	const targets = await heldTargets(env, r, caseId);
+	await holdTargets(env.SEARCH_DB!, targets, job);
+	const comment = r.kind === 'comment' ? await storedComment(env, r) : null;
+	if (comment) await holdComment(env.SEARCH_DB!, commentTarget(r), job, comment);
+	return targets;
+}
+
 /** A record, or what stands in for it when an account erasure deleted it. */
 async function recordOf(env: ContainEnv, bucket: R2Bucket, key: string, target: EraseTarget): Promise<Row | null> {
 	const object = await bucket.get(key);
@@ -411,7 +420,7 @@ export async function startContainment(env: ContainEnv, input: { caseId: string;
 	const { targetKind, targetId } = containTarget(resolution, caseId);
 	const params: ContainParams = { caseId, matchedUrl, resolution, phase: 'plan', createdAt: now() };
 	const job = await createJob(env, { kind: 'csam.contain', targetKind, targetId, actorId: input.actorId, params: params as unknown as Record<string, unknown>, delaySeconds: HIDE_FIRST_SECONDS });
-	await holdTargets(env.SEARCH_DB!, await heldTargets(env, resolution, caseId), job);
+	await hold(env, resolution, caseId, job);
 	const hide = await hideNow(env, caseId, matchedUrl, resolution);
 	return { hide, job };
 }
@@ -623,9 +632,8 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 		let next: ContainParams;
 		switch (p.phase) {
 			case 'plan': {
+				const own = await hold(env, p.resolution, p.caseId, job);
 				await ensureHidden(env, p);
-				const own = await heldTargets(env, p.resolution, p.caseId);
-				await holdTargets(env.SEARCH_DB!, own, job);
 				const erased = new Map<EraseTarget, Awaited<ReturnType<typeof erasedTargets>>>();
 				for (const target of own) erased.set(target, await erasedTargets(env.SEARCH_DB, target));
 				// An account erasure is deleting a part of it now; it takes no other since this job's row exists
@@ -656,6 +664,8 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 				break;
 			case 'purge':
 				next = await purgeItem(env, p);
+				// The evidence has it since the plan
+				if (p.resolution.kind === 'comment') await releaseComment(env.SEARCH_DB!, job.id);
 				break;
 			case 'ban': {
 				const out = await banUploader(env, p);

@@ -41,6 +41,8 @@ import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../
 import { endParts, holdTargets, takePart, writeTarget } from '../src/lib/privacy/erase-targets';
 import { createJob } from '../src/lib/admin/jobs';
 import { ERASE_MEDIA_JOB, eraseMediaHooks } from '../src/lib/privacy/erase-media';
+import { eraseUserData } from '../src/lib/privacy/user-data';
+import { OperationBudget } from '../src/lib/privacy/scan';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 import { AuthDb } from './auth-db';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -614,7 +616,7 @@ describe('taking a comment down', () => {
 			const { resolution } = (await t.json('POST', '/resolve', { url })).body.result;
 			const { job } = (await t.json('POST', '/contain', { caseId: CASE, matchedUrl: url, resolution })).body.result;
 			assert.deepEqual([job.targetKind, job.targetId], ['user', 'usr_commenter']);
-			const held = () => t.db.db.prepare('SELECT target_kind AS kind, target_id AS id, held_by AS by FROM media_erase_targets WHERE held_by IS NOT NULL').all().map((r) => ({ ...r }));
+			const held = () => t.db.db.prepare('SELECT target_kind AS kind, target_id AS id, held_by AS by FROM media_erase_targets WHERE held_by IS NOT NULL AND target_kind <> ?').all('comment').map((r) => ({ ...r }));
 			assert.deepEqual(held(), [{ kind: 'user', id: 'usr_commenter', by: job.id }]);
 			const take = async (target: { kind: 'user' | 'video' | 'channel'; id: string }) => {
 				const taken = await takePart(t.db as never, 'erase', 'd', [target]);
@@ -631,7 +633,72 @@ describe('taking a comment down', () => {
 		// Its author is not known: there is no account to hold
 		const t = setup();
 		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: null } });
-		assert.equal(t.db.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets').get()!.n, 0);
+		assert.deepEqual(t.db.db.prepare('SELECT target_kind AS kind FROM media_erase_targets').all().map((r) => r.kind), ['comment']);
+	});
+
+	for (const on of ['video', 'post'] as const) {
+		for (const what of ['its author erased their account', 'what it is on was erased', 'it was edited away'] as const) {
+			it(`keeps what it said on a ${on} as the case found it, though ${what} before the evidence was kept`, async () => {
+				const t = setup({ key: null });
+				const env = t.env as Record<string, any>;
+				for (const b of ['channel_sections', 'channel_tabs', 'subtitles', 'upload-defaults', 'global_settings', 'ADMIN_BACKUPS']) env[b] ??= new MemoryBucket();
+				const url = on === 'video' ? 'https://videos.alummahnow.net/en/video/vid-synth-02#comment-cmt-synth-01' : 'https://videos.alummahnow.net/en/post/post-synth-01?comment=pcm-synth-01';
+				const { resolution } = (await t.json('POST', '/resolve', { url })).body.result;
+				await t.json('POST', '/contain', { caseId: CASE, matchedUrl: url, resolution });
+				const text = () => JSON.stringify([...t.env.videos.store.values(), ...t.env.community_posts.store.values()]).includes(PLACEHOLDER);
+				assert.ok(text());
+				// The plan cannot keep it yet (no key)
+				await t.drain();
+				assert.equal((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'failed');
+				if (what === 'it was edited away') {
+					for (const store of [t.env.videos, t.env.community_posts]) for (const [key, value] of [...store.store]) store.store.set(key, String(value).replaceAll(PLACEHOLDER, 'nothing'));
+				} else {
+					const who = what === 'its author erased their account' ? 'usr_commenter' : OWNER;
+					const summary = await eraseUserData(env as never, who, new OperationBudget(5000), {});
+					assert.equal(summary.complete, true);
+				}
+				assert.equal(text(), false, 'gone from the records');
+				env.CSAM_EVIDENCE_KEY = KEY_V1;
+				await t.json('POST', '/retry', { caseId: CASE });
+				await t.drain();
+				const job = (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+				assert.equal(job.status, 'succeeded', job.lastError);
+				const kept = await (await t.call('GET', `/cases/${CASE}/files/record-comment.json`)).text();
+				assert.ok(kept.includes(PLACEHOLDER) && kept.includes('usr_commenter') && !kept.includes('a reply'));
+				// And nothing of it is left outside the evidence
+				assert.equal(JSON.stringify(t.db.db.prepare('SELECT * FROM media_erase_targets').all()).includes(PLACEHOLDER), false);
+				assert.equal(text(), false);
+			});
+		}
+	}
+
+	it('is held before it is hidden, again by the job, and only until the evidence has it', async () => {
+		const t = setup();
+		const resolution = { kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: 'usr_commenter' };
+		const rows = () => t.db.db.prepare("SELECT target_id AS id, media FROM media_erase_targets WHERE target_kind = 'comment'").all() as Array<{ id: string; media: string }>;
+		const put = t.env.videos.put.bind(t.env.videos);
+		let heldFirst = false;
+		(t.env.videos as any).put = async (...args: [string, string]) => {
+			heldFirst ||= rows().length === 1;
+			return put(...args);
+		};
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution });
+		assert.ok(heldFirst);
+		assert.deepEqual(rows().map((r) => [r.id, r.media.includes(PLACEHOLDER), r.media.includes('a reply')]), [['video:vid-synth-02/cmt-synth-01', true, false]]);
+		// A request that stopped before it: the job does it
+		t.db.db.prepare('DELETE FROM media_erase_targets').run();
+		const at = async (phase: string) => {
+			for (let i = 0; i < 20; i++) {
+				const row = (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+				if (row.params.phase === phase) return;
+				const out = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, row)) as Record<string, any>;
+				t.db.db.prepare('UPDATE admin_jobs SET params = ? WHERE id = ?').run(JSON.stringify(out.params), row.id);
+			}
+		};
+		await at('purge');
+		assert.equal(rows().length, 1);
+		await at('ban');
+		assert.equal(rows().length, 0);
 	});
 
 	it('a resolution can never carry a comment and what it is on', async () => {
