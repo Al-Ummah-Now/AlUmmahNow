@@ -27,6 +27,17 @@ async function takeAction(page: Page, label: string, notes?: string) {
   await expect(page).toHaveURL(/\/moderation$/, { timeout: 30_000 });
 }
 
+/**
+ * The report in a new tab, after takeAction left `page` on the queue. Not a goto on that page: the
+ * queue refreshes live, and a navigation that cancels a refresh in flight makes WebKit's Next fall
+ * back to a full load of /moderation over it (#2087)
+ */
+async function openReport(page: Page, id: string): Promise<Page> {
+  const tab = await page.context().newPage();
+  await tab.goto(`/moderation/reports/${id}`);
+  return tab;
+}
+
 test.describe('report detail', () => {
   test('RPT-01 shows every report field', async ({ page, makeReport }) => {
     const report = await makeReport({ label: 'detail', entityType: 'comment', reason: 'misinformation' });
@@ -68,12 +79,12 @@ test.describe('moderation actions', () => {
     const notes = `${E2E_DESCRIPTION_TAG} dismissed by UI test`;
     await takeAction(page, 'Dismiss Report', notes);
 
-    await page.goto(`/moderation/reports/${report.id}`);
-    await expect(page.getByTestId('status-chip')).toHaveText('Dismissed');
-    await expect(page.getByTestId('moderator-notes')).toHaveText(notes);
-    await expect(page.getByTestId('action-taken')).toHaveAttribute('data-action', 'dismissed');
-    await expect(page.getByTestId('report-closed')).toContainText('Report Closed');
-    await expect(page.getByTestId('report-actions')).toHaveCount(0);
+    const closed = await openReport(page, report.id);
+    await expect(closed.getByTestId('status-chip')).toHaveText('Dismissed');
+    await expect(closed.getByTestId('moderator-notes')).toHaveText(notes);
+    await expect(closed.getByTestId('action-taken')).toHaveAttribute('data-action', 'dismissed');
+    await expect(closed.getByTestId('report-closed')).toContainText('Report Closed');
+    await expect(closed.getByTestId('report-actions')).toHaveCount(0);
 
     // The queue consumer mirrors the decision asynchronously; it used to flip
     // dismissals to "resolved" and wipe the notes a second later.
@@ -92,9 +103,9 @@ test.describe('moderation actions', () => {
       const afterWarning = await waitForReport(warned.id, (r) => r.status !== 'pending');
       expect(afterWarning.status).toBe('resolved');
       expect(afterWarning.action).toBe('warning');
-      await page.goto(`/moderation/reports/${warned.id}`);
-      await expect(page.getByTestId('status-chip')).toHaveText('Resolved');
-      await expect(page.getByTestId('action-taken')).toHaveText('Warning');
+      const resolved = await openReport(page, warned.id);
+      await expect(resolved.getByTestId('status-chip')).toHaveText('Resolved');
+      await expect(resolved.getByTestId('action-taken')).toHaveText('Warning');
     } finally {
       await video.remove();
     }
