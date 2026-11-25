@@ -86,23 +86,32 @@ async function centre(target: Locator) {
   return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 }
 
+/** Where a control is and whether its bar is gone, read together: the bar can go at any moment */
+async function aim(player: Locator, selector: string): Promise<{ x: number; y: number; barGone: boolean }> {
+  return player.evaluate((el, sel) => {
+    const r = el.querySelector(sel)!.getBoundingClientRect();
+    const has = (c: string) => el.classList.contains(c);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, barGone: has('vjs-user-inactive') && has('vjs-playing') && !has('vjs-fanous-bar-fading') };
+  }, selector);
+}
+
 /** Taps a bar control the way a viewer does: a first tap shows a hidden bar, the next one acts */
 async function tapControl(page: Page, player: Locator, selector: string): Promise<void> {
-  const control = player.locator(selector).first();
   await settle(page);
   // A tap meant for the player must never land on the top bar or the tab bar
-  await expectInTappableArea(control, selector);
-  if (await player.evaluate((el) => el.classList.contains('vjs-user-inactive') && el.classList.contains('vjs-playing'))) {
+  await expectInTappableArea(player.locator(selector).first(), selector);
+  // Read right before the tap: the half second the fading bar still takes taps (bar-fade.ts) covers the rest
+  let target = await aim(player, selector);
+  if (target.barGone) {
     const before = await counts(page);
-    const p = await centre(control);
-    await page.touchscreen.tap(p.x, p.y);
+    await page.touchscreen.tap(target.x, target.y);
     await expect(player).toHaveClass(/vjs-user-active/);
     expect(await counts(page), 'a tap on the hidden bar only shows it').toEqual(before);
     // A human's second tap: never inside the double-tap window
     await page.waitForTimeout(350);
+    target = await aim(player, selector);
   }
-  const p = await centre(control);
-  await page.touchscreen.tap(p.x, p.y);
+  await page.touchscreen.tap(target.x, target.y);
 }
 
 async function start(page: Page, player: Locator): Promise<void> {
@@ -225,4 +234,50 @@ test('a finger dragged up on the half-visible bar scrolls the page, never seeks'
   const c = await counts(page);
   expect(c).toMatchObject({ pause: 0, seeking: 0, volumechange: 0, ratechange: 0 });
   expect((await media(page)).paused).toBe(false);
+});
+
+/**
+ * #2024: the bar fades out over a second, and took no tap from its first moment: a finger on its way to
+ * a button that was showing only brought the bar back. Whether a tap came in time is read where it
+ * lands, so a slow runner cannot turn the one case into the other.
+ */
+test('a button still showing while the bar fades takes the tap; on the hidden bar a tap only shows it', async ({ page }) => {
+  const player = await openHarness(page);
+  await start(page, player);
+  await track(page);
+  const fade = () => player.evaluate((el) => {
+    (el as unknown as { player: { userActive(active: boolean): void } }).player.userActive(false);
+    const button = el.querySelector('.vjs-play-control')!.getBoundingClientRect();
+    const x = button.x + button.width / 2;
+    const y = button.y + button.height / 2;
+    const takesTaps = () => document.elementFromPoint(x, y)?.closest('.vjs-play-control') != null;
+    const atOnce = takesTaps();
+    return new Promise<{ x: number; y: number; atOnce: boolean; later: boolean }>((resolve) => setTimeout(() => resolve({ x, y, atOnce, later: takesTaps() }), 700));
+  });
+  const { x, y, atOnce, later } = await fade();
+  expect(atOnce, 'the button takes taps when the fade begins').toBe(true);
+  expect(later, 'the faded bar takes none').toBe(false);
+
+  // The tap on the hidden bar shows it and nothing else
+  await page.touchscreen.tap(x, y);
+  await expect(player).toHaveClass(/vjs-user-active/);
+  expect(await counts(page)).toMatchObject({ pause: 0, play: 0, seeking: 0 });
+
+  // Taps as the fade begins, until one lands while the button still shows
+  await page.evaluate(() => {
+    const w = window as unknown as { tappedWhileFading: boolean };
+    w.tappedWhileFading = false;
+    document.addEventListener('touchstart', () => { w.tappedWhileFading = document.querySelector('.video-js')!.classList.contains('vjs-fanous-bar-fading'); }, { capture: true });
+  });
+  let landed = false;
+  for (let i = 0; i < 8 && !landed; i += 1) {
+    await page.waitForTimeout(350); // never inside the double-tap window
+    await player.evaluate((el) => (el as unknown as { player: { userActive(active: boolean): void } }).player.userActive(false));
+    await page.touchscreen.tap(x, y);
+    landed = await page.evaluate(() => (window as unknown as { tappedWhileFading: boolean }).tappedWhileFading);
+    if (!landed) expect((await media(page)).paused, 'a tap after the fade pauses nothing').toBe(false);
+  }
+  expect(landed, 'no tap reached the page within the half second').toBe(true);
+  await expect.poll(() => media(page).then((m) => m.paused), { message: 'the tap on the fading button did not pause' }).toBe(true);
+  expect(await counts(page)).toMatchObject({ pause: 1, play: 0, seeking: 0 });
 });

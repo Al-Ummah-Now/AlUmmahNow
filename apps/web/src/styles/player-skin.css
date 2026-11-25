@@ -95,6 +95,11 @@
   pointer-events: none;
 }
 
+/* The first half of the fade: what can still be seen can still be tapped (lib/video/bar-fade.ts) */
+.video-js.vjs-fanous.vjs-has-started.vjs-user-inactive.vjs-playing.vjs-fanous-bar-fading:not(.vjs-menu-open) .vjs-control-bar {
+  pointer-events: auto;
+}
+
 .video-js.vjs-fanous.vjs-menu-open .vjs-control-bar {
   opacity: 1;
   visibility: visible;

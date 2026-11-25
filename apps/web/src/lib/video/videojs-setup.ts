@@ -13,6 +13,7 @@ import { AR_TRANSLATIONS, EN_TRANSLATIONS } from '@/lib/video/i18n/translations'
 import { guardNativePipToggle } from '@/lib/video/native-pip-toggle';
 import { syncDurationWithPlaylist } from '@/lib/video/live-state';
 import { keepSeekBarOnPlayhead } from '@/lib/video/seek-bar-sync';
+import { keepBarTappableWhileItFades } from '@/lib/video/bar-fade';
 import { setupTouchSeekGate } from '@/lib/video/touch-seek-gate';
 import { videojsTimeFormatter } from '@/lib/video/player-time';
 
@@ -168,6 +169,9 @@ export function createVideoPlayer(
         // A finger on the progress bar scrolls the page unless it taps or drags sideways
         const stopTouchSeekGate = setupTouchSeekGate(player as unknown as Parameters<typeof setupTouchSeekGate>[0]);
         player.on('dispose', stopTouchSeekGate);
+        // A button that can still be seen takes the tap (the bar fades for a second)
+        const stopBarFade = keepBarTappableWhileItFades(player as unknown as Parameters<typeof keepBarTappableWhileItFades>[0]);
+        player.on('dispose', stopBarFade);
       }
       // Quality, captions and speed menus open on click/tap only, never on hover
       if (player) setupClickOnlyMenus(player as unknown as Parameters<typeof setupClickOnlyMenus>[0]);
