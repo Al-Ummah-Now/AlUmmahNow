@@ -17,6 +17,7 @@ import {
   type ModerationCategoryPolicy,
   type ModerationSignal,
 } from '@al-ummah/shared-types';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface D1StatementLike {
   bind(...values: unknown[]): D1StatementLike;
@@ -182,6 +183,9 @@ async function readJson<T>(bucket: R2Like | undefined, key: string): Promise<T |
   return JSON.parse(await object.text()) as T;
 }
 
+/** A video's record; a key of the bucket that is not a video's is none. */
+const readVideo = async <T>(videos: R2Like, id: string): Promise<T | null> => (isInternalVideoKey(id) ? null : readJson<T>(videos, id));
+
 export interface SubjectContent {
   available: boolean;
   text: string | null;
@@ -199,7 +203,7 @@ export async function getSubjectContent(
 ): Promise<SubjectContent> {
   const none: SubjectContent = { available: false, text: null, hidden: false, hiddenByModeration: false, canHide: false };
   if (signal.subject_type === 'comment' && signal.parent_id) {
-    const video = await readJson<{ comments?: StoredComment[] }>(buckets.videos, signal.parent_id);
+    const video = await readVideo<{ comments?: StoredComment[] }>(buckets.videos, signal.parent_id);
     const comment = video ? findComment(video.comments ?? [], signal.subject_id) : null;
     if (!comment) return { ...none, canHide: true };
     return { available: true, text: comment.text ?? null, hidden: comment.status === 'held', hiddenByModeration: comment.heldBy === 'moderation', canHide: true };
@@ -210,7 +214,7 @@ export async function getSubjectContent(
     return { available: true, text: message.title, hidden: message.isHidden === true, hiddenByModeration: message.isHidden === true, canHide: true };
   }
   if (signal.subject_type === 'video') {
-    const video = await readJson<{ title?: string; description?: string; tags?: string[] }>(buckets.videos, signal.subject_id);
+    const video = await readVideo<{ title?: string; description?: string; tags?: string[] }>(buckets.videos, signal.subject_id);
     if (!video) return none;
     return { ...none, available: true, text: [video.title, video.description, (video.tags ?? []).join(' ')].filter(Boolean).join('\n') };
   }
@@ -258,6 +262,7 @@ export async function setCommentHidden(
     if (!done.found) return { ok: false, error: 'subject_missing' };
     changed = done.changed;
   } else {
+    if (isInternalVideoKey(row.parent_id)) return { ok: false, error: 'subject_missing' };
     const result = await updateJson<{ comments?: StoredComment[] } & Record<string, unknown>>(videos, row.parent_id!, (video) => {
       changed = false;
       const comment = video ? findComment(video.comments ?? [], row.subject_id) : null;

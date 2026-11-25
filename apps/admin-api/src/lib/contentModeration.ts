@@ -6,6 +6,7 @@
  * moment is neither lost nor able to undo the moderation.
  */
 import { updateJson, type CasBucket, type CasResult } from './r2Cas';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /**
  * removed: hidden (restorable); warning: flagged, still visible;
@@ -44,13 +45,18 @@ export function applyModerationFlags(
 	}
 }
 
-/** Applies the action to the stored document. Null when it does not exist. */
+/**
+ * Applies the action to the stored document. Null when it does not exist. The videos bucket's keys that
+ * are not videos (live streams have their own path, /live-moderation) are none of these documents, and
+ * no channel or playlist has such a key: reports filed before they were refused end as not found.
+ */
 export async function applyContentModeration(
 	bucket: CasBucket,
 	id: string,
 	action: ContentModerationAction,
 	opts: { moderatorId: string; notes?: string | undefined; at?: string },
 ): Promise<CasResult<Record<string, unknown>> | null> {
+	if (isInternalVideoKey(id)) return null;
 	const at = opts.at ?? new Date().toISOString();
 	return updateJson<Record<string, unknown>>(bucket, id, (current) => {
 		if (!current) return undefined;

@@ -217,6 +217,15 @@ describe('category suggestion job', () => {
     expect(await getCategorySuggestion(db, 'v1')).toBeNull();
   });
 
+  it('a key of the videos bucket that is not a video is missing: nothing is read, asked or written', async () => {
+    const key = 'livestream:s1';
+    const { db, env, videos, ai } = setup({ videos: { [key]: { ...VIDEO, id: 's1' } } });
+    await markCategorySuggestionPending(db, { subjectId: key, subjectType: 'video', reason: 'upload', userId: 'u1', now: NOW });
+    expect(await handleCategorySuggest(videoJob(key), env, logger, { lastAttempt: false, now: NOW })).toMatchObject({ status: 'done', result: 'missing' });
+    expect(videos.puts).toBe(0);
+    expect(ai!.run).not.toHaveBeenCalled();
+  });
+
   it('a soft-deleted video keeps its row as video_missing (it may be restored)', async () => {
     const { db, env } = setup({ videos: { v1: { ...VIDEO, isDeleted: true } } });
     await markCategorySuggestionPending(db, { subjectId: 'v1', subjectType: 'video', reason: 'upload', userId: 'u1', now: NOW });

@@ -12,6 +12,7 @@ import { logger } from '../../lib/logger';
 import { apiError } from '../../lib/api-error';
 import { featureOff } from '../../lib/features/off';
 import { reportableChatMessage } from '../../lib/live/reportable';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export class ReportCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -61,7 +62,7 @@ export class ReportCreate extends AuthenticatedRoute {
 				},
 			},
 			"404": {
-				description: "A live chat message that is not there for this person, or live chat is off (feature_off)",
+				description: "A video that is not there, or a live chat message that is not there for this person, or live chat is off (feature_off)",
 				content: {
 					"application/json": {
 						schema: ResponseError,
@@ -100,6 +101,8 @@ export class ReportCreate extends AuthenticatedRoute {
 			const subject = inputReport.entityType === 'live_chat' ? await reportableChatMessage(c.env as never, inputReport.entityId, userId) : undefined;
 			if (subject === 'off') return featureOff(c, 'liveChat');
 			if (subject === null) return apiError(c, 404, 'not_found');
+			// A key of the videos bucket that is not a video's; live streams are reported as entityType livestream, by their id
+			if (inputReport.entityType === 'video' && isInternalVideoKey(inputReport.entityId)) return apiError(c, 404, 'not_found');
 
 			// Check if user has already reported this entity (prevent spam)
 			const bucket = c.env.reports; // Use dedicated reports bucket for reports storage

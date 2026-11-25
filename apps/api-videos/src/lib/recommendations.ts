@@ -199,7 +199,7 @@ export async function hydrateRanked<T extends { video: DiscoveryVideo }>(
 ): Promise<T[]> {
   const loaded = await Promise.all(ranked.map(async item => {
     try {
-      const object = await bucket.get(item.video.id);
+      const object = isInternalVideoKey(item.video.id) ? null : await bucket.get(item.video.id);
       const video = object ? await object.json<DiscoveryVideo>() : null;
       return isDiscoverable(video) ? { ...item, video } : null;
     } catch (error) {

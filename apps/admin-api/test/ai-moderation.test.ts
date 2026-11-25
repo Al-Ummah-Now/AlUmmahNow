@@ -120,6 +120,17 @@ describe('AI moderation review (admin-api)', () => {
     assert.deepEqual(actions.map((a: any) => [a.action, a.actor_id]), [['hide', 'mod-1'], ['restore', 'mod-2'], ['restore', 'mod-2']]);
   });
 
+  it('a key of the videos bucket that is not a video is none, for text and for hiding', async () => {
+    const key = 'livestream:s1';
+    const stored = JSON.stringify({ id: 's1', title: 'stream', comments: [{ id: 'c1', text: 'hi', replies: [] }] });
+    videos.data.set(key, stored);
+    assert.equal((await getSubjectContent({ videos }, { subject_type: 'comment', subject_id: 'c1', parent_id: key, channel_id: 'ch1' })).available, false);
+    assert.equal((await getSubjectContent({ videos }, { subject_type: 'video', subject_id: key, parent_id: null, channel_id: 'ch1' })).available, false);
+    insertSignal(db, { id: 'ls', parent_id: key });
+    assert.deepEqual(await setCommentHidden(db, videos, 'ls', true, 'mod-1'), { ok: false, error: 'subject_missing' });
+    assert.equal(videos.data.get(key), stored);
+  });
+
   it('a live chat message is hidden and restored through api-videos, and audited', async () => {
     insertSignal(db, { id: 'lc', subject_type: 'live_chat', subject_id: 'm1', parent_id: 's1', surface: 'live_chat' });
     const sent: unknown[] = [];
