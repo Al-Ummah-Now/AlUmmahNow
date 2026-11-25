@@ -101,7 +101,10 @@ export interface AutocompleteProps {
   emptyFooter?: ReactNode;
   /** Shown while the input is empty and there are no empty options */
   emptyText?: string;
-  /** What a failed lookup or first page says (default: that the list couldn't be loaded); Retry is beside it */
+  /**
+   * What a failed lookup or first page says, with Retry beside it. Without it a failed first page says
+   * that the list couldn't be loaded, and a failed lookup shows as no matches.
+   */
   errorText?: (error: unknown) => string;
   /** Group order and labels; options in no listed group come last, unlabelled */
   groups?: AutocompleteGroup[];
@@ -298,7 +301,6 @@ export function Autocomplete(props: AutocompleteProps) {
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           logger.warn('[Autocomplete] Lookup failed', { error });
-          // Not "no matches": the list says it failed, and offers Retry
           setRemote({ query, options: [], failed: { error } });
           setLoading(false);
         });
@@ -334,7 +336,7 @@ export function Autocomplete(props: AutocompleteProps) {
   const initialLoading = hasInitial && !query && (initial.status === 'idle' || initial.status === 'loading');
   const initialFailed = hasInitial && !query && initial.status === 'error';
   const settled = (!load || !query || !loading) && !initialLoading;
-  const lookupFailed = !!load && !!query && query.length >= minChars && settled && remote?.query === query ? remote.failed : undefined;
+  const lookupFailed = !!errorText && !!load && !!query && query.length >= minChars && settled && remote?.query === query ? remote.failed : undefined;
   const failure = initialFailed ? { error: initial.error } : lookupFailed;
   const failureText = failure ? errorText?.(failure.error) ?? a.loadFailed : '';
   const showNoMatches = !!query && query.length >= minChars && settled && ordered.length === 0 && !hideNoMatches && !lookupFailed;
