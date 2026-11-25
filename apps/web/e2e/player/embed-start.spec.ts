@@ -6,11 +6,14 @@
  * In WebKit it often did not play at all (stage release runs of 2026-11-24 and 2026-11-25): play()
  * came before Video.js had its source ready, Video.js on a Safari user agent then attached the
  * source a second time, which aborted that play, and the retry waited for a `canplay` WebKit never
- * sends while paused. Nothing here may evaluate in the page before the start: Chromium counts
- * Playwright's evaluate as a user gesture. The start is read from the console.
+ * sends while paused. The start is read from the console: nothing is evaluated in the page before it.
  */
 import { expect, test } from '@playwright/test';
 import { routeFixtures } from './harness';
+
+test.skip(({ browserName }) => browserName !== 'webkit', 'Video.js attaches the source twice on a Safari user agent only; the release spec (embed-frame-sound) starts the embed in Chrome too');
+
+const HOST_PAGE = 'http://embed-host.player.test/frame';
 
 test.beforeEach(async ({ page, baseURL }) => {
   const site = new URL(baseURL!);
@@ -29,7 +32,7 @@ test.beforeEach(async ({ page, baseURL }) => {
     await route.fulfill({ response, headers });
   });
   // The host: another site, so the frame is cross-origin as on www
-  await page.route('http://embed-host.player.test/frame', (route) => route.fulfill({
+  await page.route(HOST_PAGE, (route) => route.fulfill({
     contentType: 'text/html',
     body: `<!doctype html><body style="margin:0"><iframe id="aun" width="800" height="600" style="border:0" allow="autoplay; fullscreen" src="${site.origin}/ar/dev/player?embed=1&autoplay=1&gesture=1"></iframe></body>`,
   }));
@@ -51,30 +54,18 @@ for (const attempt of [1, 2, 3]) {
       const found = /^\[embed-start\] (.*)$/.exec(message.text());
       if (found) events.push(found[1]!);
     });
-    await page.goto('http://embed-host.player.test/frame');
+    await page.goto(HOST_PAGE);
     await expect.poll(() => events.find((e) => e.startsWith('playing')), { message: 'the embed did not start', timeout: 60_000 }).toBeTruthy();
     expect(events.filter((e) => e.startsWith('loadstart')), 'the source was attached more than once').toHaveLength(1);
     const frame = page.frameLocator('#aun');
     const video = frame.locator('.video-js video');
     const muted = () => video.evaluate((v: HTMLVideoElement) => v.muted);
     await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.5);
-    // Sound refused (a browser's own autoplay rule decides): muted, with the control that ends it
-    if (events.includes('playing true')) {
-      await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
-      await frame.getByTestId('embed-unmute').click();
-      await expect.poll(muted).toBe(false);
-    }
+    // Sound refused: muted, with the control that ends it
+    expect(events).toContain('playing true');
+    await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
+    await frame.getByTestId('embed-unmute').click();
+    await expect.poll(muted).toBe(false);
     await expect(frame.getByTestId('embed-unmute')).toHaveCount(0);
   });
 }
-
-test('the browsers that refuse sound without a click start muted', async ({ page, browserName }) => {
-  test.skip(browserName === 'firefox' || browserName === ('_bidiFirefox' as typeof browserName), 'Firefox autoplay rules differ under automation');
-  const starts: string[] = [];
-  page.on('console', (message) => {
-    const found = /^\[embed-start\] (playing .*)$/.exec(message.text());
-    if (found) starts.push(found[1]!);
-  });
-  await page.goto('http://embed-host.player.test/frame');
-  await expect.poll(() => starts[0], { message: 'the embed did not start', timeout: 60_000 }).toBe('playing true');
-});
