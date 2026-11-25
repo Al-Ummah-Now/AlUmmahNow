@@ -1288,7 +1288,7 @@ describe('the day before anything is deleted', () => {
 	});
 
 	it('a run account\'s media goes right after its pass', async () => {
-		const env = await setup();
+		const env = Object.assign(await setup(), { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'qa' });
 		await recordDeletion(env.SEARCH_DB, { kind: 'user', id: ME, deletedBy: 'admin' } as never);
 		await ADMIN_JOB_HANDLERS['user.erase-run']!(env as never, { id: 'j', kind: 'user.erase-run', targetId: ME, params: {}, result: null } as never);
 		const [job] = jobs(env);
@@ -1350,6 +1350,42 @@ describe('the day before anything is deleted', () => {
 			const p = JSON.parse(jobs(env)[0].params);
 			assert.deepEqual([p.run, p.delay], [undefined, ERASE_DELAY], `${email} ${JSON.stringify(over)}`);
 		}
+	});
+
+	it('nor does the job of a run account run, or go at once, anywhere but there', async () => {
+		for (const over of [{}, { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'production' }, { BUNNY_TEST_LIBRARY: 'false', ENVIRONMENT: 'qa' }]) {
+			const env = Object.assign(await setup(), over);
+			await recordDeletion(env.SEARCH_DB, { kind: 'user', id: ME, deletedBy: 'admin' } as never);
+			await assert.rejects(ADMIN_JOB_HANDLERS['user.erase-run']!(env as never, { id: 'j', kind: 'user.erase-run', targetId: ME, params: {}, result: null } as never), /only where there are any/);
+			assert.ok(env.videos.store.has('v-mine') && env.profiles.store.has(ME));
+			await eraseMediaHooks(env, undefined, { runAccount: true }).onVideoDeleted('v-mine', env.videos.read('v-mine'), 'v-mine');
+			const p = JSON.parse(jobs(env)[0].params);
+			assert.deepEqual([p.run, p.delay], [undefined, ERASE_DELAY], JSON.stringify(over));
+		}
+	});
+
+	it('an account\'s images that wait for their record, then for their day, name no account on the job', async () => {
+		const env = await setup();
+		own(env, '/for-gone_cover.jpg', ME, 'ch-gone', 'channel_cover');
+		const id = await start(env, [{ t: 'images', paths: ['/a-me_avatar.jpg', '/a-me-old_avatar.jpg', '/for-gone_cover.jpg'] }]);
+		const set = (over: Json) => env.SEARCH_DB.db.prepare('UPDATE admin_jobs SET params = json_patch(params, ?) WHERE id = ?').run(JSON.stringify(over), id);
+		set({ delay: 24 * 3600 });
+		const run = async (): Promise<Json> => {
+			const outcome = (await runEraseMedia(env, (await getJob(env as never, id))!)) as Json;
+			env.SEARCH_DB.db.prepare("UPDATE admin_jobs SET status = 'queued', params = ?, result = ?, last_error = ? WHERE id = ?").run(JSON.stringify(outcome.params), JSON.stringify(outcome.result ?? null), outcome.note ?? null, id);
+			assert.ok(!JSON.stringify(jobs(env)[0]).includes(ME), JSON.stringify(jobs(env)[0]));
+			return outcome;
+		};
+		assert.equal((await run()).delaySeconds, RETRY_DELAYS[0], 'the profile is still there');
+		assert.deepEqual(JSON.parse(jobs(env)[0].params).items[0].arm, { account: 'seen' });
+		env.profiles.store.delete(ME);
+		for (let i = 0; i < 2; i++) assert.match((await run()).note, /less than a day ago/);
+		assert.ok(out.images.has('/a-me_avatar.jpg') && !out.images.has('/for-gone_cover.jpg'), 'each by its own record');
+		const { items } = JSON.parse(jobs(env)[0].params);
+		assert.ok(Date.parse(items[0].arm.account) > Date.now());
+		set({ items: [{ ...items[0], arm: { account: '2026-01-01T00:00:00.000Z' } }] });
+		await run();
+		assert.equal(out.images.has('/a-me_avatar.jpg'), false);
 	});
 
 	it('what the job writes of the files it is deleting names no account', async () => {

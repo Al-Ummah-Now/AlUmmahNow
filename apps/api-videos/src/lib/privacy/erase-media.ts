@@ -28,6 +28,7 @@
  */
 import { ERASED_USER_ID, MessageType, originalPrefix, REVIEW_MEDIA_PREFIX, reportNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { createJob, getJob, type JobEnv, type JobOutcome } from '../admin/jobs';
+import { hasRunAccounts } from '../e2e/runAccounts';
 import { eraseCaptionJobs, ownedPostImagePaths, postImageFolder, videoThumbnailFolder } from '../admin/purgeCopies';
 import { bunnyClientForVideo, primaryBunnyClient, type LibraryHints } from '../bunny/libraries';
 import { purgeBunnyEdge } from '../csam/contain';
@@ -61,7 +62,7 @@ interface FolderState {
 }
 
 /**
- * When an item may go, by record (`self`, or the owner of an image): 'seen' while the record was still
+ * When an item may go, by record (`self`, or for images `account` and `channel:<id>`): 'seen' while the record was still
  * there, else not before (its day starts again when the record is seen gone).
  */
 type Arm = Record<string, string>;
@@ -317,7 +318,9 @@ export interface MediaHooks {
  */
 export function eraseMediaHooks(rawEnv: unknown, budget?: { spend(n: number): void }, opts: { runAccount?: boolean } = {}): MediaHooks {
 	const env = rawEnv as Env;
-	const outbox = new Outbox(env, opts.runAccount ? RUN_ACCOUNT_DELAY : ERASE_DELAY, opts.runAccount === true);
+	// Whoever says so: nowhere but where there are run accounts
+	const run = opts.runAccount === true && hasRunAccounts(env as never);
+	const outbox = new Outbox(env, run ? RUN_ACCOUNT_DELAY : ERASE_DELAY, run);
 	const bound = () => {
 		if (!dbOf(env) || !env.ADMIN_JOBS_QUEUE) throw new EraseMediaUnavailable('SEARCH_DB or ADMIN_JOBS_QUEUE is not bound');
 	};
@@ -626,7 +629,8 @@ async function eraseOwnPaths(s: Step, item: Extract<MediaItem, { t: 'images' }>,
 				exists.set(key, !!(await (kind === 'channel' ? env.channels : env.profiles).head(id)));
 			}
 			const uploaders = [...new Set(paths.map((path) => rows.get(path)!.owner_id).filter((o): o is string => !!o))];
-			const when = await ready(s, item, key, { kind, id }, exists.get(key)!);
+			// The job names no account: an item's images are one account's
+			const when = await ready(s, item, kind === 'user' ? 'account' : key, { kind, id }, exists.get(key)!);
 			const why: Outcome | null = when !== 'ok' ? when : (await deleteImages(s, { kind, id }, paths, uploaders, true)) ? null : 'takedown';
 			if (why) {
 				held.push(...paths);

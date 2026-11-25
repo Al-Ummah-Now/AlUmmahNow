@@ -50,7 +50,7 @@ import { findStoredComment, removeStoredComment, type StoredComment } from '../c
 import { eraseUserSubscriptions, subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
 import { CLEANUP, endParts, erasedRecord, takePart, unlessUnderCase, type EraseTarget } from '../privacy/erase-targets';
-import { isRunAccount } from '../e2e/runAccounts';
+import { hasRunAccounts, isRunAccount } from '../e2e/runAccounts';
 import { eraseMediaHooks, runEraseMedia } from '../privacy/erase-media';
 import { flagResumeUnavailable, flagUnreadableChannel } from '../privacy/notices';
 import { OperationBudget } from '../privacy/scan';
@@ -2535,6 +2535,8 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 
 /** One step of a run account's cheap erasure (lib/privacy/run-user-erase.ts, #887). */
 async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	// Queued by the run sweep alone, which runs nowhere else: never an account's erasure anywhere else
+	if (!hasRunAccounts(env as never)) throw new Error('Run accounts are erased only where there are any (a test library, not production)');
 	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
 	const previousErrors = Array.isArray(job.result?.errors) ? (job.result.errors as string[]) : [];

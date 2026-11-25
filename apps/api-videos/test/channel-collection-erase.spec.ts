@@ -140,7 +140,7 @@ describe('channel collections on erasure (#1085)', () => {
 	});
 
 	it('the run-account erase job (user.erase-run) removes its channels\' and profile\'s collections', async () => {
-		const e = env();
+		const e = Object.assign(env(), { BUNNY_TEST_LIBRARY: 'true', ENVIRONMENT: 'qa' });
 		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(e, kind, { maxPages: 10 });
 		await recordDeletion(e.SEARCH_DB, { kind: 'user', id: OWNER, deletedBy: 'e2e-run-sweep' });
 		const outcome = await ADMIN_JOB_HANDLERS['user.erase-run'](e, { id: 'j1', kind: 'user.erase-run', targetId: OWNER, params: {} } as never);

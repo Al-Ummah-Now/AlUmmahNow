@@ -5,7 +5,14 @@ export function isRunUserEmail(email: unknown): email is string {
 	return typeof email === 'string' && RUN_USER_EMAIL.test(email.toLowerCase());
 }
 
-/** A run account of this environment: only a non-production worker on a test library has any. */
-export function isRunAccount(env: { BUNNY_TEST_LIBRARY?: unknown; ENVIRONMENT?: unknown }, email: unknown): boolean {
-	return env.BUNNY_TEST_LIBRARY === 'true' && String(env.ENVIRONMENT ?? '').toLowerCase() !== 'production' && isRunUserEmail(email);
+type RunEnv = { BUNNY_TEST_LIBRARY?: unknown; ENVIRONMENT?: unknown };
+
+/** Only a non-production worker on a test library has run accounts. */
+export function hasRunAccounts(env: RunEnv): boolean {
+	return env.BUNNY_TEST_LIBRARY === 'true' && String(env.ENVIRONMENT ?? '').toLowerCase() !== 'production';
+}
+
+/** A run account of this environment. */
+export function isRunAccount(env: RunEnv, email: unknown): boolean {
+	return hasRunAccounts(env) && isRunUserEmail(email);
 }
