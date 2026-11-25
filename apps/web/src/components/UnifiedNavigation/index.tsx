@@ -267,6 +267,11 @@ export function UnifiedNavigation() {
     );
   }
 
+  // Choosing who you act as closes the menu once it is done; a refused switch keeps it open with its message
+  const actAs = async (channelId: string | null) => {
+    if ((await switchToChannel(channelId)) !== false) setIsOpen(false);
+  };
+
   const handleCreateChannel = async () => {
     if (!newChannelName.trim() || creatingChannel) return;
     let termsBlocked = false;
@@ -278,6 +283,8 @@ export function UnifiedNavigation() {
       setNewChannelName('');
       setNavTermsRequired(false);
       setIsCreatingChannel(false);
+      // Done with the menu (the header stays mounted, so nothing else closes it)
+      setIsOpen(false);
       // Reload channels to show the newly created channel
       await reloadChannels();
     }
@@ -577,7 +584,7 @@ export function UnifiedNavigation() {
               <div role="group" aria-label={t.navigation.channelSection}>
                 {backRow(t.navigation.channelSection)}
                 {/* You first, as yourself (your picture and name, tagged Personal), then your channels */}
-                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" data-identity="personal" aria-checked={!channel} className="aun-menu-item" role="menuitemradio">
+                <button type="button" onClick={() => void actAs(null)} data-testid="nav-channel-option-none" data-identity="personal" aria-checked={!channel} className="aun-menu-item" role="menuitemradio">
                   {avatar(getUserAvatar(), initial)}
                   {identityText(displayName, t.navigation.identityPersonal)}
                   {!channel && <Check className="aun-menu-check" aria-hidden="true" />}
@@ -588,7 +595,7 @@ export function UnifiedNavigation() {
                       {section.key === 'owned' ? t.channelRoles.yourChannels : t.channelRoles.channelsYouManage}
                     </p>
                     {section.items.map((ch) => (
-                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
+                      <button key={ch.id} type="button" onClick={() => void actAs(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
                         <span className="aun-avatar-slot">
                           {avatar(ch.avatarUrl, avatarInitial(getChannelName(ch.name, ch.nameLocalized)))}
                           {ch.isMain && ch.role === 'owner' && (

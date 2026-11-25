@@ -68,7 +68,7 @@ describe('MultiAccountProvider - session reloads', () => {
 
     const { result } = renderHook(() => useMultiAccount(), { wrapper });
 
-    let switched!: Promise<void>;
+    let switched!: Promise<boolean>;
     act(() => {
       switched = result.current.switchToChannel(null);
     });
