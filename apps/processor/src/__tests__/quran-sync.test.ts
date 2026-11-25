@@ -378,7 +378,8 @@ describe('Content Sync', () => {
     const e = env();
     await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
     // The state as it was stored before the filter was recorded
-    const { tokenResources: _, ...old } = e.REVIEW_MEDIA.read<QuranSyncState>(QURAN_STATE_KEY);
+    const old = e.REVIEW_MEDIA.read<QuranSyncState>(QURAN_STATE_KEY);
+    delete old.tokenResources;
     await e.REVIEW_MEDIA.put(QURAN_STATE_KEY, JSON.stringify(old));
     const qf = fakeQf({ refuseToken: { error: { code: 'token_filter_mismatch', message: 'sync_token does not match the requested resources' } } });
     expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
@@ -394,6 +395,16 @@ describe('Content Sync', () => {
     const qf = fakeQf({ refuseToken: { message: 'bad token', type: 'invalid_request', success: false } });
     expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
     expect(qf.calls).toEqual(['token', 'sync TOKEN-1', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
+    // A bootstrap that gives no token: the refused one is not kept for the new filter
+    const tokenless: typeof fetch = async (input, init) => {
+      const res = await fakeQf().fetch(input, init);
+      return String(input).includes('cursor=PAGE2') ? Response.json({ sync: { has_more: false, next_sync_token: null, mutations: [] } }) : res;
+    };
+    await runQuranSync(e, { reason: 'bootstrap' }, { ...deps(fakeQf()), fetchImpl: tokenless });
+    expect(e.REVIEW_MEDIA.read<QuranSyncState>(QURAN_STATE_KEY).syncToken).toBeUndefined();
+    // QF may answer with a null error: still its status, not a crash that is retried
+    const nullError: typeof fetch = async (input) => (String(input).includes('/oauth2/token') ? Response.json({ access_token: 't' }) : Response.json({ error: null, message: 'nope' }, { status: 422 }));
+    await expect(runQuranSync(e, { reason: 'bootstrap' }, { ...deps(fakeQf()), fetchImpl: nullError })).rejects.toMatchObject({ status: 422, retryable: false, message: 'QF /api/v4/resources/sync: 422: nope' });
     const refused = { status: 422, body: { error: { code: 'invalid_resources', message: 'Invalid resources filter' } } };
     const all: typeof fetch = async (input) => (String(input).includes('/oauth2/token') ? Response.json({ access_token: 't' }) : Response.json(refused.body, { status: refused.status }));
     await expect(runQuranSync(e, { reason: 'bootstrap' }, { ...deps(fakeQf()), fetchImpl: all })).rejects.toMatchObject({ status: 422, retryable: false, message: 'QF /api/v4/resources/sync: 422 invalid_resources: Invalid resources filter' });
