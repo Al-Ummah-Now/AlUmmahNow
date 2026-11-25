@@ -331,6 +331,8 @@ export function Autocomplete({
       setEditing(false);
       return;
     }
+    // Forward from a failure goes to Retry; leaving that closes the list (onBlur)
+    if (e.key === 'Tab' && !e.shiftKey && expanded && initialFailed) return;
     const result = keyDown(state, mode, e.key, e.altKey, rules);
     if (result.preventDefault) e.preventDefault();
     setState(result.state);
@@ -349,12 +351,14 @@ export function Autocomplete({
   const suggestionCount = state.options.filter((o) => o.type === 'suggestion').length;
   // The box shows the initial list (nothing, or one character, typed)
   const showingInitial = initialOn && state.query.trim().length < MIN_QUERY;
+  // A later page failed too: its items stay, with Retry
+  const initialFailed = showingInitial && initial?.status === 'error';
   const emptyInitial = showingInitial && !state.query.trim() && state.status === 'ready' && suggestionCount === 0;
   const announcement = !expanded
     ? ''
     : state.status === 'loading' && state.options.length === 0
       ? t(showingInitial ? 'autocomplete.loadingList' : 'autocomplete.searching')
-      : state.status === 'error'
+      : state.status === 'error' || initialFailed
         ? t(showingInitial ? 'autocomplete.listFailed' : 'autocomplete.failed')
         : emptyInitial
           ? (messages?.emptyList ?? t('autocomplete.emptyList'))
@@ -392,7 +396,16 @@ export function Autocomplete({
           showIds={showIds}
         />
       ) : (
-        <div className="relative">
+        <div
+          className="relative"
+          onBlur={(e) => {
+            // Focus went into the list (Retry): it stays
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            setState(closed);
+            // Leaving the box while changing a chosen value, with nothing typed, keeps the old value
+            if (mode === 'pick' && picked && !state.query.trim()) setEditing(false);
+          }}
+        >
           <input
             ref={inputRef}
             id={inputId}
@@ -414,11 +427,6 @@ export function Autocomplete({
             placeholder={placeholder ?? t(mode === 'search' ? 'autocomplete.searchPlaceholder' : 'autocomplete.pickPlaceholder')}
             onChange={(e) => setState((s) => (initialOn ? typed(s, e.target.value, initialRef.current) : typed(s, e.target.value)))}
             onKeyDown={onKeyDown}
-            onBlur={() => {
-              setState(closed);
-              // Leaving the box while changing a chosen value, with nothing typed, keeps the old value
-              if (mode === 'pick' && picked && !state.query.trim()) setEditing(false);
-            }}
             onFocus={() => (initialOn ? openInitial() : setState((s) => (s.options.length > 0 && s.query.trim().length >= MIN_QUERY ? { ...s, open: true } : s)))}
             onClick={() => {
               if (initialOn && !state.open) openInitial();
@@ -438,6 +446,8 @@ export function Autocomplete({
             ref={listRef}
             id={listId}
             role="listbox"
+            // A scrolling list would be a tab stop of its own; the arrow keys move in it
+            tabIndex={-1}
             aria-label={label}
             aria-busy={(showingInitial && (state.status === 'loading' || initial?.status === 'more')) || undefined}
             hidden={!expanded}
@@ -497,7 +507,7 @@ export function Autocomplete({
               {t('autocomplete.loadingMore')}
             </p>
           )}
-          {showingInitial && initial?.status === 'error' && (
+          {initialFailed && (
             <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-error` : undefined}>
               <span>{t('autocomplete.listFailed')}</span>
               <button
