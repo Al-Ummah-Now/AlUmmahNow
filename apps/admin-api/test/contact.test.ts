@@ -46,8 +46,14 @@ describe('validateContactInput', () => {
       assert.equal(r.ok, false, escape(ch));
       assert.deepEqual((r as { errors: unknown }).errors, { email: 'invalid' });
     }
-    const named = validateContactInput({ ...valid, name: 'می\u200cرا' }) as { ok: true; value: { name: string } };
-    assert.equal(named.value.name, 'می\u200cرا');
+    // ZWNJ, ZWJ (an emoji), the marks
+    for (const name of ['می\u200cرا', 'Amina 👩\u200d🏫', 'Amina\u200e (عائشة)\u200f', 'x\u061cy']) {
+      const named = validateContactInput({ ...valid, name }) as { ok: true; value: { name: string } };
+      assert.equal(named.value.name, name);
+    }
+    for (const email of ['user+tag@example.com', 'user@münchen.example', 'مريم@مثال.example']) {
+      assert.equal((validateContactInput({ ...valid, email }) as { ok: true; value: { email: string } }).value.email, email);
+    }
   });
 
   it('accepts a good message and normalises it', () => {
