@@ -271,8 +271,8 @@ test.describe('channel transfer', () => {
 
     expect(await edit(tokens.creator, 'After the move'), 'the new owner edits it').toBe(200);
     expect(await edit(tokens.previous, 'Still mine?'), 'the previous owner cannot').toBe(403);
-    const read = (await (await fetch(`${VIDEOS_API_URL}/api/channels/${channel.id}`, { headers: { authorization: `Bearer ${tokens.creator}` } })).json()) as { result?: { channel?: { description?: string } } };
-    expect(read.result?.channel?.description).toBe('After the move');
+    const read = (await (await fetch(`${VIDEOS_API_URL}/api/channels/${channel.id}`, { headers: { authorization: `Bearer ${tokens.creator}` } })).json()) as { id?: string; description?: string };
+    expect([read.id, read.description], 'the edit is saved').toEqual([channel.id, 'After the move']);
 
     // Each owner's own notice of this channel; the reason goes to the previous owner only (CC-D11)
     interface Notice { notificationKey: string; entityId: string | null; params: Record<string, string> }
