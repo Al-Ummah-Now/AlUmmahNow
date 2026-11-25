@@ -15,6 +15,7 @@ export const MOCK_API = `http://127.0.0.1:${mockPort}`;
 
 export default defineConfig({
   testDir: './e2e/themes',
+  globalSetup: './e2e/themes/warm-up.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,

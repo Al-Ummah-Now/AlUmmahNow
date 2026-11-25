@@ -278,6 +278,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/themes/channel-layer.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs per-token channel fixtures (docs/design/NAV.md context slot)' },
   'apps/web/e2e/themes/account-menu.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn (shared nav, docs/design/NAV.md)' },
   'apps/web/e2e/themes/notifications.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn' },
+  'apps/web/e2e/themes/hot-updates.spec.ts': { placement: 'local', reason: 'next dev + mock-server.mjs: hot updates do not reach the page under test' },
   'apps/web/e2e/themes/home-hero.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs (the featured art has no light-mode fade, #1556)' },
   'apps/web/e2e/themes/consent-phone.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs (the consent notice is never clamped on phones, #1587)' },
   'apps/web/e2e/themes/pages.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs' },
