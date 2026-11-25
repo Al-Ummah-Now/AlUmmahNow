@@ -1535,6 +1535,7 @@ const ar: Messages = {
       alsoTellHint: 'يصلهم كل بريد عن هذه الطلبات، بما يتغيّر فيها، إضافةً إلى الموافِقين ومقدّم الطلب.',
       alsoTellOff: 'فقط ما دام البريد مفعّلًا.',
       alsoTellAdd: 'إضافة شخص لإبلاغه',
+      alsoTellPlaceholder: 'اكتب اسمًا',
       recipientCount: '{count, plural, one {شخص واحد} two {شخصان} few {# أشخاص} many {# شخصًا} other {# شخص}}',
       recipientsEmpty: 'لا أحد يمكن تسميته بعد.',
       recipientsNoMatch: 'لا أحد باسم «{query}» بين المشرفين وقائمة المالية.',

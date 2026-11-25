@@ -1536,6 +1536,7 @@ const en = {
       alsoTellHint: 'They get every email about these requests, with what changes, besides the approvers and the person who asked.',
       alsoTellOff: 'Only while emails are on.',
       alsoTellAdd: 'Add a person to tell',
+      alsoTellPlaceholder: 'Type a name',
       recipientCount: '{count, plural, one {# person} other {# people}}',
       recipientsEmpty: 'Nobody can be named yet.',
       recipientsNoMatch: 'Nobody is called “{query}” among the admins and the finance list.',
