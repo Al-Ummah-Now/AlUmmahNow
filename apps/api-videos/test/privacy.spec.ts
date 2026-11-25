@@ -2,7 +2,7 @@
  * Story 1.3 AC 2, 3, 5: GDPR export, erasure/anonymisation, consent audit
  * trail and retention enforcement.
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -113,7 +113,7 @@ describe('collectUserData (export)', () => {
 		env = seed();
 	});
 
-	it('has every report the person filed, from the dialog or /report, once and as they filed it (#1940)', async () => {
+	it('has every report the person filed, from the dialog or /report, once and as they filed it, with what became of it (#1940)', async () => {
 		const queue = new MemoryQueue();
 		const reports = new MemoryBucket({});
 		const file = (userId: string, body: Record<string, unknown>) =>
@@ -123,10 +123,40 @@ describe('collectUserData (export)', () => {
 		assert.equal((await file(ME, { entityType: 'video', entityId: 'v-other', reason: 'child_safety' })).status, 200);
 		assert.equal((await file(ME, { entityType: 'channel', entityId: 'ch-other', reason: 'other' })).status, 200);
 		assert.equal((await file('someone-else', { entityType: 'video', entityId: 'v-other', reason: 'spam' })).status, 200);
-		const { reportsFiled } = await collectUserData({ ...env, reports } as never, ME, new OperationBudget(10_000));
+		const sent: Array<{ url: string; key: string | null; body: { reporterId: string; ids: string[] } }> = [];
+		const stored = (entityId: string, reason: string) => JSON.parse([...reports.store.entries()].find(([k, v]) => k.startsWith(`report:${entityId}:`) && k.endsWith(`:${ME}`) && JSON.parse(v).reason === reason)![1]).id as string;
+		const answer = () => ({
+			outcomes: [
+				{ id: stored('v-other', 'spam'), outcome: 'dismissed', decidedAt: '2026-11-24T10:00:00.000Z', moderatorId: 'mod', notes: 'n' },
+				{ id: stored('v-other', 'child_safety'), outcome: 'action_taken', decidedAt: '2026-11-25T10:00:00.000Z' },
+			],
+		});
+		const exported = async (respond: () => Response) => {
+			const fetched = mock.method(globalThis, 'fetch', async (url: RequestInfo | URL, init?: RequestInit) => {
+				sent.push({ url: String(url), key: new Headers(init?.headers).get('X-API-Key'), body: JSON.parse(String(init?.body)) });
+				return respond();
+			});
+			try {
+				return (await collectUserData({ ...env, reports, ADMIN_API_URL: 'https://admin.example.org/', INTERNAL_API_KEY: 'key' } as never, ME, new OperationBudget(10_000))).reportsFiled;
+			} finally {
+				fetched.mock.restore();
+			}
+		};
+		const reportsFiled = await exported(() => Response.json({ success: true, result: answer() }));
+		assert.deepEqual(sent.map((r) => [r.url, r.key, r.body.reporterId, r.body.ids.length]), [['https://admin.example.org/internal/report-outcomes', 'key', ME, 3]]);
+		assert.deepEqual(reportsFiled.map((r) => [r.entityId, r.reason, r.outcome, r.decidedAt]).sort(), [
+			['ch-other', 'other', 'open', null],
+			['v-other', 'child_safety', 'action_taken', '2026-11-25T10:00:00.000Z'],
+			['v-other', 'spam', 'dismissed', '2026-11-24T10:00:00.000Z'],
+		]);
+		// Admin-api down, refusing or not configured: the reports are there, and the file says the outcome is not
+		for (const respond of [() => new Response('', { status: 503 }), () => new Response('not json'), () => { throw new Error('down'); }]) {
+			assert.deepEqual((await exported(respond)).map((r) => [r.outcome, r.decidedAt]), [['unavailable', null], ['unavailable', null], ['unavailable', null]]);
+		}
+		assert.equal((await collectUserData({ ...env, reports } as never, ME, new OperationBudget(10_000))).reportsFiled[0].outcome, 'unavailable');
 		assert.deepEqual(reportsFiled.map((r) => [r.entityId, r.reason, r.description ?? null]).sort(), [['ch-other', 'other', null], ['v-other', 'child_safety', null], ['v-other', 'spam', 'my words']]);
 		assert.equal(new Set(reportsFiled.map((r) => r.id)).size, 3);
-		const own = ['id', 'entityType', 'entityId', 'reason', 'description', 'reporterId', 'reporterChannelId', 'status', 'dateCreated'];
+		const own = ['id', 'entityType', 'entityId', 'reason', 'description', 'reporterId', 'reporterChannelId', 'dateCreated', 'outcome', 'decidedAt'];
 		for (const r of reportsFiled) assert.deepEqual(Object.keys(r).filter((k) => !own.includes(k)), []);
 	});
 
