@@ -97,7 +97,7 @@ const COPY = {
     andMore: (names: string, n: number) => `${names} and ${n} more`,
     system: 'Al Ummah Now',
     replaced: 'Replaced',
-    footer: 'You received this email because you can approve, or asked for, changes in the Al Ummah Now admin.',
+    footer: 'You received this email because you can approve changes in the Al Ummah Now admin, asked for one, or an approval rule tells you about them.',
     sign: 'Al Ummah Now',
   },
   ar: {
@@ -135,7 +135,7 @@ const COPY = {
     andMore: (names: string, n: number) => `${names} و${arDigits(n)} غيرهم`,
     system: 'الأمة الآن',
     replaced: 'استُبدل',
-    footer: 'وصلك هذا البريد لأنك تستطيع الموافقة على تغييرات في لوحة إدارة الأمة الآن أو لأنك طلبتها.',
+    footer: 'وصلك هذا البريد لأنك تستطيع الموافقة على تغييرات في لوحة إدارة الأمة الآن، أو لأنك طلبت أحدها، أو لأن إحدى قواعد الموافقة تُبلغك بها.',
     sign: 'الأمة الآن',
   },
 } as const;

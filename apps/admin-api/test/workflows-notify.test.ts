@@ -55,6 +55,7 @@ describe('rendering', () => {
     assert.doesNotMatch(e.text, /Fixed fee/, 'unchanged fields are left out');
     assert.match(plain(e.text), /Card, Wallet/);
     assert.match(e.text, /Approvals: 1 of 2/);
+    assert.match(e.text, /or an approval rule tells you about them\./, 'true for the people a rule tells too');
     assert.match(e.text, /https:\/\/admin\.qa\.alummahnow\.net\/approvals\/wfr_1/);
     assert.doesNotMatch(e.text + e.html, /\/approve\b/, 'never approve from the email (WF-D5)');
   });
