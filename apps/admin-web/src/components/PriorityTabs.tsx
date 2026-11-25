@@ -30,6 +30,12 @@ function focusQuietly(el: HTMLElement) {
   el.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
 }
 
+/**
+ * A count pill in the menu: the page's surface colour is the menu's own in dark themes, so there it is a tint of the
+ * row's text (pills marked data-pill="plain"; the danger ones keep their colours).
+ */
+const MENU_PILL = '[&_[data-pill=plain]]:bg-[color-mix(in_srgb,currentColor_16%,transparent)] [&_[data-pill=plain]]:text-[inherit]';
+
 export interface PriorityTab {
   id: string;
   label: string;
@@ -264,7 +270,7 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                         pickedByPointer.current = event.detail > 0;
                         close(false);
                       }}
-                      className={`aun-menu-item ${tab.current ? 'font-semibold' : ''}`}
+                      className={`aun-menu-item ${MENU_PILL} ${tab.current ? 'font-semibold' : ''}`}
                       data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
                     >
                       {tab.label}
@@ -282,7 +288,7 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                         close(false);
                         onSelect?.(tab.id);
                       }}
-                      className={`aun-menu-item w-full text-start ${tab.current ? 'font-semibold' : ''}`}
+                      className={`aun-menu-item ${MENU_PILL} w-full text-start ${tab.current ? 'font-semibold' : ''}`}
                       data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
                     >
                       {tab.label}

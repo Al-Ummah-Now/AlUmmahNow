@@ -133,7 +133,7 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
           label: t(`categorySuggestions.view_${v.id}`),
           href: href({ view: v.id }),
           current: v.id === view,
-          extra: v.count === undefined ? undefined : <span className="text-xs rounded bg-surface-2 px-1.5 py-0.5" data-testid={`category-tab-count-${v.id}`}>{n(v.count)}</span>,
+          extra: v.count === undefined ? undefined : <span className="text-xs rounded bg-surface-2 px-1.5 py-0.5" data-pill="plain" data-testid={`category-tab-count-${v.id}`}>{n(v.count)}</span>,
         }))}
       />
       <p className="text-sm text-fg-muted -mt-3">{t(`categorySuggestions.viewHint_${view}`)}</p>
