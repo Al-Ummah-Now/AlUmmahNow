@@ -222,7 +222,9 @@ export async function runQuranSync(
     result = { status: 'unchanged', version: current!.version };
   }
   // The token moves only after the copy is written: a failed build sees the same changes again
-  await bucket.put(QURAN_STATE_KEY, json({ ...state, v: 1, syncToken: changes.nextToken ?? state.syncToken, tokenResources: RESOURCES, syncedAt, lastAttemptAt: syncedAt }));
+  // A bootstrap never keeps the old token: it may be the one QF refused
+  const syncToken = changes.nextToken ?? (bootstrap ? undefined : state.syncToken);
+  await bucket.put(QURAN_STATE_KEY, json({ ...state, v: 1, syncToken, tokenResources: RESOURCES, syncedAt, lastAttemptAt: syncedAt }));
   return result;
 }
 
