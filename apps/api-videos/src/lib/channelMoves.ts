@@ -9,7 +9,7 @@
  * A channel that accepts payments (creator support set up) is refused here until moves of such
  * channels can wait for an admin's approval on the approval workflow system (AUN-WORKFLOWS).
  */
-import { channelRoleOf, localizedDisplayNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { channelRoleOf, localizedDisplayNames, resolveDisplayName, stripBidiControls, type NameFields } from '@al-ummah/shared-types';
 import { OFFICIAL_HANDLES } from './channelHandles';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
@@ -144,7 +144,8 @@ export async function createMoveOffer(
 	if (input.toUserId === input.ownerId) throw new MoveError(400, 'already_owner');
 	if (!input.authTime || now / 1000 - input.authTime > MOVE_REAUTH_SECONDS) throw new MoveError(403, 'reauth_required', 'Sign in again to move this channel');
 	const want = String(channel.handle ?? channel.id).toLowerCase();
-	if (input.typed.trim().replace(/^@/, '').toLowerCase() !== want) throw new MoveError(400, 'confirm_mismatch', 'Type the channel’s @handle to confirm');
+	// Copied from a label, the handle brings its isolates
+	if (stripBidiControls(input.typed).trim().replace(/^@/, '').toLowerCase() !== want) throw new MoveError(400, 'confirm_mismatch', 'Type the channel’s @handle to confirm');
 	await checkMovable(env, channel, input.toUserId);
 	// An accept that never finished no longer blocks a new offer; before the 30-day check, because one that did start its move counts
 	await settleStaleAccept(env, channel.id, now);

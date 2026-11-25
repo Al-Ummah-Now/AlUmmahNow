@@ -7,7 +7,7 @@
  * with Withdraw instead of the form.
  */
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
-import { formatDate, formatNumber } from '@al-ummah/shared-types';
+import { formatDate, formatNumber, stripBidiControls } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
 import NotFoundPage from '@/components/NotFoundPage';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
@@ -199,7 +199,9 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
     });
   }, [channelId, lang, someone]);
 
-  const matches = typed.trim().replace(/^@/, '').toLowerCase() === handle.toLowerCase();
+  // Copied from the label, the handle brings its isolates
+  const confirm = stripBidiControls(typed).trim();
+  const matches = confirm.replace(/^@/, '').toLowerCase() === handle.toLowerCase();
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
@@ -207,7 +209,7 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
     setBusy(true);
     setError(null);
     try {
-      await makeMoveOffer(channelId, { toUserId: receiver.userId, confirm: typed, keepContactEmail });
+      await makeMoveOffer(channelId, { toUserId: receiver.userId, confirm, keepContactEmail });
       onSent();
     } catch (e) {
       if (isMoveError(e, 'move_not_owner', 'channel_not_found')) return onNotYours();

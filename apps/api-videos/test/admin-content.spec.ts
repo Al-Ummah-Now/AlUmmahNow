@@ -1562,7 +1562,7 @@ describe('channel actions', () => {
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: 'usr_viewer', typed: '@ch1', authTime: fresh }), 'receiver_not_channel_admin');
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh - 3600 }), 'reauth_required');
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@wrong', authTime: fresh }), 'confirm_mismatch');
-		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@CH1', authTime: fresh });
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '\u2068@CH1\u2069 ', authTime: fresh });
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: 'ch1', authTime: fresh }), 'offer_open');
 		const offered = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.notificationKey === 'channelMoveOffered');
 		assert.deepEqual([offered?.recipientUserId, offered?.params?.channel], [OTHER, 'Channel ch1']);

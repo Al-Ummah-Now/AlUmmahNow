@@ -109,7 +109,9 @@ describe('Move channel', () => {
     await user.type(screen.getByTestId('move-confirm'), '@wrong');
     expect(screen.getByTestId('move-send')).toBeDisabled();
     await user.clear(screen.getByTestId('move-confirm'));
-    await user.type(screen.getByTestId('move-confirm'), '@Morning');
+    // Copied from its label, with the isolates around it
+    await user.click(screen.getByTestId('move-confirm'));
+    await user.paste(`${iso('@Morning')} `);
     await user.click(screen.getByTestId('move-keep-email'));
     api.loadMoveState.mockResolvedValue({ offer: offer({ viewerRole: 'from' }), movableAt: null });
     await user.click(screen.getByTestId('move-send'));
