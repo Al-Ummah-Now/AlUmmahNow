@@ -196,7 +196,7 @@ function RequestDialog({ subjectUserId, onClose, onSent }: { subjectUserId: stri
       ref={dialogRef}
       onCancel={onClose}
       aria-labelledby="auth-request-dialog-title"
-      className="bg-surface text-fg border border-border rounded-lg p-0 w-full max-w-lg backdrop:bg-fg/40"
+      className="bg-surface text-fg border border-border rounded-lg p-0 w-full max-w-lg"
       data-testid="auth-request-dialog"
     >
       <form onSubmit={submit} className="p-6 space-y-4">

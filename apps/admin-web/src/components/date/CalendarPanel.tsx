@@ -131,7 +131,7 @@ export function CalendarPanel({ id, locale, t, value, time, min, max, required, 
   return (
     <>
       {/* Phone: the sheet dims the page behind it; a tap there closes it */}
-      <div className="fixed inset-0 z-40 bg-bg/70 sm:hidden" aria-hidden="true" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-[var(--aun-scrim)] sm:hidden" aria-hidden="true" onClick={onClose} />
       <div
         ref={panel}
         id={id}

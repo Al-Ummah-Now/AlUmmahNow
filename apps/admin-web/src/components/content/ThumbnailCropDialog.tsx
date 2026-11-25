@@ -94,7 +94,7 @@ export function ThumbnailCropDialog({ src, image, video, filename, onCancel, onC
       onClose={onCancel}
       aria-labelledby="thumb-crop-title"
       aria-describedby="thumb-crop-help"
-      className="bg-surface text-fg border border-border rounded-lg p-0 w-[min(40rem,calc(100vw-2rem))] backdrop:bg-fg/50"
+      className="bg-surface text-fg border border-border rounded-lg p-0 w-[min(40rem,calc(100vw-2rem))]"
       data-testid="video-thumbnail-cropper"
     >
       <div className="p-6 space-y-4">

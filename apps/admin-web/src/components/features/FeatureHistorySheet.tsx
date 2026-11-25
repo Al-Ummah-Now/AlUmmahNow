@@ -74,7 +74,7 @@ export function FeatureHistorySheet({ featureKey, load: fetchPage, onClose }: { 
         if (e.target === e.currentTarget) onClose();
       }}
       aria-labelledby={`${ids}-title`}
-      className="m-0 ms-auto h-dvh max-h-none w-full max-w-full border-0 border-s border-border bg-surface p-0 text-fg shadow-2xl backdrop:bg-fg/50 sm:w-[30rem]"
+      className="m-0 ms-auto h-dvh max-h-none w-full max-w-full border-0 border-s border-border bg-surface p-0 text-fg shadow-2xl sm:w-[30rem]"
       data-testid="feature-history-sheet"
       data-key={featureKey ?? ''}
     >
