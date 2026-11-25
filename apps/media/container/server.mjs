@@ -206,6 +206,20 @@ async function extractReview(job, src, info) {
 	}
 }
 
+/** A still that seeks to no frame (a short MPEG-TS clip, #1946) is retried the slower way: a poster of the first second beats a failed transcode */
+async function stillWithFallbacks(args, fallbacks) {
+	const ways = [args, ...fallbacks];
+	for (let i = 0; i < ways.length; i++) {
+		try {
+			await run('ffmpeg', ways[i]);
+			return;
+		} catch (error) {
+			if (i === ways.length - 1) throw error;
+			log('still found no frame, trying the next way', { way: i + 1, error: String(error.message).slice(0, 200) });
+		}
+	}
+}
+
 async function probe(file) {
 	const json = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file]));
 	const v = (json.streams || []).find((s) => s.codec_type === 'video' && !(s.disposition && s.disposition.attached_pic));
@@ -521,8 +535,8 @@ async function runJob(job) {
 	const published = prebuilt?.used ? prebuilt.top : src;
 	setStage('stills');
 	const stills = stillsArgs({ input: published, out, durationSeconds: info.durationSeconds });
-	await run('ffmpeg', stills.thumb);
-	await run('ffmpeg', stills.thumbSmall);
+	await stillWithFallbacks(stills.thumb, stills.thumbFallbacks);
+	await stillWithFallbacks(stills.thumbSmall, stills.thumbSmallFallbacks);
 	let preview;
 	try {
 		await run('ffmpeg', stills.preview);

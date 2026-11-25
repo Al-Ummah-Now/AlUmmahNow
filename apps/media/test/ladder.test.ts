@@ -1,4 +1,8 @@
 import { describe, it } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, posterTime, progressSeconds, stillsArgs } from '../container/ladder.mjs';
 
@@ -97,5 +101,41 @@ describe('progressive MP4 (D-SEO-11)', () => {
 		assert.ok(args.includes('copy'));
 		assert.ok(!args.includes('libx264'));
 		assert.deepEqual(args.slice(-3), ['-movflags', '+faststart', `/tmp/out/${MP4_FILE}`]);
+	});
+});
+
+describe('stills of a short MPEG-TS clip (#1946)', () => {
+	const seekOf = (args: string[]) => args[args.indexOf('-ss') + 1];
+	it('keeps the input seek first and falls back to an output seek, then the first frame', () => {
+		const s = stillsArgs({ input: 'i', out: 'o', durationSeconds: 5 });
+		assert.ok(s.thumb.indexOf('-ss') < s.thumb.indexOf('-i'));
+		const [after, first] = s.thumbFallbacks;
+		assert.ok(after.indexOf('-i') < after.indexOf('-ss'), 'the output seek comes after -i');
+		assert.equal(seekOf(after), '0.50');
+		assert.ok(!first.includes('-ss'));
+		assert.deepEqual([after.at(-1), first.at(-1)], ['o/thumb.jpg', 'o/thumb.jpg']);
+		assert.deepEqual([s.thumbSmallFallbacks[0].at(-1), s.thumbSmallFallbacks[1].at(-1)], ['o/thumb_640.jpg', 'o/thumb_640.jpg']);
+	});
+
+	const haveFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+	it('makes both posters from a real 5 s MPEG-TS clip that starts at 1.4 s or later', { skip: !haveFfmpeg && 'ffmpeg is not installed' }, () => {
+		const dir = mkdtempSync(join(tmpdir(), 'stills-'));
+		try {
+			const input = join(dir, 'clip.ts');
+			const made = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25', '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-output_ts_offset', '1.4', '-f', 'mpegts', input]);
+			assert.equal(made.status, 0, String(made.stderr));
+			const probe = JSON.parse(String(spawnSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', input]).stdout));
+			assert.ok(Number(probe.format.start_time) > 1, `the clip starts at ${probe.format.start_time}`);
+			const s = stillsArgs({ input, out: dir, durationSeconds: Number(probe.format.duration) });
+			// Every way that is left after the input seek produces a poster
+			for (const [name, args, file] of [['after', s.thumbFallbacks[0], 'thumb.jpg'], ['first', s.thumbFallbacks[1], 'thumb.jpg'], ['small after', s.thumbSmallFallbacks[0], 'thumb_640.jpg']] as const) {
+				rmSync(join(dir, file), { force: true });
+				const r = spawnSync('ffmpeg', args);
+				assert.equal(r.status, 0, `${name}: ${String(r.stderr).slice(-300)}`);
+				assert.ok(statSync(join(dir, file)).size > 0, name);
+			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

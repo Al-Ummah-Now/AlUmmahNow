@@ -142,13 +142,31 @@ export function posterTime(durationSeconds) {
 	return Math.min(30, Math.max(0, durationSeconds * 0.1));
 }
 
-/** Poster (1280 and 640 wide) and a 4 s animated preview (320 wide). */
+/**
+ * Poster (1280 and 640 wide) and a 4 s animated preview (320 wide).
+ *
+ * `thumb` and `thumbSmall` seek on the input (`-ss` before `-i`: fast, and what every normal file gets). A
+ * short MPEG-TS clip (camera and AVCHD files, start time 1.4 s or more, one keyframe) has no index to seek
+ * by, the guessed position lands past the only keyframe and the single-frame output is empty (#1946).
+ * `thumbFallbacks` and `thumbSmallFallbacks` are what to run, in order, when that happens: the same seek
+ * on the output side (decodes from the start, so it always finds the frame), then the first frame.
+ */
 export function stillsArgs(o) {
 	const t = posterTime(o.durationSeconds).toFixed(2);
 	const pt = Math.min(posterTime(o.durationSeconds), Math.max(0, o.durationSeconds - 4)).toFixed(2);
+	const frame = (width, quality, file, seek) => {
+		const tail = ['-frames:v', '1', '-vf', `scale='min(${width},iw)':-2`, '-q:v', quality, `${o.out}/${file}`];
+		return {
+			before: ['-hide_banner', '-nostdin', '-y', '-ss', t, '-i', o.input, ...tail],
+			after: ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-ss', t, ...tail],
+			first: ['-hide_banner', '-nostdin', '-y', '-i', o.input, ...tail],
+		}[seek];
+	};
 	return {
-		thumb: ['-hide_banner', '-nostdin', '-y', '-ss', t, '-i', o.input, '-frames:v', '1', '-vf', "scale='min(1280,iw)':-2", '-q:v', '3', `${o.out}/thumb.jpg`],
-		thumbSmall: ['-hide_banner', '-nostdin', '-y', '-ss', t, '-i', o.input, '-frames:v', '1', '-vf', "scale='min(640,iw)':-2", '-q:v', '4', `${o.out}/thumb_640.jpg`],
+		thumb: frame(1280, '3', 'thumb.jpg', 'before'),
+		thumbSmall: frame(640, '4', 'thumb_640.jpg', 'before'),
+		thumbFallbacks: [frame(1280, '3', 'thumb.jpg', 'after'), frame(1280, '3', 'thumb.jpg', 'first')],
+		thumbSmallFallbacks: [frame(640, '4', 'thumb_640.jpg', 'after'), frame(640, '4', 'thumb_640.jpg', 'first')],
 		preview: ['-hide_banner', '-nostdin', '-y', '-ss', pt, '-t', '4', '-i', o.input, '-an', '-vf', "fps=8,scale='min(320,iw)':-2", '-loop', '0', '-c:v', 'libwebp', '-quality', '60', `${o.out}/preview.webp`],
 	};
 }
