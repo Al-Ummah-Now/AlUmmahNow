@@ -47,6 +47,7 @@ import { reserveBudget, settleBudget } from '../moderation/budget';
 import { neuronsFor } from '../moderation/pricing';
 import { estimateTokens } from '../moderation/text';
 import { CATEGORIZE_FEATURE } from '../moderation/usage';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** The R2 calls the job needs (conditional put returns null when the etag moved on). */
 export interface CasBucket {
@@ -116,6 +117,7 @@ interface StoredVideo {
 }
 
 async function readVideo(bucket: CasBucket, id: string): Promise<{ video: StoredVideo; etag: string } | null> {
+  if (isInternalVideoKey(id)) return null;
   const object = await bucket.get(id);
   if (!object) return null;
   return { video: JSON.parse(await object.text()) as StoredVideo, etag: object.etag };

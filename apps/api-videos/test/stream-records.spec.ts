@@ -18,6 +18,10 @@ import { computeChannelTotals } from '../src/lib/channelAbout';
 import { loadPublicPlay } from '../src/lib/media/public-play';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { deleteVideo, moveVideo, reprocessVideo, restoreVideo, setVideoPublished, updateVideo, videoDetail } from '../src/lib/admin/service';
+import { ReportCreate } from '../src/endpoints/moderation/reportCreate';
+import { ChannelCommentsBulk } from '../src/endpoints/channel/channelComments';
+import { resolveByHand, resolveCsamUrl } from '../src/lib/csam/resolve';
+import { hydrateRanked } from '../src/lib/recommendations';
 import videoRouter from '../src/routers/video.router';
 import playlistRouter from '../src/routers/playlist.router';
 import analyticsRouter from '../src/routers/analytics.router';
@@ -155,7 +159,7 @@ describe('records of the videos bucket that are not videos', () => {
 		const app = new Hono();
 		app.use('/api/*', refuseInternalVideoKeys);
 		app.all('*', (c) => c.text('read'));
-		for (const path of [`/api/videos/${KEY}`, `/api/videos/${encodeURIComponent(KEY)}/comments`, '/api/videos/LIVESTREAM%3Ax'.replace('LIVESTREAM', 'livestream'), '/api/videos/index:recent-videos', `/api/recommendations?videoId=${KEY}`, `/api/analytics?entityId=${KEY}`, `/api/x?ids=v1,${KEY}`]) assert.equal((await app.request(path)).status, 404, path);
+		for (const path of [`/api/videos/${KEY}`, `/api/videos/${encodeURIComponent(KEY)}/comments`, '/api/videos/LIVESTREAM%3Ax'.replace('LIVESTREAM', 'livestream'), '/api/videos/index:recent-videos', `/api/recommendations?videoId=${KEY}`, `/api/analytics?entityId=${KEY}`, `/api/x?ids=v1,${KEY}`, `/api/x?ids=v1,%20${KEY}`, `/api/x?channelIds=ch1%20,%20${KEY}%20`]) assert.equal((await app.request(path)).status, 404, path);
 		const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
 		assert.ok(index.indexOf("app.use('/api/*', refuseInternalVideoKeys)") > 0 && index.indexOf("app.use('/api/*', refuseInternalVideoKeys)") < index.indexOf('registerAllRouters(openapi'), 'the API uses it before its routes');
 		for (const path of ['/api/videos/v1', '/api/videos?q=livestream:x', '/api/search?query=index:%20of%20lessons', '/api/live-streams/private', '/api/videos/%E0%A4%A']) assert.equal((await app.request(path)).status, 200, path);
@@ -189,6 +193,32 @@ describe('records of the videos bucket that are not videos', () => {
 		const e = env as never;
 		for (const act of [() => videoDetail(e, KEY), () => updateVideo(e, KEY, { title: 'changed' } as never), () => moveVideo(e, KEY, 'ch1', 'admin'), () => setVideoPublished(e, KEY, true), () => reprocessVideo(e, KEY), () => deleteVideo(e, KEY, 'admin'), () => restoreVideo(e, KEY)]) await assert.rejects(Promise.resolve().then(act), (error: any) => /not_found/.test(`${error.code} ${error.message}`), String(act));
 		assert.equal((await loadPublicPlay(env as never, KEY).catch(() => null)) ?? null, null);
+		assert.equal(internal(env), before);
+	});
+
+	it('cannot be reported as a video; a live stream is still reported as one', async () => {
+		const env = await setup(true);
+		const app = buildApp((r: any) => r.post('/api/moderation/reports', ReportCreate), { userId: 'usr_x' });
+		const report = async (entityType: string, entityId: string) => app.request('/api/moderation/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ entityType, entityId, reason: 'spam' }) }, env as never);
+		for (const key of [KEY, 'index:recent-videos', 'metadata:last-index-update']) {
+			const res = await report('video', key);
+			assert.deepEqual([res.status, ((await res.json()) as any).code], [404, 'not_found'], key);
+		}
+		assert.equal(env.reports.store.size, 0, 'nothing is claimed or filed');
+		assert.equal(env.queue.messages.length, 0);
+		assert.equal((await report('livestream', 'ended')).status, 200);
+		assert.equal((await report('video', 'v1')).status, 200);
+	});
+
+	it('nor does a bulk comment action, a takedown or a ranked list reach one', async () => {
+		const env = await setup(true);
+		const before = internal(env);
+		const bulk = await buildApp((r: any) => r.post('/api/channels/:id/comments/bulk', ChannelCommentsBulk), { userId: OWNER }).request('/api/channels/ch1/comments/bulk', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'remove', items: [{ kind: 'video', targetId: KEY, commentId: 'c1' }] }) }, env as never);
+		assert.equal(bulk.status, 400, 'its ids take no such key');
+		assert.equal(await resolveByHand(env as never, { kind: 'video', videoId: KEY }), null);
+		assert.equal((await resolveByHand(env as never, { kind: 'video', videoId: 'v1' }))!.kind, 'video');
+		for (const url of [`https://alummahnow.net/en/video/${KEY}`, `https://alummahnow.net/en/video/${encodeURIComponent(KEY)}`]) assert.equal((await resolveCsamUrl(env as never, url)).ok, false, url);
+		assert.deepEqual((await hydrateRanked(env.videos, [KEY, 'v1'].map((id) => ({ video: { id } as never, score: 1 })), 10)).map((r) => r.video.id), ['v1']);
 		assert.equal(internal(env), before);
 	});
 

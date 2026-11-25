@@ -144,6 +144,19 @@ describe('category suggestion review', () => {
     assert.deepEqual(await getCategorySuggestion(db, 'v-fail').then((r) => [r!.status, r!.reason, r!.attempts, r!.last_error]), ['pending', 'backfill', 0, null]);
   });
 
+  it('a key of the videos bucket that is not a video is never shown, set or queued', async () => {
+    const { db, reports, videos, queue } = await setup();
+    const key = 'livestream:s1';
+    await videos.put(key, JSON.stringify({ id: 's1', title: 'stream' }));
+    await markCategorySuggestionPending(db, { subjectId: key, subjectType: 'video', reason: 'upload', now: NOW - 2 * 3600_000 });
+    const item = (await listSuggestions(db, videos, { view: 'all', videoId: key }, NOW)).items[0];
+    assert.ok(!JSON.stringify(item ?? {}).includes('stream"'));
+    assert.deepEqual((await applyAdminCategory({ db, reports, videos }, [key], { kind: 'set', category: 'fiqh' }, 'admin-1', NOW)).map((r) => [r.ok, r.error]), [[false, 'video_missing']]);
+    assert.deepEqual((await retrySuggestions({ db, reports, queue }, [key], 'admin-1', NOW)).map((r) => [r.ok, r.error]), [[false, 'video_missing']]);
+    assert.equal(queue.messages.length, 0);
+    assert.deepEqual(videos.read(key), { id: 's1', title: 'stream' });
+  });
+
   it('backfill: dry run only counts; the real run queues each uncategorised video once; a re-run queues nothing', async () => {
     const { db, reports, videos, queue } = await setup();
     const dry = await backfillPage({ db, reports, videos, queue }, { dryRun: true }, 'admin-1', NOW);

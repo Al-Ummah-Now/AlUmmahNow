@@ -24963,7 +24963,7 @@
             }
           },
           "404": {
-            "description": "A live chat message that is not there for this person, or live chat is off (feature_off)",
+            "description": "A video that is not there, or a live chat message that is not there for this person, or live chat is off (feature_off)",
             "content": {
               "application/json": {
                 "schema": {

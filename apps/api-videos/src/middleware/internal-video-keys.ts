@@ -17,7 +17,7 @@ const decoded = (part: string): string => {
  * (lib/r2Repo.ts, lib/listFill.ts, lib/videoReadAccess.ts).
  */
 export async function refuseInternalVideoKeys(c: Context, next: Next): Promise<Response | void> {
-	const named = c.req.path.split('/').some((part) => isInternalVideoKey(decoded(part))) || Object.entries(c.req.queries()).some(([name, values]) => /ids?$/i.test(name) && values.some((value) => value.split(',').some(isInternalVideoKey)));
+	const named = c.req.path.split('/').some((part) => isInternalVideoKey(decoded(part))) || Object.entries(c.req.queries()).some(([name, values]) => /ids?$/i.test(name) && values.some((value) => value.split(',').some((id) => isInternalVideoKey(id.trim()))));
 	if (named) return apiError(c, 404, 'not_found');
 	await next();
 }

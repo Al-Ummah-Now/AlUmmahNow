@@ -300,6 +300,10 @@ export async function retrySuggestions(env: { db: SearchDb; reports: D1Like; que
   const results: BulkResult[] = [];
   const payloads: CategorySuggestPayload[] = [];
   for (const videoId of ids) {
+    if (isInternalVideoKey(videoId)) {
+      results.push({ videoId, ok: false, error: 'video_missing' });
+      continue;
+    }
     const row = await getCategorySuggestion(env.db, videoId);
     if (!row) {
       await markCategorySuggestionPending(env.db, { subjectId: videoId, subjectType: 'video', reason: 'retry', now });

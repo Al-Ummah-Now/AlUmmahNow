@@ -8,6 +8,7 @@
  */
 import { parseCsamUrl, type CsamResolution, type CsamUrlTarget } from '@al-ummah/shared-types';
 import { lookupImageOwner } from './imageOwners';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface ResolveEnv {
 	videos?: R2Bucket;
@@ -32,7 +33,7 @@ async function json<T>(bucket: R2Bucket | undefined, key: string): Promise<T | n
 type VideoRow = { userId?: string; channelId?: string | null };
 
 async function videoResolution(env: ResolveEnv, videoId: string, kind: 'video' | 'video_thumbnail', target: CsamUrlTarget): Promise<ResolveOutcome> {
-	const video = await json<VideoRow>(env.videos, videoId);
+	const video = isInternalVideoKey(videoId) ? null : await json<VideoRow>(env.videos, videoId);
 	if (!video) return { ok: false, reason: 'not_found', target };
 	return { ok: true, resolution: { kind, videoId, channelId: video.channelId ?? null, uploaderId: video.userId ?? null } };
 }
@@ -105,7 +106,7 @@ export async function resolveByHand(
 	input: { kind: 'video'; videoId: string } | { kind: 'post'; channelId: string; postId: string } | { kind: 'profile_image' | 'channel_image'; id: string; field: 'avatarUrl' | 'coverUrl' },
 ): Promise<CsamResolution | null> {
 	if (input.kind === 'video') {
-		const v = await json<VideoRow>(env.videos, input.videoId);
+		const v = isInternalVideoKey(input.videoId) ? null : await json<VideoRow>(env.videos, input.videoId);
 		return v ? { kind: 'video', videoId: input.videoId, channelId: v.channelId ?? null, uploaderId: v.userId ?? null } : null;
 	}
 	if (input.kind === 'post') {
