@@ -8,7 +8,7 @@
  */
 import { formatNumber } from '@/i18n/translate';
 import { useId, useState } from 'react';
-import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, localizeDigits } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
@@ -23,12 +23,29 @@ interface Props {
   disabled?: boolean;
 }
 
+/** api-videos' minimum-version problems, in the page's language */
+const MINIMUM_PROBLEMS: Record<string, MessageKey> = {
+  minimum_signed_release: 'appConfig.problems.minimumSignedRelease',
+  minimum_published_release: 'appConfig.problems.minimumPublishedRelease',
+  minimum_store_none: 'appConfig.problems.minimumStoreNone',
+  minimum_store: 'appConfig.problems.minimumStore',
+  minimum_not_marked: 'appConfig.problems.minimumNotMarked',
+  minimum_unknown: 'appConfig.problems.minimumUnknown',
+};
+
 export function FieldProblems({ problems, id }: { problems: Problem[]; id: string }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   if (!problems.length) return null;
+  const words = (p: Problem) => {
+    if (p.code !== 'server') return t(`appConfig.problems.${p.code}` as MessageKey);
+    const key = p.minimum && MINIMUM_PROBLEMS[p.minimum.code];
+    if (!key || !p.minimum) return t('appConfig.problems.server', { detail: p.detail ?? '' });
+    const { platform = '', store = '', version = '', minimum = '' } = p.minimum.params;
+    return t(key, { platform: platform ? t(`appConfig.platformNames.${platform}` as MessageKey) : '', store, version: localizeDigits(locale, version), minimum: localizeDigits(locale, minimum) });
+  };
   return (
     <span id={id} className="block text-xs text-danger-fg" data-testid="app-config-problem">
-      {problems.map((p) => (p.code === 'server' ? t('appConfig.problems.server', { detail: p.detail ?? '' }) : t(`appConfig.problems.${p.code}` as MessageKey))).join(' ')}
+      {problems.map(words).join(' ')}
     </span>
   );
 }

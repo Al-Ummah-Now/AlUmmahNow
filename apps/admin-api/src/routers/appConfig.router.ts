@@ -46,11 +46,14 @@ export const sameDocument = sameAppConfigDocument;
  * api-videos' zod issues as the admin's problem shape: `problem` is where (the path, `0.key` for
  * the first rule's key, `viewer/ios.minimumVersion`), `detail` what is wrong. At most 50.
  */
-export function documentProblems(issues: unknown): { problem: string; detail: string }[] {
+export function documentProblems(issues: unknown): { problem: string; detail: string; code?: string; params?: Record<string, string> }[] {
   if (!Array.isArray(issues)) return [];
   return issues.slice(0, 50).map((issue) => {
-    const i = (issue ?? {}) as { path?: unknown; message?: unknown };
-    return { problem: Array.isArray(i.path) ? i.path.map(String).join('.') : '', detail: typeof i.message === 'string' ? i.message.slice(0, 300) : 'Invalid' };
+    const i = (issue ?? {}) as { path?: unknown; message?: unknown; code?: unknown; params?: unknown };
+    // A minimum-version problem says what is wrong in a code, which the admin's page words in its own language
+    const coded = typeof i.code === 'string' && i.code.startsWith('minimum_');
+    const params = coded && i.params && typeof i.params === 'object' ? Object.fromEntries(Object.entries(i.params).filter((e): e is [string, string] => typeof e[1] === 'string').map(([k, v]) => [k, v.slice(0, 80)])) : undefined;
+    return { problem: Array.isArray(i.path) ? i.path.map(String).join('.') : '', detail: typeof i.message === 'string' ? i.message.slice(0, 300) : 'Invalid', ...(coded ? { code: i.code as string, params: params ?? {} } : {}) };
   });
 }
 

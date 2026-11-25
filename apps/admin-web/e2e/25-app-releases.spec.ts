@@ -74,6 +74,16 @@ test.describe('app releases', () => {
       await expect(refused).not.toContainText('bad_signature');
     });
 
+    test('APPREL-05 on a phone nothing is off the screen and Edit is reachable', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/app-config');
+      const edit = page.locator('[data-testid="app-releases-row"][data-target="tools/windows/stable"]').getByTestId('app-releases-edit');
+      await edit.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'the page scrolls sideways').toBeLessThanOrEqual(0);
+      const box = (await edit.boundingBox())!;
+      expect(box.x >= 0 && box.x + box.width <= 390, `Edit ${Math.round(box.x)}..${Math.round(box.x + box.width)} inside 0..390`).toBe(true);
+    });
+
     test('APPREL-02 marks a TestFlight upload available, then clears it', async ({ page }) => {
       await page.goto('/app-config');
       const row = page.locator('[data-testid="app-releases-row"][data-target="admin/ios/beta"]');
@@ -107,7 +117,8 @@ test.describe('app releases', () => {
       await page.getByTestId('app-config-tab-versions').click();
       await expect(page.getByTestId('app-config-versions-readonly')).toBeVisible();
       await expect(page.getByTestId('app-config-save')).toHaveCount(0);
-      await expect(page.getByTestId('app-config-add-versions')).toBeDisabled();
+      await expect(page.getByTestId('app-config-add-versions')).toHaveCount(0);
+      await expect(page.getByTestId('app-config-version-remove')).toHaveCount(0);
       const token = readTokens().admin;
       expect((await adminApi('/api/app-config/versions', { method: 'PUT', token, body: JSON.stringify({ value: {} }) })).status).toBe(403);
       expect((await adminApi('/api/app-config/releases/available', { method: 'PUT', token, body: JSON.stringify({ app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' }) })).status).toBe(403);

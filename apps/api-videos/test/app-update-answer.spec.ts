@@ -279,6 +279,15 @@ describe('minimum rule (§3.4, §3.7)', () => {
 		assert.equal(minimumProblems({ 'tools/linux': { minimumVersion: '2026.11.01', latestVersion: '2026.12.01' } as never }, releases([tools]), {}).length, 1, 'typed latestVersion ignored');
 	});
 
+	it('every problem says what is wrong in a code and its values, for the editor’s own language', () => {
+		const at = (doc: ReleasesDocument, key: string, min: string, marks = {}) => minimumProblems({ [key]: { minimumVersion: min } }, doc, marks).map((p) => [p.code, p.params]);
+		assert.deepEqual(at(releases([{ ...tools, artifacts: tools.artifacts }]), 'tools/windows', '2026.12.01'), [['minimum_signed_release', { platform: 'windows', version: '2026.11.23', minimum: '2026.12.01' }]]);
+		assert.deepEqual(at(releases([tools]), 'tools/linux', '2026.12.01'), [['minimum_unknown', {}]]);
+		const admin = releases([entry({ app: 'admin', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.4.0', stores: ['testflight'] })]);
+		assert.deepEqual(at(admin, 'admin/ios', '1.3.0'), [['minimum_not_marked', { platform: 'ios', store: 'TestFlight' }]]);
+		assert.deepEqual(at(admin, 'admin/ios', '1.4.0', { 'admin/ios/testflight': '1.3.0' }), [['minimum_store', { platform: 'ios', store: 'TestFlight', version: '1.3.0', minimum: '1.4.0' }]]);
+	});
+
 	it('an App Store app with no lookup answer blocks a minimum', () => {
 		const doc = releases([entry({ app: 'viewer', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.3.0.0', stores: ['appstore'] })]);
 		assert.match(minimumProblems({ 'viewer/ios': { minimumVersion: '1.3.0' } }, doc, {})[0].message, /App Store has no version/);

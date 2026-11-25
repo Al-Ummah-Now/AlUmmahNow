@@ -172,7 +172,7 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
     return { flags: built.flags.value, config: built.config.value, versions: built.versions.value };
   }, [built]);
 
-  // The Releases tab previews the versions document it shows the minimums of
+  // The Releases tab shows the minimums of the versions document
   const doc: AppConfigDocumentKey = tab === 'releases' ? 'versions' : tab;
   const preview = built[doc].value;
   const n = notice[doc];
@@ -180,7 +180,7 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
   const readOnly = doc === 'versions' && !canEditVersions;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className={`grid grid-cols-[minmax(0,1fr)] gap-6 ${tab === 'releases' ? '' : 'xl:grid-cols-[minmax(0,1fr)_22rem]'}`}>
       <div className="min-w-0 space-y-4 [&_input]:scroll-mb-40 [&_input]:scroll-mt-24 [&_select]:scroll-mb-40 [&_select]:scroll-mt-24 [&_textarea]:scroll-mb-40 [&_textarea]:scroll-mt-24">
         {/* One row: the documents that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
         <PriorityTabs
@@ -220,6 +220,7 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
               }}
               problems={problems}
               disabled={busy === 'versions' || readOnly}
+              readOnly={readOnly}
             />
             </>
           ) : (
@@ -289,6 +290,8 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
         </div>
       </div>
 
+      {/* The drafts' dry run and preview: nothing on the Releases tab is a draft */}
+      {tab !== 'releases' && (
       <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
         <DryRun documents={dryRunDocuments} />
         <section className="rounded-lg border border-border bg-surface p-4" aria-labelledby={`${ids}-preview`} data-testid="app-config-preview">
@@ -305,6 +308,7 @@ export function AppConfigEditor({ initial, history, releases, releasesFailed, ca
           )}
         </section>
       </aside>
+      )}
     </div>
   );
 }

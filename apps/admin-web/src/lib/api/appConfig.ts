@@ -71,6 +71,8 @@ export interface AppReleaseEntry {
   private: boolean;
   url: string | null;
   stores: string[];
+  /** This pair's files; empty for a store-only release */
+  artifacts: unknown[];
 }
 
 export interface AppReleasesView {

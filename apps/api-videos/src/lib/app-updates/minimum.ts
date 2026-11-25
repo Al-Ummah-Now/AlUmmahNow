@@ -17,7 +17,13 @@ export interface MinimumProblem {
 	key: string;
 	field: 'minimumVersion';
 	message: string;
+	/** What is wrong, for the editor to say in the admin's language */
+	code: MinimumCode;
+	params: Record<string, string>;
 }
+
+export type MinimumCode = 'minimum_signed_release' | 'minimum_published_release' | 'minimum_store_none' | 'minimum_store' | 'minimum_not_marked' | 'minimum_unknown';
+type Problem = Pick<MinimumProblem, 'message' | 'code' | 'params'>;
 
 const newestName = (e: ReleaseEntry) => (e.signed ? 'The newest signed release' : 'The newest published release');
 const below = (version: string, minimum: string) => compareAppVersions(version, minimum) < 0;
@@ -29,8 +35,9 @@ function releasesFor(app: string, platform: string, channels: readonly string[],
 }
 
 /** What a pair's install sources can give users now, and what each one lacks. */
-function checkPair(app: string, platform: string, minimum: string, channels: readonly string[], releases: ReleasesDocument, availability: AvailabilityDocument, noKeys: ReadonlySet<AppReleaseRepo>): { known: boolean; problems: string[] } {
-	const problems: string[] = [];
+function checkPair(app: string, platform: string, minimum: string, channels: readonly string[], releases: ReleasesDocument, availability: AvailabilityDocument, noKeys: ReadonlySet<AppReleaseRepo>): { known: boolean; problems: Problem[] } {
+	const problems: Problem[] = [];
+	const release = (e: ReleaseEntry): Problem => ({ message: `${newestName(e)} (${platform}) is ${e.version}, below ${minimum}.`, code: e.signed ? 'minimum_signed_release' : 'minimum_published_release', params: { platform, version: e.version, minimum } });
 	let known = false;
 	const signed = releasesFor(app, platform, channels, releases, noKeys);
 	const newest = signed.reduce<ReleaseEntry | null>((a, b) => (!a || compareAppVersions(b.version, a.version) > 0 ? b : a), null);
@@ -40,28 +47,28 @@ function checkPair(app: string, platform: string, minimum: string, channels: rea
 
 	if (newest && (newest.artifacts.length || !newest.signed)) {
 		known = true;
-		if (below(newest.version, minimum)) problems.push(`${newestName(newest)} (${platform}) is ${newest.version}, below ${minimum}.`);
+		if (below(newest.version, minimum)) problems.push(release(newest));
 	}
 	for (const source of stores) {
 		if (source === 'appstore') {
 			const live = bundle ? releases.appStore[bundle] : undefined;
-			if (!live) problems.push(`The App Store has no version of this app (${platform}) yet.`);
+			if (!live) problems.push({ message: `The App Store has no version of this app (${platform}) yet.`, code: 'minimum_store_none', params: { platform, store: 'App Store' } });
 			else {
 				known = true;
-				if (below(live.version, minimum)) problems.push(`The App Store (${platform}) offers ${live.version}, below ${minimum}.`);
+				if (below(live.version, minimum)) problems.push({ message: `The App Store (${platform}) offers ${live.version}, below ${minimum}.`, code: 'minimum_store', params: { platform, store: 'App Store', version: live.version, minimum } });
 			}
 		} else if (source === 'testflight' || source === 'amazon') {
 			const name = source === 'testflight' ? 'TestFlight' : 'Amazon Appstore';
 			const marked = availability[`${app}/${platform}/${source}`];
-			if (!marked) problems.push(`No ${name} build (${platform}) is marked available yet.`);
+			if (!marked) problems.push({ message: `No ${name} build (${platform}) is marked available yet.`, code: 'minimum_not_marked', params: { platform, store: name } });
 			else {
 				known = true;
-				if (below(marked, minimum)) problems.push(`${name} (${platform}) offers ${marked}, below ${minimum}.`);
+				if (below(marked, minimum)) problems.push({ message: `${name} (${platform}) offers ${marked}, below ${minimum}.`, code: 'minimum_store', params: { platform, store: name, version: marked, minimum } });
 			}
 		} else if (newest) {
 			// Play and the Microsoft Store: the device confirms; the release must reach the minimum
 			known = true;
-			if (below(newest.version, minimum) && !problems.some((p) => p.startsWith('The newest '))) problems.push(`${newestName(newest)} (${platform}) is ${newest.version}, below ${minimum}.`);
+			if (below(newest.version, minimum) && !problems.some((p) => p.code === 'minimum_signed_release' || p.code === 'minimum_published_release')) problems.push(release(newest));
 		}
 	}
 	return { known, problems };
@@ -82,9 +89,9 @@ export function minimumProblems(doc: Record<string, { minimumVersion: string }>,
 		for (const p of platforms) {
 			const r = checkPair(app, p, policy.minimumVersion, channels, releases, availability, noKeys);
 			known ||= r.known;
-			for (const message of r.problems) problems.push({ key, field: 'minimumVersion', message });
+			for (const p of r.problems) problems.push({ key, field: 'minimumVersion', ...p });
 		}
-		if (!known && !problems.some((p) => p.key === key)) problems.push({ key, field: 'minimumVersion', message: 'No release of this app is known yet, so no one could update to it.' });
+		if (!known && !problems.some((p) => p.key === key)) problems.push({ key, field: 'minimumVersion', message: 'No release of this app is known yet, so no one could update to it.', code: 'minimum_unknown', params: {} });
 	}
 	return problems;
 }
