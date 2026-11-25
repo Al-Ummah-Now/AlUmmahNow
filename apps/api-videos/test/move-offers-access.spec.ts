@@ -8,6 +8,7 @@ import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import worker from '../src/index';
 import { __resetClientForTests } from '../src/lib/openauth-client';
 import { clearRevocationCache } from '../src/lib/token-revocation';
+import { channelReportUnderReview } from '../src/lib/channelReportStatus';
 import { forgetCachedBan, writeBan, deleteBan } from '../src/lib/admin/bans';
 import { recordDeletion, removeDeletion } from '../src/lib/admin/deletions';
 import { forgetPendingUserDeletion } from '../src/lib/admin/pendingUserDeletion';
@@ -84,6 +85,30 @@ const READS: Record<string, string[]> = {
 };
 const NAMES = /Name of|Morning/;
 
+/** A Secrets Store binding as a Worker has it: an RPC stub, so its method can only be called, never `.call`ed. */
+const rpcSecret = (value: string) => ({
+	get: new Proxy(async () => value, {
+		get(_target, property) {
+			throw new TypeError(`The RPC receiver does not implement the method "${String(property)}".`);
+		},
+	}),
+});
+
+describe('secrets read from a Worker’s bindings', () => {
+	it('the report check calls the binding’s own get', async () => {
+		const asked: string[] = [];
+		const answer = (body: unknown) => (async (_url: unknown, init?: RequestInit) => {
+			asked.push((init?.headers as Record<string, string>)['X-API-Key']);
+			return Response.json(body);
+		}) as unknown as typeof fetch;
+		const env = { ADMIN_API_URL: 'https://admin.rpc.test', INTERNAL_API_KEY: rpcSecret('key-1') };
+		assert.equal(await channelReportUnderReview(env, 'ch1', answer({ success: true, result: { underReview: false } })), false);
+		assert.deepEqual(asked, ['key-1']);
+		assert.equal(await channelReportUnderReview({ ...env, INTERNAL_API_KEY: 'key-2' }, 'ch1', answer({ success: true, result: { underReview: true } })), true);
+		assert.equal(asked[1], 'key-2', 'a plain string, as in local development');
+	});
+});
+
 describe('channel move offers through the mounted app', () => {
 	it('the parties read it; a stranger, a visitor and the switch being off get nothing', async () => {
 		const { env, get } = setup();
@@ -99,7 +124,10 @@ describe('channel move offers through the mounted app', () => {
 			assert.equal((await get('usr_stranger', path)).status, 404);
 			assert.equal((await get(null, path)).status, 401);
 		}
+		// The web's pages read the switch this way for a visitor: 401 while it is on
+		assert.equal((await get(null, '/api/move-offers')).status, 401);
 		env.FEATURES_FORCE_OFF = 'channelMove';
+		assert.deepEqual([(await get(null, '/api/move-offers')).status, (await get(null, '/api/move-offers')).body.code], [404, 'feature_off']);
 		for (const path of READS[FROM]) assert.equal((await get(FROM, path)).body.code, 'feature_off');
 	});
 

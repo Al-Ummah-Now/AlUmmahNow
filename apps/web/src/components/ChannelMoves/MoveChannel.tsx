@@ -9,13 +9,14 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { formatDate, formatNumber } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
+import NotFoundPage from '@/components/NotFoundPage';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useProfile } from '@/hooks/useProfile';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
-import { isFreshSignIn, isMoveError, isolate, loadMoveState, makeMoveOffer, moveErrorMessage, moveName, searchMoveReceivers, withdrawMove, type ChannelMoveState, type MoveOffer, type MoveReceiver } from '@/lib/channels/moves';
+import { isFreshSignIn, isMoveError, isolate, loadFailedText, loadMoveState, makeMoveOffer, moveErrorMessage, moveName, searchMoveReceivers, withdrawMove, type ChannelMoveState, type MoveOffer, type MoveReceiver } from '@/lib/channels/moves';
 import { userDisplayName } from '@/lib/display-name';
 import { Avatar, CARD, Expires, LoadFailed, Loading, Message, PRIMARY, SECONDARY, SOFT, TEXT, type MoveMessage } from './parts';
 
@@ -49,16 +50,16 @@ export default function MoveChannel({ channelId, handle, locale, authTime, signe
   const { t } = useLanguage();
   const m = t.channelMoves;
   const [state, setState] = useState<ChannelMoveState | 'not-yours' | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null);
   const [message, setMessage] = useState<MoveMessage | null>(null);
 
   const refresh = useCallback(async () => {
-    setFailed(false);
+    setFailed(null);
     try {
       setState(await loadMoveState(channelId));
     } catch (error) {
       if (isMoveError(error, 'channel_not_found')) setState('not-yours');
-      else setFailed(true);
+      else setFailed({ error });
     }
   }, [channelId]);
 
@@ -67,7 +68,8 @@ export default function MoveChannel({ channelId, handle, locale, authTime, signe
   }, [refresh, signedIn]);
 
   if (!signedIn) return <SignInAgain channelId={channelId} locale={locale} />;
-  if (failed) return <LoadFailed onRetry={() => void refresh()} />;
+  if (failed && isMoveError(failed.error, 'feature_off')) return <NotFoundPage />;
+  if (failed) return <LoadFailed error={failed.error} onRetry={() => void refresh()} />;
   if (state === null) return <Loading />;
   if (state === 'not-yours') return <NotYours channelId={channelId} locale={locale} />;
 
@@ -248,6 +250,7 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
           </div>
         ) : (
           <>
+            <p id={ids.receiverHelp} className={`mb-1 text-xs ${SOFT}`}>{f.receiverHelp}</p>
             <Autocomplete
               inputId={ids.receiver}
               value={query}
@@ -257,6 +260,7 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
               loadKey={channelId}
               minChars={1}
               emptyText={f.noAdmins}
+              errorText={(e) => loadFailedText(e, lang === 'ar' ? 'ar' : 'en', m.loadFailed)}
               onSelect={(option) => { setReceiver(option.value as MoveReceiver); setError(null); }}
               listLabel={f.receiver}
               testId="move-receiver"
@@ -264,7 +268,6 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
               inputProps={{ placeholder: f.receiverPlaceholder, autoComplete: 'off', autoCapitalize: 'off', maxLength: 200, 'aria-describedby': ids.receiverHelp }}
               inputClassName={FIELD}
             />
-            <p id={ids.receiverHelp} className={`mt-1 text-xs ${SOFT}`}>{f.receiverHelp}</p>
             {noAdmins && (
               <p className={`mt-2 text-sm ${TEXT}`} data-testid="move-no-admins">
                 {f.noAdmins} <Link href={`/${locale}/settings/channel/${channelId}/team`} className="font-semibold text-[var(--fanous-c-link-text)] underline">{f.openTeam}</Link>

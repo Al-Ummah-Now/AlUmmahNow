@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { avatarInitial } from '@/lib/avatar-initial';
 import { daysUntil } from '@/lib/channels/team';
-import { moveName, type MoveOffer } from '@/lib/channels/moves';
+import { loadFailedText, moveName, type MoveOffer } from '@/lib/channels/moves';
 import { pluralText } from '@/lib/notifications/toast-queue';
 
 export const CARD = 'c p-4 sm:p-6';
@@ -71,11 +71,12 @@ export function Loading() {
   return <p className={`text-sm ${SOFT}`} role="status">{t.channelMoves.loading}</p>;
 }
 
-export function LoadFailed({ onRetry }: { onRetry: () => void }) {
-  const { t } = useLanguage();
+/** What was asked for couldn't be loaded, with the refusal's reason, and Retry. */
+export function LoadFailed({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const { t, lang } = useLanguage();
   return (
-    <div className="flex flex-wrap items-center gap-3" role="alert" data-testid="move-load-failed">
-      <p className="text-sm text-[var(--fanous-color-error-text)]">{t.channelMoves.loadFailed}</p>
+    <div className={`${CARD} flex flex-wrap items-center justify-between gap-3`} role="alert" data-testid="move-load-failed">
+      <p className="text-sm text-[var(--fanous-color-error-text)]">{loadFailedText(error, lang === 'ar' ? 'ar' : 'en', t.channelMoves.loadFailed)}</p>
       <button type="button" onClick={onRetry} className={PRIMARY}>{t.common.retry}</button>
     </div>
   );

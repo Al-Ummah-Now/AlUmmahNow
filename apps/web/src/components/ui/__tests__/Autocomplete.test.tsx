@@ -144,6 +144,30 @@ describe('Autocomplete', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());
 
+    it('a failed lookup says so with Retry, never "no matches"; the caller can say why', async () => {
+      const load = jest.fn().mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('busy')).mockResolvedValue([{ id: 'x', label: 'Zed' }]);
+      const view = render(<Harness options={undefined} mode="inline" load={load} />);
+      const type = async (value: string) => {
+        fireEvent.change(input(), { target: { value } });
+        await act(async () => { jest.advanceTimersByTime(1000); });
+      };
+      await type('ze');
+      expect(screen.getByTestId('autocomplete-error')).toHaveTextContent(en.autocomplete.loadFailed);
+      expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(en.autocomplete.loadFailed);
+      expect(screen.queryByTestId('autocomplete-no-matches')).not.toBeInTheDocument();
+      view.rerender(<Harness options={undefined} mode="inline" load={load} errorText={(e) => `Why: ${(e as Error).message}`} />);
+      const again = async () => {
+        fireEvent.click(screen.getByTestId('autocomplete-retry'));
+        await act(async () => { jest.advanceTimersByTime(1000); });
+      };
+      await again();
+      expect(screen.getByTestId('autocomplete-error')).toHaveTextContent('Why: busy');
+      await again();
+      expect(screen.queryByTestId('autocomplete-error')).not.toBeInTheDocument();
+      expect(options().map((o) => o.textContent)).toEqual(['Zed']);
+      expect(load).toHaveBeenCalledTimes(3);
+    });
+
     it('waits for a pause in typing, cancels superseded requests and caches answers', async () => {
       const signals: AbortSignal[] = [];
       const load = jest.fn(async (q: string, signal: AbortSignal) => {

@@ -11,7 +11,8 @@ import { CARD, Expires, LoadFailed, Loading, Message, OfferChannel, SECONDARY, S
 function Section({ title, offers, testId, more }: { title: string; offers: MoveOffer[]; testId: string; more: { on: boolean; busy: boolean; load: () => void } }) {
   const { t, lang } = useLanguage();
   const m = t.channelMoves;
-  if (!offers.length) return null;
+  // A page can hold only offers that are no longer open: the next one may still hold some
+  if (!offers.length && !more.on) return null;
   return (
     <section className="space-y-3" data-testid={testId}>
       <h2 className={`text-lg font-semibold ${TEXT}`}>{title}</h2>
@@ -49,14 +50,14 @@ export default function MoveOffers() {
   const [offers, setOffers] = useState<MyMoveOffers | null>(null);
   const [busy, setBusy] = useState<MoveSide | null>(null);
   const [moreError, setMoreError] = useState<string | null>(null);
-  const [problem, setProblem] = useState<'off' | 'failed' | null>(null);
+  const [problem, setProblem] = useState<'off' | { error: unknown } | null>(null);
 
   const refresh = useCallback(async () => {
     setProblem(null);
     try {
       setOffers(await loadMyMoveOffers());
     } catch (error) {
-      setProblem(isMoveError(error, 'feature_off') ? 'off' : 'failed');
+      setProblem(isMoveError(error, 'feature_off') ? 'off' : { error });
     }
   }, []);
 
@@ -92,9 +93,9 @@ export default function MoveOffers() {
           <h1 className={`text-2xl font-bold ${TEXT}`}>{m.offers.title}</h1>
           <p className={`mt-1 ${SOFT}`}>{m.offers.description}</p>
         </div>
-        {problem === 'failed' && <LoadFailed onRetry={() => void refresh()} />}
+        {problem && <LoadFailed error={problem.error} onRetry={() => void refresh()} />}
         {!offers && !problem && <Loading />}
-        {offers && !offers.received.length && !offers.sent.length && <p className={`${CARD} text-sm ${SOFT}`} data-testid="move-offers-empty">{m.offers.none}</p>}
+        {offers && !offers.received.length && !offers.sent.length && !offers.receivedCursor && !offers.sentCursor && <p className={`${CARD} text-sm ${SOFT}`} data-testid="move-offers-empty">{m.offers.none}</p>}
         {offers && <Section title={m.offers.received} offers={offers.received} testId="move-offers-received" more={more('received')} />}
         {offers && <Section title={m.offers.sent} offers={offers.sent} testId="move-offers-sent" more={more('sent')} />}
         <Message message={moreError ? { kind: 'error', text: moreError } : null} />

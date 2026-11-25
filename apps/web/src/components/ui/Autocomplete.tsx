@@ -101,6 +101,8 @@ export interface AutocompleteProps {
   emptyFooter?: ReactNode;
   /** Shown while the input is empty and there are no empty options */
   emptyText?: string;
+  /** What a failed lookup or first page says (default: that the list couldn't be loaded); Retry is beside it */
+  errorText?: (error: unknown) => string;
   /** Group order and labels; options in no listed group come last, unlabelled */
   groups?: AutocompleteGroup[];
   /** Characters before a remote lookup (default 2; local lists filter from 1) */
@@ -186,7 +188,7 @@ function setRef<T>(ref: React.Ref<T> | undefined, value: T) {
 export function Autocomplete(props: AutocompleteProps) {
   const {
     value, onValueChange, onSelect, onSubmit, options, load, loadKey, loadInitial, emptyOptions, emptyHeader, emptyFooter,
-    emptyText, groups, decorate, queryOf, debounceMs = DEFAULT_DEBOUNCE_MS, maxOptions = 12, keepOpenOnSelect, onRemove,
+    emptyText, errorText, groups, decorate, queryOf, debounceMs = DEFAULT_DEBOUNCE_MS, maxOptions = 12, keepOpenOnSelect, onRemove,
     hideNoMatches, mode = 'overlay', label, listLabel, inputId, inputClassName, className, popupClassName,
     testId, popupTestId, optionTestId, removeTestId, inputRef, inputProps, children, renderTrailing, popupHost,
   } = props;
@@ -202,7 +204,8 @@ export function Autocomplete(props: AutocompleteProps) {
   const ownInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const [remote, setRemote] = useState<{ query: string; options: AutocompleteOption[] } | null>(null);
+  const [remote, setRemote] = useState<{ query: string; options: AutocompleteOption[]; failed?: { error: unknown } } | null>(null);
+  const [retries, setRetries] = useState(0);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const loadRef = useRef(load);
@@ -212,7 +215,7 @@ export function Autocomplete(props: AutocompleteProps) {
   loadInitialRef.current = loadInitial;
   const hasInitial = !!loadInitial;
   // Initial results: what is loaded so far, the cursor of the next page, and where the loading is
-  const [initial, setInitial] = useState<{ options: AutocompleteOption[]; next: string | null; status: 'idle' | 'loading' | 'more' | 'ready' | 'error' }>(
+  const [initial, setInitial] = useState<{ options: AutocompleteOption[]; next: string | null; status: 'idle' | 'loading' | 'more' | 'ready' | 'error'; error?: unknown }>(
     { options: [], next: null, status: 'idle' },
   );
   const initialAbortRef = useRef<AbortController | null>(null);
@@ -251,7 +254,7 @@ export function Autocomplete(props: AutocompleteProps) {
         if (controller.signal.aborted) return;
         logger.warn('[Autocomplete] Initial results failed', { error });
         // A failed later page keeps what is shown; the end of the list offers the retry
-        setInitial((s) => ({ ...s, status: 'error' }));
+        setInitial((s) => ({ ...s, status: 'error', error }));
       });
   }, []);
 
@@ -295,7 +298,8 @@ export function Autocomplete(props: AutocompleteProps) {
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           logger.warn('[Autocomplete] Lookup failed', { error });
-          setRemote({ query, options: [] });
+          // Not "no matches": the list says it failed, and offers Retry
+          setRemote({ query, options: [], failed: { error } });
           setLoading(false);
         });
     }, debounceMs);
@@ -303,7 +307,7 @@ export function Autocomplete(props: AutocompleteProps) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, minChars, debounceMs, loadKey]);
+  }, [query, minChars, debounceMs, loadKey, retries]);
 
   const ordered = useMemo(() => {
     let list: AutocompleteOption[];
@@ -330,9 +334,12 @@ export function Autocomplete(props: AutocompleteProps) {
   const initialLoading = hasInitial && !query && (initial.status === 'idle' || initial.status === 'loading');
   const initialFailed = hasInitial && !query && initial.status === 'error';
   const settled = (!load || !query || !loading) && !initialLoading;
-  const showNoMatches = !!query && query.length >= minChars && settled && ordered.length === 0 && !hideNoMatches;
+  const lookupFailed = !!load && !!query && query.length >= minChars && settled && remote?.query === query ? remote.failed : undefined;
+  const failure = initialFailed ? { error: initial.error } : lookupFailed;
+  const failureText = failure ? errorText?.(failure.error) ?? a.loadFailed : '';
+  const showNoMatches = !!query && query.length >= minChars && settled && ordered.length === 0 && !hideNoMatches && !lookupFailed;
   const showEmptyChrome = !query && (!!emptyHeader || !!emptyFooter || (!!emptyText && ordered.length === 0 && !initialLoading && !initialFailed));
-  const expanded = (inline || open) && (ordered.length > 0 || showNoMatches || showEmptyChrome || initialLoading || initialFailed);
+  const expanded = (inline || open) && (ordered.length > 0 || showNoMatches || showEmptyChrome || initialLoading || !!failure);
   // A dropdown never runs past the screen (docs/design/NAV.md): fit it when it opens
   useLayoutEffect(() => {
     if (expanded && !inline) fitToViewport(popupRef.current);
@@ -345,14 +352,14 @@ export function Autocomplete(props: AutocompleteProps) {
 
   // Announce the count once results settle (not on every keystroke while loading)
   useEffect(() => {
-    if (!expanded || !settled) return;
+    if (!expanded || !settled || failureText) return;
     const count = ordered.length;
     setStatus(count === 0 ? (query ? a.noResults : '') : count === 1 ? a.oneResult : fillTemplate(lang, a.resultsCount, { count }));
-  }, [expanded, settled, ordered.length, query, a]);
+  }, [expanded, settled, ordered.length, query, a, failureText]);
 
   useEffect(() => {
-    if (initialFailed) setStatus(a.loadFailed);
-  }, [initialFailed, a]);
+    if (failureText) setStatus(failureText);
+  }, [failureText]);
 
   // Arrowing onto the last loaded option asks for the next page
   useEffect(() => {
@@ -573,14 +580,15 @@ export function Autocomplete(props: AutocompleteProps) {
       {!query && initial.status === 'more' && (
         <p className="px-4 py-2 text-xs text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-loading-more">{a.loadingMore}</p>
       )}
-      {initialFailed && (
+      {failure && (
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-error">
-          <span>{a.loadFailed}</span>
+          <span>{failureText}</span>
           <button
             type="button"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => {
-              retryInitial();
+              if (initialFailed) retryInitial();
+              else setRetries((n) => n + 1);
               ownInputRef.current?.focus();
             }}
             className="rounded-md border border-[var(--fanous-color-outline)] px-3 py-1 text-xs font-semibold text-[var(--fanous-color-text-primary)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"

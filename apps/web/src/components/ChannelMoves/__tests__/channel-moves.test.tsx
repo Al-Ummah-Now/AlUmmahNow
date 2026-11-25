@@ -248,7 +248,55 @@ describe('Offer page', () => {
   });
 });
 
+describe('A failed read', () => {
+  const refusal = new MoveApiError('rate_limited', 429);
+  it('says the refusal’s reason and tries again, on each page', async () => {
+    for (const [load, page, done] of [
+      [api.loadMoveState, () => move(), 'move-form'],
+      [api.loadMoveOffer, () => render(<OfferPage offerId="o1" />), 'move-offer'],
+      [api.loadMyMoveOffers, () => render(<MoveOffers />), 'move-offers-empty'],
+    ] as const) {
+      load.mockReset();
+      load.mockRejectedValueOnce(refusal).mockRejectedValueOnce(new MoveApiError('service_unavailable', 503)).mockResolvedValue(load === api.loadMoveState ? { offer: null, movableAt: null } : load === api.loadMoveOffer ? offer() : { received: [], sent: [], receivedCursor: null, sentCursor: null });
+      const view = page();
+      expect(await screen.findByTestId('move-load-failed')).toHaveTextContent(moveErrorMessage(refusal, 'en'));
+      await userEvent.click(screen.getByRole('button', { name: EN.common.retry }));
+      await waitFor(() => expect(screen.getByTestId('move-load-failed')).toHaveTextContent(EN.channelMoves.loadFailed));
+      await userEvent.click(screen.getByRole('button', { name: EN.common.retry }));
+      expect(await screen.findByTestId(done)).toBeInTheDocument();
+      view.unmount();
+    }
+    api.loadMoveState.mockReset();
+    api.loadMoveState.mockRejectedValue(new MoveApiError('feature_off', 404));
+    move();
+    expect(await screen.findByTestId('not-found-page')).toBeInTheDocument();
+  });
+
+  it('the picker says why it has no one to show, not "no matches"', async () => {
+    api.searchMoveReceivers.mockRejectedValue(refusal);
+    move();
+    await screen.findByTestId('move-form');
+    await userEvent.click(screen.getByTestId('move-receiver'));
+    expect(await screen.findByTestId('autocomplete-error')).toHaveTextContent(moveErrorMessage(refusal, 'en'));
+    await userEvent.type(screen.getByTestId('move-receiver'), 'om');
+    await waitFor(() => expect(screen.getByTestId('autocomplete-error')).toHaveTextContent(moveErrorMessage(refusal, 'en')), { timeout: 3000 });
+    expect(screen.queryByTestId('autocomplete-no-matches')).toBeNull();
+    expect(screen.queryByTestId('move-no-admins')).toBeNull();
+  });
+});
+
 describe('My offers', () => {
+  it('a page with no open offer and a cursor still reaches the next one', async () => {
+    api.loadMyMoveOffers.mockResolvedValueOnce({ received: [], sent: [], receivedCursor: '7', sentCursor: null });
+    render(<MoveOffers />);
+    const more = await screen.findByTestId('move-offers-received-more');
+    expect(screen.queryByTestId('move-offers-empty')).toBeNull();
+    expect(screen.queryByTestId('move-offers-sent')).toBeNull();
+    api.loadMyMoveOffers.mockResolvedValueOnce({ received: [offer({ id: 'o9' })], sent: [], receivedCursor: null, sentCursor: null });
+    await userEvent.click(more);
+    await waitFor(() => expect(screen.getByTestId('move-offer-item')).toHaveAttribute('data-offer', 'o9'));
+  });
+
   it('shows more offers a page at a time, a failed page keeps what is there, and one being accepted says so', async () => {
     api.loadMyMoveOffers.mockResolvedValueOnce({ received: [offer({ status: 'accepting' })], sent: [], receivedCursor: '7', sentCursor: null });
     render(<MoveOffers />);

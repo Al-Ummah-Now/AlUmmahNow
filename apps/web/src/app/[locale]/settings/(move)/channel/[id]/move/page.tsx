@@ -4,7 +4,7 @@ import MoveChannel from '@/components/ChannelMoves/MoveChannel';
 import { getChannelById } from '@/lib/api/channels';
 import { getServerAuthContext } from '@/lib/api/server-auth';
 import { decodeJwtPayload } from '@/lib/auth/token-refresh';
-import { getFeatures } from '@/lib/features/server';
+import { channelMovesOff } from '@/lib/channels/moves-server';
 import { getTranslations } from '@/lib/i18n';
 
 /**
@@ -14,8 +14,8 @@ import { getTranslations } from '@/lib/i18n';
  */
 export default async function MoveChannelPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
+  if (await channelMovesOff()) notFound();
   const auth = await getServerAuthContext();
-  if (auth && !(await getFeatures()).channelMove) notFound();
   // A private channel doesn't show to another account: they are told it isn't theirs below
   const channel = await getChannelById(id).catch(() => null);
   const m = getTranslations(locale as 'en' | 'ar').channelMoves;

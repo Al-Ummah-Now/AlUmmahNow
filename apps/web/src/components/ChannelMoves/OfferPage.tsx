@@ -19,7 +19,7 @@ export default function OfferPage({ offerId }: { offerId: string }) {
   const { reloadChannels } = useMultiAccount();
   const { confirm, dialog } = useConfirm();
   const [offer, setOffer] = useState<MoveOffer | null>(null);
-  const [problem, setProblem] = useState<'missing' | 'failed' | null>(null);
+  const [problem, setProblem] = useState<'missing' | { error: unknown } | null>(null);
   const [busy, setBusy] = useState<'accept' | 'decline' | 'withdraw' | null>(null);
   const [message, setMessage] = useState<MoveMessage | null>(null);
 
@@ -28,7 +28,7 @@ export default function OfferPage({ offerId }: { offerId: string }) {
     try {
       setOffer(await loadMoveOffer(offerId));
     } catch (error) {
-      setProblem(isMoveError(error, 'offer_not_found', 'feature_off') ? 'missing' : 'failed');
+      setProblem(isMoveError(error, 'offer_not_found', 'feature_off') ? 'missing' : { error });
     }
   }, [offerId]);
 
@@ -72,7 +72,7 @@ export default function OfferPage({ offerId }: { offerId: string }) {
       <div className="container mx-auto max-w-3xl space-y-6 px-4 py-8" data-testid="move-offer-page">
         <p><Link href={`/${lang}/channel-moves`} className="text-sm text-[var(--fanous-c-link-text)] underline">{m.offers.title}</Link></p>
         <Message message={message} />
-        {problem === 'failed' && <LoadFailed onRetry={() => void refresh()} />}
+        {problem && <LoadFailed error={problem.error} onRetry={() => void refresh()} />}
         {!offer && !problem && <Loading />}
         {offer && (
           <article className={`${CARD} space-y-4`} data-testid="move-offer" data-status={offer.status} data-role={offer.viewerRole}>
