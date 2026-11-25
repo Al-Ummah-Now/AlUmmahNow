@@ -14,40 +14,67 @@
  * 2. A play() can still be aborted by a real source change (the delivery fallback). The next try
  *    cannot wait for `canplay`: WebKit with Media Source decodes nothing while paused, so the
  *    element stays at HAVE_METADATA and `canplay` never comes. `loadedmetadata` always does.
+ * 3. A pause() aborts a pending play() too, with the same AbortError. Whoever paused (the viewer or
+ *    the host page) is never overridden. A source change sends no `pause` event and leaves the
+ *    element without metadata; a pause sends one.
  */
 
 /** The part of a Video.js player these helpers need. */
 export interface StartablePlayer {
+  on(event: string, fn: () => void): void;
+  off(event: string, fn: () => void): void;
   one(event: string, fn: () => void): void;
+  paused(): boolean;
   readyState?(): number;
   isDisposed?(): boolean;
 }
 
 const HAVE_METADATA = 1;
 
-const whenAlive = (player: StartablePlayer, fn: () => void) => () => {
-  if (!player.isDisposed?.()) fn();
-};
-
-/** Runs `fn` once, when the source is attached: now if it has metadata, else at `loadstart` or `loadedmetadata`. */
-export function whenSourceAttached(player: StartablePlayer, fn: () => void): void {
-  if ((player.readyState?.() ?? 0) >= HAVE_METADATA) return fn();
-  let done = false;
-  const run = whenAlive(player, () => {
-    if (done) return;
-    done = true;
-    fn();
-  });
-  player.one('loadstart', run);
-  player.one('loadedmetadata', run);
+/** One start of a player: alive until it played, was paused, or was cancelled. */
+export interface PlaybackStart {
+  /** Nothing more starts (the host paused before there was anything to pause) */
+  cancel(): void;
+  cancelled(): boolean;
+  /** Runs `fn` once, when the source is attached: now if it has metadata, else at `loadstart` or `loadedmetadata` */
+  whenSourceAttached(fn: () => void): void;
+  /** After an aborted play(): runs `fn` at the new source's `loadedmetadata`; never after a pause */
+  afterReload(fn: () => void): void;
 }
 
-/**
- * Runs `fn` when a play() that was just aborted can be tried again. A source change left the element
- * without metadata: at its `loadedmetadata`. With metadata (it was paused, not reloaded): at the
- * next `canplay`.
- */
-export function whenPlayableAgain(player: StartablePlayer, fn: () => void): void {
-  const loaded = (player.readyState?.() ?? 0) >= HAVE_METADATA;
-  player.one(loaded ? 'canplay' : 'loadedmetadata', whenAlive(player, fn));
+export function beginStart(player: StartablePlayer): PlaybackStart {
+  let over = false;
+  const cancel = () => {
+    over = true;
+    player.off('pause', onPause);
+  };
+  // WebKit sends a late `pause` after refusing sound, when the muted play is already on: not a pause
+  function onPause() {
+    if (player.paused()) cancel();
+  }
+  player.on('pause', onPause);
+  player.one('playing', () => player.off('pause', onPause));
+  const run = (fn: () => void) => () => {
+    if (!over && !player.isDisposed?.()) fn();
+  };
+  const hasMetadata = () => (player.readyState?.() ?? 0) >= HAVE_METADATA;
+  return {
+    cancel,
+    cancelled: () => over,
+    whenSourceAttached(fn) {
+      if (hasMetadata()) return run(fn)();
+      let done = false;
+      const once = run(() => {
+        if (done) return;
+        done = true;
+        fn();
+      });
+      player.one('loadstart', once);
+      player.one('loadedmetadata', once);
+    },
+    afterReload(fn) {
+      // Still has its metadata: nothing was reloaded, so it was paused
+      if (!over && !hasMetadata()) player.one('loadedmetadata', run(fn));
+    },
+  };
 }

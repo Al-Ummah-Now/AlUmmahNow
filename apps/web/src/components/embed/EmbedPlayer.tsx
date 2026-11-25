@@ -35,7 +35,8 @@ import { videoAspect } from '@/lib/embed/aspect';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
 import { updatePlayerUi } from '@/lib/video/player-ui';
-import { whenPlayableAgain, whenSourceAttached } from '@/lib/video/start-playback';
+import { markAutoMuted } from '@/lib/video/volume-control';
+import { beginStart, type PlaybackStart } from '@/lib/video/start-playback';
 import { watchHref as listWatchHref } from '@/lib/playlists/playback';
 import { shareLink } from '@/lib/share/short-link';
 import { useEmbedMessaging } from './useEmbedMessaging';
@@ -113,6 +114,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const [ended, setEnded] = useState(false);
   /** The first video of a gesture start is started here, with sound (see handlePlayerReady) */
   const startWithSoundRef = useRef(params.autoplay && params.gesture);
+  /** That start, while it may still play */
+  const startRef = useRef<PlaybackStart | null>(null);
   /** "Watch on" shows its icon alone where its label would cover the picture (see useCompactLink) */
   const watchLabelRef = useRef<HTMLSpanElement>(null);
   const playerRef = useRef<ExtendedPlayer | null>(null);
@@ -143,6 +146,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
         else void Promise.resolve(player.play()).catch(() => undefined);
         break;
       case 'pause':
+        // Also before there is anything to pause: the start under way does not play after it
+        startRef.current?.cancel();
         player?.pause();
         break;
       case 'seek':
@@ -219,25 +224,36 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     if (startWithSoundRef.current) {
       // A gesture start (once per frame): play with sound; muted only if the browser refuses
       startWithSoundRef.current = false;
-      player.muted(false);
+      const start = beginStart(player);
+      startRef.current = start;
       const tryPlay = (retries: number): Promise<void> =>
         Promise.resolve(player.play()).then(
-          () => undefined,
+          () => {
+            // The remembered volume can be 0: offer sound then too
+            if (player.muted() || player.volume() === 0) setNeedsUnmute(true);
+          },
           (err: unknown) => {
-            if ((err as { name?: string } | null)?.name === 'NotAllowedError') {
+            const name = (err as { name?: string } | null)?.name;
+            if (name === 'NotAllowedError') {
               // Even muted play was refused: the big play button stays
-              if (player.muted()) return undefined;
+              if (player.muted() || start.cancelled()) return undefined;
+              // The browser's mute, not the viewer's: never remembered
+              markAutoMuted(player, true);
               player.muted(true);
               setNeedsUnmute(true);
               return tryPlay(retries);
             }
-            // e.g. AbortError, a source change took this play with it: once more when the source is there
-            if (retries > 0) whenPlayableAgain(player, () => void tryPlay(retries - 1));
+            // Aborted by a source change: again when that source is there
+            if (name === 'AbortError' && retries > 0) start.afterReload(() => void tryPlay(retries - 1));
             return undefined;
           },
         );
       // Not before the source is attached: Safari's Video.js would attach it twice and abort this play
-      whenSourceAttached(player, () => void tryPlay(START_RETRIES));
+      start.whenSourceAttached(() => {
+        // The viewer's click asked for sound, over a mute remembered from another video
+        player.muted(false);
+        void tryPlay(START_RETRIES);
+      });
     } else {
       // Plain autoplay (muted, as third-party autoplay must be): offer sound
       player.one('playing', () => {
