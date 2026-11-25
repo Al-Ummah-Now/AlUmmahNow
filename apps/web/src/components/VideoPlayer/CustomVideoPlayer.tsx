@@ -52,6 +52,7 @@ import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
+import { whenPlayableAgain } from '@/lib/video/start-playback';
 import { recoverStuckSeeks } from '@/lib/video/seek-recovery';
 import { playerAnalyticsContext } from '@/lib/analytics/traffic-source';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
@@ -692,10 +693,10 @@ export default function CustomVideoPlayer({
             attempt().catch((error: unknown) => {
               const name = (error as { name?: string } | null)?.name;
               if (extended.isDisposed()) return;
-              // The source was still being attached (Firefox aborts that play): once more when it can play
+              // The source was still being attached (Firefox and WebKit abort that play): once more when it is
               if (name === 'AbortError' && !retried) {
                 retried = true;
-                extended.one('canplay', start);
+                whenPlayableAgain(extended, start);
                 return;
               }
               if (name !== 'NotAllowedError') {

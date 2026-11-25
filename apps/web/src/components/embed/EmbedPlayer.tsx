@@ -35,6 +35,7 @@ import { videoAspect } from '@/lib/embed/aspect';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
 import { updatePlayerUi } from '@/lib/video/player-ui';
+import { whenPlayableAgain, whenSourceAttached } from '@/lib/video/start-playback';
 import { watchHref as listWatchHref } from '@/lib/playlists/playback';
 import { shareLink } from '@/lib/share/short-link';
 import { useEmbedMessaging } from './useEmbedMessaging';
@@ -84,6 +85,9 @@ function useCompactLink(labelRef: React.RefObject<HTMLSpanElement | null>, aspec
   }, [labelRef, aspect]);
   return compact;
 }
+
+/** Tries after a gesture start's play() was aborted by a source change (the delivery fallback has two sources) */
+const START_RETRIES = 2;
 
 const FACADE_STYLE = { width: '100%', height: '100%' } as const;
 
@@ -216,21 +220,24 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
       // A gesture start (once per frame): play with sound; muted only if the browser refuses
       startWithSoundRef.current = false;
       player.muted(false);
-      const tryPlay = (retry: boolean): Promise<void> =>
+      const tryPlay = (retries: number): Promise<void> =>
         Promise.resolve(player.play()).then(
           () => undefined,
           (err: unknown) => {
             if ((err as { name?: string } | null)?.name === 'NotAllowedError') {
+              // Even muted play was refused: the big play button stays
+              if (player.muted()) return undefined;
               player.muted(true);
               setNeedsUnmute(true);
-              return Promise.resolve(player.play()).then(() => undefined, () => undefined);
+              return tryPlay(retries);
             }
-            // e.g. AbortError while the source is still loading: once more when it can play
-            if (retry) player.one('canplay', () => void tryPlay(false));
+            // e.g. AbortError, a source change took this play with it: once more when the source is there
+            if (retries > 0) whenPlayableAgain(player, () => void tryPlay(retries - 1));
             return undefined;
           },
         );
-      void tryPlay(true);
+      // Not before the source is attached: Safari's Video.js would attach it twice and abort this play
+      whenSourceAttached(player, () => void tryPlay(START_RETRIES));
     } else {
       // Plain autoplay (muted, as third-party autoplay must be): offer sound
       player.one('playing', () => {
