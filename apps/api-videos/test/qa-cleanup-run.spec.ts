@@ -70,7 +70,7 @@ describe('QA cleanup run', () => {
 	it('deletes the leftovers in one run when it can read everything, and nothing is left running', async () => {
 		const env = qa();
 		const { pending, read, result, unsettled } = await run(env, emptyState());
-		assert.ok(!pending.some((p) => /share-cards|livestream|watch-later|index\.json|comments/.test(p.key)));
+		assert.ok(!pending.some((p) => /share-cards|livestream|watch-later|index\.json|comments|_order/.test(p.key)));
 		assert.equal(read.done, pending.length);
 		assert.deepEqual(result.failures, []);
 		assert.equal(result.skipped, 0);
@@ -112,7 +112,7 @@ describe('QA cleanup run', () => {
 
 describe('QA cleanup: something on a channel could not be deleted', () => {
 	const cases: Array<[what: string, bucket: 'videos' | 'playlists' | 'community_posts' | 'channel_sections', key: string]> = [
-		['a video', 'videos', 'v2'],
+		['a video', 'videos', 'v1'],
 		['a playlist', 'playlists', 'p1'],
 		['a post', 'community_posts', 'posts/c1/x.json'],
 		['a post comment', 'community_posts', 'comments/x/1.json'],
@@ -130,12 +130,13 @@ describe('QA cleanup: something on a channel could not be deleted', () => {
 			assert.deepEqual(await keysOf(env.channels), ['c1']);
 			assert.deepEqual(await keysOf(env.channel_tabs), ['channel-handles/h1', 'channel-tabs/c1'], 'those of the channel that was gone already went');
 			assert.deepEqual(env.profiles.read<{ channels: string[] }>('u1')!.channels, ['c1']);
-			if (bucket === 'videos') assert.deepEqual(await keysOf(env.SCHEDULED_VIDEOS), []);
+			assert.deepEqual(await keysOf(env.SCHEDULED_VIDEOS), bucket === 'videos' ? ['2026-01-01/10/v1.json'] : [], 'the entry of the video that stays stays');
 			if (what === 'a post comment') assert.ok((await keysOf(env.community_posts)).includes('posts/c1/x.json'), 'the post goes after its comments');
 			env[bucket].delete = restore.bind(env[bucket]);
 			await run(env, state);
 			assert.deepEqual(await keysOf(env.channels), []);
 			assert.deepEqual(env.profiles.read<{ channels: string[] }>('u1')!.channels, []);
+			assert.deepEqual(await keysOf(env.SCHEDULED_VIDEOS), []);
 			assert.deepEqual(await keysOf(env.community_posts), ['comments/other/1.json']);
 		});
 	}
@@ -170,7 +171,7 @@ describe('QA cleanup: the site changes something while the run reads', () => {
 		for (const add of [
 			(env: Qa) => put(env.community_posts, 'posts/c1/new.json', { id: 'new', channelId: 'c1' }),
 			(env: Qa) => put(env.channel_sections, 'c1/s2', { title: 'New' }),
-			async (env: Qa) => void env.SEARCH_DB.db.prepare("INSERT INTO content_ownership (kind, id, channel_id, is_deleted) VALUES ('video', 'new', 'c1', 0)").run(),
+			...['video', 'playlist'].map((kind) => async (env: Qa) => void env.SEARCH_DB.db.prepare("INSERT INTO content_ownership (kind, id, channel_id, is_deleted) VALUES (?, 'new', 'c1', 0)").run(kind)),
 		]) {
 			const env = qa();
 			const { result } = await run(env, emptyState(), { meanwhile: () => add(env) as Promise<unknown> });
