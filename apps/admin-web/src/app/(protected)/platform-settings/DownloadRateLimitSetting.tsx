@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { LocalTime } from '@/components/LocalTime';
+import { SettingLabel } from '@/components/help/HelpTip';
 
 interface HistoryEntry {
   id: string;
@@ -137,9 +138,13 @@ export function DownloadRateLimitSetting({
 
       <form onSubmit={save} className="space-y-4" noValidate>
         <fieldset disabled={!canEdit || busy} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-fg-muted">
-            <span className="text-fg font-medium">{t('platformSettings.downloadRateLimitPerDay')}</span>
+          <div className="flex flex-col gap-1 text-sm text-fg-muted">
+            <SettingLabel htmlFor={`${ids}-perDay`} helpId="platform.downloads.perDay">
+              {t('platformSettings.downloadRateLimitPerDay')}
+            </SettingLabel>
             <input
+              id={`${ids}-perDay`}
+              data-help="platform.downloads.perDay"
               type="text"
               inputMode="numeric"
               autoComplete="off"
@@ -161,11 +166,15 @@ export function DownloadRateLimitSetting({
                 defaultValue: n(DEFAULT_DOWNLOAD_RATE_LIMIT.perDay),
               })}
             </span>
-          </label>
+          </div>
 
-          <label className="flex flex-col gap-1 text-sm text-fg-muted">
-            <span className="text-fg font-medium">{t('platformSettings.downloadRateLimitBurst')}</span>
+          <div className="flex flex-col gap-1 text-sm text-fg-muted">
+            <SettingLabel htmlFor={`${ids}-burst`} helpId="platform.downloads.burstPerMinute">
+              {t('platformSettings.downloadRateLimitBurst')}
+            </SettingLabel>
             <input
+              id={`${ids}-burst`}
+              data-help="platform.downloads.burstPerMinute"
               type="text"
               inputMode="numeric"
               autoComplete="off"
@@ -187,7 +196,7 @@ export function DownloadRateLimitSetting({
                 defaultValue: n(DEFAULT_DOWNLOAD_RATE_LIMIT.burstPerMinute),
               })}
             </span>
-          </label>
+          </div>
         </fieldset>
 
         <p className="text-sm text-fg-muted" data-testid="download-rate-limit-last-changed">

@@ -13,6 +13,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
 import { LocalTime } from '@/components/LocalTime';
+import { HelpTip } from '@/components/help/HelpTip';
 const MODES: { value: NotificationMenuOpenMode; label: MessageKey; hint: MessageKey }[] = [
   { value: 'seen', label: 'platformSettings.menuOpenSeen', hint: 'platformSettings.menuOpenSeenHint' },
   { value: 'read', label: 'platformSettings.menuOpenRead', hint: 'platformSettings.menuOpenReadHint' },
@@ -70,13 +71,18 @@ export function NotificationMenuSetting({ settings, history, canEdit }: { settin
       <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg mb-4">{t('platformSettings.notificationsTitle')}</h2>
       <form onSubmit={save} className="space-y-4" noValidate>
         <fieldset disabled={!canEdit || busy}>
-          <legend className="text-sm font-medium text-fg mb-2">{t('platformSettings.menuOpenLegend')}</legend>
+          {/* The "?" sits in the first legend, which a disabled fieldset leaves enabled (read-only admins still read the help) */}
+          <legend className="text-sm font-medium text-fg mb-2">
+            {t('platformSettings.menuOpenLegend')}
+            <HelpTip id="platform.notifications.menuOpen" />
+          </legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {MODES.map((m) => (
               <label key={m.value} className="flex items-start gap-2 rounded border border-border p-3 cursor-pointer has-[:checked]:border-accent has-[:checked]:bg-surface-2">
                 <input
                   type="radio"
                   name="menuOpen"
+                  data-help="platform.notifications.menuOpen"
                   value={m.value}
                   checked={mode === m.value}
                   onChange={() => setMode(m.value)}

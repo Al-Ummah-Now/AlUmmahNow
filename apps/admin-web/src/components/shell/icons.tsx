@@ -4,6 +4,7 @@
  * aria-hidden and the control around it carries the label.
  */
 const PATHS = {
+  help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9M12 17h.01',
   home: 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   flag: 'M5 21V4m0 0h11l-2 4 2 4H5',
   spark: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',

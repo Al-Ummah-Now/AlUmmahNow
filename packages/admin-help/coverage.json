@@ -1,0 +1,10 @@
+{
+  "$comment": "Wiki AUN-ADMIN-HELP: folders whose every form control must have help. Grows with each area PR until it is the whole of apps/admin-web/src.",
+  "apps": {
+    "videos-admin": {
+      "content": "packages/admin-help/content/videos-admin",
+      "root": "apps/admin-web/src",
+      "covered": ["app/(protected)/platform-settings"]
+    }
+  }
+}

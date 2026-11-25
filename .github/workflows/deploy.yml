@@ -83,6 +83,11 @@ jobs:
       - name: Numbers and dates go through locale-format (Arabic ٠–٩)
         run: pnpm check:locale-format
 
+      - name: Every admin setting has help (wiki AUN-ADMIN-HELP)
+        run: |
+          pnpm test:admin-help
+          pnpm check:admin-help
+
       - name: API errors go through apiError (the error envelope's catalogue)
         run: pnpm check:error-bodies
 

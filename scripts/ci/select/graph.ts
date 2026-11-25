@@ -210,6 +210,8 @@ export const NODES: NodeDef[] = [
   { id: 'logger', unit: 'packages/logger', globs: ['packages/logger/**'] },
   { id: 'theme-packages', unit: 'packages/theme-packages', globs: ['packages/theme-packages/**'] },
   { id: 'fanous-tokens', unit: 'packages/fanous-tokens', globs: ['packages/fanous-tokens/**'] },
+  // Admin setting help (wiki AUN-ADMIN-HELP): content, loader and the coverage check
+  { id: 'admin-help', unit: 'packages/admin-help', globs: ['packages/admin-help/**'] },
   { id: 'app-icons', unit: 'packages/app-icons', globs: ['packages/app-icons/**'] },
   { id: 'mcp-log-server', unit: 'packages/mcp-log-server', globs: ['packages/mcp-log-server/**'] },
   // Operational scripts: run by hand or by their own workflows, tested by `pnpm test:scripts`
@@ -245,6 +247,7 @@ export const EXTRA_EDGES: EdgeDef[] = [
   // fanous-tokens runtime files (nav, street, generated CSS/JS, tokens) that apps load by relative path
   { from: 'fanous-tokens', to: 'web', why: 'apps/web/src/app/globals.css → fanous-tokens/nav/aun-nav.css; tailwind brand.cjs; header and menu-fit JS' },
   { from: 'fanous-tokens', to: 'admin-web', why: 'admin-web globals.css, HeaderParts, site-theme page → fanous-tokens nav, street, generated' },
+  { from: 'admin-help', to: 'admin-web', why: 'admin-web lib/help/content.ts → packages/admin-help content and loader' },
   { from: 'fanous-tokens', to: 'status', why: 'apps/status/src/render.ts → fanous-tokens/nav/header.js' },
   { from: 'fanous-tokens', to: 'theme-packages', why: 'theme-packages/scripts/base-data.ts → fanous-tokens/src/themes.ts and tokens/' },
   { from: 'fanous-tokens', to: 'e2e:player-specs', why: 'apps/web/e2e/player/harness.ts → fanous-tokens/generated-player' },

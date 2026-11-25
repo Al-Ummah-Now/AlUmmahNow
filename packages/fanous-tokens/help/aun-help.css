@@ -1,0 +1,136 @@
+/*
+ * Admin setting help (wiki AUN-ADMIN-HELP): the "?" button next to a setting's label and its brief
+ * popover. One look for every admin app: the videos admin imports it, the Auth admin and the CMS
+ * vendor it byte for byte. Built on aun-surfaces.css (load that first): the popover is a frosted
+ * .aun-glass-panel with the golden edge and glow, in every theme, light and dark.
+ *
+ * Markup (the React HelpTip and the CMS script both write it):
+ *   <span class="aun-help">
+ *     <span class="aun-help-btn" role="button" tabindex="0" aria-expanded aria-controls aria-label>?</span>
+ *     <div class="aun-help-pop aun-glass-panel" role="dialog" aria-labelledby hidden>
+ *       <p class="aun-help-title" id>Label</p>
+ *       <p class="aun-help-text">Summary</p>
+ *       <p class="aun-help-caution">One-line caution</p>          (optional)
+ *       <a class="aun-help-more" href="/help/<area>#<anchor>">Learn more…</a>
+ *     </div>
+ *   </span>
+ *
+ * Logical properties only, so Arabic mirrors itself. The script keeps the popover on screen with
+ * fitToViewport (nav/menu-fit.js): it shifts, narrows and flips it, and caps its height.
+ */
+
+.aun-help {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: 6px;
+}
+
+/* 22px visible, 44px to touch (the ::before grows the hit area without moving the layout) */
+.aun-help-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 22px;
+  padding: 0;
+  border: 1px solid var(--aun-glass-edge);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fanous-color-primary, #e8b477) 14%, transparent);
+  color: var(--fanous-color-text-primary, #10222e);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms linear;
+}
+.aun-help-btn::before {
+  content: '';
+  position: absolute;
+  inset: -11px;
+}
+@media (hover: hover) {
+  .aun-help-btn:hover { background: color-mix(in srgb, var(--fanous-color-primary, #e8b477) 30%, transparent); }
+}
+.aun-help-btn[aria-expanded="true"] {
+  background: var(--aun-btn-filled-bg);
+  color: var(--aun-btn-filled-fg);
+  border-color: transparent;
+}
+.aun-help-btn:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+.aun-help-pop {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-start: -12px;
+  z-index: 60;
+  inline-size: min(20rem, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 12px;
+  border-radius: var(--aun-radius-menu, 12px);
+  color: var(--aun-menu-fg, var(--fanous-color-text-primary, #10222e));
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: start;
+  white-space: normal;
+  cursor: auto;
+}
+.aun-help-pop[hidden] { display: none; }
+.aun-help-pop:focus { outline: none; }
+.aun-help-pop:focus-visible { outline: 2px solid var(--fanous-color-focus-ring, currentColor); outline-offset: 2px; }
+
+.aun-help-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.aun-help-text { margin: 0; color: var(--aun-menu-fg, inherit); }
+
+.aun-help-caution {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--fanous-color-divider, #d3c0a0);
+  font-size: 13px;
+}
+.aun-help-caution svg {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  margin-block-start: 2px;
+  color: var(--fanous-color-primary, #b8741a);
+}
+
+.aun-help-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-block-start: 10px;
+  min-block-size: 32px;
+  color: var(--aun-btn-text-fg, var(--fanous-color-link, #7a3f08));
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.aun-help-more:focus-visible { outline: 2px solid var(--fanous-color-focus-ring, currentColor); outline-offset: 2px; border-radius: 4px; }
+/* the arrow points the reading direction */
+.aun-help-more svg { inline-size: 14px; block-size: 14px; }
+:dir(rtl) .aun-help-more svg,
+[dir="rtl"] .aun-help-more svg { transform: scaleX(-1); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .aun-help-pop:not([hidden]) { animation: aun-help-in 120ms ease-out; }
+}
+@keyframes aun-help-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}

@@ -1,0 +1,253 @@
+{
+  "area": "platform-settings",
+  "route": "/platform-settings",
+  "title": {
+    "en": "Platform settings",
+    "ar": "إعدادات المنصة"
+  },
+  "intro": {
+    "en": "Site-wide behavior for every user of the videos site and apps: what opening the notification menu does, how many download requests a viewer can make, and the Google connection creators use to move their channel from YouTube. Admins and super admins can change them; every change is in the audit log.",
+    "ar": "سلوك عامّ يشمل كل مستخدمي موقع المرئيات وتطبيقاته: ما يحدث عند فتح قائمة الإشعارات، وعدد طلبات التنزيل المسموح بها لكل مشاهد، واتصال Google الذي يستخدمه صنّاع المحتوى لنقل قنواتهم من يوتيوب. يغيّرها المشرفون والمشرفون العامّون، وكل تغيير يُسجَّل في سجل التدقيق."
+  },
+  "settings": [
+    {
+      "id": "platform.notifications.menuOpen",
+      "anchor": "notifications-menu-open",
+      "label": {
+        "en": "When the notification menu is opened",
+        "ar": "عند فتح قائمة الإشعارات"
+      },
+      "summary": {
+        "en": "Chooses whether opening the bell menu only clears the badge, or also marks the notifications it shows as read.",
+        "ar": "يحدّد هل يُخفي فتحُ قائمة الجرس العدّادَ فقط، أم يعلّم أيضًا الإشعارات المعروضة كمقروءة."
+      },
+      "what": {
+        "en": "The bell in the header of the videos site and apps shows a badge with the number of new notifications. This setting decides what happens when a user opens the bell's menu.",
+        "ar": "يعرض الجرس في رأس موقع المرئيات وتطبيقاته شارةً بعدد الإشعارات الجديدة. يحدّد هذا الإعداد ما يحدث حين يفتح المستخدم قائمة الجرس."
+      },
+      "changes": {
+        "en": "Applies to every signed-in user on the web and in the apps. API servers pick up a change within {#30} seconds; a page that is already open uses the new behavior the next time it loads the notification count. Notifications already marked read stay read when you switch back.",
+        "ar": "يسري على كل مستخدم مسجّل الدخول في الويب والتطبيقات. تلتقط خوادم الواجهة التغيير خلال {#30} ثانية، والصفحة المفتوحة تعمل بالسلوك الجديد عند تحميلها عدد الإشعارات في المرة التالية. الإشعارات التي عُلّمت مقروءة تبقى مقروءة إذا أعدت الإعداد."
+      },
+      "options": [
+        {
+          "value": "seen",
+          "default": true,
+          "label": {
+            "en": "Clear the badge only",
+            "ar": "إخفاء العدّاد فقط"
+          },
+          "text": {
+            "en": "The badge stops counting what the user has seen. Each notification stays unread until the user opens it or uses “Mark as read” or “Mark all as read”.",
+            "ar": "يتوقف العدّاد عن احتساب ما رآه المستخدم. ويبقى كل إشعار غير مقروء حتى يفتحه المستخدم أو يختار «تعليم كمقروء» أو «تعليم الكل كمقروء»."
+          }
+        },
+        {
+          "value": "read",
+          "label": {
+            "en": "Mark the shown notifications as read",
+            "ar": "تعليم الإشعارات المعروضة كمقروءة"
+          },
+          "text": {
+            "en": "Clears the badge and marks every notification the menu shows as read. Other tabs and devices of the same user update at once.",
+            "ar": "يُخفي العدّاد ويعلّم كل إشعار تعرضه القائمة كمقروء. وتتحدّث فورًا بقية النوافذ والأجهزة للمستخدم نفسه."
+          }
+        }
+      ],
+      "cautions": [
+        {
+          "en": "With “Mark the shown notifications as read”, a user who opens the menu by accident loses the unread marks on everything it showed; there is no undo for the user.",
+          "ar": "مع «تعليم الإشعارات المعروضة كمقروءة» يفقد المستخدم الذي يفتح القائمة خطأً علامة «غير مقروء» على كل ما عرضته، ولا يستطيع التراجع عن ذلك."
+        }
+      ],
+      "rules": [],
+      "sources": [
+        "apps/admin-web/src/app/(protected)/platform-settings/NotificationMenuSetting.tsx"
+      ]
+    },
+    {
+      "id": "platform.downloads.perDay",
+      "anchor": "downloads-per-day",
+      "label": {
+        "en": "Max download requests per day",
+        "ar": "أقصى عدد لطلبات التنزيل يوميًا"
+      },
+      "summary": {
+        "en": "The most offline downloads one signed-in viewer can start in a UTC day. Requests over the limit are refused until the next day.",
+        "ar": "أقصى عدد من التنزيلات للمشاهدة دون اتصال يبدؤه مشاهد مسجّل الدخول في اليوم بالتوقيت العالمي. تُرفض الطلبات الزائدة حتى اليوم التالي."
+      },
+      "tipCaution": {
+        "en": "Too low blocks real viewers saving videos for a trip; too high lets one account pull many files.",
+        "ar": "الحدّ المنخفض جدًا يمنع مشاهدين حقيقيين من حفظ المرئيات للسفر، والمرتفع جدًا يسمح لحساب واحد بسحب ملفات كثيرة."
+      },
+      "what": {
+        "en": "Viewers can save videos for offline watching or listening in the apps. Each save is a download request to the API. This is the per-user daily limit on those requests. Every signed-in viewer has the same limit; it does not depend on creator tiers.",
+        "ar": "يستطيع المشاهدون حفظ المرئيات لمشاهدتها أو الاستماع إليها دون اتصال في التطبيقات، وكل حفظ هو طلب تنزيل إلى الواجهة البرمجية. هذا هو الحدّ اليومي لتلك الطلبات لكل مستخدم. الحدّ واحد لكل مشاهد مسجّل الدخول ولا يتبع مستويات صنّاع المحتوى."
+      },
+      "changes": {
+        "en": "Applies to every signed-in viewer. API servers pick up the new limit within {#30} seconds. The day resets at midnight UTC. A viewer over the limit sees a “try again later” message in the app; files already saved are not affected.",
+        "ar": "يسري على كل مشاهد مسجّل الدخول، وتلتقط خوادم الواجهة الحدّ الجديد خلال {#30} ثانية. يبدأ اليوم الجديد عند منتصف الليل بالتوقيت العالمي. يرى المشاهد الذي تجاوز الحدّ رسالة «حاول لاحقًا» في التطبيق، ولا تتأثر الملفات المحفوظة من قبل."
+      },
+      "default": {
+        "en": "{#100} requests a day",
+        "ar": "{#100} طلب يوميًا"
+      },
+      "range": {
+        "en": "{#1} to {#10000}",
+        "ar": "من {#1} إلى {#10000}"
+      },
+      "cautions": [
+        {
+          "en": "Each download is delivered from video storage and counts toward delivery traffic. Raising the limit raises the most one account can pull in a day, not what typical viewers use.",
+          "ar": "يُسلَّم كل تنزيل من تخزين المرئيات ويُحتسب ضمن حركة التسليم. رفع الحدّ يرفع أقصى ما يستطيع حساب واحد سحبه في اليوم، لا ما يستخدمه المشاهد المعتاد."
+        },
+        {
+          "en": "The limit counts requests, not finished downloads. A failed download that the app retries counts again.",
+          "ar": "الحدّ يحسب الطلبات لا التنزيلات المكتملة، فالتنزيل الفاشل الذي يعيده التطبيق يُحتسب مرة أخرى."
+        }
+      ],
+      "rules": [],
+      "sources": [
+        "apps/admin-web/src/app/(protected)/platform-settings/DownloadRateLimitSetting.tsx"
+      ]
+    },
+    {
+      "id": "platform.downloads.burstPerMinute",
+      "anchor": "downloads-burst",
+      "label": {
+        "en": "Burst limit per minute",
+        "ar": "حدّ الذروة في الدقيقة"
+      },
+      "summary": {
+        "en": "The most download requests one viewer can make in any minute. It stops scripts that grab a whole channel at once.",
+        "ar": "أقصى عدد من طلبات التنزيل يقدّمه مشاهد واحد في أي دقيقة. يوقف البرامج التي تسحب قناة كاملة دفعة واحدة."
+      },
+      "what": {
+        "en": "A second, short-window limit on the same download requests as the daily limit. A person tapping “Download” on a few videos stays far below it; an automated client does not.",
+        "ar": "حدّ ثانٍ قصير المدى على طلبات التنزيل نفسها التي يحكمها الحدّ اليومي. من يضغط «تنزيل» على بضعة مرئيات يبقى بعيدًا عنه، أما البرامج الآلية فتتجاوزه."
+      },
+      "changes": {
+        "en": "Applies to every signed-in viewer within {#30} seconds. Requests over the limit are refused for the rest of that minute.",
+        "ar": "يسري على كل مشاهد مسجّل الدخول خلال {#30} ثانية، وتُرفض الطلبات الزائدة حتى نهاية تلك الدقيقة."
+      },
+      "default": {
+        "en": "{#10} a minute",
+        "ar": "{#10} في الدقيقة"
+      },
+      "range": {
+        "en": "{#1} to {#100}, and never more than the daily limit",
+        "ar": "من {#1} إلى {#100}، ولا يزيد على الحدّ اليومي"
+      },
+      "cautions": [
+        {
+          "en": "“Download all” on a playlist sends one request per video. A burst limit below a typical playlist length makes the app pause and continue later.",
+          "ar": "يرسل «تنزيل الكل» في قائمة التشغيل طلبًا لكل مرئي، فإذا كان حدّ الذروة أقل من طول قائمة معتادة توقّف التطبيق مؤقتًا ثم أكمل لاحقًا."
+        }
+      ],
+      "rules": [],
+      "sources": [
+        "apps/admin-web/src/app/(protected)/platform-settings/DownloadRateLimitSetting.tsx"
+      ]
+    },
+    {
+      "id": "platform.youtubeImport.clientId",
+      "anchor": "youtube-import-client-id",
+      "label": {
+        "en": "Google OAuth client ID",
+        "ar": "معرّف عميل Google OAuth"
+      },
+      "summary": {
+        "en": "The Web application client from Google Cloud that creators sign in to YouTube through. It is not a secret.",
+        "ar": "عميل تطبيق الويب من Google Cloud الذي يسجّل صنّاع المحتوى الدخول إلى يوتيوب من خلاله. وهو ليس سرًّا."
+      },
+      "what": {
+        "en": "Created in Google Cloud → APIs & Services → Credentials, as an OAuth client ID of type Web application, with this environment’s redirect URI. It ends in `.apps.googleusercontent.com`. Each environment (QA, stage, production) has its own. Creators can only connect when the YouTube import switch on the Features page is on, a client ID is set and the client secret is present.",
+        "ar": "يُنشأ من Google Cloud ← APIs & Services ← Credentials بوصفه OAuth client ID من نوع Web application، مع رابط إعادة التوجيه الخاص بهذه البيئة. وينتهي بـ `.apps.googleusercontent.com`. لكل بيئة (QA والتجريب والإنتاج) معرّفها الخاص. ولا يستطيع صنّاع المحتوى الربط إلا إذا كان مفتاح «النقل من يوتيوب» في صفحة الميزات مفعّلًا ومعرّف العميل مضبوطًا وسرّ العميل موجودًا."
+      },
+      "changes": {
+        "en": "Used by the next creator who connects. Creators already connected keep their connection while the client is the same Google client; changing to a client from another Google project ends existing connections, and those creators connect again in Studio.",
+        "ar": "يُستخدم مع أول صانع محتوى يربط حسابه بعد التغيير. ويبقى الربط القائم ما دام العميل هو نفسه، أما التحويل إلى عميل من مشروع Google آخر فينهي الربط القائم، فيعيد أولئك الربط من الاستوديو."
+      },
+      "default": {
+        "en": "Empty: imports cannot be turned on",
+        "ar": "فارغ: لا يمكن تفعيل النقل"
+      },
+      "cautions": [
+        {
+          "en": "Until Google verifies the app’s consent screen, only the test users listed on it (up to {#100}) can connect.",
+          "ar": "إلى أن تتحقق Google من شاشة موافقة التطبيق، لا يستطيع الربط إلا مستخدمو الاختبار المدرجون فيها (حتى {#100})."
+        },
+        {
+          "en": "The YouTube Data API allows {#10000} quota units a day per Google Cloud project. Downloading captions costs {#250} units per video, so about {#35} videos’ captions a day; imports wait for the next day when the quota runs out.",
+          "ar": "تسمح واجهة YouTube Data API بـ{#10000} وحدة حصة يوميًا لكل مشروع على Google Cloud. ويكلّف تنزيل الترجمات {#250} وحدة لكل مرئي، أي ترجمات نحو {#35} مرئيًا يوميًا، وتنتظر عمليات النقل اليوم التالي إذا نفدت الحصة."
+        }
+      ],
+      "rules": [
+        {
+          "en": "Both scopes the import asks for are sensitive scopes, so Google requires its OAuth app verification before the app can be used by everyone.",
+          "ar": "النطاقان اللذان يطلبهما النقل من النطاقات الحساسة، لذا تشترط Google التحقق من التطبيق قبل أن يستخدمه الجميع.",
+          "source": "https://support.google.com/cloud/answer/13463073"
+        },
+        {
+          "en": "Google API Services User Data Policy: data read from a creator’s YouTube account may only be used for the import the creator asked for, and the app’s privacy policy must say what is read and why.",
+          "ar": "سياسة بيانات المستخدم لخدمات Google API: لا تُستخدم البيانات المقروءة من حساب يوتيوب لصانع المحتوى إلا في النقل الذي طلبه، ويجب أن تبيّن سياسة الخصوصية ما يُقرأ ولماذا.",
+          "source": "https://developers.google.com/terms/api-services-user-data-policy"
+        },
+        {
+          "en": "YouTube API Services Terms of Service and Developer Policies apply to every call the import makes.",
+          "ar": "تسري شروط خدمة YouTube API Services وسياسات المطوّرين على كل طلب يجريه النقل.",
+          "source": "https://developers.google.com/youtube/terms/api-services-terms-of-service"
+        }
+      ],
+      "sources": [
+        "apps/admin-web/src/app/(protected)/platform-settings/YoutubeImportSetting.tsx"
+      ]
+    },
+    {
+      "id": "platform.youtubeImport.clientSecret",
+      "anchor": "youtube-import-client-secret",
+      "label": {
+        "en": "Client secret",
+        "ar": "سر العميل"
+      },
+      "summary": {
+        "en": "The secret of the same Google client. It is stored encrypted and never shown again, not even to admins.",
+        "ar": "سرّ عميل Google نفسه. يُخزَّن مشفّرًا ولا يُعرض مرة أخرى، ولا حتى للمشرفين."
+      },
+      "tipCaution": {
+        "en": "Replacing it disconnects creators who are connected now; they connect again in Studio.",
+        "ar": "استبداله يقطع ربط صنّاع المحتوى المتصلين الآن، فيعيدون الربط من الاستوديو."
+      },
+      "what": {
+        "en": "Copied from the Google OAuth client (Credentials → your Web client → Client secret). A secret set here is encrypted on the server and replaces the one in the environment’s Secrets Store; without one set here, the Secrets Store entry is used.",
+        "ar": "يُنسخ من عميل Google OAuth (Credentials ← عميل الويب ← Client secret). السرّ المضبوط هنا يُشفَّر على الخادم ويحلّ محل السرّ المخزَّن في مخزن أسرار البيئة، فإن لم يُضبط هنا استُخدم ما في مخزن الأسرار."
+      },
+      "changes": {
+        "en": "Takes effect on the next connection. The old secret stops being used at once, so creators connected now lose their YouTube connection and connect again in Studio. The change is in the audit log, without the secret.",
+        "ar": "يسري مع الربط التالي، ويتوقف استخدام السرّ القديم فورًا، فيفقد صنّاع المحتوى المتصلون الآن ربطهم بيوتيوب ويعيدونه من الاستوديو. ويُسجَّل التغيير في سجل التدقيق دون السرّ."
+      },
+      "default": {
+        "en": "The Secrets Store entry, if there is one",
+        "ar": "ما في مخزن الأسرار، إن وُجد"
+      },
+      "range": {
+        "en": "{#16} to {#256} characters, no spaces",
+        "ar": "من {#16} إلى {#256} حرفًا، دون مسافات"
+      },
+      "cautions": [
+        {
+          "en": "Never paste the secret anywhere else (chat, tickets, email). If it leaks, reset it in Google Cloud and set the new one here.",
+          "ar": "لا تلصق السرّ في أي مكان آخر (محادثة أو تذكرة أو بريد). وإذا تسرّب فأعد ضبطه في Google Cloud وضع الجديد هنا."
+        },
+        {
+          "en": "If the server key it was encrypted with changes, the page says the secret can no longer be read; set it again.",
+          "ar": "إذا تغيّر مفتاح الخادم الذي شُفّر به، تعرض الصفحة أن السرّ لم يعد مقروءًا، فاضبطه من جديد."
+        }
+      ],
+      "rules": [],
+      "sources": [
+        "apps/admin-web/src/app/(protected)/platform-settings/YoutubeImportSetting.tsx"
+      ]
+    }
+  ]
+}
