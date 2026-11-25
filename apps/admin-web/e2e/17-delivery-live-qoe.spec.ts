@@ -42,8 +42,9 @@ test('a play heartbeat shows on the Delivery page live, and its final report end
   await page.waitForEvent('websocket', { predicate: (ws) => ws.url().endsWith('/ws'), timeout: 15_000 }).catch(() => undefined);
   const nowBefore = await read(nowR2);
   const hourBefore = await read(hourR2);
-  let navigations = 0;
-  page.on('framenavigated', (f) => { if (f === page.mainFrame()) navigations++; });
+  // A mark on this document: a full reload loses it ('framenavigated' also counts the history change
+  // of a router.refresh(), which this page calls on job updates)
+  await page.evaluate(() => { (window as { liveSpecDocument?: boolean }).liveSpecDocument = true; });
 
   await report({ sessionId, source: 'r2', started: true, kind: 'heartbeat', playing: true, live: { attempt: true, started: true, startupMs: 640, watchMs: 0 } });
   await expect.poll(() => read(nowR2), { timeout: 20_000 }).toBe(nowBefore + 1);
@@ -51,5 +52,5 @@ test('a play heartbeat shows on the Delivery page live, and its final report end
 
   await report({ sessionId, source: 'r2', started: true, startupMs: 640, watchMs: 12_000, live: { watchMs: 12_000 } });
   await expect.poll(() => read(nowR2), { timeout: 20_000 }).toBe(nowBefore);
-  expect(navigations, 'no reload').toBe(0);
+  expect(await page.evaluate(() => (window as { liveSpecDocument?: boolean }).liveSpecDocument), 'no reload').toBe(true);
 });
