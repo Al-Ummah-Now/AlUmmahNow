@@ -6,6 +6,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -55,6 +56,8 @@ const enc = (s: string) => new TextEncoder().encode(s);
 // A binary R2 stand-in with ranges and multipart uploads
 // ---------------------------------------------------------------------------
 
+const etagOf = (bytes: Uint8Array) => createHash('md5').update(bytes).digest('hex');
+
 class BinaryBucket {
 	store = new Map<string, { bytes: Uint8Array; meta?: Record<string, string> }>();
 	uploads = new Map<string, { key: string; parts: Map<number, Uint8Array>; meta?: Record<string, string> }>();
@@ -68,7 +71,7 @@ class BinaryBucket {
 	}
 	async head(key: string) {
 		const v = this.store.get(key);
-		return v ? { key, size: v.bytes.byteLength, customMetadata: v.meta } : null;
+		return v ? { key, size: v.bytes.byteLength, etag: etagOf(v.bytes), customMetadata: v.meta } : null;
 	}
 	async get(key: string, opts?: { range?: { offset: number; length: number } }) {
 		const v = this.store.get(key);
@@ -90,8 +93,11 @@ class BinaryBucket {
 	async delete(keys: string | string[]) {
 		for (const k of Array.isArray(keys) ? keys : [keys]) this.store.delete(k);
 	}
-	async list(o: { prefix?: string; cursor?: string; limit?: number; delimiter?: string } = {}) {
-		const all = [...this.store.entries()].filter(([k]) => !o.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => ({ key, size: v.bytes.byteLength }));
+	async list(o: { prefix?: string; cursor?: string; limit?: number; delimiter?: string; startAfter?: string } = {}) {
+		const all = [...this.store.entries()]
+			.filter(([k]) => (!o.prefix || k.startsWith(o.prefix)) && (!o.startAfter || k > o.startAfter))
+			.sort(([a], [b]) => (a < b ? -1 : 1))
+			.map(([key, v]) => ({ key, size: v.bytes.byteLength, etag: etagOf(v.bytes) }));
 		const rest = (key: string) => key.slice((o.prefix ?? '').length);
 		const inside = (key: string) => !!o.delimiter && rest(key).includes(o.delimiter);
 		const delimitedPrefixes = [...new Set(all.filter((x) => inside(x.key)).map((x) => `${o.prefix ?? ''}${rest(x.key).split(o.delimiter!)[0]}${o.delimiter}`))];
@@ -944,6 +950,10 @@ describe('taking a live stream down', () => {
 		const step = await copyStep(t.env as never, keys, CASE, plan, { file: 0, uploadId: upload.uploadId, size: 2, parts: [{ partNumber: 1, etag: 'e' }], chunk: 1, chunkSha256: ['x'], bytes: 2 });
 		assert.deepEqual(step, { status: 'copying', state: { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 } });
 		assert.equal(t.env.CSAM_EVIDENCE.uploads.size, 0);
+		// The same size, made of something else
+		const other = await t.env.CSAM_EVIDENCE.createMultipartUpload('cases/x');
+		const again = await copyStep(t.env as never, keys, CASE, plan, { file: 0, uploadId: other.uploadId, size: 3, list: 'another', parts: [{ partNumber: 1, etag: 'e' }], chunk: 1, chunkSha256: ['x'], bytes: 3 });
+		assert.deepEqual(again, step);
 	});
 
 	it('a file Bunny answers with while it is still encoding is not the recording', async () => {
@@ -985,6 +995,113 @@ describe('taking a live stream down', () => {
 		assert.equal(state.exists, false);
 	});
 
+	const copies = async (t: ReturnType<typeof setup>) => {
+		const files = ((await manifestOf(t)).files as Array<{ name: string }>).map((f) => f.name).filter((n) => n.startsWith('06-'));
+		return Promise.all(files.map(async (n) => (await t.call('GET', `/cases/${CASE}/files/${n}`)).text()));
+	};
+	const toBan = async (t: ReturnType<typeof setup>) => {
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1, 1)").run();
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+		await stepTo(t, 'ban');
+	};
+
+	it('a late segment is copied before it is removed, however small, in whichever rendition, and where one was before', async () => {
+		for (const [what, key, text, expected] of [
+			['smaller than the copy', '720/seg_9.m4s', 'x', ['one|two|', 'x']],
+			['as long as the copy', '720/seg_9.m4s', '12345678', ['12345678', 'one|two|']],
+			['a moment another rendition lacks', '360/seg_9.m4s', 'low', ['low', 'one|two|']],
+			['another one under a name that was copied', '720/seg_1.m4s', 'uno|', ['one|two|', 'uno|']],
+		] as Array<[string, string, string, string[]]>) {
+			const t = setup();
+			const put = (path: string, value: string) => t.env.LIVE_MEDIA.set(`live/sess-synth-01/${path}`, value);
+			put('720/seg_1.m4s', 'one|');
+			put('720/seg_2.m4s', 'two|');
+			put('360/seg_1.m4s', '1');
+			await toBan(t);
+			assert.equal(t.env.LIVE_MEDIA.store.size, 0, what);
+			put(key, text);
+			await t.drain();
+			const job = await jobOf(t);
+			assert.equal(job.status, 'succeeded', `${what}: ${job.lastError}`);
+			assert.deepEqual((await copies(t)).sort(), expected, what);
+			assert.equal(t.env.LIVE_MEDIA.store.size, 0, what);
+		}
+	});
+
+	it('what only a lesser rendition has is copied from there, while the best one is still stored', async () => {
+		const t = setup();
+		for (const n of [1, 2]) t.env.LIVE_MEDIA.set(`live/sess-synth-01/720/seg_${n}.m4s`, `long ${n}|`);
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/360/seg_1.m4s', '1');
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1, 1)").run();
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+		await stepTo(t, 'purge-public');
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/360/seg_3.m4s', '3');
+		await t.drain();
+		assert.equal((await jobOf(t)).status, 'succeeded', (await jobOf(t)).lastError);
+		assert.deepEqual((await copies(t)).sort(), ['13', 'long 1|long 2|']);
+		assert.equal(t.env.LIVE_MEDIA.store.size, 0);
+	});
+
+	it('what comes in, or changes, between the question and the removal stays for the copy', async () => {
+		for (const [key, text] of [['720/seg_5.m4s', 'late'], ['720/seg_1.m4s', 'uno|']] as const) {
+			const t = setup();
+			t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', 'one|');
+			const list = t.env.LIVE_MEDIA.list.bind(t.env.LIVE_MEDIA);
+			let once = false;
+			const at = await (async () => {
+				await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1, 1)").run();
+				await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+				return stepTo(t, 'purge-public');
+			})();
+			assert.ok(at);
+			let wholeListings = 0;
+			(t.env.LIVE_MEDIA as any).list = async (o: any) => {
+				// The first listing of the whole session asks what is kept; the second is the removal's
+				if (o.prefix === 'live/sess-synth-01/' && !o.delimiter && ++wholeListings === 2 && !once) {
+					once = true;
+					t.env.LIVE_MEDIA.set(`live/sess-synth-01/${key}`, text);
+				}
+				return list(o);
+			};
+			await t.drain();
+			assert.equal((await jobOf(t)).status, 'succeeded', (await jobOf(t)).lastError);
+			assert.ok(once);
+			assert.ok((await copies(t)).some((c) => c.includes(text)), `${key} was copied`);
+			assert.equal(t.env.LIVE_MEDIA.store.size, 0);
+		}
+	});
+
+	it('a removal that goes on where it stopped copies nothing again, and an object changed under a copy starts it over', async () => {
+		const t = setup();
+		for (const n of [1, 2, 3]) t.env.LIVE_MEDIA.set(`live/sess-synth-01/720/seg_${n}.m4s`, `${n}|`);
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/360/seg_2.m4s', 'low');
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/master.m3u8', '#EXTM3U');
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1, 1)").run();
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+		// Replaced by another of the same size while the copy reads it
+		const get = t.env.LIVE_MEDIA.get.bind(t.env.LIVE_MEDIA);
+		let changed = false;
+		(t.env.LIVE_MEDIA as any).get = async (key: string, opts: any) => {
+			const object = await get(key, opts);
+			if (key.endsWith('seg_3.m4s') && !changed) {
+				changed = true;
+				t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', 'A|');
+			}
+			return object;
+		};
+		await stepTo(t, 'purge-public');
+		assert.ok(changed);
+		// Some of it was removed by a run that stopped
+		t.env.LIVE_MEDIA.store.delete('live/sess-synth-01/720/seg_1.m4s');
+		t.env.LIVE_MEDIA.store.delete('live/sess-synth-01/720/seg_2.m4s');
+		await t.drain();
+		assert.equal((await jobOf(t)).status, 'succeeded', (await jobOf(t)).lastError);
+		assert.deepEqual(await copies(t), ['A|2|3|']);
+		assert.equal(t.env.LIVE_MEDIA.store.size, 0);
+		const list = JSON.parse(await (await t.call('GET', `/cases/${CASE}/files/segments-of-recording-1.json`)).text());
+		assert.deepEqual(list.parts.map(([key]: [string]) => key), [1, 2, 3].map((n) => `live/sess-synth-01/720/seg_${n}.m4s`), 'what the copy holds is in the evidence');
+	});
+
 	it('what an earlier run removed is forgotten by the next one', async () => {
 		const t = setup();
 		const job = await start(t, [['sess-synth-01', 'selfhosted', null]]);
@@ -996,10 +1113,10 @@ describe('taking a live stream down', () => {
 	it('a long recording is removed in steps', async () => {
 		const t = setup();
 		for (let n = 0; n < 2500; n++) t.env.LIVE_MEDIA.set(`live/sess-synth-01/720/seg_${n}.m4s`, 'x'.repeat(1));
-		const first = await deleteSessionMedia(t.env as never, 'sess-synth-01', 2);
-		assert.deepEqual(first, { pages: 2, done: false });
+		const first = await deleteSessionMedia(t.env as never, 'sess-synth-01', 2, () => true);
+		assert.deepEqual(first, { pages: 2, done: false, late: false });
 		assert.equal(t.env.LIVE_MEDIA.store.size, 500);
-		assert.deepEqual(await deleteSessionMedia(t.env as never, 'sess-synth-01', 2), { pages: 1, done: true });
+		assert.deepEqual(await deleteSessionMedia(t.env as never, 'sess-synth-01', 2, () => true), { pages: 1, done: true, late: false });
 	});
 });
 

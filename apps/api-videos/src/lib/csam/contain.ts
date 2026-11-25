@@ -42,7 +42,7 @@ import { readBan } from '../admin/bans';
 import { accessDrift, purgeCdn, purgeVideoRenditions, queueMediaMove, type CdnPurge, type MediaEnv } from '../media/r2-delivery';
 import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
-import { copyStep, planEvidence, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
+import { copyStep, keepJson, listNameOf, planEvidence, readKeptJson, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
 import { forgetImageOwner, lookupImageOwner } from './imageOwners';
 import { erasedRecord, erasedTargets, erasureNote, holdTargets, releaseHolds, type EraseTarget } from '../privacy/erase-targets';
 import { deleteImageFile } from '../media/imageFiles';
@@ -53,7 +53,7 @@ import { swapPinnedPointer } from '../community-comments';
 import { bumpPostComments, postChannelId } from '../community-posts';
 import { moderateLive } from '../admin/liveModeration';
 import { streamKey } from '../live/streams';
-import { deleteBunny, deleteSessionMedia, forgetRemovedRecordings, recordingFiles, recordingInstruction, recordingParts, storedRecordings, type RecordingEnv, type StoredRecording } from './recordings';
+import { coveredBy, deleteBunny, deleteSessionMedia, forgetRemovedRecordings, lateRendition, recordingFiles, recordingInstruction, storedRecordings, type CopiedList, type RecordingEnv, type StoredRecording } from './recordings';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -292,20 +292,28 @@ const keptFiles = (p: ContainParams) => new Map((p.copied ?? []).map((f) => [f.n
 const plannedFor = (p: ContainParams, r: StoredRecording) =>
 	(p.files ?? []).filter((f) => (f.source.type === 'live' && f.source.sessionId === r.sessionId) || (f.source.type === 'bunny_live' && f.source.guid === r.guid));
 
-/** Whether a whole copy of the recording is in the store (or there was nothing to copy). What was streamed after the copy is not in it. */
-async function recordingKept(env: ContainEnv, p: ContainParams, r: StoredRecording): Promise<boolean> {
-	// A session with no segment holds playlists only: nothing was streamed
-	if (r.provider === 'selfhosted' && !r.rendition) return true;
+/** What the kept copies of each session hold. A copy without its list (made before lists were kept) holds nothing provable. */
+async function copiedLists(env: ContainEnv, p: ContainParams): Promise<Map<string, CopiedList[]>> {
+	const keys = await evidenceKeys(env);
 	const kept = keptFiles(p);
-	for (const f of plannedFor(p, r)) {
-		const file = kept.get(f.name);
-		if (!file) continue;
-		if (f.source.type !== 'live') return true;
-		const parts = await recordingParts(env as RecordingEnv, f.source.sessionId, f.source.rendition);
-		// Fewer bytes than were kept: its removal has begun
-		if (parts.reduce((n, part) => n + part.size, 0) <= file.bytes) return true;
+	const out = new Map<string, CopiedList[]>();
+	for (const f of p.files ?? []) {
+		if (f.source.type !== 'live' || !kept.has(f.name)) continue;
+		const file = kept.get(listNameOf(f.name));
+		const list = file ? await readKeptJson<CopiedList>(env, keys, p.caseId, file) : null;
+		if (list) out.set(list.sessionId, [...(out.get(list.sessionId) ?? []), list]);
 	}
-	return false;
+	return out;
+}
+
+/** What of the recording is not in the store yet: the rendition to copy next. `true`: all of it is kept, or nothing was streamed. */
+async function recordingKept(env: ContainEnv, p: ContainParams, r: StoredRecording, lists: Map<string, CopiedList[]>): Promise<true | { rendition: string | null }> {
+	if (r.provider === 'selfhosted') {
+		const rendition = await lateRendition(env as RecordingEnv, r.sessionId, lists.get(r.sessionId) ?? []);
+		return rendition ? { rendition } : true;
+	}
+	const kept = keptFiles(p);
+	return plannedFor(p, r).some((f) => kept.has(f.name)) ? true : { rendition: null };
 }
 
 /** Copies of recordings of one case: a stream that keeps growing ends with a person. */
@@ -324,14 +332,16 @@ async function purgeRecordings(env: ContainEnv, p: ContainParams, provider: Stor
 	let removed = 0;
 	let pages = PURGE_PAGES;
 	let more = false;
+	const lists = await copiedLists(env, p);
 	for (const r of await storedRecordings(env as RecordingEnv, streamId)) {
-		if (more || r.provider !== provider || !(await recordingKept(env, p, r))) {
+		if (more || r.provider !== provider || (await recordingKept(env, p, r, lists)) !== true) {
 			left.push(r);
 			continue;
 		}
 		if (provider === 'selfhosted') {
-			const out = await deleteSessionMedia(env as RecordingEnv, r.sessionId, pages);
+			const out = await deleteSessionMedia(env as RecordingEnv, r.sessionId, pages, coveredBy(r.sessionId, lists.get(r.sessionId) ?? []));
 			pages -= out.pages;
+			// Also when something came in since the question: the next step asks again, and it is copied first
 			if (!out.done || pages <= 0) more = true;
 			if (!out.done) {
 				left.push(r);
@@ -478,7 +488,8 @@ async function copyPhase(env: ContainEnv, p: ContainParams, stage: 'public' | 's
 	const step = await copyStep(env, keys, p.caseId, files[index]!, p.copy ?? { file: index, parts: [], chunk: 0, chunkSha256: [], bytes: 0 });
 	if (step.status === 'copying') return { ...p, file: index, copy: step.state };
 	if (step.missing) await recordingMustBeGone(env, p, files[index]!);
-	const copied = [...(p.copied ?? []), ...(step.file ? [step.file] : [])];
+	const list = step.list ? [await keepJson(env, keys, p.caseId, listNameOf(files[index]!.name), step.file!.source, step.list)] : [];
+	const copied = [...(p.copied ?? []), ...(step.file ? [step.file] : []), ...list];
 	const missing = [...(p.missing ?? []), ...(step.missing ? [step.missing] : [])];
 	// The manifest follows every finished file, so a later failure still leaves a readable case
 	await writeManifest(env, keys, { v: 1, caseId: p.caseId, matchedUrl: p.matchedUrl, resolution: p.resolution, files: copied, missing, createdAt: p.createdAt });
@@ -571,7 +582,12 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 	if (p.resolution.kind === 'live_stream') for (const provider of ['selfhosted', 'bunny'] as const) if ((await purgeRecordings(env, p, provider)).more) return { again: { ...p } };
 	const left = p.resolution.kind === 'live_stream' ? await storedRecordings(env as RecordingEnv, p.resolution.streamId!) : [];
 	const unkept: StoredRecording[] = [];
-	for (const r of left) if (!(await recordingKept(env, p, r))) unkept.push(r);
+	const lists = left.length ? await copiedLists(env, p) : new Map<string, CopiedList[]>();
+	for (const r of left) {
+		const kept = await recordingKept(env, p, r, lists);
+		// Copied next: the rendition that holds what no copy does
+		if (kept !== true) unkept.push({ ...r, rendition: kept.rendition ?? r.rendition });
+	}
 	// Only there since the plan (Bunny makes the library video later; a last segment came in), or the copy is not whole
 	const isDone = new Set([...(p.copied ?? []), ...(p.missing ?? [])].map((f) => f.name));
 	const planned = (p.files ?? []).filter((f) => f.source.type === 'live' || f.source.type === 'bunny_live').length;
@@ -594,7 +610,7 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		...(left.length ? {} : { completedAt: now() }),
 	});
 	// Hidden, held and off the CDN already; what is still stored needs another run or a person, and the case says which
-	if (left.length) throw new Error(`Nobody can reach the stream, and ${left.length} recording(s) are still stored. ${left.map((r) => recordingInstruction(r, !unkept.includes(r))).join(' ')}`);
+	if (left.length) throw new Error(`Nobody can reach the stream, and ${left.length} recording(s) are still stored. ${left.map((r) => recordingInstruction(r, !unkept.some((u) => u.sessionId === r.sessionId))).join(' ')}`);
 	return { result: { caseId: p.caseId, files: (p.copied ?? []).length, missing: (p.missing ?? []).length, purge: p.purge ?? {}, ban } };
 }
 

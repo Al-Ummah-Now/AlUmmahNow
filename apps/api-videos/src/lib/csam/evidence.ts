@@ -24,7 +24,7 @@ import { findStoredComment, type StoredComment } from '../comments';
 import { locatePostComment } from '../channelComments/moderation';
 import { streamKey } from '../live/streams';
 import { readBunnyRecording } from '../live/providers';
-import { readParts, readsOf, recordingFiles, recordingParts, storedRecordings, type RecordingEnv } from './recordings';
+import { copiedList, readParts, readsOf, recordingFiles, recordingParts, storedRecordings, type CopiedList, type RecordingEnv } from './recordings';
 import { sourceCandidates, type MediaEnv } from '../media/r2-delivery';
 import { imagePathOf } from './imageOwners';
 import { erasedRecord, erasedTargets, type EraseTarget } from '../privacy/erase-targets';
@@ -72,8 +72,9 @@ export interface CopyState {
 	bytes: number;
 	/** The Bunny file that answered, so later deliveries read the same one */
 	bunnyFile?: string;
-	/** The source's size when the copy began; another one starts it over */
+	/** The source's size when the copy began, and what it is made of; another one starts it over */
 	size?: number;
+	list?: string;
 }
 
 export const STEP_CHUNKS = 12;
@@ -119,6 +120,25 @@ function mediaKeyOf(matchedUrl: string): { bucket: 'MEDIA' | 'MEDIA_PRIVATE'; ke
 	return null;
 }
 
+/** One value sealed into the case's evidence. */
+export async function keepJson(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, name: string, source: string, value: unknown): Promise<CsamEvidenceFile> {
+	const sealed = await sealJson(keys.current.key, value, { caseId, name });
+	await store(env).put(caseKey(caseId, name), sealed);
+	const plain = new TextEncoder().encode(JSON.stringify(value));
+	return { name, source, contentType: 'application/json', bytes: plain.byteLength, chunkSha256: [await sha256Hex(plain)], chunkBytes: CHUNK_BYTES, keyVersion: keys.current.version, copiedAt: new Date().toISOString() };
+}
+
+/** A value keepJson sealed; null when it is not there. */
+export async function readKeptJson<T>(env: EvidenceEnv, keys: EvidenceKeys, caseId: string, file: CsamEvidenceFile): Promise<T | null> {
+	const object = await store(env).get(caseKey(caseId, file.name));
+	const key = keys.byVersion.get(file.keyVersion);
+	if (!object || !key) return null;
+	return openJson<T>(key, new Uint8Array(await object.arrayBuffer()), { caseId, name: file.name });
+}
+
+/** The list of what a recording's copy holds, beside it. */
+export const listNameOf = (recording: string) => recording.replace(/^06-live-recording-(.+)\.mp4$/, 'segments-of-recording-$1.json');
+
 /**
  * What to keep for a case: snapshots of the records (sealed at once, they are small) and the files
  * to copy, best source first. Returns the files; the snapshots are already in the store.
@@ -128,11 +148,7 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 	const files: PlannedFile[] = [];
 	const snapshots: CsamEvidenceFile[] = [];
 	const snapshot = async (name: string, source: string, value: unknown) => {
-		if (value == null) return;
-		const sealed = await sealJson(keys.current.key, value, { caseId, name });
-		await store(env).put(caseKey(caseId, name), sealed);
-		const plain = new TextEncoder().encode(JSON.stringify(value));
-		snapshots.push({ name, source, contentType: 'application/json', bytes: plain.byteLength, chunkSha256: [await sha256Hex(plain)], chunkBytes: CHUNK_BYTES, keyVersion: keys.current.version, copiedAt: new Date().toISOString() });
+		if (value != null) snapshots.push(await keepJson(env, keys, caseId, name, source, value));
 	};
 
 	// A record an account erasure deleted: what it wrote down of the media (ids and paths) stands in for it
@@ -204,6 +220,9 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 type Ranged = {
 	size: number;
 	read(offset: number, length: number): Promise<Uint8Array>;
+	/** What it is made of, and its fingerprint: a copy holds exactly that */
+	list?: CopiedList;
+	fingerprint?: string;
 	/** How many reads a range takes; one when it does not say */
 	reads?(offset: number, length: number): number;
 } | null;
@@ -279,7 +298,10 @@ async function openSource(env: EvidenceEnv, source: EvidenceSource, state: CopyS
 	if (source.type === 'live') {
 		const parts = await recordingParts(env as RecordingEnv, source.sessionId, source.rendition);
 		if (!parts.length) return null;
+		const list = copiedList(source.sessionId, source.rendition, parts);
 		return {
+			list,
+			fingerprint: await sha256Hex(new TextEncoder().encode(JSON.stringify(list.parts))),
 			size: parts.reduce((n, p) => n + p.size, 0),
 			read: (offset, length) => readParts((env as RecordingEnv).LIVE_MEDIA!, parts, offset, length),
 			reads: (offset, length) => readsOf(parts, offset, length),
@@ -305,7 +327,7 @@ async function openSource(env: EvidenceEnv, source: EvidenceSource, state: CopyS
 
 export type CopyStep =
 	| { status: 'copying'; state: CopyState }
-	| { status: 'file_done'; file: CsamEvidenceFile | null; missing?: { name: string; source: string; reason: string } };
+	| { status: 'file_done'; file: CsamEvidenceFile | null; list?: CopiedList; missing?: { name: string; source: string; reason: string } };
 
 const label = (s: EvidenceSource) => (s.type === 'r2' ? `${s.bucket}/${s.key}` : s.type === 'original' ? `MEDIA_ORIGINALS/${originalPrefix(s.videoId)}${s.uploadId}/` : s.type === 'image' ? `images${s.path}` : s.type === 'live' ? `LIVE_MEDIA/live/${s.sessionId}/${s.rendition}/` : s.type === 'bunny_live' ? `bunny/${s.guid}` : `bunny/${s.videoId}`);
 
@@ -318,13 +340,14 @@ export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: str
 		return { status: 'file_done', file: null, missing: { name: planned.name, source: label(planned.source), reason: 'not found at the source' } };
 	}
 	const key = caseKey(caseId, planned.name);
-	if (state.uploadId && state.size !== undefined && state.size !== source.size) {
+	const startOver: CopyStep = { status: 'copying', state: { file: state.file, parts: [], chunk: 0, chunkSha256: [], bytes: 0 } };
+	if (state.uploadId && ((state.size !== undefined && state.size !== source.size) || state.list !== source.fingerprint)) {
 		// The source changed while it was copied (a stream's last segments): what was read so far may not line up
 		await bucket.resumeMultipartUpload(key, state.uploadId).abort().catch(() => undefined);
-		return { status: 'copying', state: { file: state.file, parts: [], chunk: 0, chunkSha256: [], bytes: 0 } };
+		return startOver;
 	}
 	const upload = state.uploadId ? bucket.resumeMultipartUpload(key, state.uploadId) : await bucket.createMultipartUpload(key, { customMetadata: { caseId, keyVersion: String(keys.current.version) } });
-	const next: CopyState = { ...state, uploadId: upload.uploadId, size: source.size, parts: [...state.parts], chunkSha256: [...state.chunkSha256] };
+	const next: CopyState = { ...state, uploadId: upload.uploadId, size: source.size, ...(source.fingerprint ? { list: source.fingerprint } : {}), parts: [...state.parts], chunkSha256: [...state.chunkSha256] };
 	const total = Math.max(1, Math.ceil(source.size / CHUNK_BYTES));
 	try {
 		let reads = 0;
@@ -345,6 +368,11 @@ export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: str
 			next.chunk++;
 		}
 		if (next.chunk < total) return { status: 'copying', state: next };
+		// Or in this very step
+		if (source.fingerprint && (await openSource(env, planned.source, state))?.fingerprint !== source.fingerprint) {
+			await upload.abort().catch(() => undefined);
+			return startOver;
+		}
 		await upload.complete(next.parts);
 	} catch (error) {
 		// An upload begun in this step is not in the job's state: its retry begins another one
@@ -353,6 +381,7 @@ export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: str
 	}
 	return {
 		status: 'file_done',
+		...(source.list ? { list: source.list } : {}),
 		file: { name: planned.name, source: label(planned.source), contentType: planned.contentType, bytes: next.bytes, chunkSha256: next.chunkSha256, chunkBytes: CHUNK_BYTES, keyVersion: keys.current.version, copiedAt: new Date().toISOString() },
 	};
 }

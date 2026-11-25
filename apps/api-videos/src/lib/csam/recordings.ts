@@ -3,7 +3,9 @@
  * and its removal once the copy is in the store.
  *
  *   self-hosted  `live/<session>/…` in LIVE_MEDIA: the best rendition's init segment and segments, in order, are one
- *                playable file. Copied with the public files, then the session's whole prefix is deleted.
+ *                playable file. Copied with the public files, with a list of what the copy holds; then each segment the
+ *                list covers is deleted, and the rest of the session when nothing is left. A segment the list does
+ *                not cover (it came in later, or changed) is copied first, whatever its size.
  *   Bunny        the library video with the stream's guid: copied from Bunny's best file, then deleted there.
  */
 import type { PlannedFile, EvidenceEnv } from './evidence';
@@ -26,12 +28,18 @@ const SEGMENT = /^seg_(\d+)\.(?:m4s|ts|mp4)$/;
 const INIT = /^init(?:_\d{1,3})?\.mp4$/;
 const prefixOf = (sessionId: string) => `live/${sessionId}/`;
 
-async function objectsUnder(bucket: R2Bucket, prefix: string): Promise<Array<{ key: string; size: number }>> {
-	const out: Array<{ key: string; size: number }> = [];
+interface StoredObject {
+	key: string;
+	size: number;
+	etag: string;
+}
+
+async function objectsUnder(bucket: R2Bucket, prefix: string): Promise<StoredObject[]> {
+	const out: StoredObject[] = [];
 	let cursor: string | undefined;
 	do {
 		const page = await bucket.list({ prefix, ...(cursor ? { cursor } : {}) });
-		out.push(...page.objects.map((o) => ({ key: o.key, size: o.size })));
+		out.push(...page.objects.map((o) => ({ key: o.key, size: o.size, etag: o.etag })));
 		cursor = page.truncated ? page.cursor : undefined;
 	} while (cursor);
 	return out;
@@ -97,6 +105,7 @@ export interface RecordingPart {
 	key: string;
 	offset: number;
 	size: number;
+	etag: string;
 }
 
 /** One rendition's objects in playing order: its init segment, then its segments by number. */
@@ -115,17 +124,17 @@ export async function recordingParts(env: RecordingEnv, sessionId: string, rendi
 	const playlist = await bucket.get(`${base}${rendition}/index.m3u8`);
 	const uri = playlist ? /#EXT-X-MAP:URI="([^"]+)"/.exec(await playlist.text())?.[1]?.split('/').pop() : undefined;
 	const candidates = [...(uri && INIT.test(uri) ? [`${base}${rendition}/${uri}`, `${base}${uri}`] : []), ...objects.filter((o) => INIT.test(fileOf(o.key))).map((o) => o.key), `${base}init.mp4`];
-	let init: { key: string; size: number } | null = null;
+	let init: StoredObject | null = null;
 	for (const key of candidates) {
 		const head = await bucket.head(key);
 		if (head) {
-			init = { key, size: head.size };
+			init = { key, size: head.size, etag: head.etag };
 			break;
 		}
 	}
 	let offset = 0;
 	return [...(init ? [init] : []), ...segments].map((o) => {
-		const part = { key: o.key, offset, size: o.size };
+		const part = { key: o.key, offset, size: o.size, etag: o.etag };
 		offset += o.size;
 		return part;
 	});
@@ -153,16 +162,83 @@ export async function readParts(bucket: R2Bucket, parts: RecordingPart[], offset
 	return out;
 }
 
-/** Deletes up to `pages` × 1000 of a self-hosted session's objects. Its copy is in the store by now. */
-export async function deleteSessionMedia(env: RecordingEnv, sessionId: string, pages: number): Promise<{ pages: number; done: boolean }> {
-	if (!env.LIVE_MEDIA) return { pages: 0, done: true };
-	for (let used = 1; used <= pages; used++) {
-		// From the start each time: what was listed is gone
-		const page = await env.LIVE_MEDIA.list({ prefix: prefixOf(sessionId) });
-		if (page.objects.length) await env.LIVE_MEDIA.delete(page.objects.map((o) => o.key));
-		if (!page.truncated) return { pages: used, done: true };
+/** What a kept copy of a rendition holds: its objects in order, by key and etag. */
+export interface CopiedList {
+	sessionId: string;
+	rendition: string;
+	parts: Array<[key: string, etag: string]>;
+}
+export const copiedList = (sessionId: string, rendition: string, parts: RecordingPart[]): CopiedList => ({ sessionId, rendition, parts: parts.map((p) => [p.key, p.etag]) });
+
+const segmentOf = (sessionId: string, key: string): { rendition: string; seq: number } | null => {
+	const [rendition, file, ...more] = key.slice(prefixOf(sessionId).length).split('/');
+	const seq = file && !more.length ? SEGMENT.exec(file)?.[1] : undefined;
+	return seq === undefined ? null : { rendition: rendition!, seq: Number(seq) };
+};
+
+/**
+ * Whether the copies hold an object of the session: that very object (key and etag), or the same moment in another
+ * rendition. What is no segment holds nothing by itself.
+ */
+export function coveredBy(sessionId: string, lists: readonly CopiedList[]): (o: { key: string; etag: string }) => boolean {
+	const etags = new Map<string, Set<string>>();
+	const renditions = new Set<string>();
+	const seqs = new Set<number>();
+	for (const list of lists) {
+		renditions.add(list.rendition);
+		for (const [key, etag] of list.parts) {
+			etags.set(key, (etags.get(key) ?? new Set()).add(etag));
+			const segment = segmentOf(sessionId, key);
+			if (segment) seqs.add(segment.seq);
+		}
 	}
-	return { pages, done: false };
+	return (o) => {
+		const segment = segmentOf(sessionId, o.key);
+		if (!segment) return true;
+		const copied = etags.get(o.key);
+		if (copied) return copied.has(o.etag);
+		return !renditions.has(segment.rendition) && seqs.has(segment.seq);
+	};
+}
+
+/** The rendition to copy next: the one with the most that no copy holds. Null when the copies hold everything. */
+export async function lateRendition(env: RecordingEnv, sessionId: string, lists: readonly CopiedList[]): Promise<string | null> {
+	if (!env.LIVE_MEDIA) return null;
+	const covered = coveredBy(sessionId, lists);
+	const bytes = new Map<string, number>();
+	for (const o of await objectsUnder(env.LIVE_MEDIA, prefixOf(sessionId))) {
+		if (covered(o)) continue;
+		const { rendition } = segmentOf(sessionId, o.key)!;
+		bytes.set(rendition, (bytes.get(rendition) ?? 0) + o.size);
+	}
+	return [...bytes].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+}
+
+/**
+ * Deletes a self-hosted session's objects, up to `pages` × 1000 listed. Only what the copies hold, asked of each
+ * object as it is listed; playlists and init segments last, once nothing else is stored. `late`: something is not held.
+ */
+export async function deleteSessionMedia(env: RecordingEnv, sessionId: string, pages: number, covered: (o: { key: string; etag: string }) => boolean): Promise<{ pages: number; done: boolean; late: boolean }> {
+	const bucket = env.LIVE_MEDIA;
+	if (!bucket) return { pages: 0, done: true, late: false };
+	const rest: string[] = [];
+	let late = false;
+	let startAfter: string | undefined;
+	for (let used = 1; used <= pages; used++) {
+		const page = await bucket.list({ prefix: prefixOf(sessionId), ...(startAfter ? { startAfter } : {}) });
+		const go: string[] = [];
+		for (const o of page.objects) {
+			if (!segmentOf(sessionId, o.key)) rest.push(o.key);
+			else if (covered(o)) go.push(o.key);
+			else late = true;
+		}
+		if (go.length) await bucket.delete(go);
+		startAfter = page.objects.at(-1)?.key;
+		if (page.truncated) continue;
+		if (!late) for (let i = 0; i < rest.length; i += 1000) await bucket.delete(rest.slice(i, i + 1000));
+		return { pages: used, done: !late, late };
+	}
+	return { pages, done: false, late: false };
 }
 
 export const deleteBunny = (env: RecordingEnv, guid: string) => deleteBunnyRecording(env, guid);
