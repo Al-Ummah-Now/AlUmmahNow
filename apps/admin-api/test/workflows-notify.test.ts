@@ -15,6 +15,7 @@ import { processWorkflowNotifyJob, renderWorkflowEmail, fieldValue, arDigits, ty
 import { clearWorkflowExecutors, proposeChange, registerWorkflowExecutor, ruleVersionStatement } from '../src/lib/workflows/engine';
 import { createWorkflowDirectory } from '../src/lib/workflows/directory';
 import type { WorkflowCtx } from '../src/lib/workflows/types';
+import { sqliteD1 } from './d1-sqlite';
 
 const request: WorkflowRequestView = {
   id: 'wfr_1',
@@ -137,10 +138,19 @@ describe('delivery', () => {
     clearWorkflowExecutors();
   });
 
+  const staff = (reports: D1Database, userId: string, role: string, active = 1) =>
+    reports
+      .prepare("INSERT INTO admin_staff (user_id, role, name, email, active, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, 'x', 'x', 'x')")
+      .bind(userId, role, userId, active)
+      .run();
+
   async function setup(email: boolean) {
     const search = searchD1();
+    const reports = sqliteD1();
+    for (const u of ['sa1', 'sa2']) await staff(reports, u, 'super_admin');
     const env = {
       SEARCH_DB: search,
+      REPORTS_DB: reports,
       RESEND_API_KEY: 're_test',
       ENVIRONMENT: 'production',
       ADMIN_WEB_URL: 'https://admin.alummahnow.net',
@@ -201,6 +211,50 @@ describe('delivery', () => {
     assert.match(plain(sent.at(-1)!.text), /People also told by email: Someone, Sara/);
   });
 
+  it('a recipient gets the email only while they may read the request, named by the step or by the rule', async () => {
+    const people = ['sa2', 'adm', 'mod', 'left', 'fin1', 'finOff', 'finTech', 'nobody'];
+    const expected: Record<string, string[]> = {
+      platform: ['adm', 'fin1', 'sa2'],
+      money: ['fin1', 'sa2'],
+      'not-a-domain': ['fin1', 'sa2'],
+    };
+    for (const [domain, readers] of Object.entries(expected)) {
+      for (const by of ['step', 'rule'] as const) {
+        sent = [];
+        const { env, id } = await setup(true);
+        await staff(env.REPORTS_DB, 'adm', 'admin');
+        await staff(env.REPORTS_DB, 'mod', 'moderator');
+        await staff(env.REPORTS_DB, 'left', 'super_admin', 0);
+        for (const [u, removed] of [['fin1', null], ['finOff', 'x'], ['finTech', null]] as const) {
+          raw.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at, removed_at) VALUES (?, '[\"support:payouts\"]', 'x', 'y', 'x', ?)").run(u, removed);
+        }
+        raw.exec("INSERT INTO support_tech_staff (user_id, marked_by, marked_at) VALUES ('finTech', 'sa1', 'x')");
+        const asked: string[] = [];
+        env.VIDEOS.fetch = async (input: string) => {
+          const who = decodeURIComponent(new URL(input).pathname.split('/').at(-2) ?? '');
+          asked.push(who);
+          return Response.json({ success: true, result: { email: `${who}@example.org`, locale: 'en', displayName: who, accountEmail: true } });
+        };
+        const row = raw.prepare('SELECT rule FROM workflow_requests WHERE id = ?').get(id) as { rule: string };
+        const rule = JSON.parse(row.rule);
+        if (by === 'rule') rule.notify.extra = [{ kind: 'people', userIds: people }];
+        raw.prepare('UPDATE workflow_requests SET domain = ?, rule = ? WHERE id = ?').run(domain, JSON.stringify(rule), id);
+        assert.equal(await processWorkflowNotifyJob(env as never, msg({ v: 1, kind: 'workflow_notify', requestId: id, event: 'withdrawn', actor: 'sa1', recipients: by === 'step' ? people : [] })), 'done');
+        assert.deepEqual(sent.map((s) => s.to.split('@')[0]).sort(), readers, `${domain} by ${by}`);
+        assert.deepEqual(asked.filter((u) => u !== 'sa1').sort(), readers, 'nobody else is looked up');
+        clearWorkflowExecutors();
+      }
+    }
+  });
+
+  it('who may read cannot be told without the staff list: the job retries', async () => {
+    const { env, id } = await setup(true);
+    const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: id, event: 'proposed', actor: 'sa1', recipients: ['sa2'] };
+    const down = { prepare() { throw new Error('D1_ERROR: network connection lost'); } };
+    for (const reports of [undefined, down]) assert.equal(await processWorkflowNotifyJob({ ...env, REPORTS_DB: reports } as never, msg(job)), 'retry');
+    assert.equal(sent.length, 0);
+  });
+
   it('a recipient without an account email gets none; an unreadable account retries the job', async () => {
     const { env, id } = await setup(true);
     const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: id, event: 'proposed', actor: 'sa1', recipients: ['sa2'] };
@@ -235,7 +289,7 @@ describe('review fixes (#1832)', () => {
   it('a transient D1 error retries the job instead of dropping it', async () => {
     const broken = { prepare() { throw new Error('D1_ERROR: network connection lost'); } };
     const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: 'wfr_x', event: 'proposed', actor: 'a', recipients: ['b'] };
-    assert.equal(await processWorkflowNotifyJob({ SEARCH_DB: broken } as never, { id: 'm', body: job, attempts: 1, ack() {}, retry() {} }), 'retry');
+    assert.equal(await processWorkflowNotifyJob({ SEARCH_DB: broken, REPORTS_DB: broken } as never, { id: 'm', body: job, attempts: 1, ack() {}, retry() {} }), 'retry');
   });
   it('people: a list names five and counts the rest, and the person a change is about always shows', () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];

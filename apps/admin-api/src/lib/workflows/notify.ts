@@ -12,7 +12,9 @@
  * no email, and the job retries while accounts cannot be read.
  *
  * Recipients: those the engine names (the proposer and the eligible approvers), plus the rule's extra
- * notify list. Email is skipped when the rule turns email off; the in-app count still shows it.
+ * notify list. Each must still be allowed to read the request when the email goes out (its stored domain
+ * and the staff and finance lists as they are then). Email is skipped when the rule turns email off; the
+ * in-app count still shows it.
  */
 import { currencyExponent, workflowFieldChanged, workflowFieldPeople, workflowFieldShown, type AccountEmailContact, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
@@ -24,6 +26,7 @@ import type { QueueMessageLike } from '../contact-mail-queue';
 import { logger } from '../logger';
 import { createWorkflowDirectory, ownerIdsFrom } from './directory';
 import { getRequestView, WorkflowError } from './engine';
+import { mayReadRequest } from './visibility';
 import type { WorkflowEvent } from './types';
 import type { D1Database } from '../types';
 
@@ -244,9 +247,11 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
   const job = msg.body;
   if (job.v !== WORKFLOW_NOTIFY_VERSION || !job.requestId || job.event === 'commented') return 'done';
   const db = env.SEARCH_DB as D1Database | undefined;
-  if (!db) return 'retry';
+  const reportsDb = env.REPORTS_DB as D1Database | undefined;
+  // Both say who may read the request
+  if (!db || !reportsDb) return 'retry';
   try {
-    const ctx = { db, directory: createWorkflowDirectory({ searchDb: db, reportsDb: (env.REPORTS_DB as D1Database) ?? null, ownerIds: ownerIdsFrom(env.PLATFORM_OWNER_USER_IDS) }), now: () => new Date() };
+    const ctx = { db, directory: createWorkflowDirectory({ searchDb: db, reportsDb, ownerIds: ownerIdsFrom(env.PLATFORM_OWNER_USER_IDS) }), now: () => new Date() };
     let request: WorkflowRequestView;
     try {
       request = await getRequestView(ctx, job.requestId);
@@ -273,6 +278,8 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
     }
     let sent = 0;
     for (const userId of recipients) {
+      // Named when the step was made, or by the rule; what counts is who may read it now
+      if (!mayReadRequest(await ctx.directory.facts(userId), request.domain)) continue;
       const contact = await contactOf(env, userId);
       const to = contact?.email?.trim();
       if (!contact || !to || !to.includes('@')) continue;
