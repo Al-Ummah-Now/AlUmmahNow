@@ -86,6 +86,17 @@ const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: 'l
 const LOAD_TAG = /@load/;
 const LOAD_ONLY = process.env.E2E_LOAD === 'only';
 
+/**
+ * WebKit on Linux decodes through the system's GStreamer. Its FFmpeg H.264 decoder (avdec_h264,
+ * gst-libav 1.24.1 on ubuntu-24.04) aborts the whole web process when the picture size changes while
+ * it decodes, as HLS does on a rendition switch: "gstavviddec.c: assertion failed: (vmeta->width ==
+ * GST_VIDEO_INFO_WIDTH (info))". The page then looks hung for 10 to 20 s, while the kernel writes the
+ * core, and the test fails on whatever it did next (#2013: a hover that "timed out"; about 2 loads
+ * of the 40 s clip in 100). OpenH264, from the same packages Playwright installs, switches sizes fine.
+ * In the environment, which the browsers inherit; only GStreamer reads it.
+ */
+if (process.platform === 'linux') process.env.GST_PLUGIN_FEATURE_RANK ??= 'avdec_h264:NONE';
+
 export default defineConfig({
   testDir: './e2e/release',
   ...(LOAD_ONLY ? { grep: LOAD_TAG } : { grepInvert: LOAD_TAG }),

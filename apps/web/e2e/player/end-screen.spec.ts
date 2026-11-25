@@ -27,6 +27,16 @@ const count = (end: Locator) => end.locator('.vjs-fanous-next-count');
 const seconds = async (end: Locator) => parseShownNumber(await count(end).textContent());
 
 /**
+ * Pauses the countdown: the pointer goes straight to the card. hover() first waits for frames, which,
+ * after a slow look at the screen, took 2 of the 3 s in WebKit on a loaded runner, and now and then all
+ * of them: the video had moved on.
+ */
+async function restOnCard(page: Page) {
+  const box = (await page.getByTestId('player-next-thumb').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+/**
  * Seeks to the end and waits for the end screen. The countdown is 3 s (docs/specs/PLAYLIST-PLAYBACK.md
  * D7), so `hold` (the default, for measurements) rests the pointer on the card at once, which pauses it.
  */
@@ -38,9 +48,9 @@ async function reachEnd(page: Page, player: Locator, { hold = true }: { hold?: b
     v.currentTime = v.duration - 0.4;
   });
   const end = page.getByTestId('player-end-screen');
-  await expect(end).toBeVisible({ timeout: 20_000 });
-  const thumb = page.getByTestId('player-next-thumb');
-  if (hold && (await thumb.count()) > 0) await thumb.hover();
+  // waitFor sees the screen in the frame it shows, where expect polls up to a second apart
+  await end.waitFor({ timeout: 20_000 });
+  if (hold && (await page.getByTestId('player-next-thumb').count()) > 0) await restOnCard(page);
   return end;
 }
 
@@ -194,6 +204,9 @@ for (const dpr of [1, 2]) {
         await expect(end.getByTestId('player-cancel-next')).toBeVisible();
         await freeze(page);
         const ring = await layoutBox(end.getByTestId('player-next-ring'));
+        // Always the figure the countdown starts on: a slow runner reaches the «1», whose ink its font
+        // draws half a pixel further to one side than the «2» and «3» (WebKit on Linux: 1.58px against 1.05px)
+        await count(end).evaluate((el) => { el.textContent = '3'; });
         const digits = await inkBox(page, count(end), 'self', 2);
         // Across: the figure's box on the ring's centre; its ink may sit up to half a pixel more
         // to one side, by the font's own side bearings (DejaVu Sans's figures are not symmetric)
@@ -229,9 +242,9 @@ test.describe('end screen behaviour', () => {
     const status = end.getByRole('status');
     await expect(status).toHaveText('Next video in 3 seconds');
     const first = await seconds(end);
-    await expect.poll(() => seconds(end), { timeout: 3_000 }).toBeLessThan(first);
+    await expect.poll(() => seconds(end), { timeout: 3_000, intervals: [100] }).toBeLessThan(first);
     // Hold the 3 s countdown (pointer on the card) so the screen is still there to read
-    await page.getByTestId('player-next-thumb').hover();
+    await restOnCard(page);
     await expect(status).toHaveText('Next video in 3 seconds');
   });
 
@@ -255,13 +268,24 @@ test.describe('end screen behaviour', () => {
 
   test('pauses while the pointer is on the card and resumes when it leaves', async ({ page }) => {
     const player = await openHarness(page, { src: 'dark' });
-    const end = await reachEnd(page, player, { hold: false });
-    await page.getByTestId('player-next-thumb').hover();
+    const end = await reachEnd(page, player); // the pointer rests on the card
     const held = await seconds(end);
     await page.waitForTimeout(2_000);
     expect(await seconds(end)).toBe(held);
+    // Resumed: fewer seconds, or, where it was held near its end (a slow runner), the next video asked for
+    let nextAsked = false;
+    page.on('request', (request) => {
+      if (/src=bright/.test(request.url())) nextAsked = true;
+    });
     await page.mouse.move(2, 2);
-    await expect.poll(() => seconds(end), { timeout: 4_000 }).toBeLessThan(held);
+    const resumed = async () => {
+      const [shown] = await count(end).allTextContents().catch(() => []); // no waiting: the screen goes with the advance
+      return nextAsked || (shown !== undefined && parseShownNumber(shown) < held);
+    };
+    await expect.poll(resumed, { message: `the countdown held at ${held} did not resume`, timeout: 4_000, intervals: [100] }).toBe(true);
+    // The next video's address shows once it has loaded: 1.0 to 7.4 s on the CI dev server, once 14.5 s,
+    // where Next fell back from its payload to a full page load (23 loads, 3 browsers, 2026-11-25)
+    if (nextAsked) await expect(page).toHaveURL(/src=bright/, { timeout: 20_000 });
   });
 
   for (const how of ['Tab', 'Escape', 'Cancel'] as const) {
