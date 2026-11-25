@@ -8,6 +8,7 @@
  * version through skew protection. Without it, a chunk that only the old build
  * had answers 404 and the page breaks on its next navigation.
  */
+import { RELEASE_CHECK_HEADER, RELEASE_CHECK_OK } from '../../packages/shared-types/src/release-check.ts';
 import type { CheckResult } from './smoke.ts';
 
 export interface BuildSnapshot {
@@ -54,8 +55,10 @@ async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions,
 		try {
 			const res = await fetchImpl(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(20_000) });
 			await res.body?.cancel();
-			if (res.status < 500) return res.status;
-			last = res.status;
+			// At 0% the status counts only when the candidate answered (X-Release-Check); an older version is asked again
+			const other = headers[RELEASE_CHECK_HEADER] !== undefined && res.headers.get(RELEASE_CHECK_HEADER) !== RELEASE_CHECK_OK;
+			if (res.status < 500 && !other) return res.status;
+			last = other ? `${res.status}, not from the candidate` : res.status;
 		} catch (error) {
 			last = error instanceof Error ? error.message : String(error);
 		}

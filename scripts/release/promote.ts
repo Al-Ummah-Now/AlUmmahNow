@@ -28,6 +28,7 @@ import { createCfClient } from './cf-api.ts';
 import { attachWhenMissing, ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { REQUEST_TIMEOUT_MS, runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
 import { computeMapping, mappingVarArgs, readDeploymentId, SKEW_APPS } from './skew-mapping.ts';
+import { RELEASE_CHECK_HEADER } from '../../packages/shared-types/src/release-check.ts';
 import { captureBuild, checkOldBuildServed, OLD_BUILD_RETRY, type BuildSnapshot } from './skew-check.ts';
 
 export type ReleaseEnv = 'stage' | 'production';
@@ -369,7 +370,7 @@ if (isMain) {
 					snapshots.map((s) => {
 						const worker = WORKERS[e][s.app];
 						const version = overrides?.[worker];
-						return checkOldBuildServed(s, fetch, 8, OLD_BUILD_RETRY, version ? { 'Cloudflare-Workers-Version-Overrides': `${worker}="${version}"` } : {});
+						return checkOldBuildServed(s, fetch, 8, OLD_BUILD_RETRY, version ? { 'Cloudflare-Workers-Version-Overrides': `${worker}="${version}"`, [RELEASE_CHECK_HEADER]: version } : {});
 					})
 				),
 			log,

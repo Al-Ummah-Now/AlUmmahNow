@@ -9,11 +9,15 @@
  * With overrides, every request carries Cloudflare-Workers-Version-Overrides, so
  * the checks run on the candidate versions with that env's bindings; the health
  * checks of api-videos, websocket-server and admin-api assert which version
- * answered (`deployment` in their /health), waiting up to VERSION_WAIT_MS for the
- * candidate. Every other check asks once.
+ * answered (`deployment` in their /health). Every other check of a Worker with a
+ * candidate counts only when that candidate answered all its requests: it sends
+ * X-Release-Check and wants "ok" back (packages/shared-types/src/release-check.ts).
+ * An answer of another version is asked for again, up to VERSION_WAIT_MS for the
+ * whole smoke. Without --override every check asks once.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { RELEASE_CHECK_HEADER, RELEASE_CHECK_OK } from '../../packages/shared-types/src/release-check.ts';
 
 export type SmokeEnv = 'qa' | 'stage' | 'production';
 
@@ -102,10 +106,12 @@ export interface SmokeOptions {
 	requestTimeoutMs?: number;
 }
 
-/** How long a /health may keep answering with another version than the candidate, and the pause between tries. */
+/** How long the whole smoke may wait for answers of the candidates instead of another version, and the pause between tries. */
 export const VERSION_WAIT_MS = 90_000;
 export const VERSION_PAUSE_MS = 5_000;
 
+/** Tries of the one check whose proof may be lost on the way (production robots.txt). */
+export const ROBOTS_TRIES = 3;
 /** One request may take this long (a stalled one must not outlive the waits around it). */
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const isTimeout = (error: unknown): boolean => (error as Error)?.name === 'TimeoutError';
@@ -129,34 +135,86 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	const headers: Record<string, string> = { 'User-Agent': 'al-ummah-now-release-smoke' };
 	if (opts.overrides && Object.keys(opts.overrides).length) headers['Cloudflare-Workers-Version-Overrides'] = overrideHeader(opts.overrides);
 	const requestTimeout = opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
-	const get = (url: string, timeoutMs = requestTimeout) => doFetch(url, { redirect: 'manual', headers, signal: AbortSignal.timeout(timeoutMs) });
+	const get = (url: string, timeoutMs = requestTimeout, extra: Record<string, string> = {}) =>
+		doFetch(url, { redirect: 'manual', headers: { ...headers, ...extra }, signal: AbortSignal.timeout(timeoutMs) });
 
 	const results: CheckResult[] = [];
-	const check = async (name: string, fn: () => Promise<string>) => {
-		try {
-			results.push({ name, ok: true, detail: await fn() });
-		} catch (error) {
-			results.push({ name, ok: false, detail: (error as Error).message });
+	// One deadline for the whole smoke: a mixed edge is mixed for all checks alike
+	const deadline = now() + VERSION_WAIT_MS;
+	const started = now();
+	const timeLeft = () => Math.min(requestTimeout, Math.max(VERSION_PAUSE_MS, deadline - now()));
+	const waited = () => Math.round((now() - started) / 1000);
+	type Get = (url: string) => Promise<Response>;
+
+	/**
+	 * A check of `app`'s Worker. With a candidate of it, the verdict counts only when the candidate answered every
+	 * request of the check; otherwise (an older version, an edge error page, a stalled request) the whole check runs
+	 * again until the deadline. A verdict of the candidate, pass or fail, and a failed connection end it at once.
+	 * `proofMayBeLost`: something in front may rewrite the answer and drop the header; then it is a printed warning.
+	 */
+	const check = async (name: string, app: string, fn: (get: Get) => Promise<string>, proofMayBeLost = false) => {
+		const worker = workerName(opts.env, app);
+		const wanted = worker ? opts.overrides?.[worker] : undefined;
+		for (let tries = 1; ; tries++) {
+			const proven: boolean[] = [];
+			let broken = false;
+			const ask: Get = async (url) => {
+				try {
+					const res = await get(url, wanted ? timeLeft() : requestTimeout, wanted ? { [RELEASE_CHECK_HEADER]: wanted } : {});
+					proven.push(res.headers.get(RELEASE_CHECK_HEADER) === RELEASE_CHECK_OK);
+					return res;
+				} catch (error) {
+					broken = broken || !isTimeout(error);
+					throw error;
+				}
+			};
+			let result: CheckResult;
+			let stalled = false;
+			try {
+				result = { name, ok: true, detail: await fn(ask) };
+			} catch (error) {
+				stalled = isTimeout(error);
+				result = { name, ok: false, detail: (error as Error).message };
+			}
+			const answeredByCandidate = proven.length > 0 && proven.every(Boolean) && !stalled;
+			if (!wanted || broken || answeredByCandidate) {
+				if (wanted && tries > 1 && result.ok) result.detail += ` (after ${waited()} s)`;
+				results.push(result);
+				return;
+			}
+			if (proofMayBeLost && tries >= ROBOTS_TRIES && !stalled) {
+				results.push({ ...result, detail: `${result.detail} (WARNING: no proof that candidate ${wanted} answered; not required yet)` });
+				return;
+			}
+			if (now() + VERSION_PAUSE_MS > deadline) {
+				const last = stalled ? 'no answer in time' : `last answer, of another version: ${result.detail}`;
+				results.push({ name, ok: false, detail: `not answered by candidate ${wanted} of ${worker} (after ${waited()} s; ${last})` });
+				return;
+			}
+			await sleep(VERSION_PAUSE_MS);
 		}
 	};
 	const assert = (cond: unknown, msg: string) => {
 		if (!cond) throw new Error(msg);
 	};
 
+	// These say which version answered in their body (`deployment`), the same rule otherwise
 	for (const { app, host } of VERSIONED_HEALTH) {
-		await check(`${app}: health`, async () => {
-			const worker = workerName(opts.env, app);
-			const wanted = worker ? opts.overrides?.[worker] : undefined;
-			const start = now();
+		const name = `${app}: health`;
+		const worker = workerName(opts.env, app);
+		const wanted = worker ? opts.overrides?.[worker] : undefined;
+		try {
 			for (;;) {
 				let served: string;
 				try {
-					const res = await get(`${hosts[host]}/health`, Math.min(requestTimeout, Math.max(VERSION_PAUSE_MS, VERSION_WAIT_MS - (now() - start))));
+					const res = await get(`${hosts[host]}/health`, wanted ? timeLeft() : requestTimeout);
 					assert(res.status === 200, `HTTP ${res.status}`);
 					const body = (await res.json()) as { status?: string; deployment?: string };
 					assert(body.status === 'healthy', `status ${body.status}`);
-					const after = Math.round((now() - start) / 1000);
-					if (!wanted || body.deployment === wanted) return `version ${body.deployment ?? 'unknown'}${after >= 1 && wanted ? ` (after ${after} s)` : ''}`;
+					if (!wanted || body.deployment === wanted) {
+						results.push({ name, ok: true, detail: `version ${body.deployment ?? 'unknown'}${waited() >= 1 && wanted ? ` (after ${waited()} s)` : ''}` });
+						break;
+					}
 					served = `served by version ${body.deployment}`;
 				} catch (error) {
 					// A request that stalls says nothing about the candidate yet
@@ -166,14 +224,15 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 				// Edge locations learn of a new deployment at different times: one can still answer with the version
 				// before it, after waitForVersions saw the candidate. Only that (and a stalled request) is waited for: an
 				// error, another status or an unhealthy body fails above, at once, on every try.
-				const waited = Math.round((now() - start) / 1000);
-				assert(now() - start + VERSION_PAUSE_MS <= VERSION_WAIT_MS, `${served}, expected candidate ${wanted} (after ${waited} s)`);
+				assert(now() + VERSION_PAUSE_MS <= deadline, `${served}, expected candidate ${wanted} (after ${waited()} s)`);
 				await sleep(VERSION_PAUSE_MS);
 			}
-		});
+		} catch (error) {
+			results.push({ name, ok: false, detail: (error as Error).message });
+		}
 	}
 
-	await check('api-videos: public video list answers JSON', async () => {
+	await check('api-videos: public video list answers JSON', 'api-videos', async (get) => {
 		const res = await get(`${hosts.api}/api/videos?limit=1`);
 		assert(res.status === 200, `HTTP ${res.status}`);
 		assert((res.headers.get('content-type') ?? '').includes('application/json'), `content-type ${res.headers.get('content-type')}`);
@@ -184,7 +243,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	// read from it. A host that answers with anything but the edge's clock is a failure. A host that
 	// refuses the connection passes with a note (one that stalls is a failure): the release attaches it as a new custom domain
 	// (custom-domains.ts) and its certificate can take minutes on the first release.
-	await check('api-videos: live edge host answers', async () => {
+	await check('api-videos: live edge host answers', 'api-videos', async (get) => {
 		let res: Response;
 		try {
 			res = await get(`https://${LIVE_HOSTS[opts.env]}/time`);
@@ -202,7 +261,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		return 'HTTP 200 edge clock';
 	});
 
-	await check('web: home page renders', async () => {
+	await check('web: home page renders', 'web', async (get) => {
 		const res = await get(`${hosts.web}/en`);
 		assert(res.status === 200, `HTTP ${res.status}`);
 		const html = await res.text();
@@ -211,7 +270,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	});
 
 	// R4: an auth error on the callback must land on the error page, never raw JSON
-	await check('web: sign-in callback error goes to the error page', async () => {
+	await check('web: sign-in callback error goes to the error page', 'web', async (get) => {
 		const res = await get(`${hosts.web}/api/callback?error=access_denied&state=release-smoke`);
 		assert(res.status >= 300 && res.status < 400, `HTTP ${res.status} (expected a redirect)`);
 		const location = new URL(res.headers.get('location') ?? '', hosts.web);
@@ -224,7 +283,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	// every other env noindex, and canonical/hreflang absolute on the env's own https host.
 	const production = opts.env === 'production';
 
-	await check('web: robots.txt', async () => {
+	await check('web: robots.txt', 'web', async (get) => {
 		const res = await get(`${hosts.web}/robots.txt`);
 		assert(res.status === 200, `HTTP ${res.status}`);
 		const { groups, sitemaps } = parseRobots(await res.text());
@@ -238,9 +297,10 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		assert(!disallowAll, 'production robots.txt disallows everything for User-agent: *');
 		assert(sitemaps.includes(`${hosts.web}/sitemap.xml`), `no Sitemap: ${hosts.web}/sitemap.xml`);
 		return 'indexable, sitemap listed';
-	});
+		// Cloudflare's managed robots.txt rewrites production's answer: whether the header survives is seen first, then required
+	}, production);
 
-	await check('web: sitemap index lists this host', async () => {
+	await check('web: sitemap index lists this host', 'web', async (get) => {
 		const res = await get(`${hosts.web}/sitemap.xml`);
 		assert(res.status === 200, `HTTP ${res.status}`);
 		assert(/xml/.test(res.headers.get('content-type') ?? ''), `content-type ${res.headers.get('content-type')}`);
@@ -253,7 +313,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		return `${locs.length} sitemap(s)`;
 	});
 
-	await check('web: home page head (canonical, hreflang, og:image, robots)', async () => {
+	await check('web: home page head (canonical, hreflang, og:image, robots)', 'web', async (get) => {
 		const res = await get(`${hosts.web}/en`);
 		assert(res.status === 200, `HTTP ${res.status}`);
 		const robots = res.headers.get('x-robots-tag') ?? '';
@@ -271,7 +331,7 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		return production ? 'indexable, self-canonical, en/ar/x-default' : 'noindex, self-canonical, en/ar/x-default';
 	});
 
-	await check('admin-web: answers', async () => {
+	await check('admin-web: answers', 'admin-web', async (get) => {
 		const res = await get(`${hosts.adminWeb}/`);
 		assert(res.status >= 200 && res.status < 400, `HTTP ${res.status}`);
 		return `HTTP ${res.status}`;
