@@ -5702,6 +5702,8 @@ const ar: Messages = {
       quarantinedTitle: 'الإصدارات المرفوضة',
       quarantinedHint: 'لم تجتز هذه الإصدارات التحقق من توقيعها أو محتواها. لا يُبلَّغ أي تطبيق بها ولا يرتبط بها شيء.',
       quarantinedRow: '{tag} ({source})، السبب: {reason}',
+      sourceGitHub: 'منصة GitHub، {repo}',
+      sourcePrivate: 'الإصدارات الخاصة، {repo}',
       keysTitle: 'مفاتيح التوقيع',
       keysSet: '{repo}: قائمة المفاتيح {serial}',
       keysMissing: 'لا توجد مفاتيح توقيع بعد: تتلقى الإصدارات المنزَّلة تنبيهًا بصفحة التنزيل، ولا تثبّت شيئًا.',
