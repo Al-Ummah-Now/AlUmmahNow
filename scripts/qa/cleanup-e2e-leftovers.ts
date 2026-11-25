@@ -258,7 +258,8 @@ export async function listEverything(env: Env, until: number): Promise<{ listing
 			profiles: only(profiles, flat),
 			playlists: only(playlists, (k) => !k.startsWith('watch-later-')),
 			posts: only(posts, (k) => /^posts\/[^/]+\/[^/]+\.json$/.test(k) && !k.endsWith('/index.json')),
-			sections,
+			// `_order/<channel>` is a channel's section order, not a section
+			sections: only(sections, (k) => !k.startsWith('_order/')),
 			handles,
 		},
 		keys: { schedule, tabs },
@@ -484,10 +485,12 @@ export async function apply(env: Env, inv: Inventory, options: ApplyOptions) {
 	return { failures, ...total };
 }
 
-/** Whether anything is on a channel now: a video of the index, a post or a section (made while this run was reading). */
+/** Whether anything is on a channel now: a video or playlist of the index, a post or a section (made while this run was reading). */
 async function holdsSomething(env: Env, channelId: string): Promise<boolean> {
-	const video = await env.SEARCH_DB.prepare("SELECT 1 AS n FROM content_ownership WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 LIMIT 1").bind(channelId).first();
-	if (video) return true;
+	for (const kind of ['video', 'playlist']) {
+		const row = await env.SEARCH_DB.prepare('SELECT 1 AS n FROM content_ownership WHERE kind = ? AND channel_id = ? AND is_deleted = 0 LIMIT 1').bind(kind, channelId).first();
+		if (row) return true;
+	}
 	const posts = await env.community_posts.list({ prefix: `posts/${channelId}/`, limit: 2 });
 	if (posts.objects.some((o) => !o.key.endsWith('/index.json'))) return true;
 	const sections = await env.channel_sections.list({ prefix: `${channelId}/`, limit: 1 });
