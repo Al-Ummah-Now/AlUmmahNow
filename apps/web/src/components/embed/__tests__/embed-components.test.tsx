@@ -109,6 +109,9 @@ afterEach(() => {
   delete (globalThis as { __fakePlayer?: unknown }).__fakePlayer;
 });
 
+/** Lets a gesture start's 1 ms timer (lib/video/start-playback.ts) and its play() promises run. */
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+
 const video = (id: string, extra: Partial<EmbedVideo> = {}): EmbedVideo => ({
   id,
   title: `Title ${id}`,
@@ -176,7 +179,7 @@ describe('EmbedPlayer', () => {
     // The frame starts it itself (Video.js autoplay off), unmuted
     expect(el).toHaveAttribute('data-autoplay', 'false');
     expect(el).toHaveAttribute('data-muted', 'false');
-    await act(async () => undefined);
+    await settle();
     expect(player.calls).toEqual([{ muted: false }]);
     expect(player.muted()).toBe(false);
     expect(screen.queryByTestId('embed-unmute')).toBeNull();
@@ -186,7 +189,7 @@ describe('EmbedPlayer', () => {
     const player = fakePlayer('NotAllowedError');
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1', gesture: '1', lang: 'ar' })} />);
-    await act(async () => undefined);
+    await settle();
     expect(player.calls).toEqual([{ muted: false }, { muted: true }]);
     const unmute = await screen.findByTestId('embed-unmute');
     expect(unmute).toHaveTextContent('اضغط لتشغيل الصوت');
@@ -201,12 +204,14 @@ describe('EmbedPlayer', () => {
     const player = fakePlayer(undefined, { state: { readyState: 0, paused: false } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
-    await act(async () => undefined);
+    await settle();
     expect(player.calls).toEqual([]);
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toEqual([{ muted: false }]);
     // once: a later source's loadstart starts nothing
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toHaveLength(1);
   });
 
@@ -215,6 +220,7 @@ describe('EmbedPlayer', () => {
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toHaveLength(1);
     await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toEqual([{ muted: false }, { muted: false }]);
@@ -234,6 +240,7 @@ describe('EmbedPlayer', () => {
     };
     gesture();
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toEqual([{ muted: false }, { muted: true }]);
     await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toEqual([{ muted: false }, { muted: true }, { muted: true }]);
@@ -245,6 +252,7 @@ describe('EmbedPlayer', () => {
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => player.fire('loadstart'));
+    await settle();
     for (let i = 0; i < 5; i += 1) await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toHaveLength(3);
   });
@@ -254,6 +262,7 @@ describe('EmbedPlayer', () => {
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => player.fire('loadstart'));
+    await settle();
     await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toHaveLength(1);
   });
@@ -270,6 +279,7 @@ describe('EmbedPlayer', () => {
       return result;
     };
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toHaveLength(1);
     await act(async () => player.fire('loadedmetadata'));
     await act(async () => player.fire('canplay'));
@@ -287,6 +297,7 @@ describe('EmbedPlayer', () => {
       window.dispatchEvent(event);
     });
     await act(async () => player.fire('loadstart'));
+    await settle();
     await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toEqual([]);
   });
@@ -297,6 +308,7 @@ describe('EmbedPlayer', () => {
     gesture();
     player.muted(true); // the remembered volume, applied after ready
     await act(async () => player.fire('loadstart'));
+    await settle();
     expect(player.calls).toEqual([{ muted: false }]);
     expect(player.muted()).toBe(false);
     expect(screen.queryByTestId('embed-unmute')).toBeNull();
@@ -316,7 +328,7 @@ describe('EmbedPlayer', () => {
     const player = fakePlayer('NotAllowedError');
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
-    await act(async () => undefined);
+    await settle();
     expect(player.muted()).toBe(true);
     expect(isAutoMuted(player)).toBe(true);
   });

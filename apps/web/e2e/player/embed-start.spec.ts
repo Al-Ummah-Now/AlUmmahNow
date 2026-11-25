@@ -20,10 +20,11 @@ test.beforeEach(async ({ page, baseURL }) => {
   await routeFixtures(page);
   // The harness page refuses framing; the real embed pages do not
   await page.route((url) => url.origin === site.origin && url.searchParams.get('embed') === '1', async (route) => {
+    if (route.request().resourceType() !== 'document') return route.fallback();
     const response = await route.fetch();
     const headers = response.headers();
-    delete headers['x-frame-options'];
-    delete headers['content-security-policy'];
+    // The body is fetched decoded
+    for (const name of ['x-frame-options', 'content-security-policy', 'content-encoding', 'content-length', 'transfer-encoding']) delete headers[name];
     await route.fulfill({ response, headers });
   });
   // The host: another site, so the frame is cross-origin as on www
