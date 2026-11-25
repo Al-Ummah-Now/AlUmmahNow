@@ -193,4 +193,5 @@ export * from './features-api';
 export * from './feature-routes';
 export * from './bidi';
 export * from './workflows';
+export * from './workflow-scopes';
 export * from './d1-capacity';
