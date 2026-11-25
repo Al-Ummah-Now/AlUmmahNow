@@ -9,6 +9,8 @@ import { EditableAvatar, EditableCover } from "@/components/media/ProfileImages"
 import { PhotoFileInput } from "@/components/media/PhotoFileInput";
 import { usePhotoUploads } from "@/hooks/usePhotoUploads";
 import { useWhenReady } from "@/hooks/useWhenReady";
+// The theme's media chrome, which the cover's buttons wear (system.css .media-cover .b-secondary): only where a cover is edited
+import '@/theme/player-themes.css';
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';

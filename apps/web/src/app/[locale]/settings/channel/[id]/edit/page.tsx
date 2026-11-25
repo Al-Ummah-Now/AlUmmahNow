@@ -4,6 +4,8 @@ import { englishOf, primaryText, trimPair } from '@/lib/localized-input';
 import { useParams } from 'next/navigation';
 import Link from '@/components/common/AppLink';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
+// The theme's media chrome, which the cover's buttons wear (system.css .media-cover .b-secondary): only where a cover is edited
+import '@/theme/player-themes.css';
 import { getChannelForOwner } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';
 import { PhotoFileInput } from '@/components/media/PhotoFileInput';
