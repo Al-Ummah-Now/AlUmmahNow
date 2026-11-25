@@ -9,6 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
+import { runOwnershipPass } from '../src/lib/search/ownership';
 import { SqliteD1 } from './search-sqlite-d1';
 import { PlaylistCreate } from '../src/endpoints/playlist/playlistCreate';
 import { PlaylistFetch } from '../src/endpoints/playlist/playlistFetch';
@@ -154,6 +155,7 @@ describe('personal playlists: a user without a channel', () => {
 		assert.equal(e.playlists.read(res.body.result.playlist.id).channelId, 'member-ch');
 		const mine = await call(e, 'member', 'GET', '/api/playlists?mine=true');
 		assert.deepEqual(mine.body.data, [], 'channel playlists are not personal ones');
+		await runOwnershipPass(e as never, 'playlist', { maxPages: 10 });
 		const listed = await call(e, null, 'GET', '/api/playlists?channelId=member-ch');
 		assert.deepEqual(listed.body.data.map((p: any) => p.title), ['Channel lessons']);
 	});

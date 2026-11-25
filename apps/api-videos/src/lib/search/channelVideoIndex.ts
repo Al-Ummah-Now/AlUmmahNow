@@ -94,10 +94,10 @@ function sortOf(sort: ChannelVideoSort | undefined): 'latest' | 'popular' | 'old
 }
 
 /**
- * One page of videos from the ownership index, or null when the index cannot
- * answer (unbound/incomplete/failed, or a cursor of the caller's scan) and the
- * caller must fall back to its bucket scan. A first-page fallback queues a
- * rebuild of the index (never run in the request).
+ * One page of videos from the ownership index, also while it is incomplete or waits for a repair (queued,
+ * never run in the request). Null only without an index (a local run): the caller reads the bucket then.
+ * Throws IndexUnavailableError when D1 fails. A cursor this module did not issue (a scan's, or of another
+ * order) ends the list.
  *
  * Cost per call: at most MAX_FILL_PAGES index queries and MAX_FILL_PAGES ×
  * limit object loads (or MAX_IN_MEMORY_SORT for an in-memory sort).
@@ -112,7 +112,8 @@ export async function channelVideosFromIndex<T>(
 	const after = compare ? null : decodeKeysetCursor(cursor, sort);
 	const offset = after ? 0 : indexOffset(cursor);
 	// A cursor of the bucket scan (or a keyset cursor of another order): not ours
-	if (offset === null || (!after && cursor?.startsWith(KEYSET_CURSOR_PREFIX))) return null;
+	if (offset === null || (!after && cursor?.startsWith(KEYSET_CURSOR_PREFIX))) return env?.SEARCH_DB ? { videos: [], cursor: '', examined: 0 } : null;
+	let incomplete = false;
 
 	const loadListed = async (ids: string[]): Promise<T[]> => {
 		const listed: T[] = [];
@@ -139,6 +140,7 @@ export async function channelVideosFromIndex<T>(
 				? await channelVideoIds(env, null, { ...query, sort, offset: next, limit: pageSize })
 				: await videoListIds(env, channelId, { ...query, sort, after: position, offset: position ? 0 : next, limit: pageSize });
 			if (!ids) return null;
+			incomplete ||= !!ids.incomplete;
 			let consumed = 0;
 			while (consumed < ids.ids.length && videos.length < limit) {
 				const batch = ids.ids.slice(consumed, consumed + Math.min(LOAD_CONCURRENCY, Math.max(limit - videos.length, 4)));
@@ -166,6 +168,7 @@ export async function channelVideosFromIndex<T>(
 	const sortedInMemory = async (): Promise<ChannelVideoIndexResult<T> | null> => {
 		const ids = await channelVideoIds(env, channelId, { ...query, sort: 'latest', offset: 0, limit: MAX_IN_MEMORY_SORT });
 		if (!ids) return null;
+		incomplete ||= !!ids.incomplete;
 		if (ids.hasMore) {
 			logger.warn('[ChannelVideoIndex] In-memory sort truncated', { channelId, max: MAX_IN_MEMORY_SORT });
 		}
@@ -175,7 +178,7 @@ export async function channelVideosFromIndex<T>(
 	};
 
 	const result = compare ? await sortedInMemory() : await filledPages();
-	if (!result && !cursor) {
+	if ((!result || incomplete) && !cursor) {
 		scheduleOwnershipHeal(env, options.waitUntil ?? null, 'video');
 		// A user's own private videos are found by the channels' rows
 		if (typeof query.privateFor === 'string') scheduleOwnershipHeal(env, options.waitUntil ?? null, 'channel');

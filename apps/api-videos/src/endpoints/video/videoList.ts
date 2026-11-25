@@ -271,7 +271,8 @@ export class VideosList extends OptionalAuthRoute {
 		// it found: a channel's videos beyond the scanned window came back as empty
 		// pages, and the unfiltered list (home grid, "All videos") showed whichever
 		// keys came first instead of the newest videos (#1029). A category is a column of the index.
-		// The scan below is only for an index that cannot answer (unbound, incomplete or failing).
+		// While rows wait for a repair the index still answers (each record is checked when it is loaded); a D1
+		// failure is a 503. The scan below is only for a run without an index (local).
 		const searched = searchesTitles ? await searchTitles() : null;
 		if (searchesTitles && !searched) return apiError(c, 503, "search_unavailable", { error: "Search is not available right now" });
 		const indexed = searched ?? await channelVideosFromIndex<VideoType>(c.env as never, {
@@ -302,7 +303,6 @@ export class VideosList extends OptionalAuthRoute {
 			// private, processing or internal records (stage, limit=1, 2026-11-11).
 			const page = await scanFill<VideoType>({
 				bucket,
-				// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
 				cursor: isIndexCursor(nextCursor) ? null : nextCursor,
 				limit,
 				load: loadListed,

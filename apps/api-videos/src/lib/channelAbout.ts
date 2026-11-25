@@ -26,7 +26,7 @@ export function isChannelVisibleTo(channel: VisibleChannelFields | null | undefi
 export interface ChannelTotals {
 	totalViews: number;
 	videosCount: number;
-	/** True when the scan stopped at its bound (totals are a lower bound). */
+	/** The totals may miss some: the index waits for a repair (or, without an index, the scan stopped at its bound). */
 	partial: boolean;
 }
 

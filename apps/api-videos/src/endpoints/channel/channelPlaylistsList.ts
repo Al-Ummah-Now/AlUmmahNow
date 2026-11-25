@@ -4,7 +4,7 @@ import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/s
 import { isIndexPageCursor, pageFromIndex } from "../../lib/search/indexPage";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { toPlaylistResponse } from "../../lib/playlists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
@@ -163,13 +163,11 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				limitedPlaylists = indexed.items;
 				nextCursor = indexed.cursor;
 				scanned = indexed.examined;
+				if (indexed.incomplete && !cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
 			} else {
-				// Index unavailable: a bounded scan that keeps reading until the page is full
-				// (lib/listFill.ts); the index rebuild is queued, never run here
-				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+				// Without an index (a local run): a bounded scan that keeps reading until the page is full (lib/listFill.ts)
 				const scan = await scanFill<PlaylistType>({
 					bucket,
-					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
 					cursor: isIndexPageCursor(cursor) ? null : cursor,
 					limit,
 					load: key => repository.getObject(key),
@@ -202,6 +200,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 
 			return response;
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error('Error fetching channel playlists', {
 				channelId,
 				error: error instanceof Error ? error.message : 'Unknown error'

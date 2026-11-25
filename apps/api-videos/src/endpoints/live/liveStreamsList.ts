@@ -5,7 +5,7 @@ import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";
-import { NonVideoRepository } from "../../lib/r2Repo";
+import { NonVideoRepository, rethrowBusy } from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { scanFill } from '../../lib/listFill';
 import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/search/ownership';
@@ -145,12 +145,11 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			if (indexed) {
 				streams = indexed.items;
 				nextCursor = indexed.cursor;
+				if (indexed.incomplete && !cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'stream');
 			} else {
-				// Index unavailable: the filled bucket scan; the index rebuild is queued, never run here
-				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'stream');
+				// Without an index (a local run): the filled bucket scan
 				const scan = await scanFill<LiveStreamType>({
 					bucket,
-					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
 					cursor: isIndexPageCursor(cursor) ? null : cursor,
 					limit,
 					prefix: "livestream:",
@@ -209,6 +208,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				},
 			};
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error("Error listing live streams:", error);
 			return c.json(
 				{

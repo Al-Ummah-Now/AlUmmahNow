@@ -162,16 +162,17 @@ export class VideoSearch extends OptionalAuthRoute {
 
 		// With channelIds, the ownership index lists the channels' videos
 		// (O(their videos)); the objects are then loaded and go through the same
-		// filtering, scoring and sorting as before. Without channelIds, or while
-		// the index is incomplete, every R2 page is scanned (bounded). The
+		// filtering, scoring and sorting as before. The
 		// response `cursor` is an offset into the filtered, sorted results (see
 		// pagination below), not an R2 continuation token.
 		// SCALABILITY-AUDIT AV-16: candidates come from D1 (the channels' videos,
 		// the owner's videos, or the best public matches); a bounded scan only
 		// while those indexes are unavailable. Each candidate is one R2 get, so
 		// channel and owner searches cover the newest INDEXED_CANDIDATES videos.
+		const channelRows = channelIdList.length > 0 ? await channelsVideoIds(c.env as never, channelIdList, INDEXED_CANDIDATES) : null;
+		if (channelRows?.incomplete) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
 		const indexedIds = channelIdList.length > 0
-			? await channelsVideoIds(c.env as never, channelIdList, INDEXED_CANDIDATES)
+			? channelRows?.ids ?? null
 			: isOwner && userId
 				? await ownVideoIds(c.env as never, userId, { newest: INDEXED_CANDIDATES })
 				: await publicSearchCandidateIds(c.env, query);

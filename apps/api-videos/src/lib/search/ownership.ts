@@ -53,6 +53,7 @@ import {
   ALL_OWNERSHIP_KINDS,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { IndexUnavailableError } from './index-unavailable';
 import { syncCommentIndex } from '../admin/commentIndex';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
 
@@ -109,8 +110,8 @@ export async function hasDirtyRows(db: SearchDb, kind: OwnershipKind): Promise<b
 
 /**
  * Complete = the last full pass was complete and no row has failed a write
- * since. Readers that must not serve a stale row (public lists, which fall
- * back to scanning R2) use this.
+ * since. Readers that must not serve a stale row use this. Public lists do not: they read the rows
+ * there are (listRead) and check every record they load.
  */
 export async function isOwnershipComplete(db: SearchDb, kind: OwnershipKind): Promise<boolean> {
   // One query (it runs on every indexed read): the marker, and no row marked for re-sync
@@ -229,6 +230,8 @@ export interface KeysetPage {
   positions: KeysetPosition[];
   last: KeysetPosition | null;
   hasMore: boolean;
+  /** The index waits for a repair: some rows may be stale or missing */
+  incomplete?: true;
 }
 
 export interface KeysetPageQuery {
@@ -369,10 +372,27 @@ const NO_CHANNEL = `NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} c WHERE c.kind 
 const THEIRS_ON_CHANNEL = `(EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} own WHERE own.kind = 'channel' AND own.id = ? AND own.owner_id = ?)
   OR (owner_id = ? AND NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} c WHERE c.kind = 'channel' AND c.id = ?)))`;
 
-/** Lists with a user's own private videos need both kinds complete: whose a video is, is its channel's row. */
-function whenListComplete<T>(env: OwnershipEnv, query: ChannelVideoQuery, read: (db: SearchDb) => Promise<T>): Promise<T | null> {
-  if (typeof query.privateFor !== 'string') return whenComplete(env, 'video', read);
-  return whenComplete(env, 'channel', () => whenComplete(env, 'video', read));
+/**
+ * The index read of a list, whatever the index's state: a big import always leaves some row waiting for its
+ * re-sync, and a list must not read the bucket then. The caller loads each record and checks it again, so a
+ * stale row is never shown; one that is missing appears once its repair ran. `incomplete`: queue the repair.
+ * Null only without an index (a local run); throws IndexUnavailableError when D1 fails.
+ */
+async function listRead<T extends object>(env: OwnershipEnv, kinds: OwnershipKind[], query: (db: SearchDb) => Promise<T>): Promise<(T & { incomplete?: true }) | null> {
+  const db = dbOf(env);
+  if (!db) return null;
+  try {
+    const [value, ...complete] = await Promise.all([query(db), ...kinds.map(kind => isOwnershipComplete(db, kind))]);
+    return complete.every(Boolean) ? value : { ...value, incomplete: true };
+  } catch (error) {
+    logger.error('[Ownership] The index of a list cannot be read', { kinds, error: errorText(error) });
+    throw new IndexUnavailableError();
+  }
+}
+
+/** Lists with a user's own private videos read both kinds: whose a video is, is its channel's row (checked again on the record). */
+function videoListRead<T extends object>(env: OwnershipEnv, query: ChannelVideoQuery, read: (db: SearchDb) => Promise<T>): Promise<(T & { incomplete?: true }) | null> {
+  return listRead(env, typeof query.privateFor === 'string' ? ['channel', 'video'] : ['video'], read);
 }
 
 /** Ids of the user's not-deleted videos by the channels they own now (see OWN_CHANNELS), moderation-hidden ones included; newest first with `newest`. */
@@ -535,7 +555,7 @@ export function videoListIds(
     return Promise.reject(new Error(`videoListIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
   }
   const sort: OwnershipSort = query.sort === 'popular' ? 'popular' : query.sort === 'oldest' ? 'oldest' : 'latest';
-  return whenListComplete(env, query, async db => {
+  return videoListRead(env, query, async db => {
     const { where, params } = videoListFilters(channelId, query);
     return keysetPage(db, { kind: 'video', sort, limit: query.limit, after: query.after, offset: query.offset, where, params });
   });
@@ -550,11 +570,11 @@ export function channelVideoIds(
   env: OwnershipEnv,
   channelId: string | null,
   query: ChannelVideoQuery,
-): Promise<{ ids: string[]; hasMore: boolean } | null> {
+): Promise<{ ids: string[]; hasMore: boolean; incomplete?: true } | null> {
   if (!(query.limit >= 1) || !((query.offset ?? 0) >= 0)) {
     return Promise.reject(new Error(`channelVideoIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
   }
-  return whenListComplete(env, query, async db => {
+  return videoListRead(env, query, async db => {
     const order = CHANNEL_VIDEO_ORDER[query.sort] ?? CHANNEL_VIDEO_ORDER.latest;
     const where = [`kind = 'video'`, 'is_deleted = 0', 'is_hidden = 0'];
     const params: unknown[] = [];
@@ -630,7 +650,7 @@ export interface PlaylistListQuery {
 
 /** One page of playlists from the index (never deleted, hidden or system playlists such as Watch later). */
 export function playlistListIds(env: OwnershipEnv, query: PlaylistListQuery): Promise<KeysetPage | null> {
-  return whenComplete(env, 'playlist', async db => {
+  return listRead(env, ['playlist'], async db => {
     const where = ['is_deleted = 0', 'is_hidden = 0', "(status IS NULL OR status <> 'system')"];
     const params: unknown[] = [];
     if (query.channelId) {
@@ -667,7 +687,7 @@ export interface StreamListQuery {
 
 /** One page of live streams, live ones first, then newest (the order the Live list always had). */
 export function streamListIds(env: OwnershipEnv, query: StreamListQuery): Promise<KeysetPage | null> {
-  return whenComplete(env, 'stream', async db => {
+  return listRead(env, ['stream'], async db => {
     const where = ['is_deleted = 0'];
     const params: unknown[] = [];
     if (query.channelId) {
@@ -699,14 +719,14 @@ export function streamListIds(env: OwnershipEnv, query: StreamListQuery): Promis
 }
 
 /** Ids of every not-deleted, not-hidden video of the given channels. */
-export function channelsVideoIds(env: OwnershipEnv, channelIds: string[], newest?: number): Promise<string[] | null> {
-  return whenComplete(env, 'video', async db => {
-    if (!channelIds.length) return [];
+export function channelsVideoIds(env: OwnershipEnv, channelIds: string[], newest?: number): Promise<{ ids: string[]; incomplete?: true } | null> {
+  return listRead(env, ['video'], async db => {
+    if (!channelIds.length) return { ids: [] };
     const placeholders = channelIds.map(() => '?').join(', ');
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 ${orderAndLimit(newest)}`,
     ).bind(...channelIds, ...(newest ? [newest] : [])).all<{ id: string }>();
-    return (results ?? []).map(r => r.id);
+    return { ids: (results ?? []).map(r => r.id) };
   });
 }
 
@@ -739,14 +759,14 @@ export function channelFormatCountsFromIndex(env: OwnershipEnv, channelId: strin
  * the sum lagged until the video was next edited or reconciled.
  */
 export function channelTotalsFromIndex(env: OwnershipEnv, channelId: string): Promise<{ totalViews: number; videosCount: number; partial: boolean } | null> {
-  return whenComplete(env, 'video', async db => {
+  return fromIndex(env, 'video', async db => {
     const row = await db.prepare(
       `SELECT COUNT(*) AS videos, COALESCE(SUM(views), 0) AS views FROM ${OWNERSHIP_TABLE}
        WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND ${READY_SQL}
          AND (schedule_status IS NULL OR schedule_status = 'published')`,
     ).bind(channelId).first<{ videos: number; views: number }>();
-    return { totalViews: Number(row?.views) || 0, videosCount: Number(row?.videos) || 0, partial: false };
-  });
+    return { totalViews: Number(row?.views) || 0, videosCount: Number(row?.videos) || 0 };
+  }).then(read => (read ? { ...read.value, partial: !read.complete } : null));
 }
 
 /**

@@ -5,7 +5,7 @@ import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { waitUntilOf } from "../../lib/search/ownership";
@@ -171,11 +171,9 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				limitedShorts = page.videos;
 				nextCursor = page.cursor;
 			} else {
-				// Index incomplete (or a scan cursor): a bounded bucket scan that fills
-				// the page (lib/listFill.ts); the helper above schedules an index heal.
+				// Without an index (a local run): a bounded bucket scan that fills the page (lib/listFill.ts, #694)
 				const scan = await scanFill<VideoType>({
 					bucket: c.env.videos,
-					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
 					cursor: isIndexCursor(cursor) ? null : cursor,
 					limit,
 					load: key => repository.getObject(key),
@@ -215,6 +213,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 
 			return response;
 		} catch (error) {
+			rethrowBusy(error);
 			logger.error('Error fetching channel shorts', {
 				channelId,
 				error: error instanceof Error ? error.message : 'Unknown error'

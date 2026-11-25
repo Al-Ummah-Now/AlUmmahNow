@@ -1,3 +1,4 @@
+import { IndexUnavailableError } from './search/index-unavailable';
 import { isInternalVideoKey, withStorageRetry } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
@@ -32,11 +33,11 @@ export class ConcurrentUpdateError extends Error {
 }
 
 /**
- * For handlers that turn any failure into a 500: rethrows a lost write race so
+ * For handlers that turn any failure into a 500: rethrows a lost write race (or an index that cannot be read) so
  * the global error handler answers 503 with Retry-After instead.
  */
 export function rethrowBusy(error: unknown): void {
-  if (error instanceof ConcurrentUpdateError) throw error;
+  if (error instanceof ConcurrentUpdateError || error instanceof IndexUnavailableError) throw error;
 }
 
 /** Full-jitter exponential backoff: up to 10, 20, 40 … 320 ms. */
