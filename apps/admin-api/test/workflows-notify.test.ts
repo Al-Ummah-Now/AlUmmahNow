@@ -10,6 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { WORKFLOW_ACTIONS, type WorkflowRequestView } from '@al-ummah/shared-types';
+import { renderInboxNotification } from '../src/lib/contact-email';
 import { processWorkflowNotifyJob, renderWorkflowEmail, fieldValue, arDigits, type WorkflowNotifyJob } from '../src/lib/workflows/notify';
 import { clearWorkflowExecutors, proposeChange, registerWorkflowExecutor, ruleVersionStatement } from '../src/lib/workflows/engine';
 import { createWorkflowDirectory } from '../src/lib/workflows/directory';
@@ -242,6 +243,8 @@ describe('review fixes (#1832)', () => {
       assert.equal(cells.length, fields.length);
       const row = (x: string) => `${mark}${open}${x}\u2069`;
       // A strong mark for dir="auto", then an isolate that needs no dir at all; every isolate closed
+      // The plain text carries the same rows, each under its label in the email's language
+      for (const [i, cell] of cells.entries()) assert.ok(e.text.includes(`${fields[i].label[locale]}: ${cell}`), `${locale} text: ${cell}`);
       for (const cell of cells) {
         assert.ok(cell.startsWith(mark + open) && cell.endsWith('\u2069'), `${locale}: ${cell}`);
         assert.equal(cell.match(/[\u2066-\u2068]/g)!.length, cell.match(/\u2069/g)!.length);
@@ -262,5 +265,14 @@ describe('review fixes (#1832)', () => {
     assert.equal(fieldValue(f('percent'), 2.9, 'en', new Map()), '2.9%');
     assert.equal(fieldValue(f('percent'), 2.9, 'ar', new Map()), '٪٢٫٩');
     assert.equal(fieldValue(f('bps'), 290, 'en', new Map()), '2.9%');
+  });
+});
+
+describe('the other email with a value of several parts', () => {
+  it('a Contact us notice keeps the sender before the address, whatever the name\'s language', () => {
+    const m = { id: 'm1', name: 'عائشة محمد', email: 'aisha@example.com', topic: 'other', message: 'السلام عليكم', locale: 'ar', created_at: '2026-11-24T12:00:00.000Z', user_id: null, page_url: null };
+    const e = renderInboxNotification(m as never, { to: 'support@example.com' });
+    const from = [...e.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)][0][1];
+    assert.equal(from, '\u200e\u2066\u2068عائشة محمد\u2069 &lt;aisha@example.com&gt;\u2069');
   });
 });

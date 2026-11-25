@@ -19,6 +19,7 @@ import type { AdminBindings } from '../../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
 import { envTag, sendContactEmail } from '../contact-email';
 import { renderEmail, type EmailBlock, type EmailDoc, type EmailLocale } from '../email/layout';
+import { emailRow, inDirection, isolate } from '../email/direction';
 import type { QueueMessageLike } from '../contact-mail-queue';
 import { logger } from '../logger';
 import { createWorkflowDirectory, ownerIdsFrom } from './directory';
@@ -139,16 +140,6 @@ export function arDigits(v: number | string): string {
   return String(v).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
 }
 
-/** A value with its own direction (FSI…PDI), so what is inside never reorders what is around it. */
-const isolate = (text: string) => `\u2068${text}\u2069`;
-/** A phrase in the email's direction (RLI or LRI…PDI), whatever is around it: a list, or a whole row. */
-const inDirection = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u2067' : '\u2066'}${text}\u2069`;
-/**
- * A row in the email's direction, in every client. The layout's cell is dir="auto", which reads the first
- * letter outside an isolate: the unseen mark (RLM, LRM) is that letter. A client that drops dir and style
- * still has the isolate, which needs neither.
- */
-const emailRow = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u200f' : '\u200e'}${inDirection(locale, text)}`;
 /** One side of a change: a list in the email's direction, a single value in its own. */
 const emailSide = (f: WorkflowField, v: unknown, locale: EmailLocale, names: Map<string, string>) =>
   Array.isArray(v) ? inDirection(locale, fieldValue(f, v, locale, names)) : isolate(fieldValue(f, v, locale, names));
