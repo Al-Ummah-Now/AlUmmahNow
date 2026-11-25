@@ -334,3 +334,75 @@ describe('extra audio tracks (wiki AUN-MULTI-AUDIO MA8)', () => {
     assert.equal(t.env.REVIEW_MEDIA.files.has('review/v1/rev/manifest.json'), true);
   });
 });
+
+describe('an item under a takedown', () => {
+  const taken = (t: ReturnType<typeof setup>, id: string, status: string, item: [string, string] | null, extra: { kind?: string; uploader?: string } = {}) =>
+    t.db
+      .prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, item_kind, uploader_id, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES (?, 'u', ?, 'paste', ?, ?, ?, 'x', 'a', 'x', 'x', ?, ?)")
+      .bind(id, id, status, extra.kind ?? null, extra.uploader ?? null, item?.[0] ?? null, item?.[1] ?? null)
+      .run();
+  const ids = async (t: ReturnType<typeof setup>, roles: string, path = '/api/review/queue') => (await t.call('GET', path, { roles })).body.result.items.map((r: any) => r.id).sort();
+
+  it('is in the queue, its counts and its pages for super admins only', async () => {
+    const t = setup();
+    t.env.videos.set('v2', { id: 'v2', title: 'Other' });
+    t.insert('gone');
+    t.insert('gone_old', { status: 'rejected', decided_at: NOW, decision: 'reject', decided_by: 'rev1', undo_until: '2999-01-01' });
+    t.insert('stays', { subject_id: 'v2' });
+    await taken(t, 'c1', 'closed', ['video', 'v1']);
+    for (const roles of ['content_reviewer', 'senior_reviewer', 'moderator', 'admin']) {
+      assert.deepEqual(await ids(t, roles), ['stays'], roles);
+      assert.deepEqual(await ids(t, roles, '/api/review/queue?tab=history'), [], roles);
+      assert.equal((await t.call('GET', '/api/review/stats', { roles })).body.result.open.in_review, 1, roles);
+      for (const [method, path, body] of [
+        ['GET', 'gone'],
+        ['GET', 'gone/media?key=review/v1/rev/manifest.json'],
+        ['GET', 'gone/audio'],
+        ['POST', 'gone/reveal', { target: 'item' }],
+        ['POST', 'gone/claim', {}],
+        ['POST', 'gone/decision', { decision: 'approve' }],
+        ['POST', 'gone/decision', { decision: 'escalate' }],
+        ['POST', 'gone_old/decision', { decision: 'undo' }],
+      ] as Array<[string, string, unknown?]>) {
+        const r = await t.call(method, `/api/review/${path}`, { roles, body });
+        assert.deepEqual([r.status, r.body], [404, { success: false, code: 'not_found', error: 'Review not found' }], `${roles} ${method} ${path}`);
+      }
+    }
+    assert.deepEqual(t.decisions, []);
+    assert.equal((await t.db.prepare('SELECT COUNT(*) AS n FROM moderation_actions').bind().first<{ n: number }>())!.n, 0);
+    assert.deepEqual(await ids(t, 'super_admin'), ['gone', 'stays']);
+    assert.equal((await t.call('GET', '/api/review/stats', { roles: 'super_admin' })).body.result.open.in_review, 2);
+    assert.equal((await t.call('GET', '/api/review/gone', { roles: 'super_admin' })).body.result.subject.title, 'Talk');
+  });
+
+  it('is found by every kind of review', async () => {
+    const t = setup();
+    t.insert('track', { subject_type: 'audio_track', subject_id: 'v1:tabcdef1' });
+    t.insert('stream', { subject_type: 'livestream', subject_id: 's1' });
+    t.insert('post', { subject_type: 'post', subject_id: 'ch1/p1' });
+    t.insert('avatar', { subject_type: 'avatar', subject_id: 'ch1' });
+    t.insert('banner', { subject_type: 'banner', subject_id: 'ch1' });
+    t.insert('picture', { subject_type: 'profile_picture', subject_id: 'u1' });
+    t.insert('cover', { subject_type: 'profile_banner', subject_id: 'u1' });
+    const others = { track: ['audio_track', 'v9:tabcdef1'], stream: ['livestream', 's9'], post: ['post', 'ch1/p9'], avatar: ['avatar', 'ch9'], picture: ['profile_picture', 'u9'] };
+    for (const [id, [subject_type, subject_id]] of Object.entries(others)) t.insert(`other_${id}`, { subject_type, subject_id });
+    const left = Object.keys(others).map((k) => `other_${k}`).sort();
+    await taken(t, 'c1', 'contained', ['video', 'v1']);
+    await taken(t, 'c2', 'contained', ['livestream', 's1']);
+    await taken(t, 'c3', 'contained', ['post', 'p1']);
+    await taken(t, 'c4', 'reported', ['channel', 'ch1']);
+    await taken(t, 'c5', 'containing', null, { kind: 'profile_image', uploader: 'u1' });
+    assert.deepEqual(await ids(t, 'admin'), left);
+    // Once it is closed, a case about an image of a channel or an account hides the rest of it no more
+    await t.db.prepare("UPDATE csam_cases SET status = 'closed'").bind().run();
+    assert.deepEqual(await ids(t, 'admin'), [...left, 'avatar', 'banner', 'cover', 'picture'].sort());
+  });
+
+  it('reads its cases by an index', async () => {
+    const t = setup();
+    const { noCaseAboutReviewSql } = await import('../src/lib/csam');
+    const plan = (await t.db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM content_reviews r WHERE id = ? AND ${noCaseAboutReviewSql('r')}`).bind('x').all<{ detail: string }>()).results.map((p) => p.detail);
+    assert.equal(plan.some((d) => /^SCAN/.test(d)), false, plan.join(' | '));
+    assert.ok(plan.some((d) => /idx_csam_cases_item \(item_type=\? AND item_id=\?\)/.test(d)), plan.join(' | '));
+  });
+});
