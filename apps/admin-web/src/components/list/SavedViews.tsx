@@ -48,6 +48,7 @@ export function SavedViews({ views, active, onSelect, label, testId }: { views: 
           <span
             className={`min-w-6 rounded-full px-2 py-0.5 text-xs tabular-nums text-center ${view.alertWhenNonZero && !!view.count ? 'bg-danger-bg text-danger-fg' : 'bg-surface-2 text-fg-muted'}`}
             data-testid={view.countTestId}
+            data-pill={view.alertWhenNonZero && !!view.count ? undefined : 'plain'}
             data-count={typeof view.count === 'number' ? view.count : undefined}
             aria-busy={view.count === undefined ? true : undefined}
           >
