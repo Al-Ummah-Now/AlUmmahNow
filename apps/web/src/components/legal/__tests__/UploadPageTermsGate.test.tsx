@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import {
   CURRENT_CREATOR_TERMS_VERSION,
   EN_TRANSLATIONS as mockEn,
@@ -62,11 +62,13 @@ jest.mock('@/hooks/useLeaveGuard', () => ({
   useLeaveGuard: () => null,
 }));
 
+const mockAddRefused = jest.fn();
+let mockUploading = false;
 jest.mock('@/hooks/useBatchUpload', () => ({
   useBatchUpload: () => ({
     files: [],
     overallProgress: 0,
-    isUploading: false,
+    isUploading: mockUploading,
     isInitiating: false,
     addFiles: jest.fn(),
     removeFile: jest.fn(),
@@ -78,6 +80,7 @@ jest.mock('@/hooks/useBatchUpload', () => ({
     pauseAll: jest.fn(),
     resumeAll: jest.fn(),
     cancelAll: jest.fn(),
+    addRefusedFiles: () => mockAddRefused(),
     clearQueue: jest.fn(),
     clearFinished: jest.fn(),
     reorderQueue: jest.fn(),
@@ -114,8 +117,8 @@ jest.mock('@/components/videoUpload/useBatchSetValues', () => ({
   useBatchSetValues: () => ({ panel: null, open: jest.fn() }),
 }));
 
-jest.mock('@/components/videoUpload', () => function MockVideoUpload() {
-  return <div data-testid="mock-video-upload-form">Upload Form Draft</div>;
+jest.mock('@/components/videoUpload', () => function MockVideoUpload({ termsAccepted, termsNotice, onError }: { termsAccepted: number; termsNotice: React.ReactNode; onError: (e: string) => void }) {
+  return <div data-testid="mock-video-upload-form" data-terms={termsAccepted}>Upload Form Draft{termsNotice}<button onClick={() => onError(mockEn.creator.termsRequired)}>refused</button><button onClick={() => onError('Broken')}>failed</button></div>;
 });
 
 jest.mock('@/components/videoUpload/BatchUploadQueue', () => ({
@@ -196,6 +199,53 @@ describe('UploadPage creator terms gate and draft preservation', () => {
     // Clicking the banner button reopens the Terms dialog
     fireEvent.click(screen.getByTestId('upload-terms-reopen'));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('accepting on the page starts what was refused, in both modes', async () => {
+    const access = (termsAccepted: boolean) => { mockCreatorState = { status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted, termsVersion: CURRENT_CREATOR_TERMS_VERSION } }; };
+    access(true);
+    const { rerender } = render(<UploadPage />);
+    access(false);
+    rerender(<UploadPage />);
+    expect(screen.getByTestId('mock-video-upload-form')).toHaveAttribute('data-terms', '0');
+    fireEvent.click(screen.getByTestId('creator-terms-checkbox'));
+    await act(async () => { fireEvent.click(screen.getByTestId('creator-terms-agree')); });
+    expect(mockAddRefused).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('mock-video-upload-form')).toHaveAttribute('data-terms', '1');
+  });
+
+  it('a refusal asks again after a dismissal, is not shown as a failed upload, and is said at the form', () => {
+    const access = (termsAccepted: boolean) => { mockCreatorState = { status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted, termsVersion: CURRENT_CREATOR_TERMS_VERSION } }; };
+    access(true);
+    const { rerender } = render(<UploadPage />);
+    fireEvent.click(screen.getByText('failed'));
+    expect(screen.getByTestId('upload-page-error')).toBeInTheDocument();
+    access(false);
+    fireEvent.click(screen.getByText('refused'));
+    rerender(<UploadPage />);
+    expect(screen.queryByTestId('upload-page-error')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('creator-terms-cancel'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upload-terms-notice')).toHaveTextContent(mockEn.creator.termsRequired);
+    fireEvent.click(screen.getByText('refused'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('creator-terms-cancel'));
+    fireEvent.click(screen.getByTestId('upload-review-terms'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('during uploads it does not interrupt: the banner offers the Terms', () => {
+    const access = (termsAccepted: boolean) => { mockCreatorState = { status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted, termsVersion: CURRENT_CREATOR_TERMS_VERSION } }; };
+    access(true);
+    const { rerender } = render(<UploadPage />);
+    mockUploading = true;
+    access(false);
+    rerender(<UploadPage />);
+    mockUploading = false;
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('upload-terms-reopen'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('upload-terms-banner')).not.toBeInTheDocument();
   });
 
   it('does not unmount a mounted upload form into a loading skeleton when creator access returns to loading', () => {

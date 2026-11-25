@@ -6,14 +6,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
-import { bulkScheduleVideos, type BulkSummary, type TermsRefusal } from '@/lib/api/studio-content';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
+import { bulkScheduleVideos, type BulkSummary } from '@/lib/api/studio-content';
 import type { LimitRefusal } from '@/lib/studio/limits';
 
 interface DialogProps {
   open: boolean;
   videoIds: string[];
   onOpenChange: (open: boolean) => void;
-  onDone: (summary: BulkSummary | LimitRefusal | TermsRefusal | null) => void | Promise<void>;
+  onDone: (summary: BulkSummary | LimitRefusal | null) => void | Promise<void>;
 }
 
 export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: DialogProps) {
@@ -24,7 +25,10 @@ export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: Dia
   const [busy, setBusy] = useState(false);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  const terms = useCreatorTermsPrompt(() => submit());
+
   const submit = async () => {
+    terms.clear();
     setBusy(true);
     const summary = await bulkScheduleVideos({
       videoIds,
@@ -33,7 +37,9 @@ export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: Dia
       timezone,
     }).catch(() => null);
     setBusy(false);
-    await onDone(summary);
+    // The dialog stays, with its values, until the Terms are accepted
+    if (summary && 'termsRequired' in summary) terms.refused();
+    else await onDone(summary);
   };
 
   return (
@@ -50,10 +56,17 @@ export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: Dia
             <Input id="studio-bulk-interval" type="number" min={0} value={interval} onChange={(event) => setIntervalMinutes(event.target.value)} className="min-h-11" />
           </div>
           <p className="text-sm text-muted-foreground">{text.timezone.replace('{zone}', timezone)}</p>
+          {terms.needed && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-bulk-schedule-terms">
+              <span>{t.creator.termsRequired}</span>
+              {terms.reviewLink('studio-bulk-schedule-review-terms')}
+            </div>
+          )}
         </div>
+        {terms.dialog}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{text.cancel}</Button>
-          <Button disabled={!start || busy} onClick={() => void submit()}>{text.submit}</Button>
+          <Button disabled={!start || busy} onClick={() => void submit()} data-testid="studio-bulk-schedule-submit">{text.submit}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

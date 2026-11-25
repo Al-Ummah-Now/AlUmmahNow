@@ -29,9 +29,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
-import type { BulkSummary, StudioVideo, TermsRefusal } from '@/lib/api/studio-content';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
+import type { BulkSummary, StudioVideo } from '@/lib/api/studio-content';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { appealVideoReview, fetchContentCounts, fetchContentPage, resubmitVideoReview, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
 import { studioLiveHref } from '@/components/studio/live/href';
@@ -79,8 +78,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState('');
-  const [termsNotice, setTermsNotice] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
+  const terms = useCreatorTermsPrompt<{ work: () => Promise<unknown>; success: string }>(({ work, success }) => run(work, success));
   const [pendingDelete, setPendingDelete] = useState<Pending>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
@@ -219,28 +217,26 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const knownTags = useMemo(() => (bulkEditOpen ? collectTags(items) : []), [bulkEditOpen, items]);
 
   const run = async (work: () => Promise<unknown>, success: string) => {
+    terms.clear();
     try {
       const result = await work();
       if ((result as { code?: string } | null)?.code === 'terms_required') {
-        markCreatorTermsRequired();
-        setTermsNotice(true);
-        setNotice(t.upload.termsGateBody);
-        setTermsOpen(true);
+        setNotice(t.creator.termsRequired);
+        terms.refused({ work, success });
         return;
       }
       if (result === null || (result as { success?: boolean })?.success === false) throw new Error('rejected');
-      setTermsNotice(false);
       setNotice(success);
       await load();
     } catch (error) {
       logger.error('[Studio] Row action failed', { channelId, error });
-      setTermsNotice(false);
       setNotice(text.actionFailed);
     }
   };
 
   const deleteConfirmed = async () => {
     if (!pendingDelete) return;
+    terms.clear();
     const { ids } = pendingDelete;
     setPendingDelete(null);
     try {
@@ -258,16 +254,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
     await load();
   };
 
-  const finishBulk = async (summary: BulkSummary | LimitRefusal | TermsRefusal | null) => {
+  const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
     setBulkDialog(null);
-    if (summary && 'termsRequired' in summary) {
-      markCreatorTermsRequired();
-      setTermsNotice(true);
-      setNotice(t.upload.termsGateBody);
-      setTermsOpen(true);
-      return;
-    }
-    setTermsNotice(false);
+    terms.clear();
     if (isLimitRefusal(summary)) {
       const message = limitRefusalMessage(t.studio.limits, summary, locale);
       // A feature that is off has no words: re-read the features and its button goes
@@ -341,16 +330,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
       <h1 className="sr-only">{t.studio.tabs.videos}</h1>
       <div role="status" aria-live="polite" className={notice ? 'mb-3 flex flex-wrap items-center gap-2 text-sm text-foreground' : 'sr-only'}>
         {notice && <span>{notice}</span>}
-        {termsNotice && (
-          <button
-            type="button"
-            onClick={() => setTermsOpen(true)}
-            className="underline font-medium text-[var(--fanous-color-accent)]"
-            data-testid="studio-videos-review-terms"
-          >
-            {t.upload.termsGateReviewAction}
-          </button>
-        )}
+        {terms.reviewLink('studio-videos-review-terms')}
       </div>
 
       <div role="group" aria-label={text.statusLabel} className="mb-4 flex flex-wrap gap-2">
@@ -454,7 +434,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
           <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFmt.format(selected.size))}</span>
           {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11" data-testid="studio-bulk-edit">{text.bulk.edit}</Button>}
           {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
-          {can(role, 'video.schedule') && bulkScheduleOn && <Button variant="outline" onClick={() => setBulkDialog('schedule')} disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
+          {can(role, 'video.schedule') && bulkScheduleOn && <Button variant="outline" onClick={() => setBulkDialog('schedule')} data-testid="studio-bulk-schedule" disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
           {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
           {allSelected && cursor && canBulkEdit && selected.size < MAX_BULK_EDIT_SELECTION && (
             <Button variant="ghost" onClick={() => void selectAllMatching()} disabled={selectingAll} className="min-h-11" data-testid="studio-select-all-matching">
@@ -626,16 +606,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
         cancelLabel={text.confirmDelete.cancel}
         testId="studio-confirm-delete"
       />
-      <CreatorTermsDialog
-        open={termsOpen}
-        onOpenChange={setTermsOpen}
-        onAccepted={() => {
-          if (termsNotice) {
-            setTermsNotice(false);
-            setNotice('');
-          }
-        }}
-      />
+      {terms.dialog}
     </div>
   );
 }

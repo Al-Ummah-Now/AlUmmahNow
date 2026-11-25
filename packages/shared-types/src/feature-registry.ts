@@ -158,12 +158,12 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
   {
     key: 'creatorTerms',
     group: 'create',
-    name: { en: 'Creator Terms agreement', ar: 'الموافقة على شروط المنشئين' },
+    name: { en: 'Creator Terms acceptance', ar: 'الموافقة على شروط الاستخدام للمنشئين' },
     help: {
       en: 'Creators must accept the Terms of Service and Community Guidelines once per account before uploading, publishing, going live, or creating a channel. While off, no gate is shown and actions proceed without checking acceptance.',
       ar: 'يجب على المنشئين الموافقة على شروط الاستخدام وإرشادات المجتمع مرة واحدة لكل حساب قبل الرفع أو النشر أو البث المباشر أو إنشاء قناة. وعند إيقافها لا تظهر بوابة الموافقة وتعمل الإجراءات دون التحقق.',
     },
-    offMessage: { en: 'Creator Terms agreement isn’t active right now.', ar: 'بوابة الموافقة على شروط المنشئين غير مفعّلة الآن.' },
+    offMessage: { en: 'Creator Terms acceptance isn’t active right now.', ar: 'الموافقة على شروط الاستخدام للمنشئين غير مفعّلة الآن.' },
     default: false,
     toggle: 'superAdmin',
     confirm: 'both',

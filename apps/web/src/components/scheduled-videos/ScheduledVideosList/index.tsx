@@ -14,8 +14,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { VideoObject } from '@/interfaces';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
@@ -49,8 +48,7 @@ export function ScheduledVideosList({
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
   // A failed cancel / publish-now, shown inline
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
-  const [termsOpen, setTermsOpen] = useState(false);
+  const terms = useCreatorTermsPrompt<string>((videoId) => publish(videoId));
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Filter videos by status
@@ -68,6 +66,7 @@ export function ScheduledVideosList({
   // Handle cancel schedule
   const handleCancelSchedule = async (videoId: string) => {
     if (!auth.user) return;
+    terms.clear();
     setActionError(null);
     const confirmed = await confirm({
       title: t.confirmDialog.cancelScheduleTitle,
@@ -105,6 +104,7 @@ export function ScheduledVideosList({
   // Handle publish now
   const handlePublishNow = async (videoId: string) => {
     if (!auth.user) return;
+    terms.clear();
     setActionError(null);
     const confirmed = await confirm({
       title: t.confirmDialog.publishNowTitle,
@@ -113,8 +113,11 @@ export function ScheduledVideosList({
       danger: false,
       testId: 'publish-now-dialog',
     });
-    if (!confirmed) return;
+    if (confirmed) await publish(videoId);
+  };
 
+  const publish = async (videoId: string) => {
+    setActionError(null);
     // Find the video to get its channel ID
     const video = videos.find(v => v.id === videoId);
     if (!video?.channelId) return;
@@ -127,16 +130,12 @@ export function ScheduledVideosList({
       });
 
       if (result?.success) {
-        setActionErrorCode(null);
         // Refresh the list
         onRefresh?.();
       } else if (result?.code === 'terms_required') {
-        markCreatorTermsRequired();
-        setActionErrorCode('terms_required');
-        setActionError(t.upload.termsGateBody);
-        setTermsOpen(true);
+        setActionError(t.creator.termsRequired);
+        terms.refused(videoId);
       } else {
-        setActionErrorCode(result?.code ?? null);
         setActionError(t.errors.genericError);
       }
     } catch (err) {
@@ -188,30 +187,12 @@ export function ScheduledVideosList({
     <div className={className}>
       {confirmDialog}
       {actionError && (
-        <div role="alert" data-testid="scheduled-videos-action-error" data-code={actionErrorCode ?? undefined} className="mb-4 flex flex-wrap items-center gap-2 rounded-lg p-3 text-sm border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
+        <div role="alert" data-testid="scheduled-videos-action-error" data-code={terms.needed ? 'terms_required' : undefined} className="mb-4 flex flex-wrap items-center gap-2 rounded-lg p-3 text-sm border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
           <span>{actionError}</span>
-          {actionErrorCode === 'terms_required' && (
-            <button
-              type="button"
-              onClick={() => setTermsOpen(true)}
-              className="underline font-medium text-[var(--fanous-color-accent)]"
-              data-testid="scheduled-videos-review-terms"
-            >
-              {t.upload.termsGateReviewAction}
-            </button>
-          )}
+          {terms.reviewLink('scheduled-videos-review-terms')}
         </div>
       )}
-      <CreatorTermsDialog
-        open={termsOpen}
-        onOpenChange={setTermsOpen}
-        onAccepted={() => {
-          if (actionErrorCode === 'terms_required') {
-            setActionError(null);
-            setActionErrorCode(null);
-          }
-        }}
-      />
+      {terms.dialog}
       {/* Filters */}
       <div className="mb-6 flex items-center gap-4">
         <label htmlFor="scheduled-status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">

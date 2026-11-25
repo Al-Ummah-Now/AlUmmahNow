@@ -29,6 +29,7 @@ jest.mock('@/hooks/useCreatorAccess', () => ({
   needsCreatorTerms: (s: { status: string; access?: { termsAccepted?: boolean } }) =>
     s.status === 'ready' && s.access?.termsAccepted === false,
   acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+  markCreatorTermsRequired: jest.fn(),
 }));
 
 describe('StudioNoChannel creator terms handling', () => {

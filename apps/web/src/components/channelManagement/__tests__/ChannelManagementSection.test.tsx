@@ -33,6 +33,7 @@ jest.mock('@/hooks/useCreatorAccess', () => ({
   mayCreateChannel: (state: { status: string; access: Access }) => state.status !== 'ready' || state.access.canCreateChannel,
   needsCreatorTerms: (state: { status: string; access: Access }) => state.status === 'ready' && state.access.termsAccepted === false,
   acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+  markCreatorTermsRequired: jest.fn(),
 }));
 
 describe('ChannelManagementSection, hidden when off', () => {

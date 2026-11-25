@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { LiveApiError, endStream, getStream, startStream, swapPremiere, updateStream, type LiveStreamRow } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
 import type { LiveOffers } from '@/lib/studio/nav';
@@ -35,7 +36,10 @@ export function PremiereManage({ locale, channelId, stream: first, offers }: { l
     return () => clearInterval(timer);
   }, [open, read]);
 
+  const terms = useCreatorTermsPrompt<{ change: () => Promise<unknown>; done: string }>(({ change, done }) => run(change, done));
+
   const run = async (change: () => Promise<unknown>, done = '') => {
+    terms.clear();
     setBusy(true);
     setNotice(null);
     try {
@@ -45,6 +49,7 @@ export function PremiereManage({ locale, channelId, stream: first, offers }: { l
       const api = error instanceof LiveApiError ? error : null;
       if (!api?.code) logger.error('[StudioPremiere] Change failed', { streamId: first.id, error });
       setNotice({ text: apiErrorMessage(api?.code ?? '', api?.status ?? 0, lang), bad: true });
+      if (api?.code === 'terms_required') terms.refused({ change, done });
     } finally {
       await read();
       setBusy(false);
@@ -74,7 +79,10 @@ export function PremiereManage({ locale, channelId, stream: first, offers }: { l
         </div>
         {stream.status === 'scheduled' && !!stream.reminderCount && <p className="mt-1 text-sm text-muted-foreground" data-testid="studio-premiere-reminded">{fillTemplate(lang, text.reminded, { count: stream.reminderCount })}</p>}
         {videoHref && <p className="mt-2 text-sm"><Link href={videoHref} className="underline" data-testid="studio-premiere-video-link">{text.videoOpen}</Link></p>}
-        <p role="alert" className={`mt-2 text-sm empty:hidden ${notice?.bad ? 'text-[var(--fanous-color-error-text)]' : 'text-muted-foreground'}`} data-testid="studio-premiere-notice">{notice?.text ?? ''}</p>
+        <div role="alert" className={`mt-2 flex flex-wrap items-center gap-2 text-sm empty:hidden ${notice?.bad ? 'text-[var(--fanous-color-error-text)]' : 'text-muted-foreground'}`} data-testid="studio-premiere-notice">
+          {notice && <span>{notice.text}</span>}
+          {terms.reviewLink('studio-premiere-review-terms')}
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {stream.status === 'scheduled' && (
             <>
@@ -96,6 +104,7 @@ export function PremiereManage({ locale, channelId, stream: first, offers }: { l
       {offers.chat && open && <HeldReview streamId={stream.id} />}
       {stream.status !== 'cancelled' && <LiveSettings stream={stream} offers={offers} onSaved={() => void read()} />}
       {dialog}
+      {terms.dialog}
     </div>
   );
 }

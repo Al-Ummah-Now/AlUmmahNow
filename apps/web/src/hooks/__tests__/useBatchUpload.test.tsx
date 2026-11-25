@@ -45,7 +45,8 @@ jest.mock('@/lib/version-skew/recovery', () => ({
   recoverFromVersionSkew: jest.fn((error: unknown) => /Server Action .* was not found/.test(String((error as Error)?.message))),
 }));
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: EN_TRANSLATIONS, lang: 'en' }) }));
-jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: jest.fn(async () => undefined) }));
+const mockMarkTerms = jest.fn();
+jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: jest.fn(async () => undefined), markCreatorTermsRequired: () => mockMarkTerms() }));
 
 import { useBatchUpload } from '../useBatchUpload';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/api/upload-client';
@@ -295,6 +296,32 @@ describe('useBatchUpload', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('files refused for the creator Terms are added after accepting, once, and a newer pick replaces them', async () => {
+    const { hook, onError } = setup();
+    const refuse = () => initiate.mockResolvedValueOnce({ success: false, status: 403, code: 'terms_required', error: 'x' });
+    const names = () => initiate.mock.calls.map((c) => c[0].map((v: { title: string }) => v.title).join());
+    refuse();
+    await act(async () => { await hook.result.current.addFiles([mp4('a.mp4'), mp4('b.mp4')]); });
+    expect(onError).toHaveBeenLastCalledWith(EN_TRANSLATIONS.creator.termsRequired);
+    expect(mockMarkTerms).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.files).toHaveLength(0);
+    refuse();
+    await act(async () => { await hook.result.current.addRefusedFiles(); });
+    expect(names()).toEqual(['a,b', 'a,b']);
+    refuse();
+    await act(async () => { await hook.result.current.addFiles([mp4('c.mp4')]); });
+    await act(async () => { await hook.result.current.addRefusedFiles(); });
+    await act(async () => { await hook.result.current.addRefusedFiles(); });
+    expect(names().slice(2)).toEqual(['c', 'c']);
+    expect(hook.result.current.files.map((f) => f.file.name)).toEqual(['c.mp4']);
+    // A pick that went through leaves nothing of an earlier refusal
+    refuse();
+    await act(async () => { await hook.result.current.addFiles([mp4('d.mp4')]); });
+    await act(async () => { await hook.result.current.addFiles([mp4('e.mp4')]); });
+    await act(async () => { await hook.result.current.addRefusedFiles(); });
+    expect(names().slice(4)).toEqual(['d', 'e']);
   });
 
   it('a refused batch shows the friendly message, never the server text', async () => {

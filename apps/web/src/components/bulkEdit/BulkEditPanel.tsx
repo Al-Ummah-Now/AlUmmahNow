@@ -13,8 +13,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, Undo2, RotateCcw } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { bulkEditVideos, undoBulkEdit } from '@/lib/api/videos';
@@ -95,6 +94,8 @@ export function toSubject(video: BulkPanelVideo, listIndex = 0): RenameSubject {
   };
 }
 
+const isTermsRefusal = (o: BulkOutcome) => !o.success && o.code === 'terms_required';
+
 export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, knownTags = [], selectedTags = [], fields = STUDIO_BULK_FIELDS, onApplied, loadExistingTitles }: BulkEditPanelProps) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
@@ -105,8 +106,9 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
   const [run, setRun] = useState<RunState | null>(null);
   const [busyUndo, setBusyUndo] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [termsOpen, setTermsOpen] = useState(false);
-  const [termsRequired, setTermsRequired] = useState(false);
+  /** What the creator Terms refused, done again once they are accepted: only those videos, or the undo. */
+  const terms = useCreatorTermsPrompt<'edit' | 'undo'>((what) => (what === 'edit' ? retryFailed(isTermsRefusal) : undo()));
+  const termsClear = terms.clear;
   const abortRef = useRef<AbortController | null>(null);
   const subjects = useMemo(() => videos.map((v, i) => toSubject(v, i)), [videos]);
   const byId = useMemo(() => new Map(videos.map((v) => [v.id, v])), [videos]);
@@ -119,7 +121,8 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     setStep('form');
     setRun(null);
     setError(null);
-  }, [open, ui]);
+    termsClear();
+  }, [open, ui, termsClear]);
 
   const preview = useMemo(() => (form.ticked.includes('title') ? renamePreview(form, subjects) : undefined), [form, subjects]);
   const ready = readyFields(form, preview);
@@ -162,19 +165,15 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     result.outcomes.forEach((o, id) => outcomes.set(id, o));
     const succeeded = Array.from(outcomes.values()).filter((o) => o.success).length;
     const failed = Array.from(outcomes.values()).filter((o) => !o.success).length;
-    const hitTerms = Array.from(outcomes.values()).some((o) => !o.success && o.code === 'terms_required');
+    const refused = Array.from(outcomes.values()).filter(isTermsRefusal).length;
     setRun({ ...state, outcomes, progress: { done: result.done, total, succeeded, failed }, cancelled: result.cancelled });
     setStep('result');
     abortRef.current = null;
-    if (hitTerms) {
-      markCreatorTermsRequired();
-      setTermsRequired(true);
-      setTermsOpen(true);
-    } else {
-      setTermsRequired(false);
-    }
+    if (refused > 0) terms.refused('edit');
+    else terms.clear();
     logger.info('[BulkEditPanel] Bulk edit finished', { operationId: state.operationId, succeeded, failed, cancelled: result.cancelled });
-    if (failed > 0 && succeeded === 0) reportError(new Error('Bulk edit failed for every video'), { shown: true, extra: { operationId: state.operationId, failed, reasons: failureReasons(outcomes.values()).map((r) => `${r.code}:${r.count}`).join(',') } });
+    // Waiting for the Terms is not a failure of the product
+    if (failed > refused && succeeded === 0) reportError(new Error('Bulk edit failed for every video'), { shown: true, extra: { operationId: state.operationId, failed, reasons: failureReasons(outcomes.values()).map((r) => `${r.code}:${r.count}`).join(',') } });
     if (state.playlistOrder && !result.cancelled) {
       const playlistNotice = await orderPlaylists(state, outcomes);
       setRun((r) => (r ? { ...r, playlistNotice } : r));
@@ -224,17 +223,19 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     void execute(idsToSend(request), { operationId: newOperationId(), request, order: orderedIds(), playlistOrder: form.playlistOrder && !!request.changes.addPlaylists?.length });
   };
 
-  const retryFailed = () => {
+  const retryFailed = (which: (o: BulkOutcome) => boolean = () => true) => {
     if (!run) return;
     // In the rename order, so playlist adds keep it
-    const failedIds = run.order.filter((id) => run.outcomes.get(id)?.success === false);
+    const failedIds = run.order.filter((id) => run.outcomes.get(id)?.success === false && which(run.outcomes.get(id)!));
     const notSent = run.cancelled ? idsToSend(run.request).filter((id) => !run.outcomes.has(id)) : [];
-    const kept = new Map(Array.from(run.outcomes).filter(([, o]) => o.success));
-    void execute([...failedIds, ...notSent], run, kept);
+    const again = [...failedIds, ...notSent];
+    const kept = new Map(Array.from(run.outcomes).filter(([id]) => !again.includes(id)));
+    return execute(again, run, kept);
   };
 
   const undo = async () => {
     if (!run) return;
+    terms.clear();
     setBusyUndo(true);
     const ids = videos.map((v) => v.id).filter((id) => { const o = run.outcomes.get(id); return !!o && o.success && (o.changed || o.replayed); });
     const groups = groupByChannel(ids, (id) => byId.get(id)?.channelId || '');
@@ -243,15 +244,12 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     const restored = outcomes.filter((o) => o.success && o.code !== 'changed_since' && o.code !== 'nothing_to_undo').length;
     const kept = outcomes.filter((o) => o.code === 'changed_since').length;
     const failed = outcomes.filter((o) => !o.success).length;
-    const hitTerms = outcomes.some((o) => !o.success && o.code === 'terms_required');
-    logger.info('[BulkEditPanel] Bulk edit undone', { operationId: run.operationId, restored, kept, failed });
-    setRun((r) => (r ? { ...r, undo: { restored, kept, failed } } : r));
+    const refused = outcomes.some(isTermsRefusal);
+    logger.info('[BulkEditPanel] Bulk edit undone', { operationId: run.operationId, restored, kept, failed, refused });
+    // Refused for the Terms: nothing is said to be undone, and Undo stays (what was put back answers again as put back)
+    if (!refused) setRun((r) => (r ? { ...r, undo: { restored, kept, failed } } : r));
     setBusyUndo(false);
-    if (hitTerms) {
-      markCreatorTermsRequired();
-      setTermsRequired(true);
-      setTermsOpen(true);
-    }
+    if (refused) terms.refused('undo');
     onApplied?.(outcomes.filter((o) => o.success).map((o) => o.videoId));
   };
 
@@ -370,14 +368,15 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
             </div>
           )}
 
+          {terms.needed && <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]" data-testid="bulk-edit-terms">{t.creator.termsRequired}</p>}
           <div className="flex flex-wrap gap-2">
-            {termsRequired && (
-              <button type="button" className="b b-primary" onClick={() => setTermsOpen(true)} data-testid="bulk-edit-review-terms">
+            {terms.needed && (
+              <button type="button" className="b b-primary" onClick={terms.review} data-testid="bulk-edit-review-terms">
                 {t.upload.termsGateReviewAction}
               </button>
             )}
             {(failedOutcomes.length > 0 || run.cancelled) && (
-              <button type="button" className="b b-secondary" onClick={retryFailed} data-testid="bulk-edit-retry">
+              <button type="button" className="b b-secondary" onClick={() => void retryFailed()} data-testid="bulk-edit-retry">
                 <RotateCcw aria-hidden="true" />
                 {b.retryFailed.replace('{count}', fmt(failedOutcomes.length + (run.cancelled ? progress.total - progress.done : 0)))}
               </button>
@@ -400,13 +399,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
           )}
         </div>
       )}
-      <CreatorTermsDialog
-        open={termsOpen}
-        onOpenChange={setTermsOpen}
-        onAccepted={() => {
-          setTermsRequired(false);
-        }}
-      />
+      {terms.dialog}
     </BulkDrawer>
   );
 }

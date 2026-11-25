@@ -191,7 +191,7 @@ describe('ImportStep', () => {
   const props = {
     locale: 'en', current: imp('importing'), items, live, counts: { ready: 1, active: 1, failed: 1, waiting: 1, total: 4 }, retrying: new Set<string>(),
     onCancel: jest.fn(), resume: null, channelHref: '/en/@fajr', contentHref: '/en/studio/c1/content/videos', shortUrl: (id: string) => `https://alummahnow.link/v/${id}`,
-    onDownloadCsv: jest.fn(), onNewImport: jest.fn(), notice: '',
+    onDownloadCsv: jest.fn(), onNewImport: jest.fn(), notice: '', termsPaused: false, onReviewTerms: jest.fn(),
   };
 
   it("shows the server's reason on a failed row it did not upload here, and when captions lost the connection", () => {

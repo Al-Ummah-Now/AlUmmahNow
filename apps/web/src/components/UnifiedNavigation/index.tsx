@@ -627,7 +627,11 @@ export function UnifiedNavigation() {
                     <CreatorTermsGate
                       compact
                       autoFocus
-                      onAccepted={() => setNavTermsRequired(false)}
+                      onAccepted={() => {
+                        // Refused at Create: create it now. Asked before the form: show the form
+                        setNavTermsRequired(false);
+                        if (navTermsRequired) void handleCreateChannel();
+                      }}
                       onCancel={() => {
                         setNavTermsRequired(false);
                         setIsCreatingChannel(false);

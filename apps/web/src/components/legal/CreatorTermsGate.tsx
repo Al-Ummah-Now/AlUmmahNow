@@ -14,6 +14,8 @@ const DEFAULT_WWW_ORIGIN = 'https://www.alummahnow.net';
 interface CreatorTermsGateProps {
   /** Compact inline mode for embedding inside dialogs or dropdowns. */
   compact?: boolean;
+  /** Inside a dialog with its own close button: the title leaves it room. */
+  inDialog?: boolean;
   /** Version displayed to the creator (defaults to server-reported version or CURRENT_CREATOR_TERMS_VERSION). */
   termsVersion?: string;
   /** Focus the terms link on mount (used when rendered inline in a menu after a button unmounts). */
@@ -28,6 +30,7 @@ interface CreatorTermsGateProps {
  */
 export const CreatorTermsGate: React.FC<CreatorTermsGateProps> = ({
   compact = false,
+  inDialog = false,
   termsVersion,
   autoFocus = false,
   onAccepted,
@@ -87,7 +90,7 @@ export const CreatorTermsGate: React.FC<CreatorTermsGateProps> = ({
       }
       data-testid="creator-terms-gate"
     >
-      <div className="flex items-start gap-3">
+      <div className={`flex items-start gap-3 ${inDialog ? 'pe-8' : ''}`}>
         <FileCheck2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-[var(--fanous-color-accent)]" aria-hidden="true" />
         <div className="space-y-2">
           <h2 className={compact ? 'text-base font-semibold text-[var(--fanous-color-text-primary)]' : 'text-2xl font-bold text-[var(--fanous-color-text-primary)]'}>
@@ -204,6 +207,7 @@ export const CreatorTermsDialog: React.FC<CreatorTermsDialogProps> = ({ open, on
         </DialogHeader>
         <CreatorTermsGate
           compact
+          inDialog
           onCancel={() => onOpenChange(false)}
           onAccepted={() => {
             onOpenChange(false);

@@ -30,7 +30,7 @@ export function BulkDrawer({ open, onOpenChange, title, description, locked = fa
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (!next && locked ? undefined : onOpenChange(next))}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--fanous-color-text-primary)] opacity-40" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--aun-scrim)]" />
         <DialogPrimitive.Content
           dir={isRTL ? 'rtl' : 'ltr'}
           onEscapeKeyDown={guard}

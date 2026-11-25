@@ -47,7 +47,7 @@ describe('creatorTerms (real SQLite D1)', () => {
 		assert.deepEqual(saved, { termsVersion: CURRENT_CREATOR_TERMS_VERSION, acceptedAt: first });
 		assert.equal(await hasAcceptedCreatorTerms(db, 'user-1'), true);
 
-		// Real SQLite ON CONFLICT ... WHERE terms_version <> excluded.terms_version keeps the first timestamp
+		// Real SQLite ON CONFLICT ... WHERE terms_version < excluded.terms_version keeps the first timestamp
 		const repeated = await recordCreatorTermsAcceptance(db, 'user-1', CURRENT_CREATOR_TERMS_VERSION, later);
 		assert.deepEqual(repeated, { termsVersion: CURRENT_CREATOR_TERMS_VERSION, acceptedAt: first });
 

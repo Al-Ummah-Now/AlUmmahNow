@@ -14,6 +14,13 @@ jest.mock('@/hooks/useLanguage', () => ({
   }),
 }));
 
+let mockTermsAccepted: boolean | undefined = true;
+const mockMark = jest.fn();
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'ready', access: { termsAccepted: mockTermsAccepted } }),
+  needsCreatorTerms: (c: { access: { termsAccepted?: boolean } }) => c.access.termsAccepted === false,
+  markCreatorTermsRequired: () => { mockTermsAccepted = false; mockMark(); },
+}));
 const mockUpdate = jest.fn();
 jest.mock('@/lib/api/videos', () => ({
   updateVideo: (...args: unknown[]) => mockUpdate(...args),
@@ -222,5 +229,71 @@ describe('upload queue "Set values"', () => {
     expect((screen.getAllByTestId('batch-file-title-ar') as HTMLInputElement[]).map((i) => i.value)).toEqual(['', 'درس', '']);
     expect((screen.getAllByTestId('batch-file-title-en') as HTMLInputElement[]).map((i) => i.value)).toEqual(['Series 1: one', 'Series 2: two', 'Series 3: three']);
   });
-});
 
+  describe('while the creator Terms are not accepted (#1929)', () => {
+    const refused = { success: false, code: 'terms_required' };
+    const wait = (ms: number) => act(async () => { await jest.advanceTimersByTimeAsync(ms); });
+    const state = () => screen.getByTestId('batch-file-values-save');
+    beforeEach(() => {
+      mockTermsAccepted = true;
+      mockMark.mockReset();
+      mockSchedule.mockReset();
+    });
+
+    it('a row says why it is not saved, is not retried blindly, and is saved once they are accepted', async () => {
+      mockUpdate.mockResolvedValue(refused);
+      const { rerender } = render(<Harness files={[files[0]]} />);
+      fireEvent.change(screen.getByTestId('batch-file-title-en'), { target: { value: 'Mine' } });
+      await wait(800);
+      expect(state()).toHaveAttribute('data-state', 'terms');
+      expect(state()).toHaveTextContent(jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS.creator.termsRequired);
+      expect(mockMark).toHaveBeenCalledTimes(1);
+      await wait(60_000);
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      mockUpdate.mockResolvedValue({ success: true });
+      mockTermsAccepted = true;
+      rerender(<Harness files={[files[0]]} />);
+      await wait(50);
+      expect(mockUpdate).toHaveBeenCalledTimes(2);
+      expect(mockUpdate.mock.calls[1]).toEqual(mockUpdate.mock.calls[0]);
+      expect(state()).toHaveAttribute('data-state', 'saved');
+    });
+
+    it('a server that keeps refusing after they are accepted is asked a bounded number of times', async () => {
+      mockUpdate.mockResolvedValue(refused);
+      const { rerender } = render(<Harness files={[files[0]]} />);
+      fireEvent.change(screen.getByTestId('batch-file-title-en'), { target: { value: 'Mine' } });
+      await wait(800);
+      for (let i = 0; i < 10; i++) {
+        mockTermsAccepted = false;
+        rerender(<Harness files={[files[0]]} />);
+        mockTermsAccepted = true;
+        rerender(<Harness files={[files[0]]} />);
+        await wait(50);
+      }
+      expect(mockUpdate).toHaveBeenCalledTimes(4);
+    });
+
+    it('a publish time that was refused is set once they are accepted', async () => {
+      mockSchedule.mockResolvedValueOnce({ success: false, status: 403, code: 'terms_required' }).mockResolvedValue({ success: true });
+      const done = [row('a', 'one.mp4', { status: 'completed' })];
+      const { rerender } = render(<Harness files={done} />);
+      fireEvent.click(screen.getByTestId('batch-set-values'));
+      fireEvent.click(screen.getByTestId('bulk-set-tick-schedule'));
+      fireEvent.change(screen.getByTestId('bulk-set-schedule-start'), { target: { value: '2099-01-01T10:00' } });
+      fireEvent.click(screen.getByTestId('batch-set-apply'));
+      await wait(2_000);
+      expect(mockSchedule).toHaveBeenCalledTimes(1);
+      expect(state()).toHaveAttribute('data-state', 'terms');
+      rerender(<Harness files={[...done]} />);
+      await wait(2_000);
+      expect(mockSchedule).toHaveBeenCalledTimes(1);
+      mockTermsAccepted = true;
+      rerender(<Harness files={[...done]} />);
+      await wait(2_000);
+      expect(mockSchedule).toHaveBeenCalledTimes(2);
+      expect(mockSchedule.mock.calls[1]).toEqual(mockSchedule.mock.calls[0]);
+      expect(state()).toHaveAttribute('data-state', 'saved');
+    });
+  });
+});

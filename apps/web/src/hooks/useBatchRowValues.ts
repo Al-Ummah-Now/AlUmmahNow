@@ -13,6 +13,7 @@ import type { UploadQueueItem, TitleLanguage } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
 import { scheduleUploadedVideo } from '@/lib/api/upload-client';
 import { logger } from '@/lib/logger-client';
+import { markCreatorTermsRequired, needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import type { BulkFormState } from '@/lib/bulk-edit/form';
 import {
   applySetValues,
@@ -30,7 +31,8 @@ export const ROW_SAVE_DEBOUNCE_MS = 700;
 export const ROW_SAVE_RETRY_MS = 5000;
 const MAX_SAVE_ATTEMPTS = 4;
 
-export type RowSave = 'saving' | 'saved' | 'failed';
+/** `terms`: the server waits for the creator to accept the Terms; saved once they are. */
+export type RowSave = 'saving' | 'saved' | 'failed' | 'terms';
 
 /** Rows whose video can take values (not cancelled, not a video uploaded on an earlier visit). */
 export function editableRow(file: UploadQueueItem): boolean {
@@ -45,6 +47,9 @@ export function useBatchRowValues(files: UploadQueueItem[], channelId: string, s
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
   const scheduledRef = useRef<Set<string>>(new Set());
+  // Publish times the server refused until the Terms are accepted
+  const publishRefusedRef = useRef<Set<string>>(new Set());
+  const [publishAgain, setPublishAgain] = useState(0);
   const filesRef = useRef(files);
   filesRef.current = files;
   const rowsRef = useRef(rows);
@@ -77,9 +82,11 @@ export function useBatchRowValues(files: UploadQueueItem[], channelId: string, s
     inFlightRef.current.add(rowId);
     setSave((s) => ({ ...s, [rowId]: 'saving' }));
     let ok = false;
+    let refused = false;
     try {
       const result = await updateVideo(file.videoId, update as Parameters<typeof updateVideo>[1], { channelId });
       ok = !!result?.success;
+      refused = result?.code === 'terms_required';
     } catch (error) {
       logger.warn('[BatchRowValues] Save failed', { videoId: file.videoId, error: error instanceof Error ? error.message : String(error) });
     }
@@ -87,13 +94,21 @@ export function useBatchRowValues(files: UploadQueueItem[], channelId: string, s
     if (ok) {
       savedRef.current[rowId] = row.values;
       attemptsRef.current[rowId] = 0;
-      setSave((s) => ({ ...s, [rowId]: 'saved' }));
+      // Its publish time may still wait for the Terms
+      setSave((s) => ({ ...s, [rowId]: publishRefusedRef.current.has(rowId) ? 'terms' : 'saved' }));
       // Edited again while saving: save the newer values
       if (rowsRef.current[rowId] !== row) scheduleRef.current(rowId, ROW_SAVE_DEBOUNCE_MS);
       return;
     }
     const attempts = (attemptsRef.current[rowId] ?? 0) + 1;
     attemptsRef.current[rowId] = attempts;
+    if (refused) {
+      // No blind retries: the page asks for the Terms, and the row is saved once they are accepted
+      logger.info('[BatchRowValues] Row values wait for the creator Terms', { videoId: file.videoId, attempts });
+      setSave((s) => ({ ...s, [rowId]: 'terms' }));
+      markCreatorTermsRequired();
+      return;
+    }
     setSave((s) => ({ ...s, [rowId]: 'failed' }));
     logger.warn('[BatchRowValues] Row values not saved', { videoId: file.videoId, attempts });
     if (attempts < MAX_SAVE_ATTEMPTS) scheduleRef.current(rowId, ROW_SAVE_RETRY_MS * attempts);
@@ -127,22 +142,45 @@ export function useBatchRowValues(files: UploadQueueItem[], channelId: string, s
     return result;
   }, [schedule]);
 
+  // The Terms are accepted (or no longer asked for): the rows that waited go again, a bounded number of times
+  const creator = useCreatorAccess();
+  const termsOpen = creator.status === 'ready' && !needsCreatorTerms(creator);
+  const waitingRef = useRef(save);
+  waitingRef.current = save;
+  useEffect(() => {
+    if (!termsOpen) return;
+    for (const [rowId, state] of Object.entries(waitingRef.current)) {
+      if (state !== 'terms' || (attemptsRef.current[rowId] ?? 0) >= MAX_SAVE_ATTEMPTS) continue;
+      scheduleRef.current(rowId, 0);
+      if (publishRefusedRef.current.delete(rowId)) setPublishAgain((n) => n + 1);
+    }
+  }, [termsOpen]);
+
   // A publish time is set once the row's bytes are uploaded
   useEffect(() => {
     for (const file of files) {
       const publishAt = rows[file.id]?.values.publishAt;
-      if (!publishAt || file.status !== 'completed' || !file.videoId || !editableRow(file) || scheduledRef.current.has(file.id)) continue;
+      if (!publishAt || file.status !== 'completed' || !file.videoId || !editableRow(file) || scheduledRef.current.has(file.id) || publishRefusedRef.current.has(file.id)) continue;
       scheduledRef.current.add(file.id);
       const videoId = file.videoId;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       void scheduleUploadedVideo(videoId, publishAt, timezone, true, channelId).then((res) => {
-        if (!res.success) {
+        if (res.code === 'terms_required') {
+          attemptsRef.current[file.id] = (attemptsRef.current[file.id] ?? 0) + 1;
+          scheduledRef.current.delete(file.id);
+          publishRefusedRef.current.add(file.id);
+          setSave((s) => ({ ...s, [file.id]: 'terms' }));
+          markCreatorTermsRequired();
+        } else if (!res.success) {
           logger.warn('[BatchRowValues] Schedule failed', { videoId, status: res.status });
           setSave((s) => ({ ...s, [file.id]: 'failed' }));
+        } else {
+          attemptsRef.current[file.id] = 0;
+          setSave((s) => (s[file.id] === 'terms' ? { ...s, [file.id]: 'saved' } : s));
         }
       });
     }
-  }, [files, rows, channelId]);
+  }, [files, rows, channelId, publishAgain]);
 
   return { rows, save, edit, setValues };
 }

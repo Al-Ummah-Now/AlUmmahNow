@@ -12,8 +12,8 @@ import { UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPl
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { useLanguage } from '@/hooks/useLanguage';
-import { showsUpload, markCreatorTermsRequired, useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { showsUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -82,7 +82,10 @@ export default function VideoDashboardPage() {
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
+  /** The videos the creator Terms refused, edited once they are accepted; then the dialog is done. */
+  const terms = useCreatorTermsPrompt<{ changes: BulkVideoChanges; ids: string[] }>(async ({ changes, ids }) => {
+    if (await applyBulkEdit(changes, ids)) setBulkEditOpen(false);
+  });
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   // "Add to playlist": a playlist belongs to one channel, so the videos come from one
   const [playlistTarget, setPlaylistTarget] = useState<{ channelId: string; videos: PickedVideo[] } | null>(null);
@@ -375,37 +378,45 @@ export default function VideoDashboardPage() {
   };
 
   /** Bulk edit (Epic 5.3): one request per channel, like bulk delete. Resolves true when every video was updated. */
-  const applyBulkEdit = async (changes: BulkVideoChanges): Promise<boolean> => {
+  const applyBulkEdit = async (changes: BulkVideoChanges, ids: string[] = Array.from(selectedVideos)): Promise<boolean> => {
     if (!user) return false;
     const b = t.bulkEdit;
+    terms.clear();
+    setErrorMessage(null);
     try {
       const fallbackChannelId = multiAccountUser?.channels?.[0]?.id || '';
       const idsByChannel = new Map<string, string[]>();
-      Array.from(selectedVideos).forEach((videoId) => {
+      ids.forEach((videoId) => {
         const channelId = videos.find((v) => v.id === videoId)?.channelId || fallbackChannelId;
         idsByChannel.set(channelId, [...(idsByChannel.get(channelId) || []), videoId]);
       });
       const responses = await Promise.all(
         Array.from(idsByChannel.entries()).map(([channelId, videoIds]) => bulkUpdateVideos(videoIds, changes, { channelId }))
       );
-      if (responses.some((r) => r?.code === 'terms_required')) {
-        markCreatorTermsRequired();
-        setTermsOpen(true);
-        setErrorMessage(t.upload.termsGateBody);
-        return false;
-      }
       const updated = new Set<string>();
+      const refused: string[] = [];
       let failed = 0;
       responses.forEach((r, index) => {
         if (!r) {
           failed += Array.from(idsByChannel.values())[index].length;
           return;
         }
-        r.results.forEach((res) => (res.success ? updated.add(res.videoId) : failed++));
+        r.results.forEach((res) => {
+          if (res.success) updated.add(res.videoId);
+          else if (res.code === 'terms_required') refused.push(res.videoId);
+          else failed++;
+        });
       });
 
       if (updated.size > 0) {
         setVideos((prev) => prev.map((v) => (updated.has(v.id) ? applyChangesLocally(v, changes) : v)));
+      }
+      if (refused.length > 0) {
+        // The other channels' videos are done; these wait for the Terms, and the dialog stays open
+        if (updated.size > 0) setNoticeMessage(b.done.replace('{count}', formatNumber(lang, updated.size)));
+        if (failed > 0) setErrorMessage(b.partial.replace('{succeeded}', formatNumber(lang, updated.size)).replace('{failed}', formatNumber(lang, failed)));
+        terms.refused({ changes, ids: refused });
+        return false;
       }
       if (failed === 0) {
         setNoticeMessage(b.done.replace('{count}', formatNumber(lang, updated.size)));
@@ -751,8 +762,14 @@ export default function VideoDashboardPage() {
           videos={playlistTarget?.videos ?? []}
         />
 
-        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit}
-          selectedTags={collectTags(videos.filter((v) => selectedVideos.has(v.id)))} knownTags={collectTags(videos)} />
+        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={(open) => { if (!open) terms.clear(); setBulkEditOpen(open); }} onApply={(changes) => applyBulkEdit(changes)}
+          selectedTags={collectTags(videos.filter((v) => selectedVideos.has(v.id)))} knownTags={collectTags(videos)}
+          notice={terms.needed && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="bulk-edit-terms">
+              <span>{t.creator.termsRequired}</span>
+              {terms.reviewLink('bulk-edit-review-terms')}
+            </div>
+          )} />
 
         {/* Error Message Banner */}
         {errorMessage && (
@@ -811,13 +828,7 @@ export default function VideoDashboardPage() {
           typeToConfirm={t.confirmDialog.deleteWord}
           testId="dashboard-bulk-delete-dialog"
         />
-        <CreatorTermsDialog
-          open={termsOpen}
-          onOpenChange={setTermsOpen}
-          onAccepted={() => {
-            setErrorMessage(null);
-          }}
-        />
+        {terms.dialog}
       </div>
     </div>
   );

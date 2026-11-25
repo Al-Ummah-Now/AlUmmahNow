@@ -20,9 +20,9 @@ interface Props {
   done: boolean;
   retrying: ReadonlySet<string>;
   onRetry: (item: YtImportItem) => void;
-  /** Opens the Creator Terms dialog when an item or queue is paused on `terms_required`. */
-  onReviewTerms?: () => void;
-  termsPaused?: boolean;
+  /** The queue waits for the creator Terms; Review Terms opens them. */
+  termsPaused: boolean;
+  onReviewTerms: () => void;
   onCancel: () => void;
   /** The files picker shown when items wait for their files (after a reload) */
   resume: ReactNode;
@@ -81,7 +81,7 @@ export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportS
 
       {resume}
 
-      {termsPaused && onReviewTerms && (
+      {termsPaused && (
         <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] p-3 text-sm" data-testid="yt-terms-paused-banner">
           <span className="text-[var(--fanous-color-error-text)]">{text.errors.terms_required}</span>
           <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onReviewTerms} data-testid="yt-review-terms">
@@ -133,7 +133,7 @@ function stepLabel(name: string, state: YtStepState, steps: Record<YtStepState, 
   return `${name}: ${steps[state]}`;
 }
 
-function ProgressRow({ item, live, lang, retrying, onRetry, onReviewTerms }: { item: YtImportItem; live: LiveState | undefined; lang: string; retrying: boolean; onRetry: () => void; onReviewTerms?: () => void }) {
+function ProgressRow({ item, live, lang, retrying, onRetry, onReviewTerms }: { item: YtImportItem; live: LiveState | undefined; lang: string; retrying: boolean; onRetry: () => void; onReviewTerms: () => void }) {
   const { t } = useLanguage();
   const fill = useFill();
   const text = t.studio.youtube.progress;
@@ -173,17 +173,16 @@ function ProgressRow({ item, live, lang, retrying, onRetry, onReviewTerms }: { i
         {errorText && <p className="yt-error mt-1 text-xs" data-testid="yt-row-error">{errorText}</p>}
         {captionsGone && <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-captions-gone">{text.captionsDisconnected}</p>}
       </div>
+      {phase === 'paused' && (
+        <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onReviewTerms} data-testid="yt-row-review-terms">
+          {t.upload.termsGateReviewAction}
+        </Button>
+      )}
       {phase === 'failed' && (
-        errorKey === 'terms_required' && onReviewTerms ? (
-          <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onReviewTerms} data-testid="yt-row-review-terms">
-            {t.upload.termsGateReviewAction}
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onRetry} disabled={retrying} data-testid="yt-retry">
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            {text.tryAgain}
-          </Button>
-        )
+        <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onRetry} disabled={retrying} data-testid="yt-retry">
+          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+          {text.tryAgain}
+        </Button>
       )}
       {phase === 'ready' && item.videoId && (
         // In a div: pages.css flattens a list item whose direct child links to a video

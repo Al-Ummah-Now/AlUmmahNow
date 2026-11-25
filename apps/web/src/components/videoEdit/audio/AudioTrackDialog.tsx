@@ -9,9 +9,7 @@ import React, { useId, useState } from 'react';
 import { AUDIO_TRACK_LANGUAGES, apiErrorMessage, defaultAudioTrackLabel, detectedStreamLanguage, AUDIO_LABEL_MAX, type AudioTrackKind, type AudioTrackLanguage, type AudioTracksTranslations, fillTemplate } from '@al-ummah/shared-types';
 import { Loader2, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
-import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
-import { useLanguage } from '@/hooks/useLanguage';
+import { useCreatorTermsPrompt } from '@/components/legal/useCreatorTermsPrompt';
 import { reportError } from '@/lib/errors/reporter';
 import { addAudioTrack, detectAudioStreams, updateAudioTrack, type AudioTracksView, type StudioAudioTrack } from '@/lib/api/audio-tracks';
 import { addLimitMessage, fileProblem, languageName, maxFileSize, streamText } from './audio-track-model';
@@ -39,7 +37,6 @@ const field = 'h-10 w-full rounded-md border border-border bg-background px-3 te
 const isLanguage = (v: string | undefined): v is AudioTrackLanguage => !!v && AUDIO_TRACK_LANGUAGES.some((l) => l.code === v);
 
 export default function AudioTrackDialog({ videoId, track, view, t, lang, spokenLanguage, onDone, onClose, onDetect }: AudioTrackDialogProps) {
-  const { t: allT } = useLanguage();
   const ids = useId();
   const editing = !!track;
   const isOriginal = track?.source === 'original';
@@ -61,8 +58,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
   const [busy, setBusy] = useState(false);
   const [looking, setLooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [termsRequired, setTermsRequired] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
+  const terms = useCreatorTermsPrompt(() => submit());
 
   const pickLanguage = (code: AudioTrackLanguage) => {
     setLanguage(code);
@@ -123,19 +119,13 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
     setBusy(false);
     if (!res.ok) {
       if (res.status === 403 && (res.details?.code === 'terms_required' || res.error === 'terms_required')) {
-        markCreatorTermsRequired();
-        setTermsRequired(true);
         setError(apiErrorMessage('terms_required', 403, lang === 'ar' ? 'ar' : 'en'));
-        setTermsOpen(true);
+        terms.refused();
       } else if (res.status === 402) {
-        setTermsRequired(false);
         const d = res.details as { limit?: number; used?: number } | undefined;
         setError(addLimitMessage({ limit: { allowed: d?.limit ?? view.limit.allowed, used: d?.used ?? view.limit.used, unlimited: false } }, t, lang) ?? t.saveFailed);
-      } else if (res.error === 'duplicate_track') {
-        setTermsRequired(false);
-        setError(t.duplicate);
-      } else {
-        setTermsRequired(false);
+      } else if (res.error === 'duplicate_track') setError(t.duplicate);
+      else {
         setError(t.saveFailed);
         if (res.status === 0 || res.status >= 500) reportError(new Error(`audio track save failed: ${res.error}`), { shown: true, status: res.status, extra: { videoId } });
       }
@@ -308,32 +298,14 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
           )}
 
           {error && (
-            <div role="alert" data-testid="audio-track-error" data-code={termsRequired ? 'terms_required' : undefined} className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]">
+            <div role="alert" data-testid="audio-track-error" data-code={terms.needed ? 'terms_required' : undefined} className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]">
               <span>{error}</span>
-              {termsRequired && (
-                <button
-                  type="button"
-                  onClick={() => setTermsOpen(true)}
-                  className="underline font-medium text-[var(--fanous-color-accent)]"
-                  data-testid="audio-track-review-terms"
-                >
-                  {allT.upload.termsGateReviewAction}
-                </button>
-              )}
+              {terms.reviewLink('audio-track-review-terms')}
             </div>
           )}
         </div>
 
-        <CreatorTermsDialog
-          open={termsOpen}
-          onOpenChange={setTermsOpen}
-          onAccepted={() => {
-            if (termsRequired) {
-              setTermsRequired(false);
-              setError(null);
-            }
-          }}
-        />
+        {terms.dialog}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} disabled={busy} className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground hover:bg-muted disabled:opacity-50">

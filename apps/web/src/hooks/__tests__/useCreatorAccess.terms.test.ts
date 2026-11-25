@@ -223,6 +223,27 @@ describe('useCreatorAccess terms helpers', () => {
     expect(result.current.status === 'ready' && result.current.access.termsAccepted).toBe(false);
   });
 
+  it('a refusal elsewhere on the page while the acceptance is being saved does not lose it', async () => {
+    const answer = (termsAccepted: boolean) => jsonResponse({ success: true, result: { tier: null, via: 'tier', canUpload: true, canCreateChannel: true, channelsOwned: 0, maxChannels: 3, limits: null, usage: { hour: 0, day: 0 }, live: { allowed: true }, termsAccepted, termsVersion: CURRENT_CREATOR_TERMS_VERSION } });
+    global.fetch = jest.fn().mockImplementation(async () => answer(false)) as unknown as typeof fetch;
+    const { result } = renderHook(() => useCreatorAccess());
+    await act(async () => { await refreshCreatorAccess(); });
+    let resolvePost!: (res: Response) => void;
+    const slowPost = jest.fn().mockReturnValue(new Promise<Response>((resolve) => { resolvePost = resolve; }));
+    let accepting!: ReturnType<typeof acceptCreatorTerms>;
+    await act(async () => {
+      accepting = acceptCreatorTerms(CURRENT_CREATOR_TERMS_VERSION, slowPost);
+      await Promise.resolve();
+      markCreatorTermsRequired();
+      markCreatorTermsRequired();
+    });
+    await act(async () => {
+      resolvePost(jsonResponse({ success: true, result: { termsAccepted: true, termsAcceptedAt: 'x', termsVersion: CURRENT_CREATOR_TERMS_VERSION } }));
+      expect(await accepting).toEqual({ ok: true });
+    });
+    expect(result.current.status === 'ready' && result.current.access.termsAccepted).toBe(true);
+  });
+
   it('drops late acceptCreatorTerms response if the active account switched while Agree was in flight', async () => {
     global.fetch = jest.fn().mockResolvedValue(
       jsonResponse({

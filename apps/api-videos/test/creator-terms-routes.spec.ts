@@ -184,7 +184,7 @@ describe('creatorTerms enforcement on live start, publish, schedule, premiere, a
 			return { status: res.status, json: (await res.json().catch(() => ({}))) as Json };
 		};
 
-		return { db, call };
+		return { db, raw, call };
 	}
 
 	it('refuses unaccepted creators with 403 terms_required on live start, publish, schedule, premiere, and audio tracks; allows non-publishing metadata edit', async () => {
@@ -258,5 +258,32 @@ describe('creatorTerms enforcement on live start, publish, schedule, premiere, a
 		assert.equal(scheduleOk.status, 200, 'schedule succeeds after accepting terms');
 		const publishNowOk = await call('POST', '/api/videos/v-draft/publish-now');
 		assert.equal(publishNowOk.status, 200, 'publish-now succeeds after accepting terms');
+	});
+
+	it('one video whose record cannot be read fails alone, in a bulk edit and in its undo, and is never opened unchecked', async () => {
+		const { raw, call } = await setup();
+		const get = raw.videos.get.bind(raw.videos);
+		const stored = async (id: string) => JSON.parse(raw.videos.store.get(id)!) as Json;
+		let broken = '';
+		let failures = 0;
+		// Fails once (the read before the Terms check): the record could be read later, so only remembering the failure keeps it closed
+		raw.videos.get = async (key: string, ...rest: unknown[]) => {
+			if (key === broken && failures++ === 0) throw new Error('R2 down');
+			return get(key, ...rest);
+		};
+		const rows = (res: { json: Json }) => Object.fromEntries(res.json.results.map((r: Json) => [r.videoId, r.success]));
+
+		broken = 'v-draft';
+		const opened = await call('PATCH', '/api/videos/bulk', { ids: ['v-draft', 'v-public'], operationId: 'be_one_broken_1', changes: { visibility: 'unlisted' } });
+		assert.equal(opened.status, 200, JSON.stringify(opened.json));
+		assert.deepEqual(rows(opened), { 'v-draft': false, 'v-public': true });
+		assert.equal((await stored('v-draft')).isDraft, true, 'not opened without accepted Terms');
+		assert.equal((await stored('v-public')).isUnlisted, true);
+
+		broken = 'v-public';
+		failures = 0;
+		const undone = await call('POST', '/api/videos/bulk/undo', { operationId: 'be_one_broken_1', ids: ['v-public', 'v-draft'] });
+		assert.equal(undone.status, 200, JSON.stringify(undone.json));
+		assert.deepEqual(rows(undone), { 'v-public': false, 'v-draft': true });
 	});
 });

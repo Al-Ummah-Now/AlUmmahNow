@@ -1,4 +1,5 @@
 'use client';
+import { formatPercent } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -34,7 +35,7 @@ export function ThumbnailUploadSection({
   className = '',
   disabled = false
 }: ThumbnailUploadSectionProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [autoThumbnails, setAutoThumbnails] = useState<string[]>([]);
   const [/* customThumbnail */ _customThumbnail, setCustomThumbnail] = useState<File | null>(null);
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
@@ -237,8 +238,8 @@ export function ThumbnailUploadSection({
                   selected={selectedThumbnail?.type === 'auto' && selectedThumbnail?.position === [10, 25, 50, 75, 90][idx]}
                   onClick={() => handleAutoSelect(thumb, idx)}
                   disabled={disabled}
-                  label={`${[10, 25, 50, 75, 90][idx]}%`}
-                  ariaLabel={t.upload.thumbnailAtPosition.replace('{position}', `${[10, 25, 50, 75, 90][idx]}%`)}
+                  label={formatPercent(lang, [10, 25, 50, 75, 90][idx] / 100)}
+                  ariaLabel={t.upload.thumbnailAtPosition.replace('{position}', formatPercent(lang, [10, 25, 50, 75, 90][idx] / 100))}
                 />
               ))}
             </div>

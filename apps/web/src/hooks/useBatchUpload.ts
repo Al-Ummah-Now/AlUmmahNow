@@ -67,6 +67,8 @@ export function useBatchUpload({
   // Files the upload limit deferred: re-added when it allows (see addFiles)
   const deferredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
+  // The last pick, refused until the creator Terms are accepted
+  const termsRefusedRef = useRef<File[]>([]);
   useEffect(() => () => {
     if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
   }, []);
@@ -177,6 +179,7 @@ export function useBatchUpload({
    */
   const addFiles = useCallback(async (pickedFiles: File[]) => {
     if (!batchManagerRef.current || !optimizerRef.current) return;
+    termsRefusedRef.current = [];
     // Natural file name order ("Lesson 2" before "Lesson 10"), not the order the OS handed them over in
     const selectedFiles = [...pickedFiles].sort((a, b) => naturalCompare(a.name, b.name, langRef.current === 'ar' ? 'ar' : 'en'));
 
@@ -312,7 +315,10 @@ export function useBatchUpload({
           if (refusal) {
             logger.warn('[useBatchUpload] Batch refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter, count: freshFiles.length });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
-            if (initiateResult.code === 'terms_required') markCreatorTermsRequired();
+            if (initiateResult.code === 'terms_required') {
+              markCreatorTermsRequired();
+              termsRefusedRef.current = toAdd;
+            }
             throw new FriendlyUploadError(refusal);
           }
           initiateStatus = initiateResult.status;
@@ -374,6 +380,12 @@ export function useBatchUpload({
   useEffect(() => {
     addFilesRef.current = addFiles;
   }, [addFiles]);
+
+  /** The Terms were accepted on this page: the files they refused are added, once per acceptance. */
+  const addRefusedFiles = useCallback(async () => {
+    const refused = termsRefusedRef.current;
+    if (refused.length > 0) await addFilesRef.current?.(refused);
+  }, []);
 
   /** Put the queue in this order (row ids); uploads and batch playlist adds follow it. */
   const reorderQueue = useCallback((ids: string[]) => {
@@ -553,6 +565,7 @@ export function useBatchUpload({
     pauseAll,
     resumeAll,
     cancelAll,
+    addRefusedFiles,
     clearQueue,
     clearFinished,
     reorderQueue,
