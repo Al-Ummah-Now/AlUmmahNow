@@ -92,6 +92,36 @@ describe('useWatchProgress - periodic save', () => {
     );
   });
 
+  it('an open, paused tab does not save the same position again; a failed save is tried again', async () => {
+    const save = WatchHistoryService.saveProgress as jest.Mock;
+    save.mockClear();
+    const tick = async () => {
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
+      await flush();
+    };
+    const { player, state } = loadingPlayer();
+    renderHook(() => useWatchProgress('video-1', player, 'user-1'));
+    await flush();
+    state.readyState = 4;
+    simulatePlayback(player, 11);
+    state.currentTime = 11;
+    await tick();
+    expect(save).toHaveBeenCalledTimes(1);
+    // Paused for half a minute
+    for (let i = 0; i < 3; i++) await tick();
+    expect(save).toHaveBeenCalledTimes(1);
+    // Playing again: the server is busy once, then the same position is told again
+    save.mockResolvedValueOnce({ success: false, error: 'busy' });
+    state.currentTime = 21;
+    await tick();
+    await tick();
+    expect(save).toHaveBeenCalledTimes(3);
+    await tick();
+    expect(save).toHaveBeenCalledTimes(3);
+  });
+
   it('does not save before the media is ready', async () => {
     const { player } = loadingPlayer();
     renderHook(() => useWatchProgress('video-1', player, 'user-1'));

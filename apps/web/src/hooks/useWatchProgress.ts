@@ -133,6 +133,8 @@ export function useWatchProgress(
           // working player while the account history stays empty.
           logger.warn('[useWatchProgress] watch-history save failed, kept on device:', result.error);
           await WatchHistoryService.saveLocal(progress);
+          // Not in the account yet: the next tick tries again, even at the same position
+          lastSavedPositionRef.current = Number.NEGATIVE_INFINITY;
         }
       } else {
         if (userId) {
@@ -204,11 +206,9 @@ export function useWatchProgress(
     const timeSinceLastSave = now - lastSaveTimeRef.current;
     const positionChange = Math.abs(currentTime - lastSavedPositionRef.current);
 
-    if (
-      !force &&
-      timeSinceLastSave < saveInterval &&
-      positionChange < minTimeChange
-    ) {
+    // A paused or stalled player has nothing new to save: without this an open, paused tab saved the same
+    // position every 10 s for as long as it stayed open. Half the interval: timers drift by a few ms.
+    if (!force && (positionChange < minTimeChange || timeSinceLastSave < saveInterval / 2)) {
       return;
     }
 

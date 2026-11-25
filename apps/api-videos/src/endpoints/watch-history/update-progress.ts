@@ -8,15 +8,21 @@ import { kidsVideo } from '../../lib/contentFlags';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
-import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
+import R2Repository, { ConcurrentUpdateError } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { TransientStorageError, withStorageRetry } from "@al-ummah/shared-types";
 import type {
   WatchHistoryEntry,
   WatchProgressUpdate,
   WatchHistoryEvent
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
+import { markErrorLogged } from '../../middleware/logging';
 import { isWatchHistoryPaused, percentageOf, queueWatchHistoryEvent } from "../../lib/watch-history";
+
+/** Two more tries, about 100 and 200 ms apart: a beacon must not hold a connection for long. */
+const RETRY = { retries: 2, baseDelayMs: 100 };
 
 // Path parameter schema
 const ProgressParams = z.object({
@@ -38,6 +44,14 @@ const ProgressResponseSchema = z.object({
   completed: z.boolean(),
   timestamp: z.string(),
 });
+
+const BusyResponseSchema = z.object({
+  success: z.boolean(),
+  code: z.string(),
+});
+
+/** Busy answers of this isolate: the first and every 20th are logged. */
+let busyAnswers = 0;
 
 export class UpdateWatchProgress extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -77,6 +91,14 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         "500": {
           description: "Internal server error",
         },
+        "503": {
+          description: "Not saved: storage is briefly busy (code `busy`). Retry after Retry-After seconds",
+          content: {
+            "application/json": {
+              schema: BusyResponseSchema,
+            },
+          },
+        },
       },
     },
     "required"
@@ -101,10 +123,6 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
     const { progress, duration } = body;
 
     try {
-      if (await isWatchHistoryPaused(c.env.profiles, userId)) {
-        return c.json({ paused: true, videoId }, 200);
-      }
-
       const watchHistoryRepo = new R2Repository<WatchHistoryEntry>(
         c.env.watch_history
       );
@@ -112,14 +130,16 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
       // Generate entry ID
       const entryId = `${userId}:${videoId}`;
 
-      // Check if watch history entry exists
-      const existingEntry = await watchHistoryRepo.getObject(entryId);
-      if (!existingEntry) {
-        // Nothing to update yet: the client records the first watch instead
-        return c.json({ videoId, recorded: false }, 200);
-      }
-      // Made for kids: an entry from before it was marked stays as it is (wiki E20 §5.5)
-      if (await kidsVideo(c.env, videoId)) return c.json({ videoId, recorded: false }, 200);
+      // Read together: this runs every 10 s of playback. Each read is retried (R2 10001 and the like)
+      const [paused, existingEntry, kids] = await Promise.all([
+        withStorageRetry("get", () => isWatchHistoryPaused(c.env.profiles, userId), RETRY),
+        withStorageRetry("get", () => watchHistoryRepo.getObject(entryId), RETRY),
+        // Made for kids: an entry from before it was marked stays as it is (wiki E20 §5.5)
+        withStorageRetry("get", () => kidsVideo(c.env, videoId), RETRY),
+      ]);
+      if (paused) return c.json({ paused: true, videoId }, 200);
+      // Nothing to update yet: the client records the first watch instead
+      if (!existingEntry || kids) return c.json({ videoId, recorded: false }, 200);
 
       // Calculate progress metrics
       const now = new Date().toISOString();
@@ -128,7 +148,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
 
       // Update the fresh entry with a conditional write (SCALABILITY-AUDIT
       // AV-7): beacons from other tabs and watch-state sync are not overwritten
-      const updatedEntry = await watchHistoryRepo.updateObject(entryId, (entry) => {
+      const updatedEntry = await withStorageRetry("update", () => watchHistoryRepo.updateObject(entryId, (entry) => {
         entry.progress = progress;
         entry.percentageWatched = percentageWatched;
         entry.completed = completed || entry.completed;
@@ -137,7 +157,7 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
         entry.stateUpdatedAt = now;
         delete entry.stateDeviceId;
-      });
+      }), RETRY);
       if (!updatedEntry) {
         return c.json({ error: "Watch history entry not found. Create one first by recording a watch." }, 404);
       }
@@ -168,7 +188,14 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         200
       );
     } catch (error) {
-      rethrowBusy(error);
+      // Storage was briefly unavailable, or other tabs kept winning the write: not an error of ours. 503 and
+      // Retry-After: the native apps keep the update and send it again, the web player keeps it on the device.
+      // Not an error group (X-Error-Expected), and one warning per 20.
+      if (error instanceof TransientStorageError || error instanceof ConcurrentUpdateError) {
+        if (busyAnswers++ % 20 === 0) logger.warn("[WatchHistory] Progress not saved: storage busy", { code: error instanceof TransientStorageError ? error.code : "contention", answers: busyAnswers });
+        markErrorLogged(c);
+        return apiError(c, 503, "busy", undefined, { "Retry-After": "5", "X-Error-Expected": "busy" });
+      }
       logger.error("Error updating watch progress:", error);
       return c.json(
         {

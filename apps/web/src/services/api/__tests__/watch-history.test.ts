@@ -47,6 +47,16 @@ describe('WatchHistoryService', () => {
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer token');
   });
 
+  it('a busy server (503) is not a save: the caller keeps the position on the device', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(503));
+    const result = await WatchHistoryService.saveProgress(
+      { videoId: 'v1', currentTime: 42, duration: 100, completed: false, timestamp: '2026-01-01T00:00:00Z' },
+      'token'
+    );
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('records the watch on POST /api/watch-history when no entry exists yet', async () => {
     fetchMock.mockResolvedValueOnce(mockResponse(404)).mockResolvedValueOnce(mockResponse(201));
     const result = await WatchHistoryService.saveProgress(
