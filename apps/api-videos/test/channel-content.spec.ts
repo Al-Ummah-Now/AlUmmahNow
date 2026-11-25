@@ -204,3 +204,16 @@ describe('GET /api/channels/:id/content/summary', () => {
 		assert.deepEqual(((await res.json()) as any).result.counts, { published: 2, scheduled: 0, drafts: 1, processing: 0, in_review: 0, not_approved: 0, failed: 0 });
 	});
 });
+
+describe('why a video failed, in the Videos tab', () => {
+	it('has the kind and a known code only; a code of another build is left out', async () => {
+		const at = '2026-11-25T00:00:00.000Z';
+		const env = await setup([
+			{ id: 'known', uploadStatus: 'failed', processingIssue: { kind: 'encode_failed', reason: 'raw', at, code: 'audio_only' } },
+			{ id: 'other', uploadStatus: 'failed', processingIssue: { kind: 'encode_failed', reason: 'raw', at, code: 'toString' } },
+		]);
+		const items = ((await (await list(env, '?status=failed')).json()) as any).result.items as any[];
+		assert.deepEqual(items.find((v) => v.id === 'known').processingIssue, { kind: 'encode_failed', code: 'audio_only' });
+		assert.deepEqual(items.find((v) => v.id === 'other').processingIssue, { kind: 'encode_failed' });
+	});
+});

@@ -109,6 +109,7 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'dismissableLayer.update',
   // Page lifecycle: analytics flush, web-vitals, TanStack Query focus refetch
   'visibilitychange',
+  'prerenderingchange',
   'pagehide',
   'pageshow',
   // No 'beforeunload': the app never shows browser prompts; flushes use pagehide

@@ -1,5 +1,5 @@
 import type { VideoObject } from '@/interfaces';
-import type { AppTranslations } from '@al-ummah/shared-types';
+import { isUploadIssueCode, type AppTranslations } from '@al-ummah/shared-types';
 
 /** The upload failed for good (flagged needs_reupload, or an older failed upload) */
 export function needsReupload(video: VideoObject): boolean {
@@ -22,5 +22,6 @@ export function canReupload(video: Pick<VideoObject, 'processingIssue'>): boolea
 export function uploadIssueText(video: Pick<VideoObject, 'processingIssue'>, text: AppTranslations['upload']['issue']): string | null {
   const issue = video.processingIssue;
   if (!issue || issue.kind === 'stalled') return null;
-  return (issue.code && text[issue.code]) || text[issue.kind];
+  // A code or kind this build does not know (an older page): the kind's words, else none
+  return (isUploadIssueCode(issue.code) ? text[issue.code] : undefined) ?? text[issue.kind] ?? null;
 }
