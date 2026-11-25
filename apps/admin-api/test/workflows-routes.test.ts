@@ -494,4 +494,24 @@ describe('a rule\'s extra recipients', () => {
     assert.equal((await list(['adm', ['admin']])).status, 403);
     assert.equal((await list(['mod', ['moderator']])).status, 403);
   });
+
+  it('the picker names everyone, past one batch of names', async () => {
+    const t = await setup();
+    const asked: number[] = [];
+    (t.env as Record<string, unknown>).VIDEOS = {
+      fetch: async (_u: string, init: RequestInit) => {
+        const ids = JSON.parse(String(init.body)).users as string[];
+        asked.push(ids.length);
+        // As the API does: at most 100 at a time
+        return Response.json({ success: true, result: { users: ids.slice(0, 100).map((id) => ({ id, found: true, displayName: `Name ${id}`, userName: null, email: null })), items: [] } });
+      },
+    };
+    (t.env as Record<string, unknown>).INTERNAL_API_KEY = 'k';
+    for (let n = 0; n < 150; n++) await t.reports.prepare("INSERT INTO admin_staff (user_id, role, name, email, active, last_seen_at, created_at, updated_at) VALUES (?, 'admin', ?, NULL, 1, ?, ?, ?)").bind(`more_${n}`, `more_${n}`, at, at, at).run();
+    const all = (await t.as(...SUPER)('GET', '/recipients')).body.result.items as { id: string }[];
+    // 150 and the four admins and two finance people of the setup
+    assert.equal(all.length, 156);
+    assert.equal(new Set(all.map((i) => i.id)).size, 156);
+    assert.ok(asked.every((n) => n <= 100));
+  });
 });
