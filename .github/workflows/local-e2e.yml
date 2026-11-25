@@ -350,7 +350,7 @@ jobs:
             AXE_VERSION=$(node -p "require('../../node_modules/@axe-core/playwright/package.json').version")
             (cd "$SUITE" && npm init -y > /dev/null && npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_WEBKIT_VERSION" "@axe-core/playwright@$AXE_VERSION" && npx playwright install --with-deps chromium webkit)
             code=0
-            (cd "$SUITE/apps/admin-web" && npx playwright test --project=webkit -g "ACT-01" --repeat-each=30 --retries=0) || code=$?
+            (cd "$SUITE/apps/admin-web" && npx playwright test --project=webkit -g "ACT-01 probe forced" --repeat-each=6 --retries=0) || code=$?
             rm -rf playwright-report test-results
             cp -R "$SUITE/apps/admin-web/playwright-report" playwright-report 2>/dev/null || true
             cp -R "$SUITE/apps/admin-web/test-results" test-results 2>/dev/null || true

@@ -71,6 +71,36 @@ function watch(page: Page, tag: string) {
 }
 
 test.describe('moderation actions', () => {
+  for (const tab of ['same', 'fresh'] as const) {
+    test(`ACT-01 probe forced: a live refresh in flight, then goto in the ${tab} tab`, async ({ page, makeReport }) => {
+      const say = watch(page, `forced-${tab}${test.info().repeatEachIndex}`);
+      const frames: string[] = [];
+      page.on('websocket', (ws) => ws.on('framereceived', (f) => frames.push(String(f.payload))));
+      const report = await makeReport({ label: 'dismiss-f' });
+      await page.goto(`/moderation/reports/${report.id}`);
+      await takeAction(page, 'Dismiss Report', `${E2E_DESCRIPTION_TAG} forced`);
+      await expect.poll(() => frames.some((f) => f.includes('"subscribed"') && f.includes('admin:moderation')), { timeout: 15_000 }).toBe(true);
+      // The refresh's data request is held, so it is in flight when the goto starts
+      await page.route((url) => url.pathname === '/moderation', async (route) => {
+        if (!route.request().headers()['rsc']) return route.continue();
+        await new Promise((r) => setTimeout(r, 1500));
+        await route.continue().catch(() => {});
+      });
+      const refresh = page.waitForRequest((r) => new URL(r.url()).pathname === '/moderation' && !!r.headers()['rsc'], { timeout: 15_000 });
+      const key = process.env.INTERNAL_API_KEY || 'dev-internal-api-key';
+      const res = await fetch(`${(process.env.REALTIME_URL || 'http://127.0.0.1:3087').replace(/\/$/, '')}/broadcast`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key },
+        body: JSON.stringify({ items: [{ channel: 'admin:moderation', message: { type: 'admin.update', channel: 'admin:moderation', timestamp: Date.now(), data: { type: 'admin.update', topic: 'moderation', events: [{ kind: 'report', queue: 'reports', key: `report:probe-${Date.now()}`, id: 'probe' }] } } }] }),
+      });
+      expect(res.status).toBe(200);
+      await refresh;
+      const target = tab === 'same' ? page : await page.context().newPage();
+      say('goto detail');
+      await target.goto(`/moderation/reports/${report.id}`).catch((e: Error) => { say(`goto error ${e.message.split('\n')[0].replace(/[0-9a-f-]{36}/g, 'ID')}`); throw e; });
+      await expect(target.getByTestId('status-chip')).toHaveText('Dismissed');
+    });
+  }
+
   test('ACT-01 probe candidate: verify in a fresh tab', async ({ page, makeReport }) => {
     const report = await makeReport({ label: 'dismiss-b' });
     await page.goto(`/moderation/reports/${report.id}`);
