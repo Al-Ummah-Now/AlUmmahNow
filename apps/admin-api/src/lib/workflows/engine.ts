@@ -687,8 +687,10 @@ export interface RequestListItem {
 /**
  * One index per view: waiting (workflow_inbox by user), mine (proposer), open (status), history
  * (proposed_at). Cursor = the last item's proposed_at|id; 50 per page.
+ * `money: false` leaves money rows (by their stored domain) out of the query, so pages are full and the
+ * cursor is always a row the reader was given.
  */
-export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { view: RequestListView; status?: WorkflowStatus; type?: WorkflowActionType; cursor?: string | null; limit?: number }): Promise<{ items: RequestListItem[]; next: string | null }> {
+export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { view: RequestListView; status?: WorkflowStatus; type?: WorkflowActionType; cursor?: string | null; limit?: number; money?: boolean }): Promise<{ items: RequestListItem[]; next: string | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 50);
   const [cAt, cId] = opts.cursor ? opts.cursor.split('|') : [null, null];
   const cursorSql = cAt ? ' AND (r.proposed_at < ? OR (r.proposed_at = ? AND r.id < ?))' : '';
@@ -696,34 +698,38 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   // The action filter applies to every view; each view still starts from its own index.
   const typeSql = opts.type ? ' AND r.action_type = ?' : '';
   const typeArgs = opts.type ? [opts.type] : [];
+  // A residual filter on the same index
+  const moneySql = opts.money === false ? " AND r.domain <> 'money'" : '';
+  // Every row of a money action is stored as money: nothing to walk the index for
+  if (moneySql && opts.type && WORKFLOW_ACTIONS[opts.type].domain === 'money') return { items: [], next: null };
   let sql: string;
   let args: unknown[];
   const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.expires_at, r.approvals_needed, r.approvals_count';
   switch (opts.view) {
     case 'waiting':
-      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'mine':
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'open': {
       const statuses = opts.status && isWorkflowOpen(opts.status) ? [opts.status] : [...WORKFLOW_OPEN_STATUSES];
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [...statuses, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     }
     default:
       if (opts.type) {
         const statusSql = opts.status ? ' AND r.status = ?' : '';
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${statusSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${statusSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [opts.type, ...(opts.status ? [opts.status] : []), ...cursorArgs, limit + 1];
       } else if (opts.status) {
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status = ?${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [opts.status, ...cursorArgs, limit + 1];
       } else {
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE 1 = 1${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE 1 = 1${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [...cursorArgs, limit + 1];
       }
   }

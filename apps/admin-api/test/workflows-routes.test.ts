@@ -335,3 +335,62 @@ describe('open requests by target (GET /pending)', () => {
     assert.deepEqual(await ask(t, SUPER, 'workflows.rule.set', targets), both);
   });
 });
+
+describe('request lists in pages', () => {
+  const ADMIN: [string, string[]] = ['adm', ['admin']];
+  const SUPER: [string, string[]] = ['sa1', ['super_admin']];
+  const FINANCE: [string, string[]] = ['fin1', ['user']];
+  const stamp = (n: number) => `2026-11-23T10:${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}.000Z`;
+
+  /** 130 rule changes, every other one stored as money, all proposed by one person and waiting for three. */
+  async function many() {
+    const t = await setup();
+    const insert = t.search.raw.prepare(
+      `INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, updated_at)
+       VALUES (?, 'workflows.rule.set', ?, ?, '{}', 'workflow-rule', ?, '{}', '{"title":{"en":"t","ar":"t"},"fields":[]}', '1', 'r', 'adm', ?, ?, 'pending', 1, ?)`,
+    );
+    const inbox = t.search.raw.prepare('INSERT INTO workflow_inbox (user_id, request_id, created_at) VALUES (?, ?, ?)');
+    for (let n = 0; n < 130; n++) {
+      const money = n % 2 === 0;
+      const id = `${money ? 'wfr_money' : 'wfr_plain'}_${String(n).padStart(3, '0')}`;
+      insert.run(id, money ? 'money' : '', money ? 'money' : 'governance', id, stamp(n), stamp(n), stamp(n));
+      for (const who of ['adm', 'sa1', 'fin1']) inbox.run(who, id, at);
+    }
+    return t;
+  }
+  async function pages(t: Awaited<ReturnType<typeof setup>>, who: [string, string[]], query: string) {
+    const out: { items: { id: string; proposedAt: string }[]; next: string | null }[] = [];
+    let next: string | null = null;
+    do {
+      const res = await t.as(...who)('GET', `/requests?${query}${next ? `&cursor=${encodeURIComponent(next)}` : ''}`);
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      out.push(res.body.result);
+      next = res.body.result.next;
+    } while (next && out.length < 9);
+    return out;
+  }
+  // Each view and filter: 65 rows for whoever doesn't see money, 130 for whoever does
+  const QUERIES = ['view=waiting', 'view=mine', 'view=open', 'view=open&status=pending', 'view=history', 'view=history&type=workflows.rule.set', 'view=history&type=workflows.rule.set&status=pending', 'view=history&status=pending'];
+  for (const query of QUERIES) {
+    it(`${query}: full pages of the rows the reader sees, and cursors that are one of them`, async () => {
+      const t = await many();
+      const mine = await pages(t, ADMIN, query);
+      assert.deepEqual(mine.map((p) => p.items.length), [50, 15]);
+      const ids = mine.flatMap((p) => p.items.map((i) => i.id));
+      assert.equal(new Set(ids).size, 65);
+      assert.ok(ids.every((id) => id.startsWith('wfr_plain')));
+      const last = mine[0].items[49];
+      assert.equal(mine[0].next, `${last.proposedAt}|${last.id}`);
+      assert.doesNotMatch(JSON.stringify(mine), /wfr_money/);
+      if (query.startsWith('view=mine')) return;
+      for (const who of [SUPER, FINANCE]) assert.deepEqual((await pages(t, who, query)).map((p) => p.items.length), [50, 50, 30]);
+    });
+  }
+
+  it('a money action lists nothing, and no next page, for a reader who does not see money', async () => {
+    const t = await many();
+    t.search.raw.exec("UPDATE workflow_requests SET action_type = 'support.fees.set' WHERE domain = 'money'");
+    for (const view of ['waiting', 'mine', 'open', 'history']) assert.deepEqual(await pages(t, ADMIN, `view=${view}&type=support.fees.set`), [{ items: [], next: null }]);
+    assert.deepEqual((await pages(t, FINANCE, 'view=history&type=support.fees.set')).map((p) => p.items.length), [50, 15]);
+  });
+});
