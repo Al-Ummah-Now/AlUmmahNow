@@ -59,7 +59,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types --no-warnings scripts/ops/media-diagnostics.ts --env stage --hours 8 | tee "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/media-diagnostics.ts --env stage --hours 8 | tee "$GITHUB_STEP_SUMMARY"
       - name: Diagnostics
         if: github.event_name == 'workflow_dispatch'
         env:

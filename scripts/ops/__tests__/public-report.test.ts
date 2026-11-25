@@ -87,6 +87,7 @@ test('the scripts print the public part only, and a pull request reads stage onl
 		for (const step of steps.filter((x) => x.includes('secrets.'))) {
 			const pr = step.includes("github.event_name == 'pull_request'");
 			assert.ok(pr || step.includes("if: github.event_name == 'workflow_dispatch'"), step);
+			assert.ok(step.includes('set -o pipefail'), step);
 			if (pr) assert.ok(/--env stage /.test(step) && !/sealed|production|inputs\./.test(step), step);
 		}
 		const upload = steps.find((x) => x.includes('upload-artifact'))!;

@@ -16,6 +16,7 @@ test('a sealed report opens with the private key only, and not when it was chang
 	const data = Buffer.from(sealed.data, 'base64');
 	data[0]! ^= 1;
 	assert.throws(() => unseal({ ...sealed, data: data.toString('base64') }, privateKey));
+	assert.throws(() => unseal({ ...sealed, iv: Buffer.alloc(8).toString('base64') }, privateKey), /not a sealed/);
 	assert.throws(() => unseal({ ...sealed, tag: Buffer.alloc(4).toString('base64') }, privateKey));
 });
 
