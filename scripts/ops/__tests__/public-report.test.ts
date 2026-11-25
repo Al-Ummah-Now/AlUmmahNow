@@ -46,8 +46,8 @@ test('a nasty fixture prints nothing but the allow list', () => {
 				logs: [{ app: v, warn: v, error: v, readable: true }, { app: v, warn: 0, error: 0, readable: false }],
 			}),
 		);
-		const summary = publicSummary({ groups: [{ id: v, app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }, { id: 'eg_0123456789abcdef', app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }], actions: [{ app: v, source: v, item_type: v }] });
-		assert.deepEqual(summary.groups!.map((g) => g.id), ['eg_0123456789abcdef']);
+		const summary = publicSummary({ groups: [{ id: v, app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }, { id: 'eg_fedcba9876543210', app: v, kind: v, name: v, route: v, http_status: v, occurrences: v, test: 0 }], actions: [{ app: v, source: v, item_type: v }] });
+		assert.deepEqual(summary.groups!.map((g) => g.id), ['eg_fedcba9876543210']);
 		assert.match(summary.groups![0]!.line, /^[a-z-]+ [a-z]+ [A-Za-z0-9]+ (–|(\/(:other|:id|:locale|[a-z-]+))+) status (\d{3}|–) count (\d+|–)$/);
 		assert.doesNotMatch(JSON.stringify(summary), LEAK);
 		const n = typeof x === 'number' ? x : 0;
