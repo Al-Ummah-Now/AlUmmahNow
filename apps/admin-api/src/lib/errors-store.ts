@@ -144,7 +144,7 @@ export interface IngestOutcome {
   spiking: ErrorGroupRow[];
   /** Groups reopened because they recurred in a newer release */
   reopened: string[];
-  /** Child safety items that are new or came back (moderation/safetyMail.ts); their groups are in no other alert */
+  /** Child safety items that are new or came back (moderation/safetyMail.ts); their groups are never in `created` or `spiking` */
   safety: { groupId: string; key: string; itemUrl: string | null }[];
 }
 
@@ -408,8 +408,10 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
       }
     }
 
+    // Super admins alone are told of these (moderation/safetyMail.ts), whatever became of the item
+    if (childSafety) continue;
     if (isNew) out.created.push(group);
-    else if (!childSafety && !e.test && (await isSpiking(db, gid, hour))) out.spiking.push(group);
+    else if (!e.test && (await isSpiking(db, gid, hour))) out.spiking.push(group);
   }
   return out;
 }

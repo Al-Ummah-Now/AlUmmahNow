@@ -223,7 +223,7 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
  * child safety alerts to super admins (`kind: 'safety_alert'`, lib/moderation/safetyMail.ts), which share the sender.
  */
 export async function contactMailConsumer(
-  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob | ChannelMoveMailJob>[] },
+  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob | ChannelMoveMailJob | SafetyMailJob>[] },
   env: AdminBindings,
 ): Promise<void> {
   const startedAt = Date.now();
@@ -244,7 +244,7 @@ export async function contactMailConsumer(
             : isChannelMoveMailJob(msg.body)
               ? await processChannelMoveMailJob(env as never, msg as unknown as QueueMessageLike<ChannelMoveMailJob>)
             : isSafetyMailJob(msg.body)
-              ? await processSafetyMailJob(env as never, msg as unknown as QueueMessageLike<SafetyMailJob>)
+              ? await processSafetyMailJob(env as never, msg as QueueMessageLike<SafetyMailJob>)
             : isTierChangeMailJob(msg.body)
               ? await processTierChangeMailJob(env as never, msg as QueueMessageLike<TierChangeMailJob>)
               : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);

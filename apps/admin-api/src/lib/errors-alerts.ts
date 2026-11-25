@@ -75,16 +75,14 @@ export function renderErrorAlert(group: ErrorGroupRow, reason: 'new' | 'spike', 
 }
 
 /** Sends the alerts an ingest batch earned. Never throws. */
-export async function sendErrorAlerts(db: D1Database, env: AlertEnv, outcome: IngestOutcome, now: Date, fetchImpl?: typeof fetch): Promise<number> {
+export async function sendErrorAlerts(db: D1Database, env: AlertEnv, outcome: Pick<IngestOutcome, 'created' | 'spiking'>, now: Date, fetchImpl?: typeof fetch): Promise<number> {
   if (env.ENVIRONMENT !== 'production') return 0;
   const to = alertRecipient(env);
   if (!to) return 0;
-  // Super admins alone are told of these (lib/moderation/safetyMail.ts)
-  const safety = new Set(outcome.safety.map((s) => s.groupId));
   const candidates: [ErrorGroupRow, 'new' | 'spike'][] = [
-    ...outcome.created.filter((g) => !g.test && isAlertWorthy(g) && !safety.has(g.id)).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
+    ...outcome.created.filter((g) => !g.test && isAlertWorthy(g)).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
     ...outcome.spiking
-      .filter((g) => !g.test && g.status !== 'ignored' && isAlertWorthy(g) && !safety.has(g.id))
+      .filter((g) => !g.test && g.status !== 'ignored' && isAlertWorthy(g))
       .filter((g) => !g.last_alert_at || now.getTime() - Date.parse(g.last_alert_at) > ERROR_ALERT_LIMITS.perGroupHours * 3600_000)
       .map((g) => [g, 'spike'] as [ErrorGroupRow, 'spike']),
   ];
