@@ -211,7 +211,8 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     const event = CHANNEL_MOVE_MAIL_EVENTS.find((e) => e === args.event);
     if (!event || !args.id) return { ok: false, status: 'open', result: 'Not a channel move email' };
     if (!(await enqueueChannelMoveMail(env, event, args.id))) return { ok: false, status: 'open', result: 'Could not queue the email' };
-    return { ok: true, status: 'resolved', result: 'Queued again' };
+    // Resolved when the email ends (channel-move-mail.ts settle), open again if it fails
+    return { ok: true, status: 'retrying', result: 'Queued again' };
   },
   /** Delivers a tier request decision again (notice + email), if the request still has that decision. */
   'tier-request-delivery': async (env, args) => {
