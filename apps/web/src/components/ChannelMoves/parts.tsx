@@ -16,11 +16,12 @@ export const SOFT = 'text-[var(--fanous-color-text-secondary)]';
 
 export function Avatar({ src, name, handle, size = 'h-12 w-12 text-lg' }: { src: string | null; name: string; handle?: string | null; size?: string }) {
   const [failed, setFailed] = useState(false);
+  // The color inline: the picker's dropdown (.search-dd, system.css) colors every span in it
   return src && !failed ? (
     // eslint-disable-next-line @next/next/no-img-element -- remote avatars from several CDNs
     <img src={src} alt="" onError={() => setFailed(true)} className={`${size} shrink-0 rounded-full object-cover`} />
   ) : (
-    <span className={`flex ${size} shrink-0 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] font-semibold text-[var(--fanous-c-button-primary-text)]`} aria-hidden="true">
+    <span className={`flex ${size} shrink-0 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] font-semibold`} style={{ color: 'var(--fanous-c-button-primary-text)' }} aria-hidden="true">
       {avatarInitial(name, handle)}
     </span>
   );

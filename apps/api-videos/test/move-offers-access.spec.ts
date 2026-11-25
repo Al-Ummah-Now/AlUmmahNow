@@ -67,8 +67,8 @@ function setup() {
 		INTERNAL_API_KEY: 'k'.repeat(40),
 	} as Record<string, unknown>;
 	const pending: Promise<unknown>[] = [];
-	const get = async (userId: string | null, path: string) => {
-		const res = await worker.fetch(new Request(`https://videos.test${path}`, userId ? { headers: { Authorization: `Bearer ${await sign(userId)}` } } : {}), env as never, { waitUntil: (p: Promise<unknown>) => void pending.push(p), passThroughOnException() {} } as never);
+	const get = async (userId: string | null, path: string, method = 'GET') => {
+		const res = await worker.fetch(new Request(`https://videos.test${path}`, { method, ...(method === 'POST' ? { body: '{}' } : {}), headers: { 'Content-Type': 'application/json', ...(userId ? { Authorization: `Bearer ${await sign(userId)}` } : {}) } }), env as never, { waitUntil: (p: Promise<unknown>) => void pending.push(p), passThroughOnException() {} } as never);
 		const text = await res.text();
 		await Promise.allSettled(pending.splice(0));
 		return { status: res.status, text, body: JSON.parse(text) as any };
@@ -147,6 +147,29 @@ describe('channel move offers through the mounted app', () => {
 			}
 		});
 	}
+
+	it('offering, accepting, declining and withdrawing are counted against a limiter, per account', async () => {
+		const { env, get } = setup();
+		const keys: string[] = [];
+		env.REACTION_LIMITER = { limit: async ({ key }: { key: string }) => { keys.push(key); return { success: false }; } };
+		const writes: Array<[string, string, string]> = [
+			[OWNER_NOW, 'POST', '/api/channels/ch1/move-offers'],
+			[TO, 'POST', '/api/move-offers/o1/accept'],
+			[TO, 'POST', '/api/move-offers/o1/decline'],
+			[FROM, 'DELETE', '/api/move-offers/o1'],
+		];
+		for (const [userId, method, path] of writes) {
+			const res = await get(userId, path, method);
+			assert.deepEqual([res.status, res.body.code], [429, 'rate_limited'], `${method} ${path}`);
+		}
+		assert.deepEqual(keys, writes.map(([userId]) => `u:${userId}`));
+		// Each read is counted too, and none of the writes against the reads' limiter
+		const reads: string[] = [];
+		env.SEARCH_LIMITER = { limit: async ({ key }: { key: string }) => { reads.push(key); return { success: false }; } };
+		for (const path of ['/api/move-offers', '/api/move-offers/o1', '/api/channels/ch1/move-offers', '/api/channels/ch1/move-receivers']) assert.equal((await get(OWNER_NOW, path)).status, 429, path);
+		for (const [userId, method, path] of writes) await get(userId, path, method);
+		assert.equal(reads.length, 4);
+	});
 
 	it('reads and answers are counted against a limiter, per account', async () => {
 		const { env, get } = setup();
