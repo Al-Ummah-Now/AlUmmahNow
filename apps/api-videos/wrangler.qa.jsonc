@@ -326,6 +326,8 @@
     }
   ],
   "vars": {
+    // App update root public keys (wiki AUN-APP-UPDATES §9 K-R); public, the same in every environment
+    "UPDATE_ROOT_KEYS": "{\"AlUmmahNowDesktop\":[\"u6dWtZq34aGYg7i4C3VS2qAHh1s3+HO4y/tVAtCEu6w=\"],\"AlUmmahNowTools\":[\"WDF0ms+fkqEYaNE9+4ouJJUzdja9NV+sZkoitP8P2kg=\"],\"AlUmmahNowApple\":[\"Mf2IQATA0Y1AF5eaeIr41q3bFuogvHqz2rktf8A4nag=\"],\"AlUmmahNowAndroid\":[\"VCVHElCJXp3w8fq3YeHOiBEQuqaVNNFLjQ79Y0AG4ZM=\"]}",
     // Quran Foundation hosts (translated caption tracks, AUN-CAPTIONS O7): production QF in every env
     "QF_OAUTH_HOST": "https://oauth2.quran.foundation",
     "QF_API_HOST": "https://apis.quran.foundation",
