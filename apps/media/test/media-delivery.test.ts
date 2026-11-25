@@ -75,6 +75,32 @@ describe('delivery switch', () => {
 	});
 });
 
+describe('source facts', () => {
+	const facts = { bytes: 10, container: 'mp4', zeroStartPercent: 0, zeroEndPercent: 0, sha256: 'a'.repeat(64), format: 'mov,mp4', streams: [{ kind: 'audio', codec: 'aac' }], durationSeconds: 8 };
+	it('keeps the known fields only, bounded', async () => {
+		const { sanitizeSourceFacts } = await import('@al-ummah/shared-types');
+		assert.deepEqual(sanitizeSourceFacts(facts), facts);
+		const odd = sanitizeSourceFacts({ ...facts, container: 'evil', format: '<b>title of a file</b>', streams: Array.from({ length: 40 }, () => ({ kind: 'x', codec: 'a b/c', title: 'private' })), zeroStartPercent: 1e9, name: 'private.mp4' })!;
+		assert.equal(odd.container, 'unknown');
+		assert.equal(odd.streams!.length, 12);
+		assert.deepEqual(odd.streams![0], { kind: 'other', codec: 'abc' });
+		assert.equal(odd.zeroStartPercent, 100);
+		assert.ok(!JSON.stringify(odd).includes('private'));
+		for (const bad of [null, 'x', {}, { ...facts, sha256: 'short' }]) assert.equal(sanitizeSourceFacts(bad), null);
+	});
+	it('says what the file most likely is', async () => {
+		const { sourceVerdict } = await import('@al-ummah/shared-types');
+		const v = (over: object) => sourceVerdict({ ...facts, ...over } as never);
+		assert.equal(v({}), 'audio_only');
+		assert.equal(v({ streams: [{ kind: 'audio', codec: 'aac' }, { kind: 'cover', codec: 'mjpeg' }] }), 'audio_only');
+		assert.equal(v({ streams: [{ kind: 'video', codec: 'h264' }] }), 'has_video');
+		assert.equal(v({ zeroEndPercent: 100 }), 'half_written');
+		assert.equal(v({ container: 'zeros' }), 'half_written');
+		assert.equal(v({ streams: undefined }), 'unreadable');
+		assert.equal(v({ streams: [] }), 'unreadable');
+	});
+});
+
 describe('failure details are scrubbed', () => {
 	it('strips Bunny tokens, signed query strings, API keys and URL paths', async () => {
 		const { scrubMediaText, sanitizeFailure } = await import('@al-ummah/shared-types');

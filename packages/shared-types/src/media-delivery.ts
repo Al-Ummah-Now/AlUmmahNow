@@ -161,6 +161,59 @@ export interface TranscodeFailure {
 	stderrTail?: string[];
 }
 
+export const SOURCE_CONTAINERS = ['mp4', 'matroska', 'avi', 'wav', 'ogg', 'flac', 'mp3_aac', 'mpegts', 'zeros', 'too_short', 'unknown'] as const;
+export const SOURCE_STREAM_KINDS = ['video', 'audio', 'cover', 'subtitle', 'other'] as const;
+
+/**
+ * What the container saw in the source of a failed job (apps/media/container/source-facts.mjs): tells an
+ * audio file from a damaged or half-written one. Kept in media_jobs (admin only), never on the video record.
+ */
+export interface TranscodeSourceFacts {
+	bytes: number;
+	/** From the first bytes */
+	container: (typeof SOURCE_CONTAINERS)[number];
+	/** Zero bytes in the first and last MB, 0..100 */
+	zeroStartPercent: number;
+	zeroEndPercent: number;
+	/** SHA-256 of the whole file (hex) */
+	sha256: string;
+	/** ffprobe's format and streams; absent when it could not read the file */
+	format?: string;
+	streams?: { kind: (typeof SOURCE_STREAM_KINDS)[number]; codec: string }[];
+	durationSeconds?: number;
+}
+
+/** A well-formed copy of what the container sent (or media_jobs stores); null when it is not one. */
+export function sanitizeSourceFacts(value: unknown): TranscodeSourceFacts | null {
+	const v = value as Partial<Record<keyof TranscodeSourceFacts, unknown>> | null;
+	if (!v || typeof v !== 'object') return null;
+	const amount = (x: unknown, max: number) => (typeof x === 'number' && Number.isFinite(x) ? Math.min(max, Math.max(0, x)) : 0);
+	const word = (x: unknown, max: number) => String(x ?? '').replace(/[^A-Za-z0-9_,.-]/g, '').slice(0, max);
+	if (typeof v.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(v.sha256)) return null;
+	const container = SOURCE_CONTAINERS.find((c) => c === v.container) ?? 'unknown';
+	return {
+		bytes: amount(v.bytes, Number.MAX_SAFE_INTEGER),
+		container,
+		zeroStartPercent: amount(v.zeroStartPercent, 100),
+		zeroEndPercent: amount(v.zeroEndPercent, 100),
+		sha256: v.sha256,
+		...(word(v.format, 40) ? { format: word(v.format, 40) } : {}),
+		...(Array.isArray(v.streams)
+			? { streams: v.streams.slice(0, 12).map((s: { kind?: unknown; codec?: unknown } | null) => ({ kind: SOURCE_STREAM_KINDS.find((k) => k === s?.kind) ?? ('other' as const), codec: word(s?.codec, 24) || 'unknown' })) }
+			: {}),
+		...(amount(v.durationSeconds, 1e7) ? { durationSeconds: Math.round(amount(v.durationSeconds, 1e7)) } : {}),
+	};
+}
+
+export type SourceVerdict = 'has_video' | 'audio_only' | 'half_written' | 'unreadable';
+
+/** What a source most likely is. A media file is never mostly zeros at either end; one still being copied is. */
+export function sourceVerdict(f: Pick<TranscodeSourceFacts, 'container' | 'streams' | 'zeroStartPercent' | 'zeroEndPercent'>): SourceVerdict {
+	if (f.container === 'zeros' || f.zeroStartPercent >= 50 || f.zeroEndPercent >= 50) return 'half_written';
+	if (f.streams?.some((s) => s.kind === 'video')) return 'has_video';
+	return f.streams?.some((s) => s.kind === 'audio') ? 'audio_only' : 'unreadable';
+}
+
 /** Remove anything that could carry a credential: Bunny tokens, query strings, API keys, full URLs. */
 export function scrubMediaText(text: string, max = 300): string {
 	return text
@@ -288,6 +341,8 @@ export interface TranscodeJobEvent {
 	final?: boolean;
 	/** failed only: where and why */
 	failure?: TranscodeFailure;
+	/** failed only: what the container saw in the source */
+	sourceFacts?: TranscodeSourceFacts;
 	/** started only: how long the attempt took to start */
 	startup?: TranscodeStartup;
 }

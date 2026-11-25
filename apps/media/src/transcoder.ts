@@ -6,7 +6,7 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, sanitizeSourceFacts, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult, type TranscodeSourceFacts } from '@al-ummah/shared-types';
 import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { startupTimes, cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
@@ -23,7 +23,7 @@ type ContainerEvent =
 	| { type: 'started'; jobId: string }
 	| { type: 'progress'; jobId: string; progress: number; rungs?: R2RungProgress[] }
 	| { type: 'ready'; jobId: string; result: TranscodeResult }
-	| { type: 'failed'; jobId: string; error: string; fatal?: boolean; failure?: Partial<TranscodeFailure>; rungs?: R2RungProgress[] };
+	| { type: 'failed'; jobId: string; error: string; fatal?: boolean; failure?: Partial<TranscodeFailure>; rungs?: R2RungProgress[]; sourceFacts?: unknown };
 
 /** What finishFailed adds to the container's own report (attempt, timing, instance). */
 type FailureParts = Partial<TranscodeFailure>;
@@ -305,7 +305,7 @@ export class Transcoder extends Container<Env> {
 		if (ev.type === 'ready') return this.finishReady(job, ev.result);
 		const rungs = sanitizeRungs(ev.rungs);
 		if (rungs) job.rungs = rungs;
-		return this.finishFailed(job, ev.error, !!ev.fatal, ev.failure ?? {});
+		return this.finishFailed(job, ev.error, !!ev.fatal, ev.failure ?? {}, sanitizeSourceFacts(ev.sourceFacts));
 	}
 
 	private async finishReady(job: JobState, result: TranscodeResult): Promise<void> {
@@ -323,7 +323,7 @@ export class Transcoder extends Container<Env> {
 		await this.stop().catch(() => undefined);
 	}
 
-	private async finishFailed(job: JobState, error: string, fatal: boolean, parts: FailureParts = {}): Promise<void> {
+	private async finishFailed(job: JobState, error: string, fatal: boolean, parts: FailureParts = {}, facts: TranscodeSourceFacts | null = null): Promise<void> {
 		const now = Date.now();
 		const failure = sanitizeFailure({
 			stage: 'start',
@@ -356,7 +356,7 @@ export class Transcoder extends Container<Env> {
 			job.infraRetries = next.keepsAttempt ? (job.infraRetries ?? 0) + 1 : 0;
 			job.nextRetryAt = now + next.delaySeconds * 1000;
 			await this.save(job);
-			await this.report(job, { type: 'failed', error, final: false, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
+			await this.report(job, { type: 'failed', error, final: false, failure, ...(facts ? { sourceFacts: facts } : {}), ...(job.rungs ? { rungs: job.rungs } : {}) });
 			// Keeps its slot while it waits for the retry
 			await this.holdSlot(job, (job.nextRetryAt ?? now) + LEASE_MS);
 			await this.schedule(next.delaySeconds, 'retry', job.jobId);
@@ -367,7 +367,7 @@ export class Transcoder extends Container<Env> {
 		await this.save(job);
 		await this.dropStaging(job);
 		log.error('[Transcoder] Job failed', { videoId: job.videoId, jobId: job.jobId, attempt: job.attempt, error });
-		await this.report(job, { type: 'failed', error, final: true, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
+		await this.report(job, { type: 'failed', error, final: true, failure, ...(facts ? { sourceFacts: facts } : {}), ...(job.rungs ? { rungs: job.rungs } : {}) });
 		await this.freeSlot(job);
 	}
 
@@ -775,7 +775,7 @@ export class Transcoder extends Container<Env> {
 	// Reports to api-videos: kept until delivered (the watchdog resends)
 	// -----------------------------------------------------------------------
 
-	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure' | 'rungs' | 'startup'>): Promise<void> {
+	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure' | 'sourceFacts' | 'rungs' | 'startup'>): Promise<void> {
 		const event: TranscodeJobEvent = {
 			videoId: job.videoId,
 			jobId: job.jobId,

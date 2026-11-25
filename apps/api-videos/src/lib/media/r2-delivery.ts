@@ -28,6 +28,8 @@ import {
 	resolveNeedsAction,
 	compactRungs,
 	sanitizeFailure,
+	sanitizeSourceFacts,
+	sourceVerdict,
 	sanitizeRungs,
 	scrubMediaText,
 	MEDIA_MASTER,
@@ -42,6 +44,7 @@ import {
 	type TranscodeFailure,
 	type TranscodeJobEvent,
 	type TranscodeResult,
+	type TranscodeSourceFacts,
 	type TranscodeJobMessage,
 	type VideoR2State,
 	type VideoVisibilityFields,
@@ -129,7 +132,8 @@ export async function recordJob(env: Pick<MediaEnv, 'SEARCH_DB'>, video: MediaVi
 			   container_seconds = excluded.container_seconds, instance_type = excluded.instance_type,
 			   bunny_ready_at = COALESCE(excluded.bunny_ready_at, media_jobs.bunny_ready_at), updated_at = excluded.updated_at,
 			   start_cold = excluded.start_cold, start_dispatch_ms = excluded.start_dispatch_ms, start_ready_ms = excluded.start_ready_ms,
-			   start_accept_ms = excluded.start_accept_ms, start_ffmpeg_ms = excluded.start_ffmpeg_ms`,
+			   start_accept_ms = excluded.start_accept_ms, start_ffmpeg_ms = excluded.start_ffmpeg_ms,
+			   source_facts = CASE WHEN media_jobs.job_id = excluded.job_id THEN media_jobs.source_facts END`,
 		)
 			.bind(
 				video.id,
@@ -326,19 +330,37 @@ const STAGE_LABELS: Record<string, string> = {
 	container: 'container stopped',
 };
 
+/** What the container saw in the failed job's source (admin troubleshooting). Best effort. */
+async function recordSourceFacts(env: Pick<MediaEnv, 'SEARCH_DB'>, ev: TranscodeJobEvent): Promise<void> {
+	const facts = sanitizeSourceFacts(ev.sourceFacts);
+	if (!facts || !env.SEARCH_DB) return;
+	await env.SEARCH_DB.prepare('UPDATE media_jobs SET source_facts = ?3 WHERE video_id = ?1 AND job_id = ?2')
+		.bind(ev.videoId, ev.jobId, JSON.stringify(facts))
+		.run()
+		.catch((error) => logger.warn('[Media] Could not record what the source is', { videoId: ev.videoId, error: error instanceof Error ? error.message : String(error) }));
+}
+
+/** "audio_only; mov,mp4: audio aac, cover mjpeg; 812 s; zeros 0% at the start, 0% at the end" */
+export function sourceFactsLine(f: Omit<TranscodeSourceFacts, 'sha256'>): string {
+	const streams = f.streams ? f.streams.map((s) => `${s.kind} ${s.codec}`).join(', ') || 'no streams' : 'not readable by ffprobe';
+	return `${sourceVerdict(f)}; ${f.format ?? f.container}: ${streams}${f.durationSeconds ? `; ${f.durationSeconds} s` : ''}; zeros ${f.zeroStartPercent}% at the start, ${f.zeroEndPercent}% at the end`;
+}
+
 /** Errors-page text for a final failure: one summary line, a details block (shown as the item's stack), and small keys. */
-export function failureDetails(ev: Pick<TranscodeJobEvent, 'videoId' | 'jobId' | 'attempt' | 'error'>, f: TranscodeFailure | undefined): { summary: string; error: Error; extra: Record<string, string | number | boolean | null> } {
+export function failureDetails(ev: Pick<TranscodeJobEvent, 'videoId' | 'jobId' | 'attempt' | 'error' | 'sourceFacts'>, f: TranscodeFailure | undefined): { summary: string; error: Error; extra: Record<string, string | number | boolean | null> } {
 	const err = scrubMediaText(ev.error ?? 'failed', 200);
 	const stage = f ? STAGE_LABELS[f.stage] ?? f.stage : 'unknown stage';
 	const secs = f ? Math.round(f.elapsedMs / 1000) : null;
 	const summary = `Failed while ${stage}${f?.stageDetail ? ` (${f.stageDetail})` : ''}: ${err} (attempt ${f?.attempt ?? ev.attempt}${secs !== null ? `, after ${secs} s` : ''})`;
 	const mb = f?.source?.bytes !== undefined ? `${(f.source.bytes / 1048576).toFixed(1)} MB` : 'unknown size';
+	const facts = sanitizeSourceFacts(ev.sourceFacts);
 	const lines = [
 		`stage: ${f?.stage ?? 'unknown'}${f?.stageDetail ? ` (${f.stageDetail})` : ''}`,
 		`error: ${err}`,
 		`attempt: ${f?.attempt ?? ev.attempt}`,
 		`elapsed: ${secs ?? '?'} s`,
 		`source: ${f?.source?.file ?? 'unknown'} (${mb})`,
+		...(facts ? [`source is: ${sourceFactsLine(facts)}`] : []),
 		...(f?.exitCode !== undefined ? [`exit code: ${f.exitCode}`] : []),
 		...(f?.stopReason ? [`stop reason: ${f.stopReason}`] : []),
 		...(f?.instanceId ? [`instance: ${f.instanceId}`] : []),
@@ -360,6 +382,7 @@ export function failureDetails(ev: Pick<TranscodeJobEvent, 'videoId' | 'jobId' |
 			sourceFile: f?.source?.file ?? null,
 			sourceMB: f?.source?.bytes !== undefined ? Math.round(f.source.bytes / 104857.6) / 10 : null,
 			exitCode: f?.exitCode ?? null,
+			sourceIs: facts ? sourceFactsLine(facts) : null,
 			instanceId: f?.instanceId ? f.instanceId.slice(0, 64) : null,
 		},
 	};
@@ -564,6 +587,7 @@ export async function applyJobEvent(
 	// Live admin view (admin:media, docs/admin/LIVE_OPS.md): this job, then the transcoder figures
 	pushMediaLive(env, ctx, saved);
 	if (ev.type !== 'progress') await recordJob(env, saved);
+	if (ev.type === 'failed') await recordSourceFacts(env, ev);
 
 	if (ev.type === 'ready') {
 		resolveNeedsAction(env, ctx, needsActionKey(ev.videoId));
