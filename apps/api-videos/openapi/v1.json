@@ -2140,9 +2140,10 @@
                             "store",
                             "install",
                             "download",
+                            "notice",
                             "none"
                           ],
-                          "description": "store: open the store; install: self-update from manifestUrl; download: open url"
+                          "description": "store: open the store; install: self-update from manifestUrl; download: open url; notice: no signing keys yet, so say a new version is out and open the app’s own compiled-in page (every URL here is null)"
                         },
                         "url": {
                           "type": [

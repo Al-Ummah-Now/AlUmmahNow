@@ -3,15 +3,16 @@
  * app build should show, from the admin policy (`versions`), the release index (`releases`) and
  * store availability (`availability`). Pure: the endpoint loads the documents.
  *
- * Fail closed: a downloaded build (`direct`, `managed`) is only ever offered a release verified
- * under its repo's keys; store builds are sent to their store. While the `appUpdates` switch is
+ * Fail closed: a downloaded build (`direct`, `managed`) is only ever given a file or a link of a release
+ * verified under its repo's keys. A repo with no root key at all gets `notice` (§4.1.1, §5.5): the version
+ * and notes, and no URL of any kind, since the app opens its own compiled-in page; store builds are sent to their store. While the `appUpdates` switch is
  * off nothing is offered and nothing is required.
  */
-import { compareAppVersions, type AppConfigApp, type AppConfigPlatform, type AppReleaseNotes, type AppUpdateChannel, type AppUpdateSource } from '@al-ummah/shared-types';
+import { compareAppVersions, type AppConfigApp, type AppConfigPlatform, type AppReleaseNotes, type AppReleaseRepo, type AppUpdateChannel, type AppUpdateSource } from '@al-ummah/shared-types';
 import { appStoreBundleFor, entryKey, type ReleaseEntry, type ReleasesDocument } from './releases';
 
 export type UpdateStatus = 'ok' | 'recommended' | 'required';
-export type UpdateAction = 'store' | 'install' | 'download' | 'none';
+export type UpdateAction = 'store' | 'install' | 'download' | 'notice' | 'none';
 
 export interface UpdatePolicy {
 	minimumVersion: string;
@@ -66,6 +67,8 @@ export interface UpdateContext {
 	checkHours?: unknown;
 	/** The videos admin's staff-only Apps page (admin builds' Download) */
 	adminAppsUrl?: string;
+	/** Repos with no root key (releases.ts noKeyRepos); left out: none, so nothing unsigned is announced */
+	noKeys?: ReadonlySet<AppReleaseRepo>;
 }
 
 export const DEFAULT_CHECK_HOURS = 6;
@@ -93,7 +96,7 @@ export function releaseFor(doc: ReleasesDocument, app: string, platform: string,
 }
 
 /** What the build's install source can get now, and from which release. */
-function offer(input: UpdateInput, ctx: UpdateContext): { version: string | null; entry: ReleaseEntry | null; available: boolean | null; storeUrl: string | null } {
+function offer(input: UpdateInput, ctx: UpdateContext): { version: string | null; entry: ReleaseEntry | null; available: boolean | null; storeUrl: string | null; notice?: boolean } {
 	const source = input.source;
 	const entry = releaseFor(ctx.releases, input.app, input.platform, input.channel);
 	const keysSetUp = entry ? Boolean(ctx.releases.keys[entry.repo]) : false;
@@ -115,6 +118,10 @@ function offer(input: UpdateInput, ctx: UpdateContext): { version: string | null
 		return { version: entry?.version ?? null, entry, available: null, storeUrl: policyStore };
 	}
 	if (source === 'direct' || source === 'managed') {
+		if (!verified && entry && !entry.signed && ctx.noKeys?.has(entry.repo)) {
+			// Announced, never linked. A release below the minimum would not get this build past it.
+			return { version: entry.version, entry, available: compareAppVersions(entry.version, ctx.policy.minimumVersion) >= 0, storeUrl: null, notice: true };
+		}
 		return { version: verified?.version ?? null, entry: verified, available: verified ? true : false, storeUrl: null };
 	}
 	// samsung, or an old build that sends no source: nothing to offer (the minimum still applies)
@@ -158,8 +165,8 @@ export function updateAnswer(input: UpdateInput, ctx: UpdateContext): UpdateAnsw
 		};
 	}
 	const o = offer(input, ctx);
-	let { action, url } = actionFor(input, o.entry, o.version);
 	const isAdmin = input.app === 'admin';
+	let { action, url } = o.notice ? { action: (o.available && (!isAdmin || ctx.adminAppsUrl) ? 'notice' : 'none') as UpdateAction, url: null } : actionFor(input, o.entry, o.version);
 	if (isAdmin && action === 'download') url = ctx.adminAppsUrl ?? null;
 	if (action === 'download' && !url) action = 'none';
 	const below = compareAppVersions(input.version, minimumVersion) < 0;
@@ -168,7 +175,8 @@ export function updateAnswer(input: UpdateInput, ctx: UpdateContext): UpdateAnsw
 	const latest = o.version;
 	const overrideKey = latest ? Object.keys(ctx.policy.notesOverrides ?? {}).find((v) => sameVersion(v, latest)) : undefined;
 	const override = overrideKey ? ctx.policy.notesOverrides?.[overrideKey] : undefined;
-	const notes = isAdmin ? null : override ?? (o.entry && sameVersion(o.entry.version, latest) ? o.entry.notes : null);
+	// A release's own notes only once its signature vouches for them; before that, an admin's text or none
+	const notes = isAdmin ? null : override ?? (o.entry && o.entry.signed && sameVersion(o.entry.version, latest) ? o.entry.notes : null);
 	const repoKeys = o.entry ? ctx.releases.keys[o.entry.repo] : undefined;
 	return {
 		enabled: true,
@@ -183,10 +191,10 @@ export function updateAnswer(input: UpdateInput, ctx: UpdateContext): UpdateAnsw
 		action,
 		url: action === 'download' || action === 'install' ? url : null,
 		manifestUrl: action === 'install' ? (o.entry?.manifestUrl ?? null) : null,
-		tag: o.entry?.tag ?? null,
+		tag: o.notice ? null : (o.entry?.tag ?? null),
 		signed: o.entry ? o.entry.signed && Boolean(repoKeys) : null,
 		available: o.available,
 		checkHours: checkHoursFrom(ctx.checkHours),
-		keys: repoKeys ? { list: repoKeys.list, sig: repoKeys.sig } : null,
+		keys: repoKeys && !o.notice ? { list: repoKeys.list, sig: repoKeys.sig } : null,
 	};
 }

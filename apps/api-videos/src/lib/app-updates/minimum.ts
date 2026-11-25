@@ -3,12 +3,13 @@
  * install source of that app and platform can't give users yet. Checked when the `versions` document is saved;
  * the editor shows each problem under its field.
  *
- * Only what the server knows counts: signed releases of repos whose keys are set up (never an unsigned release, and
- * never a latest version typed into the document), Apple's own App Store lookup, and the admin's Available marks
+ * Only what the server knows counts: signed releases of repos whose keys are set up, published releases of repos
+ * with no root key yet (§5.5; their builds get a fixed download link), never an unsigned release of any other repo
+ * and never a latest version typed into the document, Apple's own App Store lookup, and the admin's Available marks
  * for TestFlight and Amazon. A stable policy looks at stable releases only; a `#beta` policy at beta and stable.
  * Play and the Microsoft Store are confirmed on the device, so the release itself must reach the minimum.
  */
-import { APP_CONFIG_PLATFORMS, compareAppVersions } from '@al-ummah/shared-types';
+import { APP_CONFIG_PLATFORMS, compareAppVersions, type AppReleaseRepo } from '@al-ummah/shared-types';
 import type { AvailabilityDocument } from './answer';
 import { appStoreBundleFor, type ReleaseEntry, type ReleasesDocument } from './releases';
 
@@ -18,27 +19,28 @@ export interface MinimumProblem {
 	message: string;
 }
 
+const newestName = (e: ReleaseEntry) => (e.signed ? 'The newest signed release' : 'The newest published release');
 const below = (version: string, minimum: string) => compareAppVersions(version, minimum) < 0;
 
-function releasesFor(app: string, platform: string, channels: readonly string[], releases: ReleasesDocument): ReleaseEntry[] {
+function releasesFor(app: string, platform: string, channels: readonly string[], releases: ReleasesDocument, noKeys: ReadonlySet<AppReleaseRepo>): ReleaseEntry[] {
 	return channels
 		.map((c) => releases.entries[`${app}/${platform}/${c}`])
-		.filter((e): e is ReleaseEntry => !!e && e.signed && !!releases.keys[e.repo]);
+		.filter((e): e is ReleaseEntry => !!e && (e.signed ? !!releases.keys[e.repo] : noKeys.has(e.repo)));
 }
 
 /** What a pair's install sources can give users now, and what each one lacks. */
-function checkPair(app: string, platform: string, minimum: string, channels: readonly string[], releases: ReleasesDocument, availability: AvailabilityDocument): { known: boolean; problems: string[] } {
+function checkPair(app: string, platform: string, minimum: string, channels: readonly string[], releases: ReleasesDocument, availability: AvailabilityDocument, noKeys: ReadonlySet<AppReleaseRepo>): { known: boolean; problems: string[] } {
 	const problems: string[] = [];
 	let known = false;
-	const signed = releasesFor(app, platform, channels, releases);
+	const signed = releasesFor(app, platform, channels, releases, noKeys);
 	const newest = signed.reduce<ReleaseEntry | null>((a, b) => (!a || compareAppVersions(b.version, a.version) > 0 ? b : a), null);
 	const stores = new Set(signed.flatMap((e) => e.stores));
 	const bundle = appStoreBundleFor(app as never, platform as never);
 	if (bundle) stores.add('appstore');
 
-	if (newest && newest.artifacts.length) {
+	if (newest && (newest.artifacts.length || !newest.signed)) {
 		known = true;
-		if (below(newest.version, minimum)) problems.push(`The newest signed release (${platform}) is ${newest.version}, below ${minimum}.`);
+		if (below(newest.version, minimum)) problems.push(`${newestName(newest)} (${platform}) is ${newest.version}, below ${minimum}.`);
 	}
 	for (const source of stores) {
 		if (source === 'appstore') {
@@ -59,13 +61,13 @@ function checkPair(app: string, platform: string, minimum: string, channels: rea
 		} else if (newest) {
 			// Play and the Microsoft Store: the device confirms; the release must reach the minimum
 			known = true;
-			if (below(newest.version, minimum) && !problems.some((p) => p.startsWith('The newest signed release'))) problems.push(`The newest signed release (${platform}) is ${newest.version}, below ${minimum}.`);
+			if (below(newest.version, minimum) && !problems.some((p) => p.startsWith('The newest '))) problems.push(`${newestName(newest)} (${platform}) is ${newest.version}, below ${minimum}.`);
 		}
 	}
 	return { known, problems };
 }
 
-export function minimumProblems(doc: Record<string, { minimumVersion: string }>, releases: ReleasesDocument, availability: AvailabilityDocument): MinimumProblem[] {
+export function minimumProblems(doc: Record<string, { minimumVersion: string }>, releases: ReleasesDocument, availability: AvailabilityDocument, noKeys: ReadonlySet<AppReleaseRepo> = new Set()): MinimumProblem[] {
 	const problems: MinimumProblem[] = [];
 	for (const [key, policy] of Object.entries(doc)) {
 		if (compareAppVersions(policy.minimumVersion, '0.0.0') <= 0) continue;
@@ -74,11 +76,11 @@ export function minimumProblems(doc: Record<string, { minimumVersion: string }>,
 		const channels = channel === 'beta' ? ['beta', 'stable'] : ['stable'];
 		const platforms =
 			platform === '*'
-				? APP_CONFIG_PLATFORMS.filter((p) => releasesFor(app, p, channels, releases).length || appStoreBundleFor(app as never, p))
+				? APP_CONFIG_PLATFORMS.filter((p) => releasesFor(app, p, channels, releases, noKeys).length || appStoreBundleFor(app as never, p))
 				: [platform];
 		let known = false;
 		for (const p of platforms) {
-			const r = checkPair(app, p, policy.minimumVersion, channels, releases, availability);
+			const r = checkPair(app, p, policy.minimumVersion, channels, releases, availability, noKeys);
 			known ||= r.known;
 			for (const message of r.problems) problems.push({ key, field: 'minimumVersion', message });
 		}
