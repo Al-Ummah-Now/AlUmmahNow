@@ -8,6 +8,7 @@ import { fetchProfile, removeProfileImage, updateCoverPhoto, updateProfile, upda
 import { EditableAvatar, EditableCover } from "@/components/media/ProfileImages";
 import { PhotoFileInput } from "@/components/media/PhotoFileInput";
 import { usePhotoUploads } from "@/hooks/usePhotoUploads";
+import { useWhenReady } from "@/hooks/useWhenReady";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -102,12 +103,15 @@ const ProfileEditPage = () => {
   const [removing, setRemoving] = useState<'profilePhoto' | 'coverPhoto' | null>(null);
   const [photoError, setPhotoError] = useState('');
 
+  // A photo picked before the profile has loaded (the form is server-rendered) waits for it
+  const loadedProfile = useWhenReady(profile);
+
   const photos = usePhotoUploads<'profilePhoto' | 'coverPhoto'>(async (type, file) => {
-    if (!profile) return;
+    const current = await loadedProfile();
     setPhotoError('');
     const ok = type === 'profilePhoto'
-      ? await updateProfilePhoto(profile, file, setProfile)
-      : await updateCoverPhoto(profile, file, setProfile);
+      ? await updateProfilePhoto(current, file, setProfile)
+      : await updateCoverPhoto(current, file, setProfile);
     if (!ok) setPhotoError(t.errors.uploadFailed || t.profile.saveFailed);
     else if (type === 'profilePhoto') void reloadProfile();
   });
@@ -123,13 +127,16 @@ const ProfileEditPage = () => {
     if (!confirmed) return;
     setRemoving(type);
     setPhotoError('');
-    try {
-      const ok = await removeProfileImage(type === 'profilePhoto' ? 'avatar' : 'cover', setProfile);
-      if (!ok) setPhotoError(t.profile.saveFailed);
-      else if (type === 'profilePhoto') void reloadProfile();
-    } finally {
-      setRemoving(null);
-    }
+    // After any upload of this photo still running: the two never race
+    await photos.run(type, async () => {
+      try {
+        const ok = await removeProfileImage(type === 'profilePhoto' ? 'avatar' : 'cover', setProfile);
+        if (!ok) setPhotoError(t.profile.saveFailed);
+        else if (type === 'profilePhoto') void reloadProfile();
+      } finally {
+        setRemoving(null);
+      }
+    });
   };
 
   const handleBack = () => {

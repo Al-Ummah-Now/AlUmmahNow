@@ -3,17 +3,19 @@ import React from 'react';
 import { act } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { EditableAvatar } from '@/components/media/ProfileImages';
+import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
 import { PhotoFileInput } from '@/components/media/PhotoFileInput';
 import { PICKER_BEFORE_HYDRATION_SCRIPT } from '../picker-before-hydration';
 
 const labels = { pick: 'Click to change avatar', change: 'Change photo', remove: 'Remove photo' };
 const onPick = jest.fn();
+const onRemove = jest.fn();
 
 function Form() {
   return (
     <>
       <EditableAvatar url="https://images.example.com/a.jpg" alt="me" inputId="photo" labels={labels} testId="ea" imageTestId="ea-img" busy />
+      <EditableCover url="https://images.example.com/c.jpg" alt="cover" inputId="photo" onRemove={onRemove} labels={labels} testId="ec" imageTestId="ec-img" />
       <PhotoFileInput id="photo" label="photo" onPick={onPick} />
     </>
   );
@@ -44,6 +46,14 @@ describe('file pickers before hydration', () => {
     press('[data-testid=ea-change] svg');
     press('[data-testid=ea]');
     expect(opened).toBe(3);
+  });
+
+  it('another control inside a picker area (Remove on the cover) never opens the picker', () => {
+    press('[data-testid=ec-remove]');
+    press('[data-testid=ec-remove] svg');
+    expect(opened).toBe(0);
+    press('[data-testid=ec]');
+    expect(opened).toBe(1);
   });
 
   it('opens once per click after hydration', async () => {

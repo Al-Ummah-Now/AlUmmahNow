@@ -33,7 +33,7 @@ describe('usePhotoUploads', () => {
       }),
     );
 
-    act(() => void result.current.start('avatar', photo('one')));
+    await act(async () => void result.current.start('avatar', photo('one')));
     expect(result.current.previews.avatar).toBe('blob:1');
     expect(result.current.uploading.avatar).toBe(true);
 
@@ -72,5 +72,37 @@ describe('usePhotoUploads', () => {
       await result.current.start('avatar', photo('b'));
     });
     expect(upload).toHaveBeenCalledTimes(2);
+  });
+
+  it('a removal waits for the upload of the same photo, and a photo picked during a removal waits for it', async () => {
+    const order: string[] = [];
+    const uploads = [deferred(), deferred()];
+    let n = 0;
+    const { result } = renderHook(() =>
+      usePhotoUploads<'avatar'>(async (_, file) => {
+        order.push(`upload ${file.name}`);
+        await uploads[n++].promise;
+      }),
+    );
+    const removal = deferred();
+    let removed!: Promise<void>;
+    await act(async () => void result.current.start('avatar', photo('one')));
+    act(() => {
+      removed = result.current.run('avatar', async () => {
+        order.push('remove');
+        await removal.promise;
+      });
+    });
+    act(() => void result.current.start('avatar', photo('two')));
+    expect(order).toEqual(['upload one']);
+    await act(async () => uploads[0].resolve());
+    expect(order).toEqual(['upload one', 'remove']);
+    await act(async () => {
+      removal.resolve();
+      await removed;
+    });
+    expect(order).toEqual(['upload one', 'remove', 'upload two']);
+    await act(async () => uploads[1].resolve());
+    expect(result.current.uploading.avatar).toBe(false);
   });
 });

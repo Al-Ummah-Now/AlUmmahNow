@@ -82,7 +82,8 @@ const handleCoverUpdate = async (c: AppContext) => {
         }
         Object.assign(profile, saved);
 
-        await Promise.all([
+        // The image is saved: a message that cannot be sent is logged, never an error for the uploader
+        await Promise.allSettled([
             new Queue(c.env.queue).send(MessageType.ProfileUpdate, {
                 profileId: userId,
                 userId,
@@ -92,7 +93,9 @@ const handleCoverUpdate = async (c: AppContext) => {
             reviewId
                 ? queueImageScan(c.env as never, gate, { subject: 'profile_banner', subjectId: userId, reviewId, ownerId: userId, images: [coverUrl] })
                 : undefined,
-        ]);
+        ]).then((results) => {
+            for (const r of results) if (r.status === 'rejected') logger.error('[ImageUpload] Saved, but a message was not queued', { error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+        });
 
         return c.json(profile, 200);
     } catch (error) {
