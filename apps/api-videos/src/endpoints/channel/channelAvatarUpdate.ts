@@ -10,6 +10,7 @@ import { Channel } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
+import { logger } from '../../lib/logger';
 import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const app = new Hono();
@@ -80,9 +81,14 @@ const handleAvatarUpdate = async (c: AppContext) => {
 
         // Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
         // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
-        const reviewed = newImagePatch(gate, 'avatar', avatarUrl, (channel as { pendingImages?: never }).pendingImages);
+        // The patch is made from the fresh record on every attempt: an avatar and a cover uploaded together keep both pending entries
+        let reviewId: string | null = null;
         const [saved] = await Promise.all([
-            patchOwnedRecord(repository, id, reviewed.patch as never, { ownerId: channel.userId }),
+            patchOwnedRecord(repository, id, (fresh) => {
+                const reviewed = newImagePatch(gate, 'avatar', avatarUrl, (fresh as { pendingImages?: never }).pendingImages);
+                reviewId = reviewed.reviewId;
+                return reviewed.patch as never;
+            }, { ownerId: channel.userId }),
             // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
             recordImageOwner(c.env.SEARCH_DB, avatarUrl, { kind: 'channel_avatar', ownerId: userId ?? null, channelId: id }),
         ]);
@@ -93,16 +99,19 @@ const handleAvatarUpdate = async (c: AppContext) => {
             return c.json({ success: false, error: "You do not have permission to update this channel" }, 403);
         }
         // After the write, so the consumer reads the channel with its new image
-        await Promise.all([
+        // The image is saved: a message that cannot be sent is logged, never an error for the uploader
+        await Promise.allSettled([
             new Queue(c.env.queue).send(MessageType.ChannelUpdate, {
                 channelId: id,
                 userId: userId,
                 timestamp: new Date().toISOString(),
             }),
-            reviewed.reviewId
-                ? queueImageScan(c.env as never, gate, { subject: 'avatar', subjectId: id, reviewId: reviewed.reviewId, ownerId: channel.userId, channelId: id, images: [avatarUrl] })
+            reviewId
+                ? queueImageScan(c.env as never, gate, { subject: 'avatar', subjectId: id, reviewId, ownerId: channel.userId, channelId: id, images: [avatarUrl] })
                 : undefined,
-        ]);
+        ]).then((results) => {
+            for (const r of results) if (r.status === 'rejected') logger.error('[ImageUpload] Saved, but a message was not queued', { error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+        });
         Object.assign(channel, saved.video);
 
         return c.json(withoutMoveMark(channel), 200);

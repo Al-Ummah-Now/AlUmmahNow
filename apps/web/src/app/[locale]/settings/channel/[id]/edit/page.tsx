@@ -201,18 +201,21 @@ function ChannelEditPage() {
     const key = field(type);
     setRemoving(type);
     setError(null);
-    try {
-      const result = await updateChannelProfile(channelId, { [key]: '' });
-      if (result.ok === false) throw new Error(result.error);
-      setFormData((f) => ({ ...f, [key]: '' }));
-      setChannel((c) => (c ? { ...c, [key]: '' } : c));
-      void reloadChannels();
-    } catch (error) {
-      logger.error('Error removing channel image', { error, type, channelId });
-      setError(t.channel.saveFailed);
-    } finally {
-      setRemoving(null);
-    }
+    // After any upload of this photo still running: the two never race
+    await photos.run(type, async () => {
+      try {
+        const result = await updateChannelProfile(channelId, { [key]: '' });
+        if (result.ok === false) throw new Error(result.error);
+        setFormData((f) => ({ ...f, [key]: '' }));
+        setChannel((c) => (c ? { ...c, [key]: '' } : c));
+        void reloadChannels();
+      } catch (error) {
+        logger.error('Error removing channel image', { error, type, channelId });
+        setError(t.channel.saveFailed);
+      } finally {
+        setRemoving(null);
+      }
+    });
   };
 
   if (!channelId || isLoading) {
