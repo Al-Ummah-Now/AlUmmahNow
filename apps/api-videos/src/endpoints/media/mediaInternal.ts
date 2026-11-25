@@ -7,6 +7,8 @@
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/mp4               Mp4JobEvent (remux-only job, #1182) → the video record's result.mp4
  *   POST /internal/media/retry             { ids: string[] } → transcode again
+ *   GET  /internal/media/hdr-check         the latest HDR check (lib/media/hdr-check.ts), or null
+ *   POST /internal/media/hdr-check         { actorId } → starts one (read only); started: false while one runs
  *   GET  /internal/media/jobs?status=&limit=  recent jobs (media_jobs)
  *   GET  /internal/media/summary?days=     time to playable and cost inputs per source, plus `live`
  *                                          (transcoding now, waiting, max concurrent, oldest wait);
@@ -44,6 +46,7 @@ import { apiError } from '../../lib/api-error';
 import { readVideoFailures } from '../../lib/media/failures';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
+import { readHdrCheck, startHdrCheck } from '../../lib/media/hdr-check';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
@@ -165,6 +168,14 @@ export function createMediaInternalRouter() {
 			if (r.queued) pushMediaLive(c.env as never, c.executionCtx as never, await new R2Repository<MediaVideo>(c.env.videos).getObject(id));
 		}
 		return c.json({ success: true, result: { results } });
+	});
+
+	app.get('/hdr-check', async (c) => c.json({ success: true, result: { run: await readHdrCheck(c.env) } }));
+
+	app.post('/hdr-check', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { actorId?: unknown } | null;
+		if (typeof body?.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		return c.json({ success: true, result: await startHdrCheck(c.env, body.actorId) });
 	});
 
 	app.get('/jobs', async (c) => {

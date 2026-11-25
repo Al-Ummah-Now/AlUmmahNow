@@ -153,6 +153,7 @@ export * from './video-reactions';
 // Video delivery on R2 + Cloudflare CDN beside Bunny (epic #687): keys, private tokens, delivery switch
 export * from './media-delivery';
 export * from './encode-ladder';
+export * from './hdr-check';
 export * from './media-providers';
 export * from './media-backfill';
 // Admin queues: Action needed / History tabs, shared query and page shape (docs/admin/QUEUES.md)

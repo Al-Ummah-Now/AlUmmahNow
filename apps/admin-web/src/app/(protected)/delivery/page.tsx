@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import { getMediaLive, getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
+import { getHdrCheck, getMediaLive, getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
 import { getMonthlyBudget } from '@/lib/api/costs';
 import type { MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
@@ -14,6 +14,7 @@ import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
 import { TranscodeTroubleshooting } from './TranscodeTroubleshooting';
+import { HdrCheck } from './HdrCheck';
 import { R2_SETTINGS_ID } from '../media-providers/limit-form';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
@@ -67,15 +68,17 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
 
   const videoParam = Array.isArray(params.video) ? params.video[0] : params.video;
   const focusVideo = typeof videoParam === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(videoParam) ? videoParam : null;
-  const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult, budgetResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult, budgetResult, hdrResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
     getMediaQoeLive(),
     getTranscodeTroubleshoot(focusVideo),
     getMonthlyBudget(),
+    getHdrCheck(),
   ]);
   const troubleshoot = troubleshootResult.status === 'fulfilled' && troubleshootResult.value.ok ? troubleshootResult.value.data : null;
   if (troubleshootResult.status === 'fulfilled' && !troubleshootResult.value.ok) logger.warn('[delivery] Troubleshoot view unavailable', { status: troubleshootResult.value.status });
+  const hdr = hdrResult.status === 'fulfilled' && hdrResult.value.ok ? hdrResult.value.data : undefined;
   // The one admin-set budget (Costs → Alert settings); null while unset or unavailable
   const budgetUsd = settled(budgetResult, 'budget');
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
@@ -113,6 +116,8 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
       )}
 
       <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} failures={known} />
+
+      <HdrCheck initial={hdr ?? null} failed={hdr === undefined} />
 
       {/* The period filters only the sections under it, so its buttons sit right above them */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">

@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, HdrCheckRun, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
 import { VIDEO_FAILURES_MAX } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
@@ -381,6 +381,17 @@ export async function listMediaJobs(params: { status?: string; limit?: number } 
 /** Transcode again (audited per video in admin-api). */
 export async function retryMediaJobs(ids: string[]): Promise<ActionResult<unknown>> {
   return mutate('/api/media/retry', 'POST', { ids });
+}
+
+/** The latest HDR check (which published renditions still carry HDR colors), or null. A result, not a throw. */
+export async function getHdrCheck(): Promise<ActionResult<HdrCheckRun | null>> {
+  const result = await readResult<{ run: HdrCheckRun | null }>('/api/media/hdr-check');
+  return result.ok ? { ok: true, data: result.data?.run ?? null } : result;
+}
+
+/** Starts a check (read only; audited). `started: false` while one runs. */
+export async function startHdrCheck(): Promise<ActionResult<{ started: boolean; run: HdrCheckRun }>> {
+  return mutate('/api/media/hdr-check', 'POST', {});
 }
 
 // Transcode troubleshooting (admin-api /api/media/troubleshoot; media:manage, token changes super admin)

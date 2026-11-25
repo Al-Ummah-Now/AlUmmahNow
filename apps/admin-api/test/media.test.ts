@@ -86,6 +86,22 @@ describe('/api/media', () => {
     assert.equal(calls[2].path, '/internal/media/summary?days=30');
   });
 
+  it('HDR check: reading forwards, starting is audited with the actor, moderators may do neither', async () => {
+    const { req, calls, audit } = setup(['admin']);
+    assert.equal((await req('/api/media/hdr-check')).status, 200);
+    assert.equal(calls[0].path, '/internal/media/hdr-check');
+    assert.equal((await req('/api/media/hdr-check', send('POST', {}))).status, 200);
+    assert.deepEqual(calls[1].body, { actorId: 'admin-1' });
+    assert.deepEqual((await audit()).map((r) => [r.key, JSON.parse(r.new_value).action]), [['media:hdr-check', 'hdr_check']]);
+    const moderator = setup(['moderator']);
+    assert.equal((await moderator.req('/api/media/hdr-check')).status, 403);
+    assert.equal((await moderator.req('/api/media/hdr-check', send('POST', {}))).status, 403);
+    assert.equal(moderator.calls.length, 0);
+    const failing = setup(['admin'], () => ({ status: 500, json: { success: false, error: 'boom' } }));
+    assert.equal((await failing.req('/api/media/hdr-check', send('POST', {}))).status, 500);
+    assert.equal((await failing.audit()).length, 0);
+  });
+
   it('jobs forwards the status filter and refuses unknown ones', async () => {
     const { req, calls } = setup(['admin']);
     assert.equal((await req('/api/media/jobs?status=failed&limit=20')).status, 200);
