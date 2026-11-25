@@ -107,7 +107,7 @@ We rejected this as the *test* slot:
 
 1. `wrangler versions upload --env production` (the new version gets no traffic).
 2. `wrangler versions deploy <new>@0% <current>@100%`. Users are still on `<current>`, but `<new>` is now part of the deployment, which makes it addressable.
-3. Pre-traffic smoke: requests to the real prod hostname with `Cloudflare-Workers-Version-Overrides: <worker>="<new>"` run on `<new>` with prod bindings and secrets. This catches the "bare `wrangler deploy`" class of bug (wrong env, missing bindings) before any user sees it.
+3. Pre-traffic smoke: requests to the real prod hostname with `Cloudflare-Workers-Version-Overrides: <worker>="<new>"` run on `<new>` with prod bindings and secrets. This catches the "bare `wrangler deploy`" class of bug (wrong env, missing bindings) before any user sees it. Edge locations learn of the deployment at different times, so the version a `/health` reports is waited for (`waitForVersions`, then up to 90 s in the smoke itself); an error, a status or an unhealthy answer is not, and a wrong version at the end fails.
 4. `wrangler versions deploy <new>@100%`.
 5. Post-promote smoke. On failure: automatic rollback to `<current>`.
 
@@ -250,7 +250,7 @@ Small, fast, no sign-up, safe against prod:
 - auth: `GET /.well-known/oauth-authorization-server`: `issuer` equals the expected issuer for the env (prod: `https://auth.alummahnow.net`); `token_endpoint` and `authorization_endpoint` are on the same host. `GET /.well-known/jwks.json` returns ≥ 1 key. `GET /health` returns `{ status: "ok" }` with every required binding present. `GET /test/email/x` returns 404 in prod.
 - auth clients: for each registered prod client, `GET /authorize?client_id=…&redirect_uri=<registered>&response_type=code` renders the login page (200, not an error page).
 - web: `/en` and `/ar` return 200 with the expected `<html lang dir>`. `/api/callback` with no code redirects to `/<locale>/auth/error`, and the response is HTML, not `{}`. The login action's authorize URL has `redirect_uri` exactly equal to what `/api/callback` will exchange with.
-- api-videos: `/health` 200.
+- api-videos, websocket-server, admin-api: `/health` is 200 and `healthy`. With overrides it also reports the candidate's version, waited for up to 90 s (`VERSION_WAIT_MS`); without them (after the promotion) the smoke doesn't read the version, `waitForVersions` does.
 - web, what crawlers see (wiki AUN-SEO; `seo.spec.ts` covers every page type on the local stack, these are the parts only a real host shows). Production: `robots.txt` lets `User-agent: *` crawl (Cloudflare's managed block allowed) and lists `Sitemap: <host>/sitemap.xml`; `/en` sends no `X-Robots-Tag: noindex`. Other envs: `robots.txt` disallows everything and `/en` is noindex. Every env: `/sitemap.xml` is a sitemap index whose every `<loc>` is on the env's own host; `/en` has one canonical, exactly `https://<host>/en`, absolute en/ar/x-default hreflang on the host, and an absolute https `og:image`. Prod is checked only this way (and by the release E2E), never by hand.
 
 ## 8. Config checks

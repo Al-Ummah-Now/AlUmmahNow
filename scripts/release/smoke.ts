@@ -9,7 +9,8 @@
  * With overrides, every request carries Cloudflare-Workers-Version-Overrides, so
  * the checks run on the candidate versions with that env's bindings; the health
  * checks of api-videos, websocket-server and admin-api assert which version
- * answered (`deployment` in their /health).
+ * answered (`deployment` in their /health), waiting up to VERSION_WAIT_MS for the
+ * candidate. Every other check asks once.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -95,7 +96,13 @@ export interface SmokeOptions {
 	/** worker name → version id */
 	overrides?: Record<string, string>;
 	fetchImpl?: typeof fetch;
+	now?: () => number;
+	sleep?: (ms: number) => Promise<void>;
 }
+
+/** How long a /health may keep answering with another version than the candidate, and the pause between tries. */
+export const VERSION_WAIT_MS = 90_000;
+export const VERSION_PAUSE_MS = 5_000;
 
 export function overrideHeader(overrides: Record<string, string>): string {
 	return Object.entries(overrides)
@@ -111,6 +118,8 @@ export function workerName(env: SmokeEnv, app: string): string | undefined {
 export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	const hosts = HOSTS[opts.env];
 	const doFetch = opts.fetchImpl ?? fetch;
+	const now = opts.now ?? Date.now;
+	const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 	const headers: Record<string, string> = { 'User-Agent': 'al-ummah-now-release-smoke' };
 	if (opts.overrides && Object.keys(opts.overrides).length) headers['Cloudflare-Workers-Version-Overrides'] = overrideHeader(opts.overrides);
 	const get = (url: string) => doFetch(url, { redirect: 'manual', headers });
@@ -129,14 +138,22 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 
 	for (const { app, host } of VERSIONED_HEALTH) {
 		await check(`${app}: health`, async () => {
-			const res = await get(`${hosts[host]}/health`);
-			assert(res.status === 200, `HTTP ${res.status}`);
-			const body = (await res.json()) as { status?: string; deployment?: string };
-			assert(body.status === 'healthy', `status ${body.status}`);
 			const worker = workerName(opts.env, app);
 			const wanted = worker ? opts.overrides?.[worker] : undefined;
-			if (wanted) assert(body.deployment === wanted, `served by version ${body.deployment}, expected candidate ${wanted}`);
-			return `version ${body.deployment ?? 'unknown'}`;
+			const start = now();
+			for (;;) {
+				const res = await get(`${hosts[host]}/health`);
+				assert(res.status === 200, `HTTP ${res.status}`);
+				const body = (await res.json()) as { status?: string; deployment?: string };
+				assert(body.status === 'healthy', `status ${body.status}`);
+				const waited = Math.round((now() - start) / 1000);
+				if (!wanted || body.deployment === wanted) return `version ${body.deployment ?? 'unknown'}${waited >= 1 && wanted ? ` (after ${waited} s)` : ''}`;
+				// Edge locations learn of a new deployment at different times: one can still answer with the version
+				// before it, after waitForVersions saw the candidate. Only that is waited for: an error, another status
+				// or an unhealthy body fails above, at once, on every try.
+				assert(now() - start + VERSION_PAUSE_MS <= VERSION_WAIT_MS, `served by version ${body.deployment}, expected candidate ${wanted} (after ${waited} s)`);
+				await sleep(VERSION_PAUSE_MS);
+			}
 		});
 	}
 
