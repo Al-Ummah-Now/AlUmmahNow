@@ -5667,7 +5667,7 @@ const en = {
       stable: 'Stable',
       beta: 'Beta',
       signed: 'Signed',
-      unsigned: 'Unsigned: signing key not set up',
+      unsigned: 'Not signed: notice only',
       privateRelease: 'Staff only',
       noMinimum: 'None',
       direct: 'Direct download',
@@ -5684,7 +5684,7 @@ const en = {
       quarantinedRow: '{tag} ({source}): {reason}',
       keysTitle: 'Signing keys',
       keysSet: '{repo}: key list {serial}',
-      keysMissing: 'No signing keys yet: downloaded builds get no update notice.',
+      keysMissing: 'No signing keys yet: downloaded builds get a notice with the download page, and install nothing.',
     },
     empty: {
       flags: 'No rules yet: every flag is off.',

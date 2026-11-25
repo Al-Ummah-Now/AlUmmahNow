@@ -5666,7 +5666,7 @@ const ar: Messages = {
       stable: 'المستقرة',
       beta: 'التجريبية',
       signed: 'موقَّع',
-      unsigned: 'غير موقَّع: لم يُعدّ مفتاح التوقيع',
+      unsigned: 'غير موقَّع: تنبيه فقط',
       privateRelease: 'للفريق فقط',
       noMinimum: 'لا يوجد',
       direct: 'تنزيل مباشر',
@@ -5683,7 +5683,7 @@ const ar: Messages = {
       quarantinedRow: '{tag} ({source})، السبب: {reason}',
       keysTitle: 'مفاتيح التوقيع',
       keysSet: '{repo}: قائمة المفاتيح {serial}',
-      keysMissing: 'لا توجد مفاتيح توقيع بعد: لا تتلقى الإصدارات المنزَّلة تنبيه تحديث.',
+      keysMissing: 'لا توجد مفاتيح توقيع بعد: تتلقى الإصدارات المنزَّلة تنبيهًا بصفحة التنزيل، ولا تثبّت شيئًا.',
     },
     empty: {
       flags: 'لا قواعد بعد: كل المفاتيح مطفأة.',

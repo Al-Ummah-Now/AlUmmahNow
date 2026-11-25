@@ -8,7 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_CONFIG_APPS, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, localizeDigits, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 import { markStoreAvailable, refreshAppReleases, type AppReleaseEntry, type AppReleasesView } from '@/lib/api/appConfig';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
@@ -45,7 +45,9 @@ function minimumFor(versions: AppConfigVersionsDocument, app: string, platform: 
 }
 
 export function ReleasesPanel({ initial, versions, canEdit }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
+  /** A version as read (٠–٩ in Arabic); typed versions elsewhere on the page stay as entered */
+  const shown = (v: string) => localizeDigits(locale, v);
   const router = useRouter();
   const [view, setView] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
       const live = view?.appStore?.[bundle];
       items.push(
         <li key="appstore">
-          {live ? fillNodes(t('appConfig.releases.appstoreLive'), { version: <bdi dir="ltr" className="font-mono">{live.version}</bdi> }) : t('appConfig.releases.appstoreNone')}
+          {live ? fillNodes(t('appConfig.releases.appstoreLive'), { version: <bdi dir="ltr" className="font-mono">{shown(live.version)}</bdi> }) : t('appConfig.releases.appstoreNone')}
         </li>,
       );
     }
@@ -120,12 +122,12 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
         <li key={source} className="flex flex-wrap items-center gap-2">
           <span>
             {marked
-              ? fillNodes(t('appConfig.releases.storeMarked'), { store, version: <bdi dir="ltr" className="font-mono">{marked}</bdi> })
+              ? fillNodes(t('appConfig.releases.storeMarked'), { store, version: <bdi dir="ltr" className="font-mono">{shown(marked)}</bdi> })
               : t('appConfig.releases.storeUploaded', { store })}
           </span>
           {markable && canEdit && marked !== e.version && (
             <button type="button" className={smallButtonClass} onClick={() => mark(e, source, e.version)} disabled={busy !== null} data-testid="app-releases-mark">
-              {t('appConfig.releases.markAvailable', { store, version: e.version })}
+              {t('appConfig.releases.markAvailable', { store, version: shown(e.version) })}
             </button>
           )}
           {markable && canEdit && marked && (
@@ -186,7 +188,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
                         <td className="px-3 py-2 text-fg">{t(`appConfig.platformNames.${e.platform}` as MessageKey)}</td>
                         <td className="px-3 py-2 text-fg-muted">{e.channel === 'beta' ? t('appConfig.releases.beta') : t('appConfig.releases.stable')}</td>
                         <td className="px-3 py-2">
-                          <bdi dir="ltr" className="font-mono text-fg">{e.version}</bdi>
+                          <bdi dir="ltr" className="font-mono text-fg">{shown(e.version)}</bdi>
                         </td>
                         <td className="px-3 py-2 text-fg-muted">
                           <LocalTime value={e.publishedAt} />
@@ -196,7 +198,7 @@ export function ReleasesPanel({ initial, versions, canEdit }: Props) {
                           {e.private && <span className="ms-2 text-fg-subtle">{t('appConfig.releases.privateRelease')}</span>}
                         </td>
                         <td className="px-3 py-2 text-fg">{stores(e)}</td>
-                        <td className="px-3 py-2">{min ? <bdi dir="ltr" className="font-mono text-fg">{min}</bdi> : <span className="text-fg-subtle">{t('appConfig.releases.noMinimum')}</span>}</td>
+                        <td className="px-3 py-2">{min ? <bdi dir="ltr" className="font-mono text-fg">{shown(min)}</bdi> : <span className="text-fg-subtle">{t('appConfig.releases.noMinimum')}</span>}</td>
                       </tr>
                     );
                   })}
