@@ -94,6 +94,9 @@ export interface DataTableProps<T extends { id: string }> {
   tableRef?: React.Ref<HTMLTableElement>;
 }
 
+/** Ends a phone card's label (U+200C ZERO WIDTH NON-JOINER). */
+export const CARD_LABEL_END = '\u200c';
+
 const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
 const td = 'px-3 sm:px-4 md:py-3 align-top';
 
@@ -165,7 +168,9 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                     role="cell"
                     className={`${td} p-0 ${columnWidthClass(c)} ${c.primary ? 'basis-[calc(100%-2.5rem)] md:basis-auto min-w-0' : 'basis-full md:basis-auto'} ${columnDisplayClass(c, true)} ${c.align === 'end' ? 'md:text-end tabular-nums' : ''} ${c.className ?? ''}`}
                   >
-                    {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted whitespace-nowrap">{c.cardLabel}</span>}
+                    {/* The label ends with a zero-width non-joiner: Arabic letters join across elements, so «مسندة إلى» would join
+                        the value's first letter («لا») and lose its last one */}
+                    {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted whitespace-nowrap" data-card-label>{c.cardLabel}{CARD_LABEL_END}</span>}
                     {c.cell(row)}
                   </td>
                 ))}
