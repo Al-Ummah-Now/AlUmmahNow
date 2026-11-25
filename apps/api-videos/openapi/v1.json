@@ -11830,11 +11830,15 @@
           },
           {
             "schema": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "maxLength": 200,
-              "default": ""
+              "description": "Empty or missing: every admin"
             },
             "required": false,
+            "description": "Empty or missing: every admin",
             "name": "q",
             "in": "query"
           }

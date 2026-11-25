@@ -99,7 +99,7 @@ const offerPath = (id: string) => `/api/move-offers/${encodeURIComponent(id)}`;
 export const loadMoveState = (channelId: string) => moveRequest<ChannelMoveState>('move-state', `${channelPath(channelId)}/move-offers`);
 
 export async function searchMoveReceivers(channelId: string, q: string, signal?: AbortSignal): Promise<MoveReceiver[]> {
-  return (await moveRequest<{ items: MoveReceiver[] }>('move-receivers', `${channelPath(channelId)}/move-receivers?q=${encodeURIComponent(q)}`, { method: 'GET', signal })).items;
+  return (await moveRequest<{ items: MoveReceiver[] }>('move-receivers', `${channelPath(channelId)}/move-receivers${q.trim() ? `?q=${encodeURIComponent(q)}` : ''}`, { method: 'GET', signal })).items;
 }
 
 export async function makeMoveOffer(channelId: string, input: { toUserId: string; confirm: string; keepContactEmail: boolean }): Promise<void> {
