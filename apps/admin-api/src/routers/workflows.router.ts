@@ -22,6 +22,7 @@ import {
   WORKFLOW_LISTED_SCOPES,
   WORKFLOW_STATUSES,
   isMoneyRule,
+  workflowDomainVisible,
   workflowFloorFor,
   hasContentPermission,
   isWorkflowActionType,
@@ -44,6 +45,7 @@ import {
   commentOnRequest,
   getRequestView,
   listRequests,
+  OPEN_DOMAINS_SQL,
   openRequests,
   rejectRequest,
   retryRequest,
@@ -141,7 +143,8 @@ const mayEditRule = (actor: WorkflowActor, type: WorkflowActionType, scope: stri
   hasWorkflowExecutor(type) && (isMoneyRule(type, scope) ? moneyPerson(actor) : actor.roles.includes('super_admin'));
 /** May this person retry a failed apply? The same check as POST /requests/:id/retry. */
 const mayRetry = (actor: WorkflowActor, domain: string | undefined) => (domain === 'money' ? moneyPerson(actor) : actor.roles.includes('super_admin'));
-const seesMoney = (c: C, actor: WorkflowActor) => actor.financePermissions.length > 0 || hasContentPermission(c.get('auth')?.roles, 'support:read');
+/** Who sees money requests: the finance list and support:read. */
+export const seesMoney = (c: { get(key: 'auth'): AuthContext | undefined }, actor: WorkflowActor) => actor.financePermissions.length > 0 || hasContentPermission(c.get('auth')?.roles, 'support:read');
 
 app.onError((error, c) => {
   if (error instanceof Refused) return apiError(c, error.status, error.code);
@@ -238,11 +241,11 @@ app.get('/pending', async (c) => {
   if (!type || !isWorkflowActionType(type)) return apiError(c, 404, 'not_found');
   const money = seesMoney(c, actor);
   const open = await openRequests(ctx, type, c.req.queries('target') ?? []);
-  return ok(c, { items: Object.fromEntries(open.filter((r) => money || r.domain !== 'money').map((r) => [r.target, r.id])) });
+  return ok(c, { items: Object.fromEntries(open.filter((r) => workflowDomainVisible(r.domain, money)).map((r) => [r.target, r.id])) });
 });
 
 /**
- * Live autocomplete over requests: the newest 200 (one index range, idx_workflow_requests_proposed)
+ * Live autocomplete over requests: the newest 200 the reader sees (one index range, idx_workflow_requests_proposed)
  * matched on their title in either language. Never a LIKE over the table.
  */
 app.get('/requests/suggest', async (c) => {
@@ -250,12 +253,11 @@ app.get('/requests/suggest', async (c) => {
   const actor = await needRead(c, ctx);
   const q = (c.req.query('q') ?? '').trim().toLowerCase();
   const { results } = await ctx.db
-    .prepare('SELECT id, action_type, domain, diff, status, proposed_at FROM workflow_requests ORDER BY proposed_at DESC LIMIT 200')
-    .all<{ id: string; action_type: string; domain: string; diff: string; status: WorkflowStatus; proposed_at: string }>();
-  const money = seesMoney(c, actor);
+    .prepare(`SELECT r.id, r.action_type, r.diff, r.status, r.proposed_at FROM workflow_requests r${seesMoney(c, actor) ? '' : ` WHERE ${OPEN_DOMAINS_SQL}`} ORDER BY r.proposed_at DESC LIMIT 200`)
+    .all<{ id: string; action_type: string; diff: string; status: WorkflowStatus; proposed_at: string }>();
   const items = [];
   for (const r of results ?? []) {
-    if (!isWorkflowActionType(r.action_type) || (r.domain === 'money' && !money)) continue;
+    if (!isWorkflowActionType(r.action_type)) continue;
     const title = (JSON.parse(r.diff) as { title: { en: string; ar: string } }).title;
     if (q && !title.en.toLowerCase().includes(q) && !title.ar.includes(q) && r.id !== q) continue;
     items.push({ id: r.id, type: r.action_type, title, status: r.status, proposedAt: r.proposed_at });
@@ -267,14 +269,14 @@ app.get('/requests/suggest', async (c) => {
 app.get('/counts', async (c) => {
   const ctx = ctxFor(c);
   const actor = await needRead(c, ctx);
-  return ok(c, { waitingForMe: await waitingCount(ctx, actor.userId) });
+  return ok(c, { waitingForMe: await waitingCount(ctx, actor.userId, seesMoney(c, actor)) });
 });
 
 async function visible(c: C, ctx: WorkflowCtx, id: string): Promise<WorkflowActor> {
   const actor = await needRead(c, ctx);
   const row = await ctx.db.prepare('SELECT domain FROM workflow_requests WHERE id = ?').bind(id).first<{ domain: string }>();
   if (!row) throw new WorkflowError(404, 'not_found');
-  if (row.domain === 'money' && !seesMoney(c, actor)) throw new Refused(403, 'forbidden');
+  if (!workflowDomainVisible(row.domain, seesMoney(c, actor))) throw new Refused(403, 'forbidden');
   return actor;
 }
 

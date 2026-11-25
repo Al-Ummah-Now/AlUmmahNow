@@ -21,6 +21,8 @@ import {
   isMoneyRule,
   WORKFLOW_DECIDING_STEPS,
   WORKFLOW_LIMITS,
+  WORKFLOW_OPEN_DOMAINS,
+  workflowDomainVisible,
   checkWorkflowFloor,
   workflowDefaultRuleFor,
   workflowFloorFor,
@@ -668,6 +670,9 @@ export async function getRequestView(ctx: WorkflowCtx, id: string, viewer?: Work
   return view;
 }
 
+/** The open domains as a predicate on `r` (constants from shared-types, never input). */
+export const OPEN_DOMAINS_SQL = `r.domain IN (${WORKFLOW_OPEN_DOMAINS.map((d) => `'${d}'`).join(', ')})`;
+
 export type RequestListView = 'waiting' | 'mine' | 'open' | 'history';
 
 export interface RequestListItem {
@@ -687,8 +692,8 @@ export interface RequestListItem {
 /**
  * One index per view: waiting (workflow_inbox by user), mine (proposer), open (status), history
  * (proposed_at). Cursor = the last item's proposed_at|id; 50 per page.
- * `money: false` leaves money rows (by their stored domain) out of the query, so pages are full and the
- * cursor is always a row the reader was given.
+ * Without `money` only the open domains (by the domain stored with each row) are in the query, so pages are
+ * full and the cursor is always a row the reader was given.
  */
 export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { view: RequestListView; status?: WorkflowStatus; type?: WorkflowActionType; cursor?: string | null; limit?: number; money?: boolean }): Promise<{ items: RequestListItem[]; next: string | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 50);
@@ -699,37 +704,37 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   const typeSql = opts.type ? ' AND r.action_type = ?' : '';
   const typeArgs = opts.type ? [opts.type] : [];
   // A residual filter on the same index
-  const moneySql = opts.money === false ? " AND r.domain <> 'money'" : '';
-  // Every row of a money action is stored as money: nothing to walk the index for
-  if (moneySql && opts.type && WORKFLOW_ACTIONS[opts.type].domain === 'money') return { items: [], next: null };
+  const domainSql = opts.money ? '' : ` AND ${OPEN_DOMAINS_SQL}`;
+  // Every row of such an action is stored in its domain: nothing to walk the index for
+  if (opts.type && !workflowDomainVisible(WORKFLOW_ACTIONS[opts.type].domain, opts.money === true)) return { items: [], next: null };
   let sql: string;
   let args: unknown[];
   const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.expires_at, r.approvals_needed, r.approvals_count';
   switch (opts.view) {
     case 'waiting':
-      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'mine':
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${typeSql}${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'open': {
       const statuses = opts.status && isWorkflowOpen(opts.status) ? [opts.status] : [...WORKFLOW_OPEN_STATUSES];
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${typeSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${typeSql}${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
       args = [...statuses, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     }
     default:
       if (opts.type) {
         const statusSql = opts.status ? ' AND r.status = ?' : '';
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${statusSql}${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${statusSql}${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [opts.type, ...(opts.status ? [opts.status] : []), ...cursorArgs, limit + 1];
       } else if (opts.status) {
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status = ?${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status = ?${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [opts.status, ...cursorArgs, limit + 1];
       } else {
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE 1 = 1${moneySql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE 1 = 1${domainSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [...cursorArgs, limit + 1];
       }
   }
@@ -771,8 +776,12 @@ export async function openRequests(ctx: Pick<WorkflowCtx, 'db'>, type: WorkflowA
   return (results ?? []).map((r) => ({ target: r.open_key.slice(prefix.length), id: r.id, domain: r.domain }));
 }
 
-export async function waitingCount(ctx: WorkflowCtx, userId: string): Promise<number> {
-  const r = await ctx.db.prepare('SELECT COUNT(*) AS n FROM workflow_inbox WHERE user_id = ?').bind(userId).first<{ n: number }>();
+/** How many requests wait for this person: the rows `listRequests` lists in its `waiting` view, for the same reader. */
+export async function waitingCount(ctx: WorkflowCtx, userId: string, money = false): Promise<number> {
+  const sql = money
+    ? 'SELECT COUNT(*) AS n FROM workflow_inbox WHERE user_id = ?'
+    : `SELECT COUNT(*) AS n FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ? AND ${OPEN_DOMAINS_SQL}`;
+  const r = await ctx.db.prepare(sql).bind(userId).first<{ n: number }>();
   return Number(r?.n ?? 0);
 }
 

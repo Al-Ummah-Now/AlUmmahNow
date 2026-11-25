@@ -382,10 +382,46 @@ describe('request lists in pages', () => {
       const last = mine[0].items[49];
       assert.equal(mine[0].next, `${last.proposedAt}|${last.id}`);
       assert.doesNotMatch(JSON.stringify(mine), /wfr_money/);
+      // A cursor from a reader who sees every row pages on through the rows this reader sees, and nothing else
+      const other = (await t.as(...(query.startsWith('view=mine') ? ADMIN : SUPER))('GET', `/requests?${query}`)).body.result.next as string;
+      const money = `${stamp(60)}|wfr_money_060`;
+      for (const cursor of [other, money]) {
+        const res = (await t.as(...ADMIN)('GET', `/requests?${query}&cursor=${encodeURIComponent(cursor)}`)).body.result as { items: { id: string }[]; next: string | null };
+        assert.ok(res.items.length > 0 && res.items.every((i) => i.id.startsWith('wfr_plain')));
+        assert.doesNotMatch(JSON.stringify(res), /wfr_money/);
+      }
       if (query.startsWith('view=mine')) return;
       for (const who of [SUPER, FINANCE]) assert.deepEqual((await pages(t, who, query)).map((p) => p.items.length), [50, 50, 30]);
     });
   }
+
+  it('the waiting count is the waiting list\'s length, for each reader', async () => {
+    const t = await many();
+    for (const [who, n] of [[ADMIN, 65], [SUPER, 130], [FINANCE, 130]] as const) {
+      assert.equal((await t.as(...who)('GET', '/counts')).body.result.waitingForMe, n);
+      assert.equal((await pages(t, who, 'view=waiting')).flatMap((p) => p.items).length, n);
+    }
+    // Off the finance list: the inbox rows stay, the count and the list do not show them
+    t.search.raw.exec(`UPDATE support_finance_members SET removed_at = '${at}' WHERE user_id = 'fin1'`);
+    const off: [string, string[]] = ['fin1', ['admin']];
+    assert.equal((await t.as(...off)('GET', '/counts')).body.result.waitingForMe, 65);
+    assert.equal((await pages(t, off, 'view=waiting')).flatMap((p) => p.items).length, 65);
+  });
+
+  it('suggestions come from the newest 200 the reader sees', async () => {
+    const t = await many();
+    // 250 newer money rows do not crowd the others out
+    const insert = t.search.raw.prepare(
+      `INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, updated_at)
+       VALUES (?, 'workflows.rule.set', 'money', 'money', '{}', 'workflow-rule', ?, '{}', '{"title":{"en":"t","ar":"t"},"fields":[]}', '1', 'r', 'fin1', ?, ?, 'pending', 1, ?)`,
+    );
+    for (let n = 0; n < 250; n++) insert.run(`wfr_money_new_${n}`, `new_${n}`, stamp(600 + n), at, at);
+    const ids = async (who: [string, string[]]) => ((await t.as(...who)('GET', '/requests/suggest?q=t')).body.result.items as { id: string }[]).map((i) => i.id);
+    const mine = await ids(ADMIN);
+    assert.equal(mine.length, 10);
+    assert.ok(mine.every((id) => id.startsWith('wfr_plain')));
+    assert.ok((await ids(FINANCE)).every((id) => id.startsWith('wfr_money_new')));
+  });
 
   it('a money action lists nothing, and no next page, for a reader who does not see money', async () => {
     const t = await many();
