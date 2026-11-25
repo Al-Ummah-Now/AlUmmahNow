@@ -68,10 +68,13 @@ describe('transfer search results as Autocomplete items', () => {
 });
 
 describe('transfer text', () => {
-  it('isolates Latin values inside Arabic text, nowhere else', () => {
-    assert.equal(bidiIsolate('@nasheeds', 'ar'), '\u2068@nasheeds\u2069');
-    assert.equal(bidiIsolate('@nasheeds', 'en'), '@nasheeds');
-    assert.equal(bidiIsolate('', 'ar'), '');
+  it('isolates a value inside a sentence, in either language', () => {
+    for (const locale of ['ar', 'en']) {
+      assert.equal(bidiIsolate('@nasheeds', locale), '\u2068@nasheeds\u2069');
+      assert.equal(bidiIsolate('', locale), '');
+      // A name can't end its isolate or reorder the text around it
+      assert.equal(bidiIsolate('\u202eAmina\u2069\nx', locale), '\u2068Amina x\u2069');
+    }
     const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds', 'ar'), id: bidiIsolate('usr_1', 'ar') });
     assert.ok(label.includes('\u2068@nasheeds\u2069') && label.includes('\u2068usr_1\u2069'));
   });
@@ -93,6 +96,7 @@ describe('transfer confirmation', () => {
     const values = transferConfirmValues('nasheeds', 'usr_amina');
     assert.equal(confirmMatches('@nasheeds', values), true);
     assert.equal(confirmMatches('nasheeds', values), true);
+    assert.equal(confirmMatches(bidiIsolate('@nasheeds'), values), true, 'copied from the label');
     assert.equal(confirmMatches(' usr_amina ', values), true);
     assert.equal(confirmMatches('amina@example.com', values), false);
     assert.equal(confirmMatches('usr_Amina', values), false, 'ids are exact');

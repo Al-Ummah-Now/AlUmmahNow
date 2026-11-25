@@ -14,6 +14,7 @@ import {
 	MessageType,
 	NOTIFICATION_EMAIL_LOCALES,
 	isOptionalNotificationCategory,
+	lineParams,
 	type AccountNoticeRequest,
 	type NotificationEmailLocale,
 	type NotificationEmailSettings,
@@ -104,7 +105,8 @@ export function toNotificationItem(row: NotificationRow): NotificationItem {
 		category: row.category as NotificationItem['category'],
 		notificationType: row.notification_type as NotificationItem['notificationType'],
 		notificationKey: row.notification_key as NotificationKey,
-		params: parseParams(row.params_json),
+		// Stored before notices were cleaned on the way in
+		params: lineParams(parseParams(row.params_json)),
 		actionUrl: row.action_url,
 		entityId: row.entity_id,
 		isRead: row.is_read === 1,

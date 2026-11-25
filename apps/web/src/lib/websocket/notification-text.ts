@@ -1,4 +1,4 @@
-import { fillTemplate } from '@al-ummah/shared-types';
+import { fillTemplate, lineParams } from '@al-ummah/shared-types';
 import type { NotificationEvent, RealtimeNotificationKey } from '@/interfaces/websocket';
 import type { AppTranslations } from '@/lib/i18n/types';
 
@@ -41,9 +41,9 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
 
 const CHANNEL_TEAM_KEYS = new Set<string>(['channelInviteReceived', 'channelInviteAccepted', 'channelRoleChanged', 'channelMemberRemoved', 'channelMemberLeft']);
 
-/** Numbers in the viewer's digits (Arabic ٠–٩), strings as sent. */
+/** Numbers in the viewer's digits (Arabic ٠–٩), strings as sent, on one line without direction controls. */
 function interpolate(template: string, params: Record<string, string | number> = {}, lang = 'en'): string {
-  return fillTemplate(lang, template, params, '');
+  return fillTemplate(lang, template, lineParams(params), '');
 }
 
 /**

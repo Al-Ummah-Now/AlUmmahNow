@@ -3,7 +3,7 @@
  * a search result as an Autocomplete item, what a user is called, and the typed
  * confirmation. The picker itself is the shared Autocomplete (issue #713).
  */
-import type { AdminUserSearchItem } from '@al-ummah/shared-types';
+import { isolateText, stripBidiControls, type AdminUserSearchItem } from '@al-ummah/shared-types';
 import type { MessageKey, Translator } from '@/i18n/translate';
 import type { AutocompleteItem } from '@/components/search/autocomplete-model';
 import { adminUserName } from '@/lib/user-name';
@@ -48,15 +48,17 @@ export function transferConfirmValues(handle: string | null, userId: string): st
 
 /** Whether `typed` matches one of the confirm values (exactly, spaces around it aside). */
 export function confirmMatches(typed: string, values: readonly string[]): boolean {
-  const v = typed.trim();
+  // Pasted from the label, the value brings its isolates
+  const v = stripBidiControls(typed).trim();
   return !!v && values.includes(v);
 }
 
 /**
- * Wraps a Latin value (name, user id, @handle) in Unicode isolates (FSI…PDI) for
- * Arabic text, so it keeps its own order: "@handle" stays "@handle" and a
- * parenthesised id does not split across the sentence. Other locales: as is.
+ * Wraps a value (name, user id, @handle) in Unicode isolates (FSI…PDI), so either script keeps its own order
+ * in the other: "@handle" stays "@handle" and a parenthesised id does not split across the sentence. Direction
+ * controls in the value go.
  */
-export function bidiIsolate(value: string, locale: string): string {
-  return locale === 'ar' && value ? `⁨${value}⁩` : value;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- callers still say the locale
+export function bidiIsolate(value: string, _locale?: string): string {
+  return value ? isolateText(value) : '';
 }

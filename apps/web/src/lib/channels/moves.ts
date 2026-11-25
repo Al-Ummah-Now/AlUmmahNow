@@ -5,7 +5,7 @@
  * the browser with the session's token. A refusal comes back as a `MoveApiError` whose message is the
  * error catalogue's, in the page's language.
  */
-import { API_ERROR_CATALOGUE, apiErrorMessage } from '@al-ummah/shared-types';
+import { API_ERROR_CATALOGUE, apiErrorMessage, isolateText } from '@al-ummah/shared-types';
 import { getApiUrl } from '@/lib/runtime-config';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { reportChannelListFailure } from './report';
@@ -146,7 +146,7 @@ export function isFreshSignIn(authTime: number | null, now = Date.now()): boolea
 }
 
 /** A name inside a sentence: isolated, so either script keeps its own order and punctuation in the other. */
-export const isolate = (name: string): string => `⁨${name}⁩`;
+export const isolate = isolateText;
 
 export function moveName(named: { name: string | null; nameLocalized?: Record<string, string> }, lang: string, fallback: string): string {
   return named.nameLocalized?.[lang]?.trim() || named.name?.trim() || fallback;

@@ -266,6 +266,14 @@ describe('post images (#699)', () => {
 	});
 });
 
+it('a notice stored before names were cleaned reads on one line without direction controls', async () => {
+	const env = baseEnv();
+	notification(env, 'n1', 'v1');
+	const params = { channel: '\u202eCorner\u2069\nx', count: 2 };
+	await env.NOTIFICATIONS_DB.prepare('UPDATE notifications SET params_json = ? WHERE id = ?').bind(JSON.stringify(params), 'n1').run();
+	assert.deepEqual((await listNotifications(env.NOTIFICATIONS_DB, 'viewer')).items[0].params, { channel: 'Corner x', count: 2 });
+});
+
 describe('notifications of soft-deleted content (#702)', () => {
 	it('hidden rows leave the list and the counts; showing them again brings them back', async () => {
 		const env = baseEnv();

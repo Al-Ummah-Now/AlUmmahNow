@@ -31,7 +31,7 @@ import { eraseReportedOwner, storeReport } from './erasure/reports';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, ReportSubject, SocialEventPayload } from '@al-ummah/shared-types';
-import { featureGate, PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
+import { featureGate, lineParams, PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
 import { socialEventMessage } from './social/consumer';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
@@ -573,7 +573,7 @@ export class MessageProcessor {
         notificationId: crypto.randomUUID(),
         recipientUserId: payload.userId,
         notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',
-        params: { videoTitle: payload.title || '' },
+        params: lineParams({ videoTitle: payload.title || '' }),
         actionUrl: uploadResultActionUrl(payload.videoId, status),
         entityId: payload.videoId,
         dedupeKey: uploadResultDedupeKey(payload.videoId, status, payload.attempt),
@@ -601,6 +601,7 @@ export class MessageProcessor {
       this.logger.warn('NOTIFICATIONS_DB not bound; notification not stored', { key: payload.notificationKey });
       return;
     }
+    payload.params = lineParams(payload.params);
     const stored = await insertNotification(env.NOTIFICATIONS_DB, payload);
     // Push the row unless it was already pushed: a retry after a failure
     // between store and push still pushes it (SCALABILITY-AUDIT PR-10)
@@ -645,6 +646,7 @@ export class MessageProcessor {
       this.logger.debug('Reminder fan-out skipped', { kind: payload.kind, entityId: payload.entityId });
       return;
     }
+    payload.params = lineParams(payload.params);
     const data = {
       notificationKey: fanoutKey(payload.kind),
       params: payload.params,
