@@ -77,16 +77,19 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
   const extraRole = (role: 'super_admin' | 'admin') => draft.notify.extra.some((a) => a.kind === 'role' && a.role === role);
   const toggleExtra = (match: (a: WorkflowApproverSet) => boolean, on: boolean, add: WorkflowApproverSet) =>
     setDraft((d) => ({ ...d, notify: { ...d.notify, extra: on ? [...d.notify.extra.filter((a) => !match(a)), add] : d.notify.extra.filter((a) => !match(a)) } }));
+  // Everyone who can be added: whoever is named already has a chip
+  const named = extraPeople?.userIds.join(',') ?? '';
   const recipientSource: AutocompleteSource = useCallback(
     async (q) => {
       try {
-        return { items: (await recipients(q)).items, next: null };
+        const taken = new Set(named.split(','));
+        return { items: (await recipients(q)).items.filter((p) => !taken.has(p.id)), next: null };
       } catch (error) {
         logger.warn('[approval-rules] Recipient search failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
       }
     },
-    [recipients],
+    [recipients, named],
   );
   const ex = (key: keyof WorkflowRuleConfig['exclusions'], on: boolean) => setDraft((d) => ({ ...d, exclusions: { ...d.exclusions, [key]: on } }));
 
@@ -277,7 +280,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
             {checkbox(`${ids}-efi`, t('workflows.rules.financeAny'), !!extraFinance, (on) => toggleExtra((a) => a.kind === 'finance', on, { kind: 'finance' }), false, 'approval-rule-extra-finance')}
             <div className="pt-2">
               <Autocomplete
-                key={extraPeople?.userIds.join(',') ?? 'none'}
+                key={named || 'none'}
                 kind="user"
                 mode="pick"
                 label={t('workflows.rules.alsoTellAdd')}

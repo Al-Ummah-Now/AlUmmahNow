@@ -447,7 +447,7 @@ describe('a rule\'s extra recipients', () => {
     assert.deepEqual([field('approvers').kind, field('approvers').after], ['list', ['role:super_admin']]);
     assert.deepEqual([field('approversPeople').kind, field('approversPeople').before, field('approversPeople').after], ['person', null, ['sa2']]);
     assert.deepEqual([field('notifyExtra').before, field('notifyExtra').after], [null, ['finance:support:providers']]);
-    assert.deepEqual(field('notifyExtra').enumLabels!['finance:support:providers'], { en: 'The finance list with Providers and fees', ar: 'قائمة المالية بصلاحية المزوّدون والرسوم' });
+    assert.deepEqual(field('notifyExtra').enumLabels!['finance:support:providers'], { en: 'Finance list (Providers and fees)', ar: 'قائمة المالية (المزوّدون والرسوم)' });
     assert.deepEqual([field('notifyExtraPeople').kind, field('notifyExtraPeople').after], ['person', ['adm', 'fin1']]);
     for (const f of request.fields) if (f.kind === 'list') for (const k of [...((f.before as string[]) ?? []), ...((f.after as string[]) ?? [])]) assert.ok(f.enumLabels![k], `${f.key} ${k}`);
   });
