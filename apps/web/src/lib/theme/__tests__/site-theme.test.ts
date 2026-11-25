@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { logger } from '@/lib/logger';
 import { getSiteTheme, resetSiteThemeCache } from '../site-theme';
 
-let waits: Promise<unknown>[] | null = null;
+let mockWaits: Promise<unknown>[] | null = null;
 jest.mock('@opennextjs/cloudflare', () => ({
   getCloudflareContext: async () => {
-    if (!waits) throw new Error('no Worker context');
-    return { ctx: { waitUntil: (p: Promise<unknown>) => waits!.push(p) } };
+    if (!mockWaits) throw new Error('no Worker context');
+    return { ctx: { waitUntil: (p: Promise<unknown>) => mockWaits!.push(p) } };
   },
 }));
 
@@ -39,6 +39,9 @@ describe('getSiteTheme', () => {
     jest.spyOn(Date, 'now').mockImplementation(() => (clock += 31_000));
   });
 
+  const pkg = { theme: 'eid-lights', package: { id: 'eid-lights', version: '1.0.0', css: 'https://admin.test/public/themes/eid-lights/1.0.0/theme.css' } };
+  const css = "html[data-theme='eid-lights']{--m-page:none}";
+
   it('reads the setting at most once per 30 s per isolate (prod: per-page reads timed out)', async () => {
     const t0 = 1_800_000_000_000;
     jest.spyOn(Date, 'now').mockReturnValue(t0);
@@ -65,12 +68,22 @@ describe('getSiteTheme', () => {
   it('uses the stored theme and rejects unknown ones', async () => {
     answer({ theme: 'nahas' });
     await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+    // Not a theme of this site: not an answer
     answer({ theme: 'neon' });
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+    resetSiteThemeCache();
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
   });
 
-  const pkg = { theme: 'eid-lights', package: { id: 'eid-lights', version: '1.0.0', css: 'https://admin.test/public/themes/eid-lights/1.0.0/theme.css' } };
-  const css = "html[data-theme='eid-lights']{--m-page:none}";
+  it('a null, empty or partial answer never replaces a good theme and never throws', async () => {
+    for (const partial of [null, {}, [], 'x', { theme: null }, { theme: 5 }, { theme: 'eid-lights' }, { theme: 'eid-lights', package: null }, { theme: 'eid-lights', package: { id: 'eid-lights' } }, { theme: 'a', package: pkg.package }, { theme: 'eid-lights', package: { ...pkg.package, css: 'javascript:1' } }]) {
+      resetSiteThemeCache();
+      answers(pkg, css);
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+      answer(partial);
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    }
+  });
 
   it('renders a published theme package with its compiled CSS', async () => {
     const spy = answers(pkg, css);
@@ -149,23 +162,24 @@ describe('getSiteTheme', () => {
 
   describe('on Workers', () => {
     const store = new Map<string, string>();
+    const KEY = 'site-theme https://site-theme.cache.invalid/v1?of=https%3A%2F%2Fadmin.test';
     const settled = async () => {
-      while (waits!.length) await waits!.shift();
+      while (mockWaits!.length) await mockWaits!.shift();
     };
     /** Another isolate in the same data centre */
     const newIsolate = () => resetSiteThemeCache();
     beforeEach(() => {
-      waits = [];
+      mockWaits = [];
       store.clear();
       (globalThis as { caches?: unknown }).caches = {
-        default: {
-          match: async (key: string) => (store.has(key) ? new Response(store.get(key)) : undefined),
-          put: async (key: string, res: Response) => void store.set(key, await res.text()),
-        },
+        open: async (name: string) => ({
+          match: async (key: string) => (store.has(`${name} ${key}`) ? new Response(store.get(`${name} ${key}`)) : undefined),
+          put: async (key: string, res: Response) => void store.set(`${name} ${key}`, await res.text()),
+        }),
       };
     });
     afterEach(() => {
-      waits = null;
+      mockWaits = null;
       delete (globalThis as { caches?: unknown }).caches;
     });
 
@@ -202,19 +216,99 @@ describe('getSiteTheme', () => {
       await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
     });
 
-    it('a theme taken away falls back to the default on the next visit; one kept for too long is not used', async () => {
+    it('a theme taken away (admin-api then names the default) is gone on the next visit', async () => {
       answers(pkg, css);
       await getSiteTheme();
       await settled();
-      answer({ theme: 'eid-lights' });
+      answer({ theme: 'fawanees' });
       await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
       await settled();
+      newIsolate();
       await expect(getSiteTheme()).resolves.toEqual(fawanees);
       await settled();
+    });
+
+    it('is kept under a URL no request can have, in a cache of its own', async () => {
+      answer({ theme: 'nahas' });
+      await getSiteTheme();
+      await settled();
+      expect([...store.keys()]).toEqual([KEY]);
+    });
+
+    const timeout = () => new DOMException('timed out', 'TimeoutError');
+
+    it('an expired entry does not stop the read after the page, and is not kept again', async () => {
+      store.set(KEY, JSON.stringify({ theme: { id: 'nahas', css: null }, at: Date.now() - 25 * 3600_000 }));
+      const before = store.get(KEY);
+      jest.spyOn(global, 'fetch').mockRejectedValueOnce(timeout());
+      answerLater({ theme: 'zujaj' });
+      await expect(getSiteTheme()).resolves.toEqual(fawanees);
+      expect(store.get(KEY)).toBe(before);
+      await settled();
       newIsolate();
-      store.set([...store.keys()][0], JSON.stringify({ theme: { id: 'nahas', css: null }, at: 1 }));
+      await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+      await settled();
+    });
+
+    it('a read after the page that fails leaves the kept theme, and is tried again later', async () => {
+      const t0 = 1_800_000_000_000;
+      let ms = 0;
+      jest.spyOn(Date, 'now').mockImplementation(() => t0 + ms);
+      answer({ theme: 'nahas' });
+      await getSiteTheme();
+      await settled();
+      const kept = store.get(KEY);
+      for (const bad of [() => Promise.reject(timeout()), () => Promise.resolve({ ok: true, json: async () => null } as Response), () => Promise.resolve({ ok: false, status: 500 } as Response)]) {
+        const spy = jest.spyOn(global, 'fetch').mockClear().mockImplementation(bad);
+        ms += 40_000;
+        await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+        await settled();
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(store.get(KEY)).toBe(kept);
+      }
+    });
+
+    it('what is read back is checked: time, id and CSS', async () => {
+      jest.spyOn(global, 'fetch').mockRejectedValue(timeout());
+      const good = { theme: { id: 'eid-lights', css }, at: Date.now() };
+      const bads = [null, 5, {}, { ...good, at: 'x' }, { ...good, at: null }, { ...good, at: Infinity }, { ...good, at: good.at + 3600_000_000 }, { ...good, theme: null }, { ...good, theme: { id: 'neon', css: null } }, { ...good, theme: { id: 'Eid Lights', css } }, { ...good, theme: { id: 'eid-lights' } }, { ...good, theme: { id: 'eid-lights', css: `${css}</style><script>` } }, { ...good, theme: { id: 'eid-lights', css: 'body{}' } }, { ...good, theme: { id: 'eid-lights', css: css + ' '.repeat(1024 * 1024) } }];
+      for (const text of [...bads.map((b) => JSON.stringify(b)), JSON.stringify(good).replace(/"at":\d+/, '"at":1e400'), 'not json']) {
+        newIsolate();
+        store.set(KEY, text);
+        await expect(getSiteTheme()).resolves.toEqual(fawanees);
+        await settled();
+      }
+      newIsolate();
+      store.set(KEY, JSON.stringify(good));
+      await expect(getSiteTheme()).resolves.toEqual(good.theme);
+      await settled();
+    });
+
+    it('is off in next dev, whose context has waitUntil too', async () => {
+      process.env = { ...process.env, NODE_ENV: 'development' };
+      answer({ theme: 'nahas' });
+      await getSiteTheme();
       answer({ theme: 'zujaj' });
       await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+      expect(store.size).toBe(0);
+      expect(mockWaits).toEqual([]);
+    });
+
+    it('a cold first read starts one background read, however many pages wait', async () => {
+      const t0 = 1_800_000_000_000;
+      let ms = 0;
+      jest.spyOn(Date, 'now').mockImplementation(() => t0 + ms);
+      const spy = jest.spyOn(global, 'fetch').mockClear().mockRejectedValue(timeout());
+      // Each page reads once; one read after them, and the next only after both its time limits
+      await Promise.all([getSiteTheme(), getSiteTheme(), getSiteTheme()]);
+      expect(spy).toHaveBeenCalledTimes(4);
+      await settled();
+      ms = 6_900;
+      await getSiteTheme();
+      expect(spy).toHaveBeenCalledTimes(5);
+      ms = 7_100;
+      await getSiteTheme();
+      expect(spy).toHaveBeenCalledTimes(7);
       await settled();
     });
 
