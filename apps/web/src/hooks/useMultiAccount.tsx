@@ -14,7 +14,6 @@ import {
   switchUserAccount,
   removeUserAccount,
   switchChannel,
-  reloadUserChannels,
   reloadActiveProfile,
   createChannelForActiveUserResult,
   logoutCurrentAccount,
@@ -28,6 +27,7 @@ import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
 import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
 import { sameChannelList } from '@/lib/channels/menu';
+import { refreshSessionChannels } from '@/lib/channels/session-refresh';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -256,8 +256,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const cached = cacheChannels(cookieChannelsRef.current.map((c) => toSessionChannel(c as unknown as Channel)), current.id, activeId);
       if (activeRevoked || !sameChannelList(expectedCache, cached)) {
         logger.debug('[MultiAccountProvider] Channel list changed; updating the session cache', { activeRevoked, channels: channels.length });
-        await reloadUserChannels();
-        const sessionInfo = await getActiveSessionInfo();
+        const sessionInfo = await refreshSessionChannels();
         if (sessionInfo && mountedRef.current) {
           applySessionUser(sessionInfo.user);
           setAccounts(sessionInfo.accounts);

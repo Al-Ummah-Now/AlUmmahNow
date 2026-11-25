@@ -20,7 +20,6 @@ jest.mock('@/lib/actions/multi-account', () => ({
   switchUserAccount: jest.fn(),
   removeUserAccount: jest.fn(),
   switchChannel: jest.fn(),
-  reloadUserChannels: jest.fn(),
   reloadActiveProfile: jest.fn(),
   createChannelForActiveUser: jest.fn(),
   logoutCurrentAccount: jest.fn(),

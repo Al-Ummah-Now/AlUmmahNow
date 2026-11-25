@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { watchLeaving } from './leaving';
 import { getReporter, setErrorContext } from './reporter';
 
 /**
@@ -16,6 +17,8 @@ export function ErrorReportingProvider({ userId, workerVersion, environment }: {
     const reporter = getReporter();
     return reporter ? reporter.install() : undefined;
   }, []);
+
+  useEffect(() => watchLeaving(), []);
 
   return null;
 }

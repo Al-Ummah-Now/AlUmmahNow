@@ -31,6 +31,7 @@ import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { NONCE_HEADER } from "@/lib/security/nonce-header";
+import { PICKER_BEFORE_HYDRATION_SCRIPT } from "@/lib/forms/picker-before-hydration";
 import { TYPED_RECORDER_SCRIPT } from "@/lib/forms/keep-typed-before-hydration";
 import { KeepTypedBeforeHydration } from "@/components/forms/KeepTypedBeforeHydration";
 import { serializeForInlineScript } from "@/lib/security/csp";
@@ -248,6 +249,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
         <RuntimeConfigScript nonce={nonce} />
         {/* Text typed before hydration is kept (#1462, lib/forms/keep-typed-before-hydration.ts) */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TYPED_RECORDER_SCRIPT }} />
+        {/* A photo's Change button opens its picker before hydration too (lib/forms/picker-before-hydration.ts) */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: PICKER_BEFORE_HYDRATION_SCRIPT }} />
       </head>
       <body className="font-inter">
         <SecurityBootstrap />

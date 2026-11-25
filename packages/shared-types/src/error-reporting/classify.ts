@@ -31,7 +31,8 @@ export function isChunkLoadError(error: unknown): boolean {
 /** A request never got an answer (offline, DNS, CORS, aborted). */
 export function isNetworkError(error: unknown): boolean {
   const msg = messageOf(error);
-  return /^(TypeError: )?(Failed to fetch|NetworkError when attempting to fetch resource\.|Load failed|Network request failed)$/i.test(msg);
+  // "Error in input stream" (Firefox), "network error" (Chrome): the answer broke off while it was read
+  return /^(TypeError: )?(Failed to fetch|NetworkError when attempting to fetch resource\.|Load failed|Network request failed|Error in input stream|network error)$/i.test(msg);
 }
 
 /** Noise that is not ours or not actionable: never reported. */

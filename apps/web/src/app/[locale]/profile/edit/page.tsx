@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
 import { fetchProfile, removeProfileImage, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
 import { EditableAvatar, EditableCover } from "@/components/media/ProfileImages";
+import { PhotoFileInput } from "@/components/media/PhotoFileInput";
+import { usePhotoUploads } from "@/hooks/usePhotoUploads";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -96,24 +98,19 @@ const ProfileEditPage = () => {
   // Picked image waiting to be positioned/zoomed before upload
   const [cropping, setCropping] = useState<{ type: 'profilePhoto' | 'coverPhoto'; file: File } | null>(null);
 
-  // Which photo is uploading or being removed (disables its buttons meanwhile)
-  const [photoBusy, setPhotoBusy] = useState<'profilePhoto' | 'coverPhoto' | null>(null);
+  // Which photo is being removed (its Remove button waits)
+  const [removing, setRemoving] = useState<'profilePhoto' | 'coverPhoto' | null>(null);
   const [photoError, setPhotoError] = useState('');
 
-  const handlePhotoUpdate = async (type: 'profilePhoto' | 'coverPhoto', file: File) => {
+  const photos = usePhotoUploads<'profilePhoto' | 'coverPhoto'>(async (type, file) => {
     if (!profile) return;
-    setPhotoBusy(type);
     setPhotoError('');
-    try {
-      const ok = type === 'profilePhoto'
-        ? await updateProfilePhoto(profile, file, setProfile)
-        : await updateCoverPhoto(profile, file, setProfile);
-      if (!ok) setPhotoError(t.errors.uploadFailed || t.profile.saveFailed);
-      else if (type === 'profilePhoto') void reloadProfile();
-    } finally {
-      setPhotoBusy(null);
-    }
-  };
+    const ok = type === 'profilePhoto'
+      ? await updateProfilePhoto(profile, file, setProfile)
+      : await updateCoverPhoto(profile, file, setProfile);
+    if (!ok) setPhotoError(t.errors.uploadFailed || t.profile.saveFailed);
+    else if (type === 'profilePhoto') void reloadProfile();
+  });
 
   const removePhoto = async (type: 'profilePhoto' | 'coverPhoto') => {
     if (!profile) return;
@@ -124,14 +121,14 @@ const ProfileEditPage = () => {
       testId: 'profile-image-remove-dialog',
     });
     if (!confirmed) return;
-    setPhotoBusy(type);
+    setRemoving(type);
     setPhotoError('');
     try {
       const ok = await removeProfileImage(type === 'profilePhoto' ? 'avatar' : 'cover', setProfile);
       if (!ok) setPhotoError(t.profile.saveFailed);
       else if (type === 'profilePhoto') void reloadProfile();
     } finally {
-      setPhotoBusy(null);
+      setRemoving(null);
     }
   };
 
@@ -168,25 +165,25 @@ const ProfileEditPage = () => {
         {/* Name Section */}
         <section id="name" className="section mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
           <EditableCover
-            url={profile?.coverUrl}
+            url={photos.previews.coverPhoto ?? profile?.coverUrl}
             alt={t.channel.currentCover}
-            onPick={() => document.getElementById('coverPhotoInput')?.click()}
+            inputId="coverPhotoInput"
             onRemove={() => void removePhoto('coverPhoto')}
             labels={{ pick: t.channel.clickToChangeCover, change: t.channel.changeCover, remove: t.channel.removeCover }}
             testId="profile-cover-upload"
             imageTestId="profile-cover-image"
-            busy={photoBusy === 'coverPhoto'}
+            busy={photos.uploading.coverPhoto || removing === 'coverPhoto'}
             className="cover-photo h-48 rounded-md bg-gray-300 dark:bg-gray-700"
           />
           <EditableAvatar
-            url={profile?.avatarUrl}
+            url={photos.previews.profilePhoto ?? profile?.avatarUrl}
             alt={t.channel.currentAvatar}
-            onPick={() => document.getElementById('profilePhotoInput')?.click()}
+            inputId="profilePhotoInput"
             onRemove={() => void removePhoto('profilePhoto')}
             labels={{ pick: t.channel.clickToChangeAvatar, change: t.channel.changeAvatar, remove: t.channel.removeAvatar }}
             testId="profile-avatar-upload"
             imageTestId="profile-avatar-image"
-            busy={photoBusy === 'profilePhoto'}
+            busy={photos.uploading.profilePhoto || removing === 'profilePhoto'}
             // eslint-disable-next-line @next/next/no-img-element -- static default avatar
             placeholder={<img src="/avatar.png" alt="" className="h-full w-full object-cover" />}
             className="profile-photo relative z-[3] -mt-12 ps-4"
@@ -195,30 +192,8 @@ const ProfileEditPage = () => {
             <p role="alert" data-testid="profile-photo-error" className="mt-2 text-sm text-red-600 dark:text-red-400">{photoError}</p>
           )}
           {/* Pickers live outside the clickable areas so their click does not bubble back */}
-          <input
-            type="file"
-            id="coverPhotoInput"
-            aria-label={t.channel.clickToChangeCover}
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const picked = e.target.files?.[0];
-              e.target.value = '';
-              if (picked) setCropping({ type: 'coverPhoto', file: picked });
-            }}
-          />
-          <input
-            type="file"
-            id="profilePhotoInput"
-            aria-label={t.channel.clickToChangeAvatar}
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const picked = e.target.files?.[0];
-              e.target.value = '';
-              if (picked) setCropping({ type: 'profilePhoto', file: picked });
-            }}
-          />
+          <PhotoFileInput id="coverPhotoInput" label={t.channel.clickToChangeCover} onPick={(file) => setCropping({ type: 'coverPhoto', file })} />
+          <PhotoFileInput id="profilePhotoInput" label={t.channel.clickToChangeAvatar} onPick={(file) => setCropping({ type: 'profilePhoto', file })} />
           <ImageCropDialog
             file={cropping?.file ?? null}
             kind={cropping?.type === 'coverPhoto' ? 'cover' : 'avatar'}
@@ -226,7 +201,7 @@ const ProfileEditPage = () => {
             onApply={(cropped) => {
               const type = cropping?.type;
               setCropping(null);
-              if (type) void handlePhotoUpdate(type, cropped);
+              if (type) void photos.start(type, cropped);
             }}
           />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">{t.profile.welcomeUser?.replace('{name}', welcomeName) || `${t.common.welcome} ${welcomeName}!`}</h1>
