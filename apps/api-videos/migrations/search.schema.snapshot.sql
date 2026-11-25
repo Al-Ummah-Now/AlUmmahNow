@@ -77,6 +77,7 @@
 --   apps/api-videos/migrations/search/0123_image_owners_channel.sql
 --   apps/api-videos/migrations/search/0124_admin_comments_by_id.sql
 --   apps/api-videos/migrations/search/0125_creator_terms_acceptance.sql
+--   apps/api-videos/migrations/search/0128_content_ownership_category.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -316,6 +317,8 @@ CREATE UNIQUE INDEX idx_channel_move_offers_open ON channel_move_offers (channel
 CREATE INDEX idx_channel_move_offers_to ON channel_move_offers (to_user_id, status);
 CREATE INDEX idx_channel_quran_translations_edition ON channel_quran_translations (lang, qf_translation_id, name);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
+CREATE INDEX idx_content_ownership_category_created ON content_ownership (kind, category, created_at DESC, id) WHERE category IS NOT NULL;
+CREATE INDEX idx_content_ownership_category_views ON content_ownership (kind, category, views DESC, id) WHERE category IS NOT NULL;
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
 CREATE INDEX idx_content_ownership_channel_feed ON content_ownership (kind, channel_id, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_channel_live ON content_ownership (kind, channel_id, is_live, COALESCE(created_at, 0), id);

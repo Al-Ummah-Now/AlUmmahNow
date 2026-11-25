@@ -9,7 +9,7 @@ import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
-import { waitUntilOf } from "../../lib/search/ownership";
+import { titleFilter, waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex, isIndexCursor } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
@@ -64,7 +64,7 @@ export class VideosList extends OptionalAuthRoute {
 				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
 				category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 				format: z.enum(["video", "short"]).optional().describe("Only Shorts (`short`) or everything but Shorts (`video`)"),
-				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it." }).max(200).optional(),
+				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it." }).max(200).optional(),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -207,25 +207,26 @@ export class VideosList extends OptionalAuthRoute {
 		// The bucket scan reads keys (random UUIDs) in order and sorts only the page
 		// it found: a channel's videos beyond the scanned window came back as empty
 		// pages, and the unfiltered list (home grid, "All videos") showed whichever
-		// keys came first instead of the newest videos (#1029). The index has no
-		// category or title column, so those filters keep the scan.
-		const indexed = filterChannelId || (!category && !titleQuery)
-			? await channelVideosFromIndex<VideoType>(c.env as never, {
-				channelId: filterChannelId || null,
-				cursor,
-				limit,
-				query: {
-					sort: INDEX_SORT[sort as VideoSort],
-					privateFor: seesAllOfChannel ? true : (userId || null),
-					...INDEX_FILTER[(filter || "all") as VideoFilter],
-					...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
-				},
-				load: loadListed,
-				isListed: (video): video is VideoType => !!video,
-				compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
-				waitUntil: waitUntilOf(c as never),
-			})
-			: null;
+		// keys came first instead of the newest videos (#1029). A category is a column of the index; a
+		// title without a channel is answered from the full-text index (a word of it, or its start).
+		// The scan below is only for an index that cannot answer (unbound, incomplete or failing).
+		const indexed = await channelVideosFromIndex<VideoType>(c.env as never, {
+			channelId: filterChannelId || null,
+			cursor,
+			limit,
+			query: {
+				sort: INDEX_SORT[sort as VideoSort],
+				privateFor: seesAllOfChannel ? true : (userId || null),
+				...INDEX_FILTER[(filter || "all") as VideoFilter],
+				...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
+				...(category ? { category } : {}),
+				...(titleQuery && !filterChannelId ? { title: titleFilter(titleQuery) } : {}),
+			},
+			load: loadListed,
+			isListed: (video): video is VideoType => !!video,
+			compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
+			waitUntil: waitUntilOf(c as never),
+		});
 
 		if (indexed) {
 			source = "index";

@@ -39669,10 +39669,10 @@
             "schema": {
               "type": "string",
               "maxLength": 200,
-              "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it."
+              "description": "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it."
             },
             "required": false,
-            "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it.",
+            "description": "Only videos whose title contains this text (any language, case-insensitive); without a channel it must start at a word. A page can come back short with a cursor: keep following it.",
             "name": "q",
             "in": "query"
           },
