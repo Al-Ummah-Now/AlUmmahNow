@@ -104,6 +104,16 @@ export function wranglerFailureDetail(output: string, max = 2000): string {
 	return head ? `${head}\n…\n${tail}` : tail;
 }
 
+/** What `wrangler triggers deploy` applied, as the release log shows it: counts and custom domains, never an account address. */
+export function triggerLines(worker: string, output: string): string[] {
+	const lines = output.replace(/\u001b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim());
+	const domains = lines.flatMap((l) => /^([a-z0-9.-]+\.(?:alummahnow\.(?:net|org)|alummahnow\.link))(?:\/\S*)? \(custom domain/.exec(l)?.[1] ?? []);
+	const count = (re: RegExp) => lines.filter((l) => re.test(l)).length;
+	return [
+		`${worker}: triggers deployed; workers.dev address ${lines.some((l) => /workers\.dev/.test(l)) ? 'ON' : 'off'}, ${count(/^schedule: /)} schedules, ${count(/^Consumer for /)} consumers${domains.length ? `, ${domains.join(', ')}` : ''}`,
+	];
+}
+
 export type Runner = (cwd: string, args: string[]) => string;
 
 const runWrangler: Runner = (cwd, args) => {
@@ -257,7 +267,7 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 	try {
 		for (const { r, a } of promoted) {
 			run(a.cwd, ['versions', 'deploy', `${r.candidate}@100%`, ...a.configArgs, '-y', '--message', message]);
-			run(a.cwd, ['triggers', 'deploy', ...a.configArgs]);
+			for (const line of triggerLines(a.worker, run(a.cwd, ['triggers', 'deploy', ...a.configArgs]))) log(line);
 		}
 		await deps.waitForVersions(env, versioned(released), false);
 		const post = await smokeFailures();

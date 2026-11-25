@@ -19,7 +19,7 @@ describe('a request for a file', () => {
     const out = markStaticFile(new Request('https://videos.alummahnow.net/x.json', { method: 'POST', body: 'a' }));
     expect([out.method, await out.text()]).toEqual(['POST', 'a']);
     const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8');
-    expect(read('worker.ts')).toContain('markStaticFile(withPublicHost(request))');
+    expect(read('worker.ts')).toContain('markStaticFile(request)');
     expect(read('src/app/layout.tsx')).toMatch(/requestHeaders\.has\(STATIC_FILE_HEADER\) \? defaultSiteTheme : await getSiteTheme\(\)/);
   });
 });
