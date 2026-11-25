@@ -18,6 +18,7 @@ on:
       - 'apps/web/src/components/VideoPlayer/**'
       - 'apps/web/src/components/VideoPagePlayer/**'
       - 'apps/web/src/lib/video/**'
+      - 'apps/web/src/components/embed/**'
       - 'apps/web/src/lib/accessibility/**'
       - 'apps/web/src/styles/player-skin.css'
       - 'apps/web/src/styles/video-player.css'
