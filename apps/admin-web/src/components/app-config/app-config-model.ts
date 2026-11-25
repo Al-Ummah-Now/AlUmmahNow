@@ -78,6 +78,8 @@ export interface Problem {
   field: string;
   code: ProblemCode;
   detail?: string;
+  /** A minimum-version problem's own code and values (api-videos lib/app-updates/minimum.ts) */
+  minimum?: { code: string; params: Record<string, string> };
 }
 
 let seq = 0;
@@ -345,12 +347,12 @@ export function entryForRow(drafts: VersionDraft[], row: { app: string; platform
  * `viewer/ios.minimumVersion` for a versions entry), placed on the draft they name. One it cannot
  * place belongs to the whole document.
  */
-export function serverProblems(problems: { problem: string; detail?: string }[] | undefined, drafts: { id: string }[], kind: RulesKind | 'versions', versionDrafts: VersionDraft[] = []): Problem[] {
-  return (problems ?? []).map(({ problem, detail }) => {
+export function serverProblems(problems: { problem: string; detail?: string; code?: string; params?: Record<string, string> }[] | undefined, drafts: { id: string }[], kind: RulesKind | 'versions', versionDrafts: VersionDraft[] = []): Problem[] {
+  return (problems ?? []).map(({ problem, detail, code, params }) => {
     const [head, field = ''] = problem.split(/\.(.*)/s);
     if (kind === 'versions') {
       const d = versionDrafts.find((v) => `${v.app}/${v.platform}${v.channel === 'beta' ? '#beta' : ''}` === head);
-      return { id: d?.id ?? '', field: d ? versionField(d, field) : '', code: 'server' as const, detail };
+      return { id: d?.id ?? '', field: d ? versionField(d, field) : '', code: 'server' as const, detail, ...(code?.startsWith('minimum_') ? { minimum: { code, params: params ?? {} } } : {}) };
     }
     const index = /^\d+$/.test(head) ? Number(head) : -1;
     const d = index >= 0 ? drafts[index] : undefined;

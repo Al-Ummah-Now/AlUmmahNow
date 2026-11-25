@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import router, { appConfigAuditKey, sameDocument } from '../src/routers/appConfig.router';
+import router, { appConfigAuditKey, documentProblems, sameDocument } from '../src/routers/appConfig.router';
 import { sqliteD1 } from './d1-sqlite';
 
 function setup(roles: string[], opts: { reject?: boolean; down?: boolean } = {}) {
@@ -126,6 +126,19 @@ describe('/api/app-config', () => {
 });
 
 describe('app versions and releases (wiki AUN-APP-UPDATES §4.2, #1434)', () => {
+  it('a minimum problem keeps its code and values; other codes and values that are not text stay out', () => {
+    assert.deepEqual(
+      documentProblems([
+        { path: ['tools/windows', 'minimumVersion'], message: 'm', code: 'minimum_store', params: { store: 'TestFlight', version: '1.3.0', n: 3 } },
+        { path: [0, 'key'], message: 'z', code: 'invalid_type', params: { a: 'b' } },
+      ]),
+      [
+        { problem: 'tools/windows.minimumVersion', detail: 'm', code: 'minimum_store', params: { store: 'TestFlight', version: '1.3.0' } },
+        { problem: '0.key', detail: 'z' },
+      ],
+    );
+  });
+
   it('only super admins change the versions document; admins still read it', async () => {
     const admin = setup(['admin']);
     assert.equal((await admin.req('/api/app-config/versions', send('PUT', { value: { 'viewer/ios': { minimumVersion: '0.0.0' } } }))).status, 403);

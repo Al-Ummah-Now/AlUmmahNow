@@ -69,6 +69,12 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
   const reason = (code: string): React.ReactNode =>
     (REASONS as readonly string[]).includes(code) ? t(`appConfig.releases.reasons.${code}` as MessageKey) : <bdi dir="ltr" className="font-mono">{code}</bdi>;
 
+  const cell = 'flex items-baseline gap-3 px-3 py-1 md:table-cell md:py-2';
+  /** The column's name beside its value, on phones only (the table's header names it from md up) */
+  const label = (column: 'colPlatform' | 'colChannel' | 'colLatest' | 'colReleased' | 'colSignature' | 'colStores' | 'colMinimum') => (
+    <span className="w-28 shrink-0 text-fg-muted md:hidden" aria-hidden="true">{t(`appConfig.releases.${column}`)}</span>
+  );
+
   const byApp = useMemo(() => {
     const entries = Object.values(view?.entries ?? {});
     return APP_CONFIG_APPS.map((app) => ({
@@ -119,13 +125,14 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
 
   const stores = (e: AppReleaseEntry) => {
     const items: React.ReactNode[] = [];
-    if (e.signed && !e.private && Object.keys(view?.keys ?? {}).includes(e.repo)) items.push(<li key="direct">{t('appConfig.releases.direct')}</li>);
+    // Files people download themselves; a store-only release (iPhone, Play) has none
+    if (e.signed && !e.private && e.artifacts.length > 0 && Object.keys(view?.keys ?? {}).includes(e.repo)) items.push(<li key="direct">{t('appConfig.releases.direct')}</li>);
     const bundle = APP_STORE[`${e.app}/${e.platform}`];
     if (bundle) {
       const live = view?.appStore?.[bundle];
       items.push(
         <li key="appstore">
-          {live ? fillNodes(t('appConfig.releases.appstoreLive'), { version: <bdi dir="ltr" className="font-mono">{shown(live.version)}</bdi> }) : t('appConfig.releases.appstoreNone')}
+          {live ? fillNodes(t('appConfig.releases.appstoreLive'), { version: <bdi dir="ltr" className="font-medium">{shown(live.version)}</bdi> }) : t('appConfig.releases.appstoreNone')}
         </li>,
       );
     }
@@ -138,7 +145,7 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
         <li key={source} className="flex flex-wrap items-center gap-2">
           <span>
             {marked
-              ? fillNodes(t('appConfig.releases.storeMarked'), { store, version: <bdi dir="ltr" className="font-mono">{shown(marked)}</bdi> })
+              ? fillNodes(t('appConfig.releases.storeMarked'), { store, version: <bdi dir="ltr" className="font-medium">{shown(marked)}</bdi> })
               : t('appConfig.releases.storeUploaded', { store })}
           </span>
           {markable && canEdit && marked !== e.version && (
@@ -183,41 +190,47 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
             <h2 id={`releases-${app}`} className="text-lg font-semibold text-fg">
               {t(`appConfig.appNames.${app}` as MessageKey)}
             </h2>
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-              <table className="w-full min-w-[44rem] text-start text-sm" data-testid="app-releases-table" data-app={app}>
-                <thead className="bg-surface-2 text-fg-muted">
-                  <tr>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colPlatform')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colChannel')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colLatest')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colReleased')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colSignature')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colStores')}</th>
-                    <th scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colMinimum')}</th>
-                    {canEdit && <th scope="col" className="px-3 py-2"><span className="sr-only">{t('appConfig.releases.colActions')}</span></th>}
+            {/* A table from md up; on a phone each release is a block of labelled lines (nothing off the screen) */}
+            <div className="relative overflow-hidden rounded-lg border border-border bg-surface">
+              <table role="table" className="block w-full text-start text-sm md:table" data-testid="app-releases-table" data-app={app}>
+                <thead role="rowgroup" className="sr-only bg-surface-2 text-fg-muted md:not-sr-only md:table-header-group">
+                  <tr role="row">
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colPlatform')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colChannel')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colLatest')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colReleased')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colSignature')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colStores')}</th>
+                    <th role="columnheader" scope="col" className="px-3 py-2 text-start font-medium">{t('appConfig.releases.colMinimum')}</th>
+                    {canEdit && <th role="columnheader" scope="col" className="relative px-3 py-2"><span className="sr-only">{t('appConfig.releases.colActions')}</span></th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody role="rowgroup" className="block divide-y divide-border md:table-row-group">
                   {rows.map((e) => {
                     const min = minimumFor(versions, e.app, e.platform, e.channel);
                     return (
-                      <tr key={`${e.platform}/${e.channel}`} data-testid="app-releases-row" data-target={`${e.app}/${e.platform}/${e.channel}`}>
-                        <td className="px-3 py-2 text-fg">{t(`appConfig.platformNames.${e.platform}` as MessageKey)}</td>
-                        <td className="px-3 py-2 text-fg-muted">{e.channel === 'beta' ? t('appConfig.releases.beta') : t('appConfig.releases.stable')}</td>
-                        <td className="px-3 py-2">
-                          <bdi dir="ltr" className="font-mono text-fg">{shown(e.version)}</bdi>
+                      <tr role="row" key={`${e.platform}/${e.channel}`} className="block py-2 md:table-row md:py-0" data-testid="app-releases-row" data-target={`${e.app}/${e.platform}/${e.channel}`}>
+                        <td role="cell" className={`${cell} font-medium text-fg md:font-normal`}>{label('colPlatform')}{t(`appConfig.platformNames.${e.platform}` as MessageKey)}</td>
+                        <td role="cell" className={`${cell} text-fg-muted`}>{label('colChannel')}{e.channel === 'beta' ? t('appConfig.releases.beta') : t('appConfig.releases.stable')}</td>
+                        <td role="cell" className={cell}>
+                          {label('colLatest')}
+                          <bdi dir="ltr" className="text-fg">{shown(e.version)}</bdi>
                         </td>
-                        <td className="px-3 py-2 text-fg-muted">
+                        <td role="cell" className={`${cell} text-fg-muted`}>
+                          {label('colReleased')}
                           <LocalTime value={e.publishedAt} />
                         </td>
-                        <td className="px-3 py-2">
+                        <td role="cell" className={cell}>
+                          {label('colSignature')}
+                          <span className="min-w-0">
                           <span className={e.signed ? 'text-success-fg' : 'text-warning-fg'}>{e.signed ? t('appConfig.releases.signed') : t('appConfig.releases.unsigned')}</span>
                           {e.private && <span className="ms-2 text-fg-subtle">{t('appConfig.releases.privateRelease')}</span>}
+                          </span>
                         </td>
-                        <td className="px-3 py-2 text-fg">{stores(e)}</td>
-                        <td className="px-3 py-2">{min ? <bdi dir="ltr" className="font-mono text-fg">{shown(min)}</bdi> : <span className="text-fg-subtle">{t('appConfig.releases.noMinimum')}</span>}</td>
+                        <td role="cell" className={`${cell} text-fg`}>{label('colStores')}{stores(e)}</td>
+                        <td role="cell" className={cell}>{label('colMinimum')}{min ? <bdi dir="ltr" className="text-fg">{shown(min)}</bdi> : <span className="text-fg-subtle">{t('appConfig.releases.noMinimum')}</span>}</td>
                         {canEdit && (
-                          <td className="px-3 py-2 text-end">
+                          <td role="cell" className="block px-3 pb-1 pt-2 md:table-cell md:py-2 md:text-end">
                             <button
                               type="button"
                               className={smallButtonClass}

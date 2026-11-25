@@ -25,16 +25,27 @@ export function envelopeError(body: ErrorBody, fallback: string): string {
   return message || body.errors?.[0]?.message || fallback;
 }
 
+/** One thing the server refused: where, its own words, and (for some) a code with values to word in the page's language. */
+export interface ApiProblem {
+  problem: string;
+  detail?: string;
+  code?: string;
+  params?: Record<string, string>;
+}
+
+const textParams = (value: unknown): Record<string, string> =>
+  value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
+
 /**
  * A refused change's problems, as { problem, detail? } (at most 20). Settings send objects; the approval
  * workflow sends plain codes (['below_floor_approvals']), kept as { problem }.
  */
-export function problemsOf(value: unknown): { problem: string; detail?: string }[] | undefined {
+export function problemsOf(value: unknown): ApiProblem[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const out = value
     .map((p) => (typeof p === 'string' && p.length <= 80 ? { problem: p } : p))
-    .filter((p): p is { problem: string; detail?: unknown } => !!p && typeof p === 'object' && typeof (p as { problem?: unknown }).problem === 'string')
+    .filter((p): p is { problem: string; detail?: unknown; code?: unknown; params?: unknown } => !!p && typeof p === 'object' && typeof (p as { problem?: unknown }).problem === 'string')
     .slice(0, 20)
-    .map((p) => ({ problem: p.problem, ...(typeof p.detail === 'string' ? { detail: p.detail } : {}) }));
+    .map((p) => ({ problem: p.problem, ...(typeof p.detail === 'string' ? { detail: p.detail } : {}), ...(typeof p.code === 'string' ? { code: p.code, params: textParams(p.params) } : {}) }));
   return out.length ? out : undefined;
 }

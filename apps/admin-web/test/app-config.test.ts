@@ -218,6 +218,8 @@ describe('releases and the version entries (AUN-APP-UPDATES §3.4, §4.2)', () =
     }
     assert.equal(at('viewer/ios.minimumVersion').id, drafts[0].id);
     assert.equal(at('studio/ios.minimumVersion').id, '', 'an entry that is gone: the whole document');
+    const [coded] = serverProblems([{ problem: 'viewer/ios.minimumVersion', detail: 'x', code: 'minimum_store', params: { store: 'App Store', version: '1.2.0' } }], [], 'versions', drafts);
+    assert.deepEqual(coded.minimum, { code: 'minimum_store', params: { store: 'App Store', version: '1.2.0' } });
   });
 
   it('every refusal reason has words in both languages', () => {
