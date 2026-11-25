@@ -390,7 +390,7 @@ export interface RenderedEmailParts {
 /**
  * Direction controls typed by people (names, titles, messages) reorder the text around them, the subject and
  * the inbox preview included. The copy uses none, so they go from every string. A facts value keeps isolates
- * (U+2066–U+2069): email/direction.ts builds those rows with them, and it strips the values it puts inside.
+ * (U+2066–U+2069): admin-api's email/direction.ts builds rows with them, and it strips the values it puts inside.
  */
 const plain = (text: string) => text.replace(/[\u202a-\u202e\u2066-\u2069]/g, '');
 const plainRow = (text: string) => text.replace(/[\u202a-\u202e]/g, '');
@@ -418,6 +418,7 @@ function plainDoc(doc: EmailDoc): EmailDoc {
   return {
     ...doc,
     // One line
+    // eslint-disable-next-line no-control-regex
     subject: plain(doc.subject).replace(/[\r\n\u001c-\u001e\u0085\u2028\u2029]+/g, ' '),
     preheader: plain(doc.preheader),
     greeting: doc.greeting && plain(doc.greeting),
