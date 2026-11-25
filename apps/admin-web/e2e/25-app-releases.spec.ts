@@ -118,7 +118,7 @@ test.describe('app releases', () => {
       await expect(page.getByTestId('app-config-versions-readonly')).toBeVisible();
       await expect(page.getByTestId('app-config-save')).toHaveCount(0);
       await expect(page.getByTestId('app-config-add-versions')).toHaveCount(0);
-      await expect(page.getByTestId('app-config-version-remove')).toHaveCount(0);
+      await expect(page.getByTestId('app-config-versions').locator('input, select, textarea, button')).toHaveCount(0);
       const token = readTokens().admin;
       expect((await adminApi('/api/app-config/versions', { method: 'PUT', token, body: JSON.stringify({ value: {} }) })).status).toBe(403);
       expect((await adminApi('/api/app-config/releases/available', { method: 'PUT', token, body: JSON.stringify({ app: 'admin', platform: 'ios', source: 'testflight', version: '1.4.0' }) })).status).toBe(403);
