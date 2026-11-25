@@ -186,16 +186,31 @@ export function renderChannelMoveEmail(input: ChannelMoveEmailInput): RenderedEm
   return { to: input.to, subject: rendered.subject, html: rendered.html, text: rendered.text };
 }
 
+/** A Retry waits this long, so the item is marked as retrying before the email's end settles it. */
+const RETRY_DELAY_SECONDS = 10;
+
 /** Queues the email again (the Errors page's Retry). */
 export async function enqueueChannelMoveMail(env: Pick<AdminBindings, 'CONTACT_MAIL_QUEUE'>, event: ChannelMoveMailEvent, id: string): Promise<boolean> {
   if (!env.CONTACT_MAIL_QUEUE) return false;
   try {
     const job: ChannelMoveMailJob = { v: 1, kind: 'channel_move', event, id };
-    await env.CONTACT_MAIL_QUEUE.send(job as never, { contentType: 'json' });
+    await env.CONTACT_MAIL_QUEUE.send(job as never, { contentType: 'json', delaySeconds: RETRY_DELAY_SECONDS });
     return true;
   } catch (error) {
     logger.error('[ChannelMoveMail] Enqueue failed', { event, id, error: error instanceof Error ? error.message : String(error) });
     return false;
+  }
+}
+
+const itemKey = (job: ChannelMoveMailJob) => `channel-move-mail:${job.event}:${job.id}`.slice(0, 160);
+
+/** The email ended: its item on the Errors page, if any, is resolved. Never throws. */
+async function settle(env: AdminBindings, job: ChannelMoveMailJob): Promise<void> {
+  try {
+    const { resolveActionItems } = await import('./errors-store');
+    await resolveActionItems(env.REPORTS_DB, env.ENVIRONMENT || 'development', [itemKey(job)], new Date());
+  } catch (error) {
+    logger.error('[ChannelMoveMail] Could not resolve the item on the Errors page', { event: job.event, id: job.id, error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -208,7 +223,7 @@ async function flagFailure(env: AdminBindings, job: ChannelMoveMailJob, reason: 
     environment: env.ENVIRONMENT,
     occurredAt: new Date().toISOString(),
     action: {
-      key: `channel-move-mail:${job.event}:${job.id}`.slice(0, 160),
+      key: itemKey(job),
       source: 'email',
       title: 'Channel move email not sent',
       itemType: 'channel-move-mail',
@@ -244,6 +259,12 @@ const record = (env: VideosClientEnv, job: ChannelMoveMailJob, status: string) =
 
 /** Sends one move email. Never throws; the caller acks or retries by the outcome. */
 export async function processChannelMoveMailJob(env: AdminBindings & VideosClientEnv, msg: QueueMessageLike<ChannelMoveMailJob>): Promise<Outcome> {
+  const outcome = await send(env, msg);
+  if (outcome === 'done') await settle(env, msg.body);
+  return outcome;
+}
+
+async function send(env: AdminBindings & VideosClientEnv, msg: QueueMessageLike<ChannelMoveMailJob>): Promise<Outcome> {
   const job = msg.body;
   const fail = async (reason: string): Promise<Outcome> => {
     logger.error('[ChannelMoveMail] Email failed for good', { alert: 'channel_move_email_failed', event: job.event, id: job.id, attempts: msg.attempts, reason });

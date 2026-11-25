@@ -29,13 +29,14 @@ function setup(which: keyof typeof MAILS | null, contact: Partial<AccountEmailCo
   const ingest: unknown[] = [];
   const paths: string[] = [];
   const states: string[] = [];
+  const delays: Array<number | undefined> = [];
   const env = {
     REPORTS_DB: sqliteD1(),
     INTERNAL_API_KEY: 'internal-key',
     ENVIRONMENT: 'production',
     RESEND_API_KEY: 'k',
     VIDEOS_WEB_URL: 'https://alummahnow.net',
-    CONTACT_MAIL_QUEUE: { send: async (body: unknown) => void queued.push(body) },
+    CONTACT_MAIL_QUEUE: { send: async (body: unknown, opts?: { delaySeconds?: number }) => void (queued.push(body), delays.push(opts?.delaySeconds)) },
     ERRORS_QUEUE: { send: async (body: unknown) => void ingest.push(body) },
     VIDEOS: {
       async fetch(input: string, init?: RequestInit) {
@@ -51,7 +52,7 @@ function setup(which: keyof typeof MAILS | null, contact: Partial<AccountEmailCo
       },
     },
   };
-  return { env, queued, ingest, paths, states };
+  return { env, queued, ingest, paths, states, delays };
 }
 
 function msg(event: ChannelMoveMailEvent, attempts = 1) {
@@ -163,8 +164,36 @@ describe('channel move emails', () => {
     down.env.VIDEOS.fetch = async () => new Response('x', { status: 500 });
     assert.equal(await processChannelMoveMailJob(down.env as never, msg('moved_out', 1)), 'retry');
     const retry = await BUILTIN_RETRIES['channel-move-mail'](s.env as never, { event: 'moved_out', id: 'id_1' }, 'a1');
-    assert.equal(retry.ok, true);
+    assert.deepEqual([retry.ok, retry.status], [true, 'retrying'], 'not resolved by queueing it');
+    assert.ok(s.delays[0]! > 0, 'the item is marked as retrying before the email can end');
     assert.deepEqual(s.queued, [{ v: 1, kind: 'channel_move', event: 'moved_out', id: 'id_1' }]);
     assert.equal((await BUILTIN_RETRIES['channel-move-mail'](s.env as never, { event: 'other', id: 'x' }, 'a1')).ok, false);
+  });
+
+  it('the item on the Errors page is resolved when the email ends, and stays while it fails', async () => {
+    const cases: Array<[ReturnType<typeof setup>, ChannelMoveMailEvent, number, string]> = [
+      [setup('moved_out'), 'moved_out', 200, 'resolved'],
+      [setup(null), 'moved_in', 200, 'resolved'],
+      [setup('offered', { accountEmail: false }), 'offered', 200, 'resolved'],
+      [setup('moved_in', { email: null }), 'moved_in', 200, 'resolved'],
+      [setup('moved_out'), 'moved_out', 503, 'retrying'],
+    ];
+    for (const [s, event, status, expected] of cases) {
+      respond = () => new Response('{}', { status });
+      const items: Array<[string, string]> = [[`channel-move-mail:${event}:id_1`, 'production'], [`channel-move-mail:${event}:id_2`, 'production'], [`channel-move-mail:${event}:id_1x`, 'stage']];
+      await s.env.REPORTS_DB.prepare(
+        `INSERT INTO error_groups (id, fingerprint, environment, app, kind, message, first_seen, last_seen, updated_at)
+         VALUES ('g1', 'f1', 'production', 'admin-api', 'action', 'x', '2026', '2026', '2026')`,
+      ).bind().run();
+      for (const [index, [key, environment]] of items.entries()) {
+        await s.env.REPORTS_DB.prepare(
+          `INSERT INTO error_actions (id, group_id, environment, item_key, app, source, title, status, created_at, updated_at)
+           VALUES (?, 'g1', ?, ?, 'admin-api', 'email', 'x', 'retrying', '2026', '2026')`,
+        ).bind(`a${index}`, environment, key).run();
+      }
+      await processChannelMoveMailJob(s.env as never, msg(event));
+      const rows = (await s.env.REPORTS_DB.prepare('SELECT status FROM error_actions ORDER BY id').all<{ status: string }>()).results;
+      assert.deepEqual(rows.map((row) => row.status), [expected, 'retrying', 'retrying'], event);
+    }
   });
 });
