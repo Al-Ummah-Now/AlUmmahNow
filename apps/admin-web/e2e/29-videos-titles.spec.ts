@@ -30,8 +30,11 @@ const videos = [
   },
   { id: `${E2E_ENTITY_PREFIX}titles-mix-${hex}`, title: `AlUmmahNow Ad — إعلان المنصة الجديد with mixed English and العربية words ${hex}` },
 ];
-/** Not all ready and public: the list has views with counts (Processing, Private), so a phone's row needs More */
-const state = (i: number) => ({ upload: i === 2 ? 'processing' : 'ready', isPublic: i !== 1 });
+/**
+ * Not all ready and public: whatever else is on the stack, the views All, Processing, Failed and Private have
+ * counts, and those four never fit a phone's row (Pixel 5), so it has More
+ */
+const state = (i: number) => ({ upload: i === 2 ? 'processing' : i === 0 ? 'failed' : 'ready', isPublic: i !== 1 });
 const expected = (v: (typeof videos)[number], locale: 'en' | 'ar') => v.titleLocalized?.[locale] ?? v.title;
 const q = (s: string) => s.replace(/'/g, "''");
 
@@ -93,10 +96,13 @@ test.describe('videos list titles', () => {
         expect(cell!.width, `title width (${v.id})`).toBeGreaterThanOrEqual(140);
         // Two lines at most for the title; the row stays compact (was ~900 px)
         expect(cell!.height, `title height (${v.id})`).toBeLessThanOrEqual(50);
-        expect(box!.height, `row height (${v.id})`).toBeLessThanOrEqual(phone ? 320 : 160);
+        // A failed video's row also says why (FailureWhy), so only the others are held to the compact height
+        if (state(videos.indexOf(v)).upload !== 'failed') expect(box!.height, `row height (${v.id})`).toBeLessThanOrEqual(phone ? 320 : 160);
       }
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
       // The saved views are one row: each tab in it whole and on screen, the rest under More, also in RTL
+      // Once the counts are in (no pill busy) and the row is measured with them
+      await expect(page.locator('[data-testid="video-status-summary"] [aria-busy="true"]')).toHaveCount(0);
       await expect(page.locator('[data-testid="video-status-summary"]:not([data-measuring])')).toBeVisible();
       const tabs = await page.locator('[data-testid^="saved-view-"]').evaluateAll((els) =>
         els.map((el) => {
