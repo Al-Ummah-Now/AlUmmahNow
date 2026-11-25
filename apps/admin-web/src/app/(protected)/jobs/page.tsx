@@ -1,3 +1,4 @@
+import { shownViews } from '@/lib/list/shown-views';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import { formatNumber } from '@/i18n/translate';
 import { ADMIN_JOB_STATUSES } from '@al-ummah/shared-types';
@@ -58,16 +59,18 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         currentClassName="border-accent text-fg"
         idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
-        tabs={FILTERS.map((f) => {
-          const count = f.status === 'failed' ? counts?.failed : f.status === 'retrying' ? counts?.retrying : undefined;
-          return {
-            id: f.status ?? 'all',
-            label: t(f.label),
-            href: f.status ? `/jobs?status=${f.status}` : '/jobs?status=all',
-            current: f.status === status,
-            extra: count ? <span className="tabular-nums" data-testid={`jobs-count-${f.status}`}>{formatNumber(count, locale)}</span> : undefined,
-          };
-        })}
+        tabs={shownViews(
+          // Failed comes first: it is the page's own view, kept at 0 (its count is the page's message)
+          FILTERS.map((f) => ({ ...f, count: f.status === 'retrying' ? counts?.retrying : undefined, shownCount: f.status === 'failed' ? counts?.failed : f.status === 'retrying' ? counts?.retrying : undefined })),
+          (f) => f.status === status,
+        ).map((f) => ({
+          id: f.status ?? 'all',
+          label: t(f.label),
+          href: f.status ? `/jobs?status=${f.status}` : '/jobs?status=all',
+          current: f.status === status,
+          extra: f.shownCount ? <span className="tabular-nums" data-testid={`jobs-count-${f.status}`}>{formatNumber(f.shownCount, locale)}</span> : undefined,
+          extraKey: String(f.shownCount ?? ''),
+        }))}
       />
       {!jobs && <ErrorAlert testId="jobs-error">{t('content.loadFailed')}</ErrorAlert>}
       {jobs && jobs.length === 0 && <EmptyState>{status === 'failed' ? t('jobs.emptyFailed') : t('jobs.empty')}</EmptyState>}

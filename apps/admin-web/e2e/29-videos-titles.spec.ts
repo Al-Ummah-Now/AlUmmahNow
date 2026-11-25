@@ -30,6 +30,8 @@ const videos = [
   },
   { id: `${E2E_ENTITY_PREFIX}titles-mix-${hex}`, title: `AlUmmahNow Ad — إعلان المنصة الجديد with mixed English and العربية words ${hex}` },
 ];
+/** Not all ready and public: the list has views with counts (Processing, Private), so a phone's row needs More */
+const state = (i: number) => ({ upload: i === 2 ? 'processing' : 'ready', isPublic: i !== 1 });
 const expected = (v: (typeof videos)[number], locale: 'en' | 'ar') => v.titleLocalized?.[locale] ?? v.title;
 const q = (s: string) => s.replace(/'/g, "''");
 
@@ -46,21 +48,22 @@ test.describe('videos list titles', () => {
     const now = new Date().toISOString();
     const ms = Date.now();
     for (const v of videos) {
-      const object = { id: v.id, title: v.title, ...(v.titleLocalized ? { titleLocalized: v.titleLocalized } : {}), userId: ownerId, channelId, isPublic: true, uploadStatus: 'ready', dateCreated: now, dateModified: now, comments: [], likes: [] };
+      const s = state(videos.indexOf(v));
+      const object = { id: v.id, title: v.title, ...(v.titleLocalized ? { titleLocalized: v.titleLocalized } : {}), userId: ownerId, channelId, isPublic: s.isPublic, uploadStatus: s.upload, dateCreated: now, dateModified: now, comments: [], likes: [] };
       expect((await stackR2('PUT', 'videos', v.id, object)).ok).toBe(true);
     }
     // admin_cols = OWNERSHIP_ADMIN_COLS_VERSION (shared-types search/ownership.ts): an older value
     // would mark the whole admin index stale for every spec running beside this one
-    const row = (kind: string, id: string, channel: string | null, title: string, upload: string | null) =>
-      `('${kind}', '${id}', '${ownerId}', ${channel ? `'${channel}'` : 'NULL'}, '${q(title)}', ${upload ? `'${upload}'` : 'NULL'}, 1, ${ms}, ${ms}, ${ms})`;
+    const row = (kind: string, id: string, channel: string | null, title: string, upload: string | null, isPublic = true) =>
+      `('${kind}', '${id}', '${ownerId}', ${channel ? `'${channel}'` : 'NULL'}, '${q(title)}', ${upload ? `'${upload}'` : 'NULL'}, ${isPublic ? 1 : 0}, 1, ${ms}, ${ms}, ${ms})`;
     const rows = [
       row('channel', channelId, null, `E2E titles channel ${hex}`, null),
       row('profile', ownerId, null, `E2E Titles Owner ${hex}`, null),
-      ...videos.map((v) => row('video', v.id, channelId, v.title, 'ready')),
+      ...videos.map((v, i) => row('video', v.id, channelId, v.title, state(i).upload, state(i).isPublic)),
     ];
     await stackSql(
       SEARCH,
-      `INSERT OR REPLACE INTO content_ownership (kind, id, owner_id, channel_id, admin_title, upload_status, admin_cols, created_at, updated_at, indexed_at)
+      `INSERT OR REPLACE INTO content_ownership (kind, id, owner_id, channel_id, admin_title, upload_status, is_public, admin_cols, created_at, updated_at, indexed_at)
        VALUES ${rows.join(', ')}`,
     );
   });
@@ -108,6 +111,25 @@ test.describe('videos list titles', () => {
         expect(tab.left, `tab ${tab.id} starts on screen`).toBeGreaterThanOrEqual(0);
         expect(tab.right, `tab ${tab.id} ends on screen`).toBeLessThanOrEqual(vw);
         expect(tab.clipped, `tab ${tab.id} label not clipped`).toBe(false);
+      }
+      // A phone's row has no room for every view: More opens a menu under itself, on screen, and a view picked there
+      // takes a slot in the row as the current one
+      if (phone) {
+        const more = page.getByTestId('video-status-summary-more');
+        await expect(more).toBeVisible();
+        await more.click();
+        const menu = page.getByTestId('video-status-summary-menu');
+        await expect(menu).toBeVisible();
+        const [m, b] = [await menu.boundingBox(), await more.boundingBox()];
+        expect(m!.x).toBeGreaterThanOrEqual(0);
+        expect(m!.x + m!.width).toBeLessThanOrEqual(vw);
+        expect(m!.y, 'under More').toBeGreaterThanOrEqual(b!.y + b!.height - 1);
+        const entries = menu.getByRole('menuitem');
+        expect(await entries.count()).toBeGreaterThan(0);
+        const picked = (await entries.first().getAttribute('data-testid'))!.replace('video-status-summary-menu-', '');
+        await entries.first().click();
+        await expect(menu).toBeHidden();
+        await expect(page.getByTestId(`saved-view-${picked}`)).toHaveAttribute('aria-current', 'page');
       }
     });
   }
