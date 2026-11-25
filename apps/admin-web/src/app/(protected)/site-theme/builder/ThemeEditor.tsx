@@ -61,6 +61,9 @@ export interface EditorProps {
   canEdit: boolean;
 }
 
+/** The theme package schema's limit for a name or description. */
+const THEME_TEXT_MAX = 80;
+
 export function ThemeEditor({ initial, assets: initialAssets, latestVersion: initialLatest, activeVersion: initialActive, canEdit }: EditorProps) {
   const { t, locale } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -106,6 +109,16 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
   // A failing pair is also shown at the role or brand colour it comes from
   const traced = useMemo(() => traceIssues(theme, issues), [theme, issues]);
   const errorsAt = (path: string) => traced.get(path) ?? [];
+  // The name and description errors in the admin's words (the validator's are English, for the list above)
+  const textErrors = (path: 'name' | 'description') => {
+    const one = (lang: 'en' | 'ar') =>
+      errorsAt(`${path}.${lang}`).length === 0
+        ? undefined
+        : theme[path]?.[lang]?.trim()
+          ? t('localized.tooLong', { max: THEME_TEXT_MAX })
+          : t('localized.required', { lang: t(lang === 'en' ? 'localized.langEnglish' : 'localized.langArabic') });
+    return { en: one('en'), ar: one('ar') };
+  };
   const unlinked = useMemo(() => unlinkedBrandColors(theme), [theme]);
   const usage = useMemo(() => brandUsage(theme), [theme]);
 
@@ -213,7 +226,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
         </ul>
       </details>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className={`${cardClass} !p-4 max-h-[calc(100vh-8rem)] overflow-y-auto`}>
           <nav className="flex flex-wrap gap-1 mb-4" aria-label={t('themeBuilder.title')}>
             {SECTIONS.map(([id, key]) => (
@@ -233,11 +246,8 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                 field="themes.name"
                 value={{ en: theme.name?.en ?? '', ar: theme.name?.ar ?? '' }}
                 onChange={(next) => update(['name'], next)}
-                errors={{
-                  en: errorsAt('name.en')[0],
-                  ar: errorsAt('name.ar')[0],
-                }}
-                maxLength={80}
+                errors={textErrors('name')}
+                maxLength={THEME_TEXT_MAX}
                 required
                 disabled={readOnly}
                 testId="general-name"
@@ -248,8 +258,8 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                 field="themes.description"
                 value={{ en: theme.description?.en ?? '', ar: theme.description?.ar ?? '' }}
                 onChange={(next) => update(['description'], next.en || next.ar ? next : undefined)}
-                errors={{ en: errorsAt('description.en')[0], ar: errorsAt('description.ar')[0] }}
-                maxLength={80}
+                errors={textErrors('description')}
+                maxLength={THEME_TEXT_MAX}
                 required={false}
                 disabled={readOnly}
                 testId="general-description"
