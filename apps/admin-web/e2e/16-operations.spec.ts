@@ -68,11 +68,44 @@ test.describe('operations', () => {
       await page.getByTestId('ops-tabs-more').click();
       await page.getByTestId('ops-tabs-menu-queue').click();
     }
-    await expect(page).toHaveURL(/tab=queue/);
+    // The tab is a link and the click a navigation: the URL changes once the server has rendered the
+    // page it goes to (/operations reads admin-api several times), which took over 15 s on a loaded
+    // stack (#1941). waitForURL takes the navigation budget (45 s, playwright.config.ts), not the
+    // 15 s of an assertion; a click that did nothing still fails here.
+    await page.waitForURL(/tab=queue/);
     await expect(page).toHaveURL(/range=7d/);
     await expect(page).toHaveURL(/env=qa/);
     await expect(page.getByTestId('ops-tab-queue')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('ops-chart-backlog_max').or(page.getByTestId('ops-chart-backlog_max-error'))).toBeVisible();
+  });
+
+  // The same click when the server is slow: the page's data request (Next's `_rsc` fetch) is held
+  // back for 17 s, longer than an assertion waits. The link must still end on the tab it names,
+  // keeping the period and the environment.
+  test('OPS-05 a tab link click ends on its tab when the server takes longer than an assertion timeout', async ({ page }) => {
+    await page.goto('/operations?env=qa&range=7d');
+    await expect(page.getByTestId('ops-tabs')).toBeVisible();
+    await expect(page.getByTestId('ops-tabs')).not.toHaveAttribute('data-measuring', /.*/);
+    let held = false;
+    await page.route(
+      (url) => url.searchParams.has('_rsc') && url.searchParams.get('tab') === 'queue',
+      async (route) => {
+        held = true;
+        await new Promise((resolve) => setTimeout(resolve, 17_000));
+        await route.fallback();
+      },
+    );
+    const queue = page.getByTestId('ops-tab-queue');
+    if (await queue.isVisible()) await queue.click();
+    else {
+      await page.getByTestId('ops-tabs-more').click();
+      await page.getByTestId('ops-tabs-menu-queue').click();
+    }
+    await page.waitForURL(/tab=queue/);
+    // The hydrated link took the page's data over the held request (it was not a plain page load)
+    expect(held).toBe(true);
+    await expect(page).toHaveURL(/range=7d/);
+    await expect(page.getByTestId('ops-tab-queue')).toHaveAttribute('aria-current', 'page');
   });
 
   test('OPS-04 the Errors page links to Operations', async ({ page }) => {

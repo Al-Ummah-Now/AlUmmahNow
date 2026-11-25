@@ -55,6 +55,20 @@ test.describe('authentication - signed out', () => {
     await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
   });
 
+  // A sign-in is a redirect chain (issuer POST → /authorize → callback → dashboard). On a loaded
+  // stack it took longer than the 15 s action timeout (#1941). The issuer's answer is held back
+  // for 17 s here, so the chain is always longer than that: the helper must wait for the sign-in
+  // itself, not time out inside the click.
+  test('AUTH-16 a sign-in that takes longer than an action timeout still completes', async ({ page }) => {
+    await page.route(`${OPENAUTH_URL}/password/authorize**`, async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      await new Promise((resolve) => setTimeout(resolve, 17_000));
+      await route.fallback();
+    });
+    await uiLogin(page, accounts.admin);
+    await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+  });
+
   test('AUTH-05 a user without an admin role is sent to access denied', async ({ page }) => {
     await uiLogin(page, accounts.nonadmin, /\/access-denied$/);
     await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();

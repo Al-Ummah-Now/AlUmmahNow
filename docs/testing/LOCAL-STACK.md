@@ -232,3 +232,24 @@ through the proxy. Against QA or stage it runs only the `deployed` ones.
 - **Quarantine.** A spec still red on the stack gets
   `test.fixme(releaseEnv() === 'local', 'quarantined: #<issue> @<owner> ...')`, with one issue per
   cause (`scripts/ci/check-quarantine.ts`). Fix it in a small follow-up and lift the fixme.
+
+### A busy runner: waits and idle connections (#1941)
+
+The WebKit admin job runs four browsers beside the whole stack on four cores. When it is short of
+CPU the stack still answers every request, only late: on 24 Nov a sign-in's issuer step took 5.7 s
+(each D1 call 0.5 to 1 s instead of a few ms) and the admin pages 6 to 17 s to render. Two rules
+follow for specs and for the stack:
+
+- **Wait for the thing, with the navigation budget.** A click that starts a navigation is held by
+  Playwright for the action timeout (15 s) while it "waits for scheduled navigations to finish". A
+  redirect chain or a server-rendered page can take longer on a busy runner, so `uiLogin` clicks with
+  `noWaitAfter` and then waits for the page it signs in to (or the form's own error), and a link
+  click is followed by `page.waitForURL` (45 s, `navigationTimeout`) instead of a 15 s
+  `toHaveURL`. AUTH-16 and OPS-05 hold the answer back for 17 s to keep that true.
+- **Idle connections.** workerd closes an idle keep-alive connection after about 4.7 s and Node's
+  HTTP server after 5 s. A process that was descheduled for a few seconds sends its next request on a
+  connection the other side has already closed (`fetch failed`, `SocketError: other side closed`,
+  ECONNRESET), although nothing is wrong with the stack. The stack's own Node servers (control API,
+  fake CDN, browser proxy) keep idle connections for 65 s (`IDLE_CONNECTION_MS` in `stack.ts`), and
+  the admin suite's `fetch` keeps its own for 1 s (`e2e/support/keep-alive.ts`), so it closes them
+  before workerd can.
