@@ -9,8 +9,13 @@
  * Reads the video ids the run recorded ("video <id>" lines, apps/web/e2e/release/builders.ts
  * recordResource) and the throwaway account's session (the refresh token the check keeps current and
  * the channel id), renews the access token (it lives 15 minutes on QA), and for every video moves it to
- * the trash and deletes it for good (the owner's two calls, with the Bunny video and R2 objects). Several
- * at once, each request bounded, the whole run bounded; a 404 counts as deleted. Prints the counts, never
+ * the trash and deletes it for good (the owner's two calls, with the Bunny video and R2 objects). All
+ * at once (10), each request bounded, the whole run bounded to 2 minutes; a 404 counts as deleted. Empty
+ * --resources or --session (the workflow was cancelled before they were set) is a note and exit 0.
+ * What this step cannot delete is picked up after the run accounts' deletion that follows it: the
+ * api-videos run-user sweep (every 10 minutes, lib/e2e/runUserSweep.ts) erases a deleted run account's
+ * profile, channels and videos with their Bunny media; a run cancelled before that deletion leaves the
+ * accounts to e2e-run-users-sweep.yml (hourly, older than 24 hours) and then the same sweep. Prints the counts, never
  * a token. Exit code 1 when a video could not be deleted (the leftover check then reports it too).
  * QA only: refuses any other API or auth host.
  */
@@ -23,8 +28,13 @@ export const QA_AUTH = 'https://auth.qa.alummahnow.net';
 /** The videos web app's OAuth client on QA (apps/web/e2e/release/builders.ts WEB_CLIENT_ID.qa) */
 export const QA_WEB_CLIENT_ID = 'e0de3c30-0304-4ac4-86d6-1e185dec0439';
 export const REQUEST_TIMEOUT_MS = 30_000;
-export const RUN_BUDGET_MS = 6 * 60_000;
-export const CONCURRENCY = 5;
+/**
+ * After a cancel GitHub gives all always() steps about 5 minutes in total, and the run accounts' deletion
+ * and the leftover check come after this step: so 10 videos at once (their two calls are sequential, 30 s
+ * each at worst, so about a minute), 2 minutes in all, and a 3 minute step.
+ */
+export const RUN_BUDGET_MS = 2 * 60_000;
+export const CONCURRENCY = 10;
 
 /** The distinct video ids of a run resources file */
 export function videoIdsOf(text: string): string[] {
@@ -109,11 +119,10 @@ export async function run(opts: { resources: string; session: string }, deps: De
 	return { deleted, failed, notTried };
 }
 
-function arg(name: string): string {
-	const i = process.argv.indexOf(name);
-	const v = i >= 0 ? process.argv[i + 1] : undefined;
-	if (!v) throw new Error(`missing ${name}`);
-	return v;
+/** The value of --name, '' when it is missing or empty */
+export function arg(name: string, argv: string[] = process.argv): string {
+	const i = argv.indexOf(name);
+	return (i >= 0 ? argv[i + 1] : undefined) ?? '';
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -122,7 +131,13 @@ if (isMain) {
 		process.stderr.write('delete-format-videos: E2E_ENV must be qa\n');
 		process.exit(1);
 	}
-	run({ resources: arg('--resources'), session: arg('--session') }, { fetch, log: (line) => process.stdout.write(`${line}\n`) })
+	const resources = arg('--resources');
+	const session = arg('--session');
+	if (!resources || !session) {
+		process.stdout.write('[format-videos] the run was cancelled before its files were set: nothing to delete\n');
+		process.exit(0);
+	}
+	run({ resources, session }, { fetch, log: (line) => process.stdout.write(`${line}\n`) })
 		.then((r) => process.exit(r.failed || r.notTried ? 1 : 0))
 		.catch((error) => {
 			process.stderr.write(`delete-format-videos: ${(error as Error).message}\n`);
