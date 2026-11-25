@@ -87,7 +87,7 @@ export class MemoryBucket {
 		const page = keys.slice(0, limit);
 		const truncated = limit < keys.length;
 		return {
-			objects: page.map((key) => ({ key, uploaded: this.uploaded.get(key) })),
+			objects: page.map((key) => ({ key, etag: this.etag(key), uploaded: this.uploaded.get(key) })),
 			truncated,
 			cursor: truncated ? page[page.length - 1] : undefined,
 		};

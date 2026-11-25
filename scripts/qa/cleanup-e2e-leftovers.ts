@@ -6,11 +6,16 @@
  *   pnpm qa:cleanup --apply --reconcile   # then runs the search / ownership reconcile passes
  *
  * Options: --out <file> (inventory JSON, default: $TMPDIR/qa-cleanup-<time>.json)
+ *          --state <file> (what earlier runs read; read at the start, written after the read phase)
  *          --min-age-hours <n> (default 2: anything newer is kept, a running job may use it)
  *          --api-url <url> (only https://videos.api.qa.alummahnow.net is accepted)
  *
  * The selection rules live in ./e2e-leftovers.ts (unit-tested); "unsure" items are
  * reported and never deleted.
+ *
+ * A run is bounded and resumes where the last one stopped (./cleanup-inventory.ts): it lists every
+ * key, reads only records the state does not have yet (by etag) until its time is up, deletes what
+ * it knows enough about, and leaves the rest for the next run. It ends red only when it got nowhere.
  *
  * How it deletes: the leftovers belong to hundreds of throwaway test accounts
  * that only a browser flow can sign in to, so instead of calling the API as each
@@ -34,35 +39,30 @@
  * Needs a wrangler login (or CLOUDFLARE_API_TOKEN) with R2 and D1 access to the
  * QA account.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { getPlatformProxy } from 'wrangler';
 import { parseJsonc } from '../release/jsonc.ts';
+import { assertQaTarget, DEFAULT_MIN_AGE_MS, QA_TARGET } from './e2e-leftovers.ts';
 import {
-	type Action,
-	type ChannelLike,
-	type Verdict,
-	type VideoLike,
-	accountKind,
-	applyMinAge,
-	assertQaTarget,
-	DEFAULT_MIN_AGE_MS,
-	blockChannelDeletion,
-	classifyChannel,
-	classifyHandleEntry,
-	classifyTabsConfig,
-	classifyPlaylist,
-	classifyPost,
-	classifyScheduleEntry,
-	classifySection,
-	classifyVideo,
-	junkCommentIds,
-	publicItem,
-	scheduleEntryVideoId,
-	staleProfileChannels,
-	QA_TARGET,
-} from './e2e-leftovers.ts';
+	type InventoryItem,
+	type Listing,
+	type Pending,
+	type State,
+	type Store,
+	buildInventory,
+	DEADLINES_MIN,
+	mapUntil,
+	parseState,
+	pendingReads,
+	push,
+	prune,
+	shorten,
+	stalled,
+	summarize,
+	type ChannelEntry,
+} from './cleanup-inventory.ts';
 import R2Repository from '../../apps/api-videos/src/lib/r2Repo';
 import { withSearchSync } from '../../apps/api-videos/src/lib/search/sync';
 import { reconcileSearchIndex } from '../../apps/api-videos/src/lib/search/backfill';
@@ -80,12 +80,13 @@ const READ_CONCURRENCY = 8;
 const WRITE_CONCURRENCY = 2;
 const R2_BINDINGS = ['videos', 'channels', 'playlists', 'community_posts', 'channel_sections', 'channel_tabs', 'profiles', 'SCHEDULED_VIDEOS'] as const;
 
-type Env = Record<(typeof R2_BINDINGS)[number], R2Bucket> & { SEARCH_DB: D1Database };
+export type Env = Record<(typeof R2_BINDINGS)[number], R2Bucket> & { SEARCH_DB: D1Database };
 
 interface Args {
 	apply: boolean;
 	reconcile: boolean;
 	out: string;
+	state: string | null;
 	apiUrl: string;
 	minAgeMs: number;
 }
@@ -95,6 +96,7 @@ function parseArgs(argv: string[]): Args {
 		apply: false,
 		reconcile: false,
 		out: join(tmpdir(), `qa-cleanup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`),
+		state: null,
 		apiUrl: `https://${QA_TARGET.apiHost}`,
 		minAgeMs: DEFAULT_MIN_AGE_MS,
 	};
@@ -103,6 +105,7 @@ function parseArgs(argv: string[]): Args {
 		if (a === '--apply') args.apply = true;
 		else if (a === '--reconcile') args.reconcile = true;
 		else if (a === '--out') args.out = resolve(argv[++i] ?? '');
+		else if (a === '--state') args.state = resolve(argv[++i] ?? '');
 		else if (a === '--api-url') args.apiUrl = argv[++i] ?? '';
 		else if (a === '--min-age-hours') {
 			const hours = Number(argv[++i]);
@@ -145,28 +148,51 @@ function writeQaProxyConfig(apiUrl: string): { path: string; dispose: () => void
 	return { path, dispose: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-/** The remote-binding proxy now and then fails a call with "internal error"; retry those. */
-async function retry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
+/** One call of the remote-binding proxy may take this long; a hung one must not hold the run. */
+const CALL_TIMEOUT_MS = 30_000;
+/** A delete step is several calls. */
+const WRITE_TIMEOUT_MS = 120_000;
+
+async function withTimeout<T>(fn: () => Promise<T>, ms = CALL_TIMEOUT_MS): Promise<T> {
+	let timer: NodeJS.Timeout | undefined;
+	try {
+		return await Promise.race([
+			fn(),
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(`no answer in ${Math.round(ms / 1000)} s`)), ms);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** The remote-binding proxy now and then fails a call with "internal error"; retry those, not past `until`. */
+async function retry<T>(fn: () => Promise<T>, attempts = 5, until = Infinity, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
 	for (let i = 1; ; i++) {
 		try {
-			return await fn();
+			return await withTimeout(fn, timeoutMs);
 		} catch (error) {
-			if (i >= attempts) throw error;
+			if (i >= attempts || Date.now() >= until) throw error;
 			await new Promise((r) => setTimeout(r, 500 * 2 ** i));
 		}
 	}
 }
 
-async function listKeys(bucket: R2Bucket, prefix?: string): Promise<string[]> {
-	const keys: string[] = [];
+/** Every object under `prefix` (top level only with `flat`): key → etag. */
+async function listObjects(bucket: R2Bucket, until: number, options: { prefix?: string; flat?: boolean } = {}): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
 	let cursor: string | undefined;
 	do {
-		const page = await retry(() => bucket.list({ prefix, cursor, limit: 1000 }));
-		keys.push(...page.objects.map((o) => o.key));
+		if (Date.now() >= until) throw new Error(`listing a bucket did not finish in ${DEADLINES_MIN.list} minutes`);
+		const page = await retry(() => bucket.list({ prefix: options.prefix, cursor, limit: 1000, ...(options.flat ? { delimiter: '/' } : {}) }), 5, until);
+		for (const o of page.objects) out.set(o.key, o.etag);
 		cursor = page.truncated ? page.cursor : undefined;
 	} while (cursor);
-	return keys;
+	return out;
 }
+
+const only = (objects: Map<string, string>, keep: (key: string) => boolean) => new Map([...objects].filter(([key]) => keep(key)));
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
 	const out: R[] = new Array(items.length);
@@ -180,8 +206,8 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 	return out;
 }
 
-async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
-	const text = await retry(async () => (await bucket.get(key))?.text() ?? null);
+async function readJson<T>(bucket: R2Bucket, key: string, attempts = 5, until = Infinity): Promise<T | null> {
+	const text = await retry(async () => (await bucket.get(key))?.text() ?? null, attempts, until);
 	if (text === null) return null;
 	try {
 		return JSON.parse(text) as T;
@@ -190,171 +216,63 @@ async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
 	}
 }
 
-interface VideoRecord extends VideoLike {
-	isPublic?: boolean;
-	isDeleted?: boolean;
-	uploadStatus?: string;
-	scheduledPublishStatus?: string;
-	scheduledPublishDate?: string;
-	dateCreated?: string;
-	comments?: CommentRecord[];
+interface VideoRecord {
+	id: string;
+	comments?: StoredComment[];
 }
-type CommentRecord = StoredComment & { text?: string; dateCreated?: string };
-interface ChannelRecord extends ChannelLike {
-	handle?: string;
-	dateCreated?: string;
-	isDeleted?: boolean;
+interface ChannelRecord {
+	id: string;
+	isMain?: boolean;
 }
 interface ProfileRecord {
 	id: string;
-	email?: string;
 	channels?: string[];
 }
-interface PostRecord {
-	id: string;
-	channelId: string;
-	content?: string;
-	status?: string;
-	userId?: string;
-	createdAt?: string;
+
+export async function listEverything(env: Env, until: number): Promise<{ listing: Listing; keys: { schedule: string[]; tabs: string[] } }> {
+	const flat = (key: string) => !key.includes('/');
+	const [videos, channels, profiles, playlists, posts, sections, schedule, handles, tabs] = await Promise.all([
+		listObjects(env.videos, until, { flat: true }),
+		listObjects(env.channels, until, { flat: true }),
+		listObjects(env.profiles, until, { flat: true }),
+		listObjects(env.playlists, until),
+		listObjects(env.community_posts, until, { prefix: 'posts/' }),
+		listObjects(env.channel_sections, until),
+		listObjects(env.SCHEDULED_VIDEOS, until),
+		listObjects(env.channel_tabs, until, { prefix: 'channel-handles/' }),
+		listObjects(env.channel_tabs, until, { prefix: 'channel-tabs/' }),
+	]);
+	return {
+		listing: {
+			videos: only(videos, (k) => flat(k) && !k.includes(':')),
+			channels: only(channels, flat),
+			profiles: only(profiles, flat),
+			playlists: only(playlists, (k) => !k.startsWith('watch-later-')),
+			posts: only(posts, (k) => /^posts\/[^/]+\/[^/]+\.json$/.test(k) && !k.endsWith('/index.json')),
+			sections,
+			handles,
+		},
+		keys: { schedule: [...schedule.keys()], tabs: [...tabs.keys()] },
+	};
 }
 
-export interface InventoryItem {
-	kind: 'video' | 'comment' | 'channel' | 'playlist' | 'post' | 'post-comment' | 'section' | 'schedule-entry' | 'profile-ref' | 'handle' | 'tabs';
-	id: string;
-	title?: string;
-	owner?: string;
-	parent?: string;
-	action: Action;
-	reason: string;
-	detail?: Record<string, unknown>;
-}
+const BUCKET: Record<Store, keyof Env & string> = {
+	videos: 'videos', channels: 'channels', profiles: 'profiles', playlists: 'playlists', posts: 'community_posts', sections: 'channel_sections', handles: 'channel_tabs',
+};
+/** This many reads failing in a row: the connection is gone, keep what was read. */
+const MAX_READ_FAILURES = 40;
 
-/** Owner label for the inventory: test accounts by address, anyone else only by kind. */
-function ownerLabel(email: string | undefined, userId: string | undefined): string {
-	const kind = accountKind(email);
-	if (kind === 'other') return `non-test account ${userId ?? ''}`.trim();
-	return email ?? `unknown (${userId ?? 'no user id'})`;
-}
-
-async function buildInventory(env: Env, minAgeMs: number) {
-	const now = Date.now();
-	say('[cleanup] reading QA buckets…');
-	const videoKeys = await listKeys(env.videos);
-	const channelKeys = await listKeys(env.channels);
-	const playlistKeys = await listKeys(env.playlists);
-	const postKeys = await listKeys(env.community_posts);
-	const sectionKeys = await listKeys(env.channel_sections);
-	const scheduleKeys = await listKeys(env.SCHEDULED_VIDEOS);
-	const profileKeys = await listKeys(env.profiles);
-	const handleKeys = await listKeys(env.channel_tabs, 'channel-handles/');
-	const tabKeys = await listKeys(env.channel_tabs, 'channel-tabs/');
-	const videos = (await mapLimit(videoKeys.filter((k) => !k.includes(':') && !k.includes('/')), READ_CONCURRENCY, (k) => readJson<VideoRecord>(env.videos, k)))
-		.filter((v): v is VideoRecord => !!v?.id);
-	const channels = (await mapLimit(channelKeys.filter((k) => !k.includes('/')), READ_CONCURRENCY, (k) => readJson<ChannelRecord>(env.channels, k)))
-		.filter((c): c is ChannelRecord => !!c?.id);
-	const playlists = (await mapLimit(playlistKeys.filter((k) => !k.startsWith('watch-later-')), READ_CONCURRENCY, (k) => readJson<{ id: string; title?: string; channelId?: string; userId?: string }>(env.playlists, k)))
-		.filter((p): p is { id: string; title?: string; channelId?: string; userId?: string } => !!p?.id);
-	const postObjectKeys = postKeys.filter((k) => /^posts\/[^/]+\/[^/]+\.json$/.test(k) && !k.endsWith('/index.json'));
-	const posts = (await mapLimit(postObjectKeys, READ_CONCURRENCY, (k) => readJson<PostRecord>(env.community_posts, k))).filter((p): p is PostRecord => !!p?.id);
-	const sections = await mapLimit(sectionKeys, 8, async (k) => ({ key: k, record: await readJson<{ title?: string }>(env.channel_sections, k) }));
-	const profiles = (await mapLimit(profileKeys.filter((k) => !k.includes('/')), READ_CONCURRENCY, (k) => readJson<ProfileRecord>(env.profiles, k)))
-		.filter((p): p is ProfileRecord => !!p?.id);
-	say(`[cleanup] read ${videos.length} videos, ${channels.length} channels, ${playlists.length} playlists, ${posts.length} posts, ${sections.length} sections, ${scheduleKeys.length} schedule entries, ${profiles.length} profiles`);
-
-	// Owner address of a user id: from the profile, else from one of the user's channels
-	const emailByUser = new Map<string, string>();
-	for (const p of profiles) if (p.email) emailByUser.set(p.id, p.email);
-	for (const c of channels) if (c.userId && c.email && !emailByUser.has(c.userId)) emailByUser.set(c.userId, c.email);
-	const ownerEmail = (userId: string | undefined) => (userId ? emailByUser.get(userId) : undefined);
-
-	const items: InventoryItem[] = [];
-	const videoAction = new Map<string, Action>();
-	for (const v of videos) {
-		const verdict = applyMinAge(classifyVideo(v, ownerEmail), v.dateCreated, now, minAgeMs);
-		videoAction.set(v.id, verdict.action);
-		items.push({
-			kind: 'video', id: v.id, title: v.title, owner: ownerLabel(ownerEmail(v.userId), v.userId), parent: v.channelId, ...verdict,
-			detail: { isPublic: v.isPublic ?? null, isDeleted: v.isDeleted ?? false, uploadStatus: v.uploadStatus ?? null, created: v.dateCreated ?? null },
-		});
-		if (verdict.action !== 'delete') {
-			for (const cid of junkCommentIds(v)) {
-				const c = findComment(v.comments, cid);
-				const cv = applyMinAge({ action: 'delete', reason: 'test probe comment' }, c?.dateCreated, now, minAgeMs);
-				items.push({ kind: 'comment', id: cid, title: c?.text, owner: ownerLabel(ownerEmail(c?.userId), c?.userId), parent: v.id, ...cv });
-			}
+/** Reads what the state does not have yet, until the deadline. */
+export async function readPending(env: Env, state: State, pending: Pending[], deadline: number) {
+	return mapUntil(pending, READ_CONCURRENCY, async ({ store, key, etag }) => {
+		try {
+			const raw = await readJson<Record<string, unknown>>(env[BUCKET[store]] as R2Bucket, key, 3, deadline);
+			(state.stores[store] as Record<string, unknown>)[key] = [etag, shorten(store, raw)];
+			return true;
+		} catch {
+			return false;
 		}
-	}
-
-	const remainingByChannel = new Map<string, Action[]>();
-	for (const v of videos) {
-		if (!v.channelId) continue;
-		remainingByChannel.set(v.channelId, [...(remainingByChannel.get(v.channelId) ?? []), videoAction.get(v.id) ?? 'keep']);
-	}
-	const channelAction = new Map<string, Action>();
-	for (const c of channels) {
-		const verdict: Verdict = blockChannelDeletion(applyMinAge(classifyChannel(c), c.dateCreated, now, minAgeMs), remainingByChannel.get(c.id) ?? []);
-		channelAction.set(c.id, verdict.action);
-		items.push({ kind: 'channel', id: c.id, title: c.name, owner: ownerLabel(c.email, c.userId), ...verdict, detail: { isMain: c.isMain ?? false, handle: c.handle ?? null } });
-	}
-	for (const p of playlists) {
-		items.push({ kind: 'playlist', id: p.id, title: p.title, owner: ownerLabel(ownerEmail(p.userId), p.userId), parent: p.channelId, ...classifyPlaylist(p, p.channelId ? channelAction.get(p.channelId) : undefined) });
-	}
-	const deletedPosts = new Set<string>();
-	for (const p of posts) {
-		const verdict = applyMinAge(classifyPost(p.content, channelAction.get(p.channelId), p.channelId), p.createdAt, now, minAgeMs);
-		if (verdict.action === 'delete') deletedPosts.add(p.id);
-		items.push({ kind: 'post', id: p.id, title: p.content?.slice(0, 120), owner: ownerLabel(ownerEmail(p.userId), p.userId), parent: p.channelId, ...verdict, detail: { status: p.status ?? null } });
-	}
-	for (const k of postKeys) {
-		const m = /^comments\/([^/]+)\//.exec(k);
-		if (m && deletedPosts.has(m[1])) items.push({ kind: 'post-comment', id: k, parent: m[1], action: 'delete', reason: 'comment object of a deleted post' });
-	}
-	for (const s of sections) {
-		const channelId = s.key.split('/')[0];
-		items.push({ kind: 'section', id: s.key, title: s.record?.title, parent: channelId, ...classifySection(s.record?.title, channelAction.get(channelId), channelId) });
-	}
-	for (const k of scheduleKeys) {
-		const vid = scheduleEntryVideoId(k);
-		const verdict = classifyScheduleEntry(k, vid ? (videoAction.get(vid) ?? 'missing') : 'keep');
-		items.push({ kind: 'schedule-entry', id: k, parent: vid ?? undefined, ...verdict });
-	}
-	const existingChannels = new Set(channels.map((c) => c.id));
-	const deletingChannels = new Set(channels.filter((c) => channelAction.get(c.id) === 'delete').map((c) => c.id));
-	for (const p of profiles) {
-		const stale = staleProfileChannels(p, existingChannels, deletingChannels);
-		if (stale.length > 0) {
-			items.push({ kind: 'profile-ref', id: p.id, owner: p.email, action: 'delete', reason: 'profile lists channels that are deleted', detail: { channels: stale } });
-		}
-	}
-	const handles = await mapLimit(handleKeys, READ_CONCURRENCY, async (k) => ({ key: k, entry: await readJson<{ channelId?: string; userId?: string; handle?: string }>(env.channel_tabs, k) }));
-	for (const h of handles) {
-		const verdict = classifyHandleEntry(h.entry, ownerEmail(h.entry?.userId), existingChannels, deletingChannels);
-		if (verdict.action !== 'keep') items.push({ kind: 'handle', id: h.key, title: h.entry?.handle, owner: ownerLabel(ownerEmail(h.entry?.userId), h.entry?.userId), parent: h.entry?.channelId, ...verdict });
-	}
-	for (const k of tabKeys) {
-		const verdict = classifyTabsConfig(k, existingChannels, deletingChannels);
-		if (verdict.action !== 'keep') items.push({ kind: 'tabs', id: k, ...verdict });
-	}
-	return { items, videos, channels, posts };
-}
-
-function findComment(list: CommentRecord[] | undefined, id: string): CommentRecord | undefined {
-	for (const c of list ?? []) {
-		if (c.id === id) return c;
-		const r = findComment(c.replies as CommentRecord[] | undefined, id);
-		if (r) return r;
-	}
-	return undefined;
-}
-
-function summarize(items: InventoryItem[]): Record<string, Record<Action, number>> {
-	const out: Record<string, Record<Action, number>> = {};
-	for (const i of items) {
-		out[i.kind] ??= { delete: 0, keep: 0, unsure: 0 };
-		out[i.kind][i.action]++;
-	}
-	return out;
+	}, { deadline, maxFailuresInRow: MAX_READ_FAILURES });
 }
 
 /** content_ownership / search_* rows that point at the records marked for deletion. */
@@ -378,48 +296,67 @@ async function indexRows(db: D1Database, items: InventoryItem[]): Promise<Record
 	};
 }
 
-async function apply(env: Env, inv: Awaited<ReturnType<typeof buildInventory>>, items: InventoryItem[]) {
-	const del = (kind: InventoryItem['kind']) => items.filter((i) => i.kind === kind && i.action === 'delete');
+type Inventory = ReturnType<typeof buildInventory>;
+
+export async function apply(env: Env, inv: Inventory, until: number) {
+	const del = (kind: InventoryItem['kind']) => inv.items.filter((i) => i.kind === kind && i.action === 'delete');
 	const videoRepo = new R2Repository<VideoRecord>(env.videos);
 	const failures: string[] = [];
+	const total = { planned: 0, done: 0, left: 0 };
 	// Every step is idempotent (deletes, or writes recomputed from a fresh read), so retry it
 	const guard = async (label: string, fn: () => Promise<unknown>): Promise<boolean> => {
 		try {
-			await retry(fn);
+			await retry(fn, 5, until, WRITE_TIMEOUT_MS);
 			return true;
 		} catch (error) {
 			failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
 			return false;
 		}
 	};
-	const count = (results: boolean[]) => results.filter(Boolean).length;
+	const step = async <T>(what: string, items: T[], label: (item: T) => string, fn: (item: T) => Promise<unknown>): Promise<void> => {
+		const r = await mapUntil(items, WRITE_CONCURRENCY, (item) => guard(label(item), () => fn(item)), { deadline: until });
+		total.planned += items.length;
+		total.done += r.done;
+		total.left += r.left;
+		say(`[cleanup] ${what}: ${r.done}/${items.length} done${r.failed ? `, ${r.failed} failed` : ''}${r.left ? `, ${r.left} left for the next run` : ''}`);
+	};
 
 	// 1. Probe comments on kept videos (CommentDelete: removeStoredComment, then one write per video)
 	const commentsByVideo = new Map<string, string[]>();
-	for (const c of del('comment')) commentsByVideo.set(c.parent!, [...(commentsByVideo.get(c.parent!) ?? []), c.id]);
-	const commentVideosDone = count(await mapLimit([...commentsByVideo], WRITE_CONCURRENCY, ([videoId, ids]) => guard(`comments of ${videoId}`, async () => {
-		const video = await readJson<VideoRecord>(env.videos, videoId);
+	for (const c of del('comment')) push(commentsByVideo, c.parent!, c.id);
+	await step('videos with probe comments', [...commentsByVideo], ([id]) => `comments of ${id}`, async ([videoId, ids]) => {
+		const video = await readJson<VideoRecord>(env.videos, videoId, 1);
 		if (!video) return;
 		let comments = (video.comments ?? []) as StoredComment[];
 		for (const id of ids) comments = removeStoredComment(comments, id).comments;
 		await videoRepo.putObject(videoId, { ...video, comments });
-	})));
-	say(`[cleanup] removed the probe comments from ${commentVideosDone}/${commentsByVideo.size} video(s) (${del('comment').length} comment(s))`);
+	});
 
 	// 2. Videos (VideoBulkDelete). Their schedule entries go in step 7.
-	const videosDone = count(await mapLimit(del('video'), WRITE_CONCURRENCY, (item) => guard(`video ${item.id}`, () => videoRepo.deleteObject(item.id))));
-	say(`[cleanup] deleted ${videosDone}/${del('video').length} video record(s)`);
+	const videosGone = new Set<string>();
+	await step('video records', del('video'), (v) => `video ${v.id}`, async (v) => {
+		await videoRepo.deleteObject(v.id);
+		videosGone.add(v.id);
+	});
 
-	// 3. Community posts: the post object is removed outright (as removeChannelContent does; the
-	//    DeleteCommunityPost endpoint only marks it deleted, which is what left ~2,000 records
-	//    behind), its id leaves the channel post index (DeleteCommunityPost), then the comment
-	//    objects of those posts go too.
-	const postsByChannel = new Map<string, string[]>();
-	for (const p of del('post')) postsByChannel.set(p.parent!, [...(postsByChannel.get(p.parent!) ?? []), p.id]);
-	const postsDone = count(await mapLimit(del('post'), WRITE_CONCURRENCY, (p) => guard(`post ${p.id}`, () => env.community_posts.delete(`posts/${p.parent}/${p.id}.json`))));
+	// 3. Community posts: the comment objects, then the post object itself (as removeChannelContent
+	//    does; the DeleteCommunityPost endpoint only marks it deleted, which is what left ~2,000
+	//    records behind), then its id leaves the channel post index (DeleteCommunityPost).
+	const postsGone = new Map<string, string[]>();
+	await step('posts', del('post'), (p) => `post ${p.id}`, async (p) => {
+		for (;;) {
+			const page = await env.community_posts.list({ prefix: `comments/${p.id}/`, limit: 1000 });
+			if (page.objects.length === 0) break;
+			await env.community_posts.delete(page.objects.map((o) => o.key));
+			if (!page.truncated) break;
+		}
+		await env.community_posts.delete(`posts/${p.parent}/${p.id}.json`);
+		push(postsGone, p.parent!, p.id);
+	});
 	type PostIndex = { postIds: string[]; lastUpdated: string };
 	const postIndexRepo = new R2Repository<PostIndex>(env.community_posts);
-	await mapLimit([...postsByChannel], WRITE_CONCURRENCY, ([channelId, ids]) => guard(`post index of ${channelId}`, async () => {
+	// Not under the deadline: the posts of these are gone, and there is one write per channel
+	await mapLimit([...postsGone], WRITE_CONCURRENCY, ([channelId, ids]) => guard(`post index of ${channelId}`, async () => {
 		const gone = new Set(ids);
 		await postIndexRepo.updateObject(`posts/${channelId}/index.json`, (index) => {
 			if (!index.postIds?.some((id) => gone.has(id))) return false;
@@ -428,128 +365,138 @@ async function apply(env: Env, inv: Awaited<ReturnType<typeof buildInventory>>, 
 			return true;
 		});
 	}));
-	const commentKeys = del('post-comment').map((c) => c.id);
-	let postCommentsDone = 0;
-	for (let i = 0; i < commentKeys.length; i += 500) {
-		const batch = commentKeys.slice(i, i + 500);
-		if (await guard(`post comments batch ${i}`, () => env.community_posts.delete(batch))) postCommentsDone += batch.length;
-	}
-	say(`[cleanup] deleted ${postsDone}/${del('post').length} post(s) and ${postCommentsDone}/${commentKeys.length} post comment object(s)`);
 
 	// 4. Sections of kept channels (ChannelSectionDelete); deleted channels lose theirs in step 6
-	for (const s of del('section')) await guard(`section ${s.id}`, () => env.channel_sections.delete(s.id));
+	await step('sections', del('section'), (s) => `section ${s.id}`, (s) => env.channel_sections.delete(s.id));
 
 	// 5. Playlists (PlaylistDelete)
 	const playlistRepo = new R2Repository<unknown>(env.playlists);
-	for (const p of del('playlist')) await guard(`playlist ${p.id}`, () => playlistRepo.deleteObject(p.id));
+	await step('playlists', del('playlist'), (p) => `playlist ${p.id}`, (p) => playlistRepo.deleteObject(p.id));
 
-	// 6. Channels (ChannelDelete), one owner at a time so main-channel updates never race.
+	// 6. Channels (ChannelDelete), one owner at a time so main-channel updates never race. A channel
+	//    goes only when every video of it is really gone (a step above may have stopped or failed).
 	//    The owner's profile is updated afterwards, once (step 6b).
 	const channelRepo = new R2Repository<ChannelRecord>(env.channels);
 	const profileRepo = new R2Repository<ProfileRecord>(env.profiles);
-	const deleting = new Set(del('channel').map((c) => c.id));
-	const byOwner = new Map<string, ChannelRecord[]>();
-	for (const c of inv.channels) if (c.userId) byOwner.set(c.userId, [...(byOwner.get(c.userId) ?? []), c]);
-	const owners = [...byOwner].filter(([, list]) => list.some((c) => deleting.has(c.id)));
-	let channelsDone = 0;
-	await mapLimit(owners, WRITE_CONCURRENCY, async ([, owned]) => {
+	const deletable = del('channel').filter((c) => (inv.videosByChannel.get(c.id) ?? []).every((id) => videosGone.has(id)));
+	const deleting = new Set(deletable.map((c) => c.id));
+	const channelsGone = new Set<string>();
+	const byOwner = new Map<string, ChannelEntry[]>();
+	for (const c of inv.channels) if (c.userId) push(byOwner, c.userId, c);
+	const owners = [...byOwner.values()].filter((list) => list.some((c) => deleting.has(c.id)));
+	await step('owners of channels to delete', owners, (list) => `channels of ${list[0].userId}`, async (owned) => {
 		const kept = owned.filter((c) => !deleting.has(c.id));
-		for (const channel of owned.filter((c) => deleting.has(c.id))) {
-			if (await guard(`channel ${channel.id}`, async () => {
-				if (channel.isMain && kept.length > 0) {
-					const next = pickNewMainChannel([...kept, channel] as never[], channel.id) as ChannelRecord | null;
-					if (next && !next.isMain) {
-						const fresh = await readJson<ChannelRecord>(env.channels, next.id);
-						if (fresh) await channelRepo.putObject(next.id, { ...fresh, isMain: true, dateModified: new Date().toISOString() } as ChannelRecord);
-					}
+		for (const channel of owned.filter((c) => deleting.has(c.id) && !channelsGone.has(c.id))) {
+			if (channel.isMain && kept.length > 0) {
+				const next = pickNewMainChannel([...kept, channel] as never[], channel.id) as unknown as ChannelEntry | null;
+				if (next && !next.isMain) {
+					const fresh = await readJson<ChannelRecord>(env.channels, next.id, 1);
+					if (fresh) await channelRepo.putObject(next.id, { ...fresh, isMain: true, dateModified: new Date().toISOString() } as ChannelRecord);
 				}
-				await channelRepo.deleteObject(channel.id);
-				await releaseHandle(env.channel_tabs, channel.handle, channel.id);
-				await env.channel_tabs.delete(`channel-tabs/${channel.id}`);
-				// The channel's videos were hard-deleted in step 2 and nothing kept points at it
-				// (blockChannelDeletion), so skip the soft-delete scan of videos and playlists
-				// (maxObjects 0) and let it remove the channel's posts and sections.
-				await removeChannelContent(env, channel.id, 0);
-			})) channelsDone++;
+			}
+			await channelRepo.deleteObject(channel.id);
+			await releaseHandle(env.channel_tabs, channel.handle, channel.id);
+			await env.channel_tabs.delete(`channel-tabs/${channel.id}`);
+			// The channel's videos are gone (above) and nothing kept points at it (blockChannelDeletion),
+			// so skip the soft-delete scan of videos and playlists (maxObjects 0) and let it remove the
+			// channel's posts and sections.
+			await removeChannelContent(env, channel.id, 0);
+			channelsGone.add(channel.id);
 		}
 	});
-	say(`[cleanup] deleted ${channelsDone}/${deleting.size} channel(s)`);
+	say(`[cleanup] channels: ${channelsGone.size}/${del('channel').length} deleted`);
 
-	// 6b. Profiles of test accounts: drop the ids of deleted channels (ChannelDelete does this per channel)
-	const refsDone = count(await mapLimit(del('profile-ref'), WRITE_CONCURRENCY, (item) => guard(`profile ${item.id}`, async () => {
-		const gone = new Set((item.detail?.channels as string[]) ?? []);
-		const profile = await readJson<ProfileRecord>(env.profiles, item.id);
+	// 6b. Profiles of test accounts: drop the ids of channels that are gone (ChannelDelete does this per channel)
+	const stillThere = new Set(del('channel').map((c) => c.id).filter((id) => !channelsGone.has(id)));
+	await step('profiles with dead channels', del('profile-ref'), (item) => `profile ${item.id}`, async (item) => {
+		const gone = new Set(((item.detail?.channels as string[]) ?? []).filter((id) => !stillThere.has(id)));
+		const profile = await readJson<ProfileRecord>(env.profiles, item.id, 1);
 		if (!profile?.channels?.some((id) => gone.has(id))) return;
 		await profileRepo.putObject(item.id, { ...profile, channels: profile.channels.filter((id) => !gone.has(id)) });
-	})));
-	say(`[cleanup] updated ${refsDone}/${del('profile-ref').length} profile(s)`);
+	});
 
 	// 6c. Handles and tab configs of channels that are gone (ChannelDelete's releaseHandle and
 	//     tabs delete, for deletes that stopped half-way). Runs after step 6, so the handles of
 	//     channels deleted in this run are already released and these keys are the leftovers.
-	const deadKeys = [...del('handle'), ...del('tabs')].map((i) => i.id);
-	const deadDone = count(await mapLimit(deadKeys, WRITE_CONCURRENCY, (k) => guard(`channel-tabs ${k}`, () => env.channel_tabs.delete(k))));
-	say(`[cleanup] removed ${deadDone}/${deadKeys.length} handle / tab config object(s) of deleted channels`);
+	const channelOf = (i: InventoryItem) => (i.kind === 'tabs' ? i.id.replace('channel-tabs/', '') : (i.parent ?? ''));
+	const deadKeys = [...del('handle'), ...del('tabs')].filter((i) => !stillThere.has(channelOf(i)));
+	await step('handles and tab configs of deleted channels', deadKeys, (i) => `channel-tabs ${i.id}`, (i) => env.channel_tabs.delete(i.id));
 
 	// 7. Schedule entries of deleted or missing videos
-	const entries = del('schedule-entry').map((e) => e.id);
-	let entriesDone = 0;
-	for (let i = 0; i < entries.length; i += 500) {
-		const batch = entries.slice(i, i + 500);
-		if (await guard(`schedule batch ${i}`, () => env.SCHEDULED_VIDEOS.delete(batch))) entriesDone += batch.length;
-	}
-	say(`[cleanup] deleted ${entriesDone}/${entries.length} schedule entries`);
-	return failures;
+	const planned = new Set(del('video').map((v) => v.id));
+	const entries = del('schedule-entry').filter((e) => !planned.has(e.parent ?? '') || videosGone.has(e.parent ?? '')).map((e) => e.id);
+	const batches = Array.from({ length: Math.ceil(entries.length / 500) }, (_, i) => entries.slice(i * 500, (i + 1) * 500));
+	await step('schedule entry batches', batches, (b) => `schedule entries from ${b[0]}`, (b) => env.SCHEDULED_VIDEOS.delete(b));
+	return { failures, ...total };
 }
 
 async function main(): Promise<void> {
+	const started = Date.now();
+	const until = (minutes: number) => started + minutes * 60_000;
 	const args = parseArgs(process.argv.slice(2));
 	const config = writeQaProxyConfig(args.apiUrl);
 	const proxy = await getPlatformProxy<Env>({ configPath: config.path, remoteBindings: true });
 	const pending: Promise<unknown>[] = [];
 	const env = withSearchSync(proxy.env as unknown as Env, { waitUntil: (p: Promise<unknown>) => void pending.push(p) });
 	try {
-		const inv = await buildInventory(env, args.minAgeMs);
+		say('[cleanup] listing QA buckets…');
+		const { listing, keys } = await listEverything(env, until(DEADLINES_MIN.list));
+		const state = parseState(args.state && existsSync(args.state) ? readFileSync(args.state, 'utf8') : null);
+		prune(state, listing);
+		const toRead = pendingReads(state, listing);
+		for (const [store, objects] of Object.entries(listing)) say(`  ${store.padEnd(10)} ${objects.size} listed, ${objects.size - Object.keys(state.stores[store as Store]).length} to read`);
+		const read = await readPending(env, state, toRead, until(DEADLINES_MIN.read));
+		if (args.state) writeFileSync(args.state, JSON.stringify(state));
+		say(`[cleanup] read ${read.done}/${toRead.length} new or changed record(s)${read.failed ? `, ${read.failed} failed` : ''}${read.left + read.failed ? `; ${read.left + read.failed} left for the next run` : ''}`);
+
+		const inv = buildInventory(state, listing, keys, { now: Date.now(), minAgeMs: args.minAgeMs });
 		const summary = summarize(inv.items);
 		const index = await indexRows(proxy.env.SEARCH_DB, inv.items);
-		writeFileSync(args.out, JSON.stringify({ generatedAt: new Date().toISOString(), mode: args.apply ? 'apply' : 'dry-run', summary, indexRowsOfDeletedRecords: index, items: inv.items.map(publicItem) }, null, 2));
+		const unread = read.left + read.failed;
+		writeFileSync(args.out, JSON.stringify({ generatedAt: new Date().toISOString(), mode: args.apply ? 'apply' : 'dry-run', unread, summary, indexRowsOfDeletedRecords: index, items: inv.items.filter((i) => i.action !== 'keep') }, null, 2));
 		say(`[cleanup] inventory: ${args.out}`);
-		for (const [kind, counts] of Object.entries(summary)) say(`  ${kind.padEnd(15)} delete ${counts.delete}  keep ${counts.keep}  unsure ${counts.unsure}`);
+		for (const [kind, counts] of Object.entries(summary)) say(`  ${kind.padEnd(15)} delete ${counts.delete}  keep ${counts.keep}  unsure ${counts.unsure}  wait ${counts.wait}`);
 		say(`  index rows of records to delete: ${JSON.stringify(index)}`);
-		for (const u of inv.items.filter((i) => i.action === 'unsure').map(publicItem)) say(`  unsure ${u.kind} ${u.id} (${u.owner ?? ''}): ${u.reason}`);
+		for (const u of inv.items.filter((i) => i.action === 'unsure')) say(`  unsure ${u.kind} ${u.id} ${JSON.stringify(u.title ?? '')} (${u.owner ?? ''}): ${u.reason}`);
+		let result = { failures: [] as string[], planned: 0, done: 0, left: 0 };
 		if (!args.apply) {
 			say('[cleanup] dry run: nothing changed (pass --apply to delete)');
-			return;
-		}
-		const failures = await apply(env, inv, inv.items);
-		await Promise.allSettled(pending.splice(0));
-		const after = await indexRows(proxy.env.SEARCH_DB, inv.items);
-		say(`[cleanup] index rows of deleted records left: ${JSON.stringify(after)}`);
-		if (args.reconcile) {
-			say('[cleanup] running the search and ownership reconcile passes…');
-			try {
-				say(`  search: ${JSON.stringify(await reconcileSearchIndex(proxy.env as never, { pagesPerEntity: 100 }))}`);
-				say(`  ownership: ${JSON.stringify(await reconcileOwnershipIndex(proxy.env as never, { pagesPerKind: 100 }))}`);
-			} catch (error) {
-				// The daily cron finishes the pass; a re-run of --apply --reconcile resumes it too
-				say(`  reconcile stopped: ${error instanceof Error ? error.message : String(error)}`);
-				process.exitCode = 1;
+		} else {
+			result = await apply(env, inv, until(DEADLINES_MIN.write));
+			await withTimeout(() => Promise.allSettled(pending.splice(0)), WRITE_TIMEOUT_MS).catch(() => say('  some index writes were still running (the daily reconcile repairs them)'));
+			if (args.reconcile && Date.now() < until(DEADLINES_MIN.reconcile)) {
+				// A bounded step of the passes the daily cron finishes; each resumes where the last stopped
+				say('[cleanup] running a step of the search and ownership reconcile passes…');
+				try {
+					await withTimeout(async () => {
+						say(`  search: ${JSON.stringify(await reconcileSearchIndex(proxy.env as never, { pagesPerEntity: 2 }))}`);
+						say(`  ownership: ${JSON.stringify(await reconcileOwnershipIndex(proxy.env as never, { pagesPerKind: 2 }))}`);
+					}, until(DEADLINES_MIN.reconcile) - Date.now());
+				} catch (error) {
+					say(`  reconcile stopped, the daily cron goes on: ${error instanceof Error ? error.message : String(error)}`);
+				}
 			}
+			for (const f of result.failures) say(`  failed, the next run tries again: ${f}`);
+			if (result.left) say(`[cleanup] ${result.left} leftover(s) not reached this time`);
 		}
-		if (failures.length > 0) {
-			for (const f of failures) say(`  failed: ${f}`);
+		const stuck = stalled({ toRead: toRead.length, read: read.done, toDelete: result.planned, deleted: result.done });
+		if (stuck) {
+			say(`[cleanup] no progress: ${stuck}`);
 			process.exitCode = 1;
 		}
 	} finally {
-		await Promise.allSettled(pending);
-		await proxy.dispose();
+		await withTimeout(() => Promise.allSettled(pending)).catch(() => undefined);
+		await withTimeout(() => proxy.dispose()).catch(() => undefined);
 		config.dispose();
 	}
 }
 
 if (require.main === module) {
-	main().catch((error) => {
-		process.stderr.write(`[cleanup] ${error instanceof Error ? error.message : String(error)}\n`);
-		process.exit(1);
-	});
+	main()
+		.catch((error) => {
+			process.stderr.write(`[cleanup] ${error instanceof Error ? error.message : String(error)}\n`);
+			process.exitCode = 1;
+		})
+		// A call the proxy never answered would keep the process alive
+		.finally(() => process.exit());
 }

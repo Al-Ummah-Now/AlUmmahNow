@@ -7,6 +7,11 @@
 # anything owned by a non-test account are kept; "unsure" items are only listed.
 # Anything younger than 2 hours is left alone, so a running E2E job is never hit.
 #
+# One run cannot read all of QA, so a run is bounded (list, read, delete and reconcile each have a
+# deadline) and starts from what earlier runs read: the state, an artifact of the last run that has
+# one. Each run reads what is new or changed, deletes what it knows enough about and leaves the rest
+# for the next day. It ends red only when it got nowhere.
+#
 # QA only: the script refuses any other host, worker config or bucket.
 # Token: R2 + D1 edit and Workers Scripts edit (wrangler's remote bindings) on the
 # QA account. The inventory JSON is uploaded as an artifact. The repo is public, so it and the log show
@@ -30,6 +35,8 @@ on:
 permissions:
   contents: read
   packages: read
+  # The previous runs' state artifact
+  actions: read
 
 concurrency:
   group: qa-cleanup
@@ -39,7 +46,8 @@ jobs:
   sweep:
     name: QA cleanup (${{ inputs.mode || 'dry-run' }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Above the script's own last deadline (DEADLINES_MIN in scripts/qa/cleanup-inventory.ts) and the setup
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +70,18 @@ jobs:
           pnpm --filter @al-ummah/logger build
           pnpm --filter @al-ummah/theme-packages build
 
+      - name: Get what earlier runs read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The newest run of this workflow on main that left a state; none (or too old): start afresh
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow qa-cleanup.yml --branch main --limit 14 --json databaseId -q '.[].databaseId'); do
+            if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name qa-cleanup-state --dir "$RUNNER_TEMP/state" 2>/dev/null; then
+              echo "State of run $id"
+              break
+            fi
+          done
+
       - name: Sweep QA
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -70,16 +90,17 @@ jobs:
           MODE: ${{ inputs.mode || 'dry-run' }}
         run: |
           set -o pipefail
-          args=(--out "$RUNNER_TEMP/qa-cleanup.json")
+          mkdir -p "$RUNNER_TEMP/state"
+          args=(--out "$RUNNER_TEMP/qa-cleanup.json" --state "$RUNNER_TEMP/state/qa-cleanup-state.json")
           if [ "$MODE" = apply ]; then args+=(--apply --reconcile); fi
-          pnpm -s qa:cleanup "${args[@]}" 2>&1 | grep -v 'internal error; reference' | tee qa-cleanup.txt
+          pnpm -s qa:cleanup "${args[@]}" 2>&1 | grep -vE 'internal error; reference|^$' | tee qa-cleanup.txt
           { echo "### QA cleanup ($MODE)"; echo '```'; grep -E '^\[cleanup\]|^  ' qa-cleanup.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Scan inventory for secrets
         if: always()
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: python3 scripts/ci/scan-artifacts-for-secrets.py --env CLOUDFLARE_API_TOKEN --remove "$RUNNER_TEMP/qa-cleanup.json"
+        run: python3 scripts/ci/scan-artifacts-for-secrets.py --env CLOUDFLARE_API_TOKEN --remove "$RUNNER_TEMP/qa-cleanup.json" "$RUNNER_TEMP/state"
 
       - name: Upload inventory
         if: always()
@@ -87,5 +108,14 @@ jobs:
         with:
           name: qa-cleanup-inventory
           path: ${{ runner.temp }}/qa-cleanup.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload what was read, for the next run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-cleanup-state
+          path: ${{ runner.temp }}/state/qa-cleanup-state.json
           retention-days: 30
           if-no-files-found: ignore
