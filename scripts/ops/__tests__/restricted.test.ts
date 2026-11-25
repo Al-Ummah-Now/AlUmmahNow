@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mediaLogLines } from '../media-diagnostics.ts';
 import { logLines, pathLines } from '../prod-errors.ts';
 import { leftOutLine, messageTemplate, placeLog, restrictedPath, restrictedText, unrestricted } from '../restricted.ts';
 
@@ -43,6 +44,25 @@ test('every restricted line is left out of both listings, and counted', () => {
 	assert.doesNotMatch(paths.lines.join('\n'), /SECRET|csam|child.?safety|guest-report|SafetyMail|Retention|takedown/i);
 	assert.ok(paths.leftOut >= RESTRICTED.length - 1);
 	assert.match(paths.lines.join('\n'), /Job failed/);
+});
+
+test('media diagnostics: the same lines are left out and counted, for every Worker', () => {
+	const ordinary = line('[Media] Job failed', { videoId: ID, stage: 'probe' }, '/internal/media/events');
+	for (const media of [true, false]) {
+		const r = mediaLogLines([...RESTRICTED, ordinary], { media });
+		assert.deepEqual([r.leftOut, r.error, r.warn], [RESTRICTED.length, 1, 0]);
+		assert.doesNotMatch(r.lines.join('\n'), /SECRET|csam|child.?safety|guest-report|SafetyMail|Retention|takedown/i);
+		assert.ok(r.lines.join('\n').includes(ID), 'the rest keeps its fields');
+	}
+	// The request's path is on an info line of the same request
+	const info = line('[Api] SECRET', {}, '/api/csam/1', 'm');
+	info.source.level = info.$metadata.level = 'info';
+	assert.equal(mediaLogLines([info, line('[Api] plain', {}, undefined, 'm')]).leftOut, 1);
+	// No tag and no path: the media Worker's lines never have one
+	const bare = line(`Job ${ID} failed`, { videoId: ID });
+	assert.doesNotMatch(mediaLogLines([bare]).lines.join('\n'), /9a66ebfa/);
+	assert.ok(mediaLogLines([bare], { media: true }).lines.join('\n').includes(ID));
+	assert.equal(mediaLogLines([{ ...bare, $metadata: { message: 'x', level: 'info' }, $container: { placementId: 'pl' } }], { allLevels: true, media: true }).lines.length, 2);
 });
 
 test('everything else keeps its fields, ids and extra', () => {

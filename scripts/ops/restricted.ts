@@ -41,7 +41,7 @@ export function messageTemplate(message: unknown): string {
 export interface LogEvent {
 	source?: unknown;
 	$metadata?: { message?: unknown; error?: unknown; level?: unknown; timestamp?: unknown };
-	$workers?: { event?: { request?: { url?: unknown; path?: unknown } }; scriptName?: unknown };
+	$workers?: { event?: { request?: { url?: unknown; path?: unknown } }; scriptName?: unknown; requestId?: unknown };
 }
 
 const TAG = /^\s*\[[A-Za-z][A-Za-z0-9 _.:-]{0,60}\]/;
@@ -52,6 +52,19 @@ export function placeLog(e: LogEvent, path: string): 'restricted' | 'template' |
 	const message = String(e.$metadata?.message ?? source?.message ?? source?.msg ?? '');
 	if (restrictedPath(path) || restrictedText(message) || restrictedText(e.$metadata?.error) || restrictedText(e.source)) return 'restricted';
 	return path || TAG.test(message) ? 'full' : 'template';
+}
+
+export function pathOf(url: unknown): string {
+	return String(url ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]!.split('#')[0]!;
+}
+
+export const requestPath = (e: LogEvent): string => pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
+
+/** The events of one Worker that may be in a report. A restricted request takes all its lines with it. */
+export function placed<T extends LogEvent>(events: T[]): { e: T; template: boolean }[] {
+	const of = events.map((e) => ({ e, place: placeLog(e, requestPath(e)) }));
+	const requests = new Set(of.filter((x) => x.place === 'restricted').map((x) => x.e.$workers?.requestId).filter(Boolean));
+	return of.filter((x) => x.place !== 'restricted' && !requests.has(x.e.$workers?.requestId)).map((x) => ({ e: x.e, template: x.place === 'template' }));
 }
 
 /** Rows without the restricted ones. */
