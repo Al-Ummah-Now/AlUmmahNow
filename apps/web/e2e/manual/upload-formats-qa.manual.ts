@@ -32,14 +32,46 @@ import * as os from 'os';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { releaseEnv, target } from '../release/targets';
-import { apiFetch, createProfile, signUpOnWeb, type WebUser } from '../release/web-session';
+import { apiFetch, contextAccessToken, createProfile, signUpOnWeb, type WebUser } from '../release/web-session';
 import { grantCreatorTier } from '../release/creator-tier';
 import { submitNewChannelInMenu } from '../release/account-menu';
 import { trackRunUploads } from '../release/run-videos';
-import { recordResource } from '../release/builders';
+import { recordResource, sessionRefreshToken } from '../release/builders';
 
 test.use({ trace: 'off' });
 test.describe.configure({ retries: 0, mode: 'serial' });
+
+/**
+ * The account's access token lives 15 minutes on QA and this check runs longer, so every API call goes
+ * through api(): the token is renewed through the web session (contextAccessToken: the web app keeps the
+ * cookie's refresh token current) every 8 minutes, and every call has a timeout. The cookie's refresh
+ * token is written to FORMATS_SESSION_FILE each time, for the workflow's cleanup step
+ * (scripts/e2e/delete-format-videos.ts), which deletes the run's videos whatever became of this process.
+ */
+const REQUEST_TIMEOUT_MS = 60_000;
+const TOKEN_MAX_AGE_MS = 8 * 60_000;
+const session: { user?: WebUser; context?: import('@playwright/test').BrowserContext; channelId: string; tokenAt: number } = { channelId: '', tokenAt: 0 };
+
+async function persistSession(): Promise<void> {
+  const file = process.env.FORMATS_SESSION_FILE;
+  if (!file || !session.context) return;
+  const refreshToken = await sessionRefreshToken(session.context).catch(() => undefined);
+  if (refreshToken) fs.writeFileSync(file, JSON.stringify({ refreshToken, channelId: session.channelId }), { mode: 0o600 });
+}
+
+async function freshToken(): Promise<void> {
+  if (!session.user || !session.context || Date.now() - session.tokenAt < TOKEN_MAX_AGE_MS) return;
+  const token = await contextAccessToken(session.context).catch(() => undefined);
+  if (token) session.user.accessToken = token;
+  session.tokenAt = Date.now();
+  await persistSession();
+}
+
+/** apiFetch with a fresh token and a timeout */
+async function api(path: string, init: RequestInit = {}): Promise<Response> {
+  await freshToken();
+  return apiFetch(session.user!, path, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+}
 
 interface Format {
   label: string;
@@ -92,7 +124,7 @@ async function channelIn(page: Page, user: WebUser, name: string): Promise<strin
   let channelId = '';
   await expect
     .poll(async () => {
-      const res = await apiFetch(user, '/api/channels?limit=100');
+      const res = await apiFetch(user, '/api/channels?limit=100', { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; name: string }> };
       channelId = body.data?.find((c) => c.name === name)?.id ?? '';
       return channelId;
@@ -102,10 +134,10 @@ async function channelIn(page: Page, user: WebUser, name: string): Promise<strin
 }
 
 /** The form's own calls (initiate, TUS create and PATCH, complete) for a file the form refuses. Returns the video id. */
-async function uploadViaApi(user: WebUser, channelId: string, file: string, mimeType: string, title: string, onInitiate: (id: string) => void): Promise<string> {
+async function uploadViaApi(channelId: string, file: string, mimeType: string, title: string, onInitiate: (id: string) => void): Promise<string> {
   const bytes = fs.readFileSync(file);
   const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json', channelId }, body: JSON.stringify(body) });
-  const initiate = await apiFetch(user, '/api/videos/upload/initiate', json({ title, description: 'Formats check', fileSize: bytes.length, mimeType, isPublic: false }));
+  const initiate = await api('/api/videos/upload/initiate', json({ title, description: 'Formats check', fileSize: bytes.length, mimeType, isPublic: false }));
   expect(initiate.status, `initiate for ${mimeType}: ${await initiate.clone().text()}`).toBeLessThan(300);
   const { result } = (await initiate.json()) as { result?: { videoId?: string; tusSessionId?: string } };
   const id = result?.videoId ?? '';
@@ -116,7 +148,7 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
   }
   expect(id && result?.tusSessionId, 'initiate returned no video id or TUS session').toBeTruthy();
   const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
-  const create = await apiFetch(user, '/api/videos/tus', {
+  const create = await api('/api/videos/tus', {
     method: 'POST',
     headers: {
       'Tus-Resumable': '1.0.0',
@@ -127,13 +159,15 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
   expect(create.status, `TUS create: ${await create.clone().text()}`).toBeLessThan(300);
   const location = create.headers.get('Location');
   expect(location, 'TUS create returned no Location').toBeTruthy();
+  await freshToken();
   const patch = await fetch(new URL(location as string, target().api), {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${user.accessToken}`, 'Tus-Resumable': '1.0.0', 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
+    signal: AbortSignal.timeout(2 * REQUEST_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${session.user!.accessToken}`, 'Tus-Resumable': '1.0.0', 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
     body: new Uint8Array(bytes),
   });
   expect(patch.status, `TUS PATCH: ${await patch.clone().text()}`).toBeLessThan(300);
-  const complete = await apiFetch(user, '/api/videos/upload/complete', json({ videoId: id, fileSize: bytes.length, duration: 5 }));
+  const complete = await api('/api/videos/upload/complete', json({ videoId: id, fileSize: bytes.length, duration: 5 }));
   expect(complete.status, `complete: ${await complete.clone().text()}`).toBeLessThan(300);
   return id;
 }
@@ -141,8 +175,8 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
 type UploadStatus = { status?: string; r2?: { status?: string; error?: string } };
 const terminal = (v: string | undefined) => v === 'ready' || v === 'failed';
 
-async function status(user: WebUser, id: string, channelId: string): Promise<{ status?: string; r2?: { status?: string; error?: string } }> {
-  const res = await apiFetch(user, `/api/videos/${id}/upload-status`, { headers: { channelId } });
+async function status(id: string, channelId: string): Promise<{ status?: string; r2?: { status?: string; error?: string } }> {
+  const res = await api(`/api/videos/${id}/upload-status`, { headers: { channelId } });
   return ((await res.json().catch(() => ({}))) as { result?: { status?: string; r2?: { status?: string; error?: string } } }).result ?? {};
 }
 
@@ -174,6 +208,11 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     await createProfile(user);
     await grantCreatorTier(user);
     channelId = await channelIn(page, user, `Formats check ${Date.now().toString(36)}`);
+    session.user = user;
+    session.context = page.context();
+    session.channelId = channelId;
+    session.tokenAt = Date.now();
+    await persistSession();
 
     // Phase 1: upload every clip, one after another (the form's flow, or the API for what the form refuses).
     // Each format is on its own: a failure is noted in the table and the others go on.
@@ -195,7 +234,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         if (f.viaApi) {
           // The web list does not take it: the form's answer, then the same calls the form would make
           out.note = out.formAccepted ? 'the form took it' : 'the form refuses it (expected); uploaded through the API';
-          id = await uploadViaApi(user, channelId, path.join(dir, f.file), f.viaApi, title, (videoId) => made.set(videoId, channelId));
+          id = await uploadViaApi(channelId, path.join(dir, f.file), f.viaApi, title, (videoId) => made.set(videoId, channelId));
         } else {
           if (!out.formAccepted) {
             out.error = `the form refused it: ${(await page.getByTestId('upload-page-error').textContent().catch(() => '')) ?? ''}`.trim();
@@ -208,7 +247,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         }
         await expect
           .poll(async () => {
-            const res = await apiFetch(user!, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
+            const res = await api(`/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
             id = ((await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> }).data?.find((v) => v.title === title)?.id ?? id;
             return id;
           }, { timeout: 60_000 })
@@ -216,6 +255,8 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         made.set(id, channelId);
         waiting.push({ out, id });
       } catch (error) {
+        // A closed page or an ended test is a cancellation, not this format's failure: stop, clean up
+        if (page.isClosed() || /has been closed|Test ended|Test timeout|Target (page|closed)/i.test(String(error))) throw error;
         out.error = `upload failed: ${oneLine(error)}`;
       }
     }
@@ -227,8 +268,8 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     const deadline = Math.min(Date.now() + BUNNY_TIMEOUT_MS, startedAt + ENCODES_END_MS);
     const bunnyAnsweredAt = new Map<string, number>();
     const last = new Map<string, Awaited<ReturnType<typeof status>>>();
-    for (let pending = waiting.slice(); pending.length > 0 && Date.now() < deadline; ) {
-      for (const w of pending) last.set(w.id, await status(user, w.id, channelId).catch((): UploadStatus => ({})));
+    for (let pending = waiting.slice(); pending.length > 0 && Date.now() < deadline && !page.isClosed(); ) {
+      for (const w of pending) last.set(w.id, await status(w.id, channelId).catch((): UploadStatus => ({})));
       pending = pending.filter((w) => {
         const s = last.get(w.id)!;
         if (terminal(s.status) && !bunnyAnsweredAt.has(w.id)) bunnyAnsweredAt.set(w.id, Date.now());
@@ -238,7 +279,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
       if (pending.length > 0) await page.waitForTimeout(10_000);
     }
     for (const w of waiting) {
-      const s = last.get(w.id) ?? (await status(user, w.id, channelId).catch((): UploadStatus => ({})));
+      const s = last.get(w.id) ?? (await status(w.id, channelId).catch((): UploadStatus => ({})));
       w.out.bunny = s.status ?? 'unknown';
       w.out.r2 = s.r2 ? `${s.r2.status}${s.r2.error ? `: ${s.r2.error}` : ''}` : 'no r2';
       const graceOver = bunnyAnsweredAt.has(w.id) && Date.now() - bunnyAnsweredAt.get(w.id)! > 60_000;
@@ -249,14 +290,23 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     outcomes.forEach((o) => (o.error ??= `stopped: ${oneLine(error)}`));
     if (outcomes.length === 0) outcomes.push({ format: '(setup)', file: '', formAccepted: null, bunny: '-', r2: '-', note: '', error: `stopped: ${oneLine(error)}` });
   } finally {
-    for (const [id, channel] of made) {
-      if (!user) break;
-      await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId: channel } }).catch(() => undefined);
-      await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId: channel } }).catch(() => undefined);
+    // Delete every video the run initiated, all at once, each request bounded. The workflow's cleanup
+    // step deletes what this misses (a dead process, an expired session).
+    let deleteFailures = 0;
+    if (session.user) {
+      const results = await Promise.allSettled(
+        [...made].map(async ([id, channel]) => {
+          for (const suffix of ['', '/permanent']) {
+            const res = await api(`/api/videos/${id}${suffix}`, { method: 'DELETE', headers: { channelId: channel } });
+            if (!res.ok && res.status !== 404) throw new Error(`DELETE ${suffix || 'trash'} answered ${res.status}`);
+          }
+        }),
+      );
+      deleteFailures = results.filter((r) => r.status === 'rejected').length;
     }
     fs.rmSync(dir, { recursive: true, force: true });
     const rows = outcomes.map((o) => `${o.format.padEnd(36)} form:${String(o.formAccepted).padEnd(5)} bunny:${o.bunny.padEnd(8)} r2:${o.r2} ${o.note} ${o.error ? `ERROR ${o.error}` : ''}`);
-    process.stdout.write(`\n[formats] ${made.size} videos made and deleted\n${rows.join('\n')}\n`);
+    process.stdout.write(`\n[formats] ${made.size} videos made, ${deleteFailures} delete(s) failed\n${rows.join('\n')}\n`);
     // The table for the workflow's job summary (FORMATS_SUMMARY_FILE): no ids, emails or secrets in it
     if (process.env.FORMATS_SUMMARY_FILE) {
       const cell = (v: string) => v.replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
@@ -265,7 +315,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         '|---|---|---|---|---|',
         ...outcomes.map((o) => `| ${cell(o.format)} | ${o.formAccepted === null ? 'not tried' : o.formAccepted ? 'accepted' : 'refused'} | ${cell(o.bunny)} | ${cell(o.r2)} | ${cell([o.note, o.error ? `FAILED: ${o.error}` : ''].filter(Boolean).join(' '))} |`),
         '',
-        `${made.size} videos made, then deleted.`,
+        `${made.size} videos made; ${deleteFailures === 0 ? 'all deleted' : `${deleteFailures} could not be deleted here (the workflow's cleanup step retries them)`}.`,
       ].join('\n');
       fs.writeFileSync(process.env.FORMATS_SUMMARY_FILE, `${md}\n`);
     }

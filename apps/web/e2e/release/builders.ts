@@ -140,7 +140,7 @@ function findRefreshToken(value: unknown): string | undefined {
 }
 
 /** The refresh token of the web session in this browser context (undefined: cleanup keeps the original access token). */
-async function sessionRefreshToken(context: BrowserContext): Promise<string | undefined> {
+export async function sessionRefreshToken(context: BrowserContext): Promise<string | undefined> {
   const cookie = (await context.cookies(target().web)).find((c) => c.name === 'al_ummah_session');
   try {
     return findRefreshToken(JSON.parse(decodeURIComponent(cookie?.value ?? '{}')));

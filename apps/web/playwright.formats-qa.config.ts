@@ -10,5 +10,6 @@ export default defineConfig({
   timeout: 55 * 60_000,
   expect: { timeout: 20_000 },
   reporter: [['list']],
-  use: { ...devices['Desktop Chrome'] },
+  // Every click, fill and navigation is bounded, so no single hung action can run out the test's time
+  use: { ...devices['Desktop Chrome'], actionTimeout: 60_000, navigationTimeout: 60_000 },
 });
