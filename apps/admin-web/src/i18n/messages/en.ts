@@ -249,6 +249,7 @@ const en = {
     required: 'Enter the {lang} text, or use Translate.',
     oneIsEnough: 'One language is enough here. Add the other, or use Translate.',
     cut: 'The {lang} translation is longer than {max} characters and was cut. Check the end before saving.',
+    tooLong: 'Use at most {max} characters.',
     quran: 'This is Quran text: it is never machine-translated. Paste the official text and a recognized translation.',
     quranRefs: 'Found: {refs}.',
     missingAr: 'Arabic missing',

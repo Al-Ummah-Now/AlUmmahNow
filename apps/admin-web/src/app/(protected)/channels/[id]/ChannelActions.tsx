@@ -152,7 +152,7 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
               multiline
               rows={4}
               maxLength={5000}
-              required={hasBoth(initialDescription)}
+              required={false}
               help={hasBoth(initialDescription) ? undefined : t('localized.oneIsEnough')}
               disabled={!!busy}
               testId="channel-edit-description"

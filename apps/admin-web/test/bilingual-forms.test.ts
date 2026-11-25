@@ -5,6 +5,7 @@
  */
 import './support/next-navigation-stub';
 import Module from 'node:module';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -68,6 +69,9 @@ stubAbs('../src/lib/api/admin.ts', {
   retryProcessing: okAction,
   syncProcessing: okAction,
 });
+
+// The theme builder's live preview is an iframe; its form is what is tested here
+stubAbs('../src/app/(protected)/site-theme/builder/Preview.tsx', { Preview: () => null });
 
 describe('bilingual admin forms in a DOM', () => {
   let dom: JSDOM;
@@ -193,6 +197,27 @@ describe('bilingual admin forms in a DOM', () => {
     await m.unmount();
   });
 
+  for (const [locale, words] of [
+    ['en', 'Enter the Arabic text, or use Translate.'],
+    ['ar', 'أدخل نص العربية، أو استخدم الترجمة.'],
+  ] as const) {
+    it(`the theme builder words a missing language in the admin's language (${locale})`, async () => {
+      const { ThemeEditor } = await import('../src/app/(protected)/site-theme/builder/ThemeEditor');
+      const theme = JSON.parse(readFileSync(path.resolve(__dirname, '../../../packages/theme-packages/themes/zujaj/theme.json'), 'utf8'));
+      const initial = { ...theme, id: 'ramadan-nights', name: { en: 'Ramadan Nights', ar: 'ليالي رمضان' }, description: { en: 'Blue glass', ar: 'زجاج أزرق' } };
+      const m = await mount(React.createElement(ThemeEditor, { initial, assets: [], latestVersion: null, activeVersion: null, canEdit: true }), locale);
+      await click(m.q('section-general'));
+      const ar = () => m.q('general-description-ar') as HTMLInputElement;
+      const error = () => m.container.querySelector(`#${ar().id}-error`)?.textContent ?? null;
+      assert.equal(error(), null);
+      await type(ar(), '');
+      assert.equal(error(), words);
+      await type(m.q('general-description-en'), '');
+      assert.equal(error(), null, 'an optional description may go as a whole');
+      await m.unmount();
+    });
+  }
+
   // The two forms that edit a user's own text
   const EDITS = [
     {
@@ -271,6 +296,7 @@ describe('bilingual admin forms in a DOM', () => {
     it(`${E.form}: a text with both keeps both; the description may go as a whole`, async () => {
       const m = await open({ [E.keys.plain]: 'Two', [E.keys.map]: { en: 'Two', ar: 'لغتان' }, description: 'About', descriptionLocalized: { en: 'About', ar: 'نبذة' } });
       assert.equal(m.en().required, true);
+      assert.equal(m.descEn().required, false, 'the description is optional');
       await type(m.ar(), '');
       await type(m.descEn(), '');
       await m.save();

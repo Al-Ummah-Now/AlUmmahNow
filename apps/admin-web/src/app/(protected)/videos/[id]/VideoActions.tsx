@@ -143,7 +143,7 @@ export function VideoActions({ video, permissions }: Props) {
               multiline
               rows={5}
               maxLength={5000}
-              required={hasBoth(initialDescription)}
+              required={false}
               help={hasBoth(initialDescription) ? undefined : t('localized.oneIsEnough')}
               disabled={!!busy}
               testId="video-edit-description"
