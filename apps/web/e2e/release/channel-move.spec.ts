@@ -5,7 +5,8 @@
  * On: the owner opens Move channel. Coming back from "Sign in with another account" as someone else says
  * it isn't their channel and changes nothing; signed in again as the owner, they pick the admin, type the
  * @handle and send the offer. The admin sees it in their offers (Arabic too, axe clean), accepts, and owns
- * the channel; the old owner has no access and reads that it moved.
+ * and edits the channel; the old owner's edits are refused, they read that it moved, and both have their
+ * notices, which open the offer.
  *
  * The switch row is written to the stack's database and put back however the test ends; no other spec
  * depends on channelMove.
@@ -146,6 +147,24 @@ test.describe('Release: channel moves by owners', () => {
       const receiver = admin;
       await expect.poll(() => roleOf(receiver), { timeout: 60_000, intervals: [500, 1000, 2000] }).toBe('owner');
       await expect.poll(() => roleOf(owner), { timeout: 30_000, intervals: [500, 1000] }).toBeNull();
+
+      // The new owner edits the channel; the old owner can't any more
+      const edit = async (user: WebUser, description: string) => (await apiFetch(user, `/api/channels/${channelId}`, json({ description }, 'PUT'))).status;
+      expect(await edit(receiver, 'After the move'), 'the new owner edits it').toBe(200);
+      expect(await edit(owner, 'Still mine?'), 'the old owner cannot').toBe(403);
+
+      // Both were told: the offer and the move to its receiver, the answer to the owner who made it
+      interface Notice { notificationKey: string; entityId: string | null; actionUrl: string | null }
+      const notices = async (user: WebUser) => {
+        const body = (await (await apiFetch(user, '/api/notifications?limit=50')).json().catch(() => ({}))) as { result?: { items?: Notice[] } };
+        return (body.result?.items ?? []).filter((n) => n.entityId === channelId && /^channelMove/.test(n.notificationKey)).map((n) => `${n.notificationKey} ${n.actionUrl}`).sort();
+      };
+      const told = { timeout: 60_000, intervals: [1000, 2000, 5000] };
+      await expect.poll(() => notices(receiver), told).toEqual([`channelMoveOffered /channel-moves/${offerId}`, `channelMovedIn /channels/${channelId}`]);
+      await expect.poll(() => notices(owner), told).toEqual([`channelMoveAccepted /channel-moves/${offerId}`]);
+      await gotoSettled(ownerPage, `${target().web}/en/notifications`);
+      const answer = ownerPage.getByTestId('notification-item').filter({ hasText: 'is now theirs' });
+      await expect(answer).toBeVisible({ timeout: 30_000 });
 
       // The old owner reads what happened, and the channel is no longer theirs to move
       await gotoSettled(ownerPage, `${target().web}/en/channel-moves/${offerId}`);

@@ -6,8 +6,10 @@
  * and by @handle (and never offers the current owner); the
  * confirm dialog names the user and needs the channel @handle or their user id
  * typed; the queued job is followed to "done" and the page shows the new
- * owner. The same flow by keyboard only, and in Arabic (right to left). An
- * admin without the super admin role sees no transfer section.
+ * owner. The same flow by keyboard only, and in Arabic (right to left). After a
+ * move the new owner edits the channel, the previous owner is refused, and both
+ * have their notice (wiki AUN-CHANNEL-CLAIM §10). An admin without the super
+ * admin role sees no transfer section.
  *
  * Each test transfers its own throwaway channel (created as the super admin,
  * deleted afterwards) to a creator this spec registers (run mode; outside it,
@@ -16,7 +18,8 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { LOCAL_RUN_ROLES, RUN_ID, RUN_TAG, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
+import { LOCAL_RUN_ROLES, RUN_ID, RUN_TAG, VIDEOS_API_URL, accounts, storageStatePath, type Account } from './support/env';
+import { getAccessToken } from './support/oauth';
 import { createRunUser, createVideosProfile } from './support/profiles';
 import { purgeChannel } from './support/cleanup';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
@@ -28,13 +31,15 @@ interface SearchItem { id: string; displayName: string; userName: string | null;
 
 const created: string[] = [];
 let creator: SearchItem;
+/** The creator's own session, for what they see after a move (run mode only) */
+let creatorAccount: Account | undefined;
 
 const superToken = () => readTokens().superadmin;
 
-async function createChannel(label: string): Promise<{ id: string; handle: string | null }> {
+async function createChannel(label: string, token = superToken()): Promise<{ id: string; handle: string | null }> {
   const res = await fetch(`${VIDEOS_API_URL}/api/channels`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${superToken()}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ name: `E2E transfer ${label} ${RUN_TAG} ${Date.now().toString(36)}`, description: `[e2e-admin] channel transfer ${RUN_TAG}`, isMain: false }),
   });
   const body = (await res.json()) as { result?: { channel?: { id: string; handle?: string } } };
@@ -73,7 +78,9 @@ test.describe('channel transfer', () => {
     test.skip(probe.status === 404, 'admin-api on QA does not have the transfer user search yet');
     expect(probe.status, 'the super admin may search users').toBe(200);
     // The new owner: this job's own creator (run mode), else the seeded QA creator
-    const email = RUN_ID ? (await createRunUser(browser, 'creator', `E2E Creator ${RUN_TAG} ${Date.now().toString(36)}`)).email : 'qa-creator@delivered.resend.dev';
+    const runCreator = RUN_ID ? await createRunUser(browser, 'creator', `E2E Creator ${RUN_TAG} ${Date.now().toString(36)}`) : undefined;
+    creatorAccount = runCreator?.account;
+    const email = runCreator?.email ?? 'qa-creator@delivered.resend.dev';
     let found: SearchItem | undefined;
     // A new profile reaches the search index asynchronously (processor)
     await expect
@@ -232,6 +239,51 @@ test.describe('channel transfer', () => {
     await expect(page.getByTestId('channel-transfer-status')).toContainText('أصبح');
     await expect(page.getByTestId('channel-owner-link')).toHaveAttribute('href', `/users/${encodeURIComponent(creator.id)}`, { timeout: 30_000 });
     await expectNoAxeViolations(page, 'channel transfer (ar)');
+  });
+
+  test('TRANSFER-06 after a move the new owner edits the channel, the previous owner cannot, and both were told', async ({ page, browser }) => {
+    test.skip(!creatorAccount, 'needs accounts of this run (E2E_RUN_ID)');
+    test.setTimeout(240_000);
+    // A previous owner with no site role: a super admin's own access would hide the refusal
+    const previous = await createRunUser(browser, 'previous', `E2E Previous ${RUN_TAG} ${Date.now().toString(36)}`);
+    const tier = await adminApi(`/api/content/users/${encodeURIComponent(previous.id)}/creator-tier`, { method: 'PUT', token: superToken(), body: JSON.stringify({ tierId: 'unlimited', source: 'admin', quiet: true }) });
+    expect(tier.status).toBe(200);
+    const tokens = { previous: await getAccessToken(previous.account), creator: await getAccessToken(creatorAccount!) };
+    const channel = await createChannel('after', tokens.previous);
+    const edit = async (token: string, description: string) =>
+      (await fetch(`${VIDEOS_API_URL}/api/channels/${channel.id}`, {
+        method: 'PUT',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ description }),
+      })).status;
+    expect(await edit(tokens.previous, 'Before the move'), 'the owner edits it').toBe(200);
+    expect(await edit(tokens.creator, 'Not mine yet'), 'the receiver cannot yet').toBe(403);
+
+    const reason = 'Requested by the scholar (E2E)';
+    await page.goto(`/channels/${channel.id}`);
+    await search(page, creator.email!);
+    await option(page, creator.id).click();
+    await page.getByTestId('channel-transfer-submit').click();
+    await page.getByTestId('channel-transfer-submit-typed').fill(creator.id);
+    await page.getByTestId('channel-transfer-submit-reason').fill(reason);
+    await page.getByTestId('channel-transfer-submit-confirm').click();
+    await expectTransferred(page, creator);
+
+    expect(await edit(tokens.creator, 'After the move'), 'the new owner edits it').toBe(200);
+    expect(await edit(tokens.previous, 'Still mine?'), 'the previous owner cannot').toBe(403);
+    const read = (await (await fetch(`${VIDEOS_API_URL}/api/channels/${channel.id}`, { headers: { authorization: `Bearer ${tokens.creator}` } })).json()) as { result?: { channel?: { description?: string } } };
+    expect(read.result?.channel?.description).toBe('After the move');
+
+    // Each owner's own notice of this channel; the reason goes to the previous owner only (CC-D11)
+    interface Notice { notificationKey: string; entityId: string | null; params: Record<string, string> }
+    const notices = async (token: string) => {
+      const res = await fetch(`${VIDEOS_API_URL}/api/notifications?limit=50`, { headers: { authorization: `Bearer ${token}` } });
+      const items = ((await res.json().catch(() => ({}))) as { result?: { items?: Notice[] } }).result?.items ?? [];
+      return items.filter((n) => n.entityId === channel.id).map((n) => [n.notificationKey, n.params.reason ?? null]);
+    };
+    const told = { timeout: 60_000, intervals: [1_000, 2_000, 5_000] };
+    await expect.poll(() => notices(tokens.creator), told).toEqual([['channelMovedIn', null]]);
+    await expect.poll(() => notices(tokens.previous), told).toEqual([['channelMovedOutByTeamWithReason', reason]]);
   });
 });
 
