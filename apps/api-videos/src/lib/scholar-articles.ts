@@ -7,11 +7,13 @@
  *   key (`cms-<id>`) to { userId, channelId, postId }. A re-publish updates that post; a different
  *   channel moves it (the old one is hidden); hide/show flip its status and its place in the index.
  * - Only the channel's owner: the CMS says on whose behalf it calls, and the channel record must
- *   belong to that user and be neither suspended nor deleted.
+ *   belong to that user and be neither suspended nor deleted. An article already posted is decided by the
+ *   channel it is on, as it is now: after a move it is its new owner's. The stored `userId` is who posted it.
  */
 import { PostStatus, PostType, PostVisibility, parsePostFields, type Channel, type CommunityPost, type PostV2Fields } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
+import { roleOnRecord } from './channelAccess';
 import { channelNameFields } from './channelName';
 
 export interface ArticleInput {
@@ -25,6 +27,7 @@ export interface ArticleInput {
 }
 
 interface Mapping {
+  /** Who posted it, for the record; it decides only where the channel is gone */
   userId: string;
   channelId: string;
   postId: string;
@@ -81,6 +84,11 @@ async function ownedChannel(env: ArticleEnv, userId: string, channelId: string):
   return channel;
 }
 
+/** Throws unless the article is this user's: its channel's owner of now. A channel that can't be read is an error, never a yes. */
+async function needOwner(env: ArticleEnv, userId: string, m: Mapping): Promise<void> {
+  if ((await roleOnRecord({ channels: env.channels }, m, userId)) !== 'owner') throw new ArticleError(403, 'not_owner');
+}
+
 async function setInIndex(env: ArticleEnv, channelId: string, postId: string, present: boolean): Promise<void> {
   type PostIndex = { postIds: string[]; lastUpdated: string };
   await new R2Repository<PostIndex>(env.community_posts).updateObject(
@@ -112,7 +120,7 @@ export async function upsertArticle(env: ArticleEnv, userId: string, externalId:
   const channel = await ownedChannel(env, userId, input.channelId);
   const maps = new R2Repository<Mapping>(env.community_posts);
   const existing = await maps.getObject(mappingKey(externalId));
-  if (existing && existing.userId !== userId) throw new ArticleError(403, 'not_owner');
+  if (existing) await needOwner(env, userId, existing);
   const now = new Date().toISOString();
   const article = { title: input.title, excerpt: input.excerpt, coverUrl: input.coverUrl, url: input.url, locale: input.locale, externalId };
 
@@ -172,7 +180,7 @@ export async function hideArticle(env: ArticleEnv, userId: string, externalId: s
   if (!EXTERNAL_ID.test(externalId)) throw new ArticleError(400, 'bad_request');
   const m = await new R2Repository<Mapping>(env.community_posts).getObject(mappingKey(externalId));
   if (!m) return null;
-  if (m.userId !== userId) throw new ArticleError(403, 'not_owner');
+  await needOwner(env, userId, m);
   await setStatus(env, m, PostStatus.DELETED);
   await setInIndex(env, m.channelId, m.postId, false);
   return m;
@@ -243,7 +251,7 @@ export async function convertScholarPost(env: ArticleEnv, userId: string, extern
   const channel = await ownedChannel(env, userId, input.channelId);
   const maps = new R2Repository<Mapping>(env.community_posts);
   const existing = await maps.getObject(mappingKey(externalId));
-  if (existing && existing.userId !== userId) throw new ArticleError(403, 'not_owner');
+  if (existing) await needOwner(env, userId, existing);
   const now = new Date().toISOString();
   const shown = input.status === 'published';
 
@@ -289,8 +297,9 @@ export async function convertScholarPost(env: ArticleEnv, userId: string, extern
   return { post, created: true, upgraded: false };
 }
 
-/** Where a CMS post went (the conversion check and rollback use it). Null = never posted. */
-export async function scholarPostMapping(env: ArticleEnv, externalId: string): Promise<Mapping | null> {
+/** Where a CMS post of this user's went (the conversion check and rollback use it). Null = never posted, or not theirs. */
+export async function scholarPostMapping(env: ArticleEnv, userId: string, externalId: string): Promise<Mapping | null> {
   if (!EXTERNAL_ID.test(externalId)) throw new ArticleError(400, 'bad_request');
-  return new R2Repository<Mapping>(env.community_posts).getObject(mappingKey(externalId));
+  const m = await new R2Repository<Mapping>(env.community_posts).getObject(mappingKey(externalId));
+  return m && (await roleOnRecord({ channels: env.channels }, m, userId)) === 'owner' ? m : null;
 }
