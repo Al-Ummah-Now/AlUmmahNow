@@ -1420,6 +1420,10 @@ describe('taking a video down', () => {
 			if (how !== 'erased after it was mapped') assert.deepEqual(resolution, { kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/avatar-placeholder_avatar.jpeg', channelId: null, uploaderId: null });
 			const started = await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg', resolution });
 			assert.equal(started.status, 200, JSON.stringify(started.body));
+			// For admin-api's freeze, told to the intake alone
+			assert.equal(started.body.result.account, how === 'erased after it was mapped' ? undefined : OWNER);
+			const asked = await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution });
+			assert.deepEqual([asked.body.result.existing, asked.body.result.account], [true, started.body.result.account]);
 			const erase = t.db.db.prepare('SELECT id FROM admin_jobs WHERE kind = ?').get(ERASE_MEDIA_JOB) as { id: string };
 			assert.equal(await takePart(t.db as never, erase.id, 'd', [{ kind: 'user', id: OWNER }]), false, 'held at once');
 			assert.equal(await takePart(t.db as never, erase.id, 'd', [{ kind: 'channel', id: 'x' }, { kind: 'user', id: OWNER }]), false);
@@ -1436,6 +1440,22 @@ describe('taking a video down', () => {
 			if (how !== 'erased after it was mapped') assert.ok(!JSON.stringify([job, manifest]).includes(OWNER), 'nothing names it');
 			assert.equal(t.db.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets WHERE held_by IS NOT NULL').get()!.n, 0, 'the hold ends with the case');
 		}
+	});
+
+	it('an account is told of only by the image\'s own upload row, and only for an erased profile', async () => {
+		const t = setup();
+		const path = '/avatar-placeholder_avatar.jpeg';
+		const ask = async (caseId: string, resolution: object) => (await t.json('POST', '/contain', { caseId, matchedUrl: 'x', resolution })).body.result.account;
+		const image = { kind: 'profile_image', imageField: 'avatarUrl', imagePath: path, channelId: null };
+		assert.equal(await ask('case-synthetic-a', { ...image, uploaderId: null }), undefined, 'no row');
+		t.db.db.prepare("INSERT INTO image_owners (path, kind, owner_id, channel_id, created_at) VALUES (?, 'profile_avatar', ?, NULL, '2026-11-01T00:00:00.000Z')").run(path, OWNER);
+		assert.equal(await ask('case-synthetic-b', { ...image, uploaderId: null }), undefined, 'a guess');
+		t.db.db.prepare("UPDATE image_owners SET created_at = '2026-11-01T00:00:00.000+00:00', channel_id = 'chan-synth-01'").run();
+		assert.equal(await ask('case-synthetic-c', { ...image, uploaderId: null }), undefined, 'a channel\'s');
+		t.db.db.prepare('UPDATE image_owners SET channel_id = NULL').run();
+		assert.equal(await ask('case-synthetic-d', { ...image, uploaderId: null }), OWNER);
+		assert.equal(await ask('case-synthetic-e', { ...image, uploaderId: OWNER }), undefined, 'the case names it');
+		assert.equal(await ask('case-synthetic-f', { kind: 'post_image', channelId: 'chan-synth-01', imagePath: path, uploaderId: null }), undefined);
 	});
 
 	it('the purges of deleted records wait for it, and it for them', async () => {

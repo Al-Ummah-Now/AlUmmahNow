@@ -44,8 +44,8 @@ function fakeVideos(account: { email: string; deleted: boolean } | null | 'down'
         if (host === 'images.alummahnow.net') return reply({ ok: false, reason: 'not_found', target: { kind: 'image', path: '/x' } });
         return reply({ ok: false, reason: 'not_ours' });
       }
-      if (p === '/internal/csam/resolve-by-hand') return reply({ kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/synthetic-placeholder_avatar.jpeg', channelId: null, uploaderId: call.body.id });
-      if (p === '/internal/csam/contain') return reply({ job: { id: `job-${call.body.caseId}` }, hide: { hidden: true, cdn: 'purged' } });
+      if (p === '/internal/csam/resolve-by-hand') return reply({ kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/synthetic-placeholder_avatar.jpeg', channelId: null, uploaderId: call.body.id === 'usr_erased' ? null : call.body.id });
+      if (p === '/internal/csam/contain') return reply({ job: { id: `job-${call.body.caseId}` }, hide: { hidden: true, cdn: 'purged' }, ...(call.body.resolution.kind === 'profile_image' && !call.body.resolution.uploaderId ? { account: 'usr_erased' } : {}) });
       if (p === '/internal/csam/retry') return reply({ retried: true });
       if (/^\/internal\/csam\/cases\/[^/]+\/job$/.test(p)) return reply({ job: { id: 'job-x', status: jobStatus, attempts: 1, lastError: null, result: { phase: 'ban' } } });
       if (/^\/internal\/csam\/cases\/[^/]+\/manifest$/.test(p)) return reply({ v: 1, caseId: 'x', matchedUrl: VIDEO_URL, resolution: {}, files: [{ name: '01-matched.jpg', source: 'MEDIA/pub/x', contentType: 'image/jpeg', bytes: 12, chunkSha256: ['a'], chunkBytes: 8, keyVersion: 1, copiedAt: 't' }], missing: [], createdAt: 't', completedAt: 't' });
@@ -196,6 +196,32 @@ describe('intake', () => {
     const again = (await t.json('/api/csam/intake', { method: 'POST', json: { text: `${VIDEO_URL}?x=1 and ${AVATAR_URL}` } })).body.result;
     assert.equal(again.cases.length, 0);
     assert.deepEqual(again.existing.sort(), [avatar.id, video.id].sort());
+  });
+
+  it('an erased profile: the account alone is frozen, the case names no uploader, and a retry still knows whose it was', async () => {
+    for (const fails of [false, true]) {
+      const t = setup();
+      const [avatar] = (await t.json('/api/csam/intake', { method: 'POST', json: { text: AVATAR_URL } })).body.result.cases;
+      const breaks = t.db.prepare.bind(t.db);
+      if (fails) (t.db as any).prepare = (sql: string) => { if (/INTO\s+auth_moderation_requests/.test(sql)) throw new Error('D1 down'); return breaks(sql); };
+      const mapped = (await t.json(`/api/csam/${avatar.id}/map`, { method: 'POST', json: { kind: 'profile_image', id: 'usr_erased', field: 'avatarUrl' } })).body.result;
+      assert.equal(mapped.uploaderId, null);
+      const requests = async () => (await t.db.prepare('SELECT subject_user_id, action, reason FROM auth_moderation_requests ORDER BY action').all<any>()).results;
+      if (fails) {
+        assert.equal((await requests()).length, 0);
+        assert.ok(t.flags().includes(`csam-freeze:${avatar.id}`));
+        (t.db as any).prepare = breaks;
+        await t.json(`/api/csam/${avatar.id}/retry`, { method: 'POST' });
+      }
+      assert.deepEqual((await requests()).map((r) => [r.subject_user_id, r.action, r.reason]), ['revoke_sessions', 'suspend_account'].map((action) => ['usr_erased', action, `Trust and safety action (ref ${avatar.id})`]), `fails ${fails}`);
+      const row = (await t.db.prepare('SELECT uploader_id, resolution, freeze FROM csam_cases WHERE id = ?').bind(avatar.id).first<any>())!;
+      assert.equal(row.uploader_id, null);
+      assert.ok(!row.resolution.includes('usr_erased'));
+      const freeze = JSON.parse(row.freeze);
+      assert.deepEqual([freeze.ban, freeze.account, freeze.error], ['no_uploader', 'usr_erased', undefined]);
+      // Nothing is written about it on videos
+      assert.deepEqual(t.videos.calls.filter((c) => c.path.includes('usr_erased')), []);
+    }
   });
 
   it('a hand mapping takes an unmapped case down', async () => {

@@ -43,7 +43,7 @@ import { accessDrift, purgeCdn, purgeVideoRenditions, queueMediaMove, type CdnPu
 import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
 import { commentTarget, copyStep, keepJson, storedComment, listNameOf, planEvidence, readKeptJson, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
-import { forgetImageOwner, lookupImageOwner } from './imageOwners';
+import { forgetImageOwner, isUploadRow, lookupImageOwner } from './imageOwners';
 import { erasedRecord, erasedTargets, erasureNote, holdComment, holdTargets, releaseComment, releaseHolds, type EraseTarget } from '../privacy/erase-targets';
 import { deleteImageFile } from '../media/imageFiles';
 import { findStoredComment, type StoredComment } from '../comments';
@@ -375,6 +375,17 @@ export function containTarget(resolution: CsamResolution, caseId: string): { tar
 	const ofUser = resolution.kind === 'profile_image' || resolution.kind === 'comment';
 	const targetKind = resolution.videoId ? 'video' : ofUser ? 'user' : 'channel';
 	return { targetKind, targetId: resolution.videoId ?? (ofUser ? resolution.uploaderId : resolution.channelId) ?? caseId };
+}
+
+/**
+ * Whose an erased profile's image was, by its upload row (until the file is gone): the case names no account, but
+ * admin-api freezes it. Told once, to the intake request.
+ */
+export async function erasedProfileAccount(env: ContainEnv, r: CsamResolution): Promise<string | null> {
+	if (r.kind !== 'profile_image' || r.uploaderId || !r.imagePath) return null;
+	const owner = await lookupImageOwner(env.SEARCH_DB, r.imagePath);
+	// A row the upload did not write is a guess: enough to ask about, not to freeze anyone
+	return owner?.ownerId && owner.channelId === null && isUploadRow(owner.createdAt) ? owner.ownerId : null;
 }
 
 /** The case's own targets in an erasure's list: its media, and the post that names it. */

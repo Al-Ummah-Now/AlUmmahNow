@@ -545,6 +545,8 @@ export interface CsamFreezeState {
   revokeSessions?: string;
   suspendAccount?: string;
   error?: string;
+  /** The account alone is frozen (its videos profile was erased: there is nothing to ban there, and the case names no uploader) */
+  account?: string;
 }
 
 export interface CsamCaseSummary {

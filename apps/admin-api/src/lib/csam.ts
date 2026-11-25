@@ -335,8 +335,10 @@ function neutralReason(caseId: string): string {
   return `Trust and safety action (ref ${caseId})`;
 }
 
-async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, actorId: string): Promise<CsamFreezeState> {
+/** `accountOnly`: the videos profile was erased. Nothing is written about the account on videos, and only Auth is asked. */
+async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, actorId: string, accountOnly = false): Promise<CsamFreezeState> {
   const state: CsamFreezeState = json<CsamFreezeState>(row.freeze) ?? {};
+  if (accountOnly) Object.assign(state, { ban: 'no_uploader', account: uploaderId });
   try {
     if (!state.ban) {
       try {
@@ -383,7 +385,7 @@ async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, ac
 /** Starts the takedown of a mapped case and freezes its uploader. */
 async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolution, actorId: string): Promise<void> {
   const facts = await captureFacts(env, row.matched_url, row.detected_at, resolution);
-  const out = await callVideos<{ job: { id: string } }>(env, '/contain', { ...csam, method: 'POST', json: { caseId: row.id, matchedUrl: row.matched_url, resolution }, actorId });
+  const out = await callVideos<{ job: { id: string }; account?: string }>(env, '/contain', { ...csam, method: 'POST', json: { caseId: row.id, matchedUrl: row.matched_url, resolution }, actorId });
   await updateCase(env.REPORTS_DB, row.id, {
     status: 'containing',
     resolution: JSON.stringify(resolution),
@@ -393,6 +395,7 @@ async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolutio
     facts: JSON.stringify(facts),
   });
   if (resolution.uploaderId) await freezeUploader(env, { ...row, freeze: null }, resolution.uploaderId, actorId);
+  else if (out.account) await freezeUploader(env, { ...row, freeze: null }, out.account, actorId, true);
 }
 
 /**
@@ -574,7 +577,9 @@ export async function retryCase(env: CsamEnv, id: string, actorId: string): Prom
     if (row.status === 'containment_failed') await updateCase(env.REPORTS_DB, id, { status: 'containing' });
   }
   const fresh = await getCase(env.REPORTS_DB, id);
-  if (fresh.uploader_id && json<CsamFreezeState>(fresh.freeze)?.error) await freezeUploader(env, fresh, fresh.uploader_id, actorId);
+  const freeze = json<CsamFreezeState>(fresh.freeze);
+  if (freeze?.error && fresh.uploader_id) await freezeUploader(env, fresh, fresh.uploader_id, actorId);
+  else if (freeze?.error && freeze.account) await freezeUploader(env, fresh, freeze.account, actorId, true);
   return summaryOf(await getCase(env.REPORTS_DB, id), await retentionDays(env.REPORTS_DB));
 }
 
