@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { QA_API, QA_AUTH, inPool, run, videoIdsOf } from '../delete-format-videos.ts';
+import { QA_API, QA_AUTH, arg, inPool, run, videoIdsOf } from '../delete-format-videos.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'dfv-'));
 const resources = join(dir, 'resources.txt');
@@ -65,6 +65,12 @@ describe('delete-format-videos', () => {
 		writeFileSync(empty, '');
 		assert.deepEqual(await run({ resources: empty, session }, { fetch, log: () => undefined }), { deleted: 0, failed: 0, notTried: 0 });
 		assert.equal((await run({ resources, session: join(dir, 'missing.json') }, { fetch, log: () => undefined })).failed, 2);
+	});
+
+	it('reads an empty or missing option as empty, so an early cancel is a note and not an error', () => {
+		assert.equal(arg('--resources', ['node', 'x', '--resources', '', '--session', '']), '');
+		assert.equal(arg('--session', ['node', 'x', '--resources', 'a']), '');
+		assert.equal(arg('--resources', ['node', 'x', '--resources', '/tmp/r.txt']), '/tmp/r.txt');
 	});
 
 	it('stops starting work at the deadline and says how many it did not try', async () => {

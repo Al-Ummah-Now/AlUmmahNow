@@ -43,27 +43,46 @@ test.describe.configure({ retries: 0, mode: 'serial' });
 
 /**
  * The account's access token lives 15 minutes on QA and this check runs longer, so every API call goes
- * through api(): the token is renewed through the web session (contextAccessToken: the web app keeps the
- * cookie's refresh token current) every 8 minutes, and every call has a timeout. The cookie's refresh
- * token is written to FORMATS_SESSION_FILE each time, for the workflow's cleanup step
- * (scripts/e2e/delete-format-videos.ts), which deletes the run's videos whatever became of this process.
+ * through api(): when the token's own `exp` is less than 3 minutes away the token is renewed through the
+ * web session (contextAccessToken: the web app renews it from 2 minutes before expiry and keeps the
+ * cookie's refresh token current), and every call has a timeout. The refresh token rotates whenever
+ * the web app renews, which a page load or the upload form may do at any time, so the COOKIE's current
+ * refresh token is written to FORMATS_SESSION_FILE after every page step and every renewal, atomically,
+ * for the workflow's cleanup step (scripts/e2e/delete-format-videos.ts), which deletes the run's videos
+ * whatever became of this process.
  */
 const REQUEST_TIMEOUT_MS = 60_000;
-const TOKEN_MAX_AGE_MS = 8 * 60_000;
-const session: { user?: WebUser; context?: import('@playwright/test').BrowserContext; channelId: string; tokenAt: number } = { channelId: '', tokenAt: 0 };
+const RENEW_WITHIN_S = 3 * 60;
+const session: { user?: WebUser; context?: import('@playwright/test').BrowserContext; channelId: string; lastTry: number } = { channelId: '', lastTry: 0 };
+
+/** The `exp` (seconds) of a JWT, or 0 when it cannot be read (then it is renewed) */
+function tokenExpiry(token: string | undefined): number {
+  try {
+    const payload = JSON.parse(Buffer.from((token ?? '').split('.')[1] ?? '', 'base64url').toString('utf8')) as { exp?: number };
+    return typeof payload.exp === 'number' ? payload.exp : 0;
+  } catch {
+    return 0;
+  }
+}
 
 async function persistSession(): Promise<void> {
   const file = process.env.FORMATS_SESSION_FILE;
   if (!file || !session.context) return;
   const refreshToken = await sessionRefreshToken(session.context).catch(() => undefined);
-  if (refreshToken) fs.writeFileSync(file, JSON.stringify({ refreshToken, channelId: session.channelId }), { mode: 0o600 });
+  if (!refreshToken) return;
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ refreshToken, channelId: session.channelId }), { mode: 0o600 });
+  fs.renameSync(tmp, file);
 }
 
 async function freshToken(): Promise<void> {
-  if (!session.user || !session.context || Date.now() - session.tokenAt < TOKEN_MAX_AGE_MS) return;
+  if (!session.user || !session.context) return;
+  if (tokenExpiry(session.user.accessToken) - Date.now() / 1000 > RENEW_WITHIN_S) return;
+  // At most one try every 10 s while the web app has nothing newer (it renews only inside its own window)
+  if (Date.now() - session.lastTry < 10_000) return;
+  session.lastTry = Date.now();
   const token = await contextAccessToken(session.context).catch(() => undefined);
   if (token) session.user.accessToken = token;
-  session.tokenAt = Date.now();
   await persistSession();
 }
 
@@ -211,7 +230,6 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     session.user = user;
     session.context = page.context();
     session.channelId = channelId;
-    session.tokenAt = Date.now();
     await persistSession();
 
     // Phase 1: upload every clip, one after another (the form's flow, or the API for what the form refuses).
@@ -229,6 +247,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
       try {
         await page.goto(`${target().web}/en/upload`);
         await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30_000 });
+        await persistSession();
         await page.getByTestId('upload-file-input').setInputFiles(path.join(dir, f.file));
         out.formAccepted = await page.getByTestId('upload-details').isVisible().catch(() => false);
         if (f.viaApi) {
@@ -244,6 +263,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
           await page.getByTestId('upload-is-public').uncheck();
           await page.getByTestId('upload-submit').click();
           await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150_000 });
+          await persistSession();
         }
         await expect
           .poll(async () => {
@@ -276,6 +296,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         const noR2 = !s.r2 && bunnyAnsweredAt.has(w.id) && Date.now() - bunnyAnsweredAt.get(w.id)! > 60_000;
         return !((terminal(s.status) && terminal(s.r2?.status)) || noR2);
       });
+      await persistSession();
       if (pending.length > 0) await page.waitForTimeout(10_000);
     }
     for (const w of waiting) {
@@ -294,6 +315,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     // step deletes what this misses (a dead process, an expired session).
     let deleteFailures = 0;
     if (session.user) {
+      await persistSession().catch(() => undefined);
       const results = await Promise.allSettled(
         [...made].map(async ([id, channel]) => {
           for (const suffix of ['', '/permanent']) {

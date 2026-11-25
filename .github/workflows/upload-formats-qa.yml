@@ -34,9 +34,9 @@ jobs:
     runs-on: ubuntu-24.04
     # Nested timeouts: Playwright 55 min (uploads stop starting at 30, the encode wait ends by 42, then the
     # deletes) < the test step 60 < the qa-encode lock 65 < this job: 15 setup + 90 waiting for a release +
-    # 65 for the slot + 60 for the test + 10 for the video cleanup + 45 for the teardown (account deletion,
+    # 65 for the slot + 60 for the test + 3 for the video cleanup + 45 for the teardown (account deletion,
     # leftover check, probe)
-    timeout-minutes: 290
+    timeout-minutes: 280
     permissions:
       contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?; the release check below
@@ -180,10 +180,14 @@ jobs:
 
       # Every video the run initiated is deleted here too, whatever became of the test process (a timeout, a
       # cancel, an expired session): the ids are in the run resources file, the account's session in
-      # FORMATS_SESSION_FILE. Trusted copy. Bounded: 5 at a time, each request 30 s, the whole step 10 min.
+      # FORMATS_SESSION_FILE. Trusted copy. Bounded: all at once, each request 30 s, 2 minutes in all, the
+      # step 3: after a cancel GitHub gives every always() step about 5 minutes together, and the run
+      # accounts' deletion must still get its turn. What is left is erased by the api-videos run-user sweep
+      # (every 10 minutes) once the account is deleted, and for a run cancelled before that by
+      # e2e-run-users-sweep.yml (accounts older than 24 hours) and then the same sweep.
       - name: Delete the videos the run made
         if: always() && hashFiles('.ci-trusted/scripts/e2e/delete-format-videos.ts') != ''
-        timeout-minutes: 10
+        timeout-minutes: 3
         run: >-
           node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/delete-format-videos.ts"
           --resources "$E2E_RUN_RESOURCES_FILE" --session "$FORMATS_SESSION_FILE"
