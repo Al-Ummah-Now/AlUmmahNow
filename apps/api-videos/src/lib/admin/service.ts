@@ -1260,10 +1260,11 @@ async function discardUploads(env: AdminServiceEnv, ids: string[], uploaderId: s
 				}
 			}
 			if (video.uploadFingerprint && env.global_settings) await releaseClaimFor(env.global_settings as never, video.uploadFingerprint, id);
-			const marked = await repo(env.videos).updateObject(id, (fresh) => {
-				if (!fresh.abandoned || fresh.abandoned.bunnyDeleted === true) return false;
-				fresh.abandoned.bunnyDeleted = true;
-				return true;
+			let marked = false;
+			await repo(env.videos).updateObject(id, (fresh) => {
+				marked = !!fresh.abandoned && fresh.abandoned.bunnyDeleted !== true;
+				if (marked) fresh.abandoned.bunnyDeleted = true;
+				return marked;
 			});
 			// The stopped upload gives its session back to the account it was counted against
 			if (marked && uploaderId) await refundUploadSession(env.SEARCH_DB as D1Database | undefined, uploaderId, video.dateCreated, { source: 'sweep' }).catch(() => false);

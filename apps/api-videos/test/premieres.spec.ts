@@ -14,7 +14,7 @@ import { VideoUpdate } from '../src/endpoints/video/videoUpdate';
 import { applyBulkChanges, revertFields } from '../src/lib/bulkEdit';
 import { updateVideo } from '../src/lib/admin/service';
 import { saveTier } from '../src/lib/creatorTiers';
-import { heldForPremiere, premiereTimes, runPremieres, startPremiere, swapPremiere } from '../src/lib/live/premieres';
+import { cancelPremiere, heldForPremiere, premiereStillPossible, premiereTimes, runPremieres, startPremiere, swapPremiere } from '../src/lib/live/premieres';
 import { desiredAccess } from '../src/lib/media/r2-delivery';
 import { scheduleRefusal } from '../src/lib/videoSchedule';
 import { withSearchSync } from '../src/lib/search/sync';
@@ -106,6 +106,52 @@ describe('scheduling', () => {
 		assert.deepEqual({ ...(row as Json) }, { kind: 'premiere', status: 'scheduled', premiere_video_id: 'v1', duration_seconds: 600, visibility: 'public' });
 		assert.equal(t.db.count('live_sessions'), 0);
 		assert.equal(studioVideoStatus(await t.video()), 'scheduled');
+	});
+
+	it('goes by the channel\'s owner of today when the video\'s record still names the one before', async () => {
+		const t = await setup();
+		// The owner before has no tier that premieres
+		await t.putVideo({ userId: 'before' });
+		await writeFeatureSwitch(t.env as never, { key: 'liveEvents', enabled: true, expectedVersion: 0, actorId: 'usr_a', currentStored: false });
+		const answer = await t.schedule('owner', { eventType: 'halqa' });
+		assert.equal(answer.status, 200, JSON.stringify(answer.json));
+		const s = answer.json.result.stream as Json;
+		assert.deepEqual([s.userId, s.createdBy ?? null, s.eventType], ['owner', null, 'halqa']);
+		await t.putVideo({ id: 'v2', userId: 'owner' });
+		await t.putVideo({ id: 'v3', userId: 'before' });
+		for (const id of ['v2', 'v3']) assert.equal((await t.call('owner', 'PATCH', `live-streams/${s.id}/premiere`, { videoId: id })).status, 200, id);
+		// Off without its owner: the owner of today is told
+		const stored = await t.stream(s.id);
+		await t.env.videos.put(`livestream:${s.id}`, JSON.stringify({ ...stored, userId: 'before' }));
+		assert.equal(await premiereStillPossible(t.env as never, await t.stream(s.id) as never), true);
+		await cancelPremiere(t.env as never, s.id, 'missed');
+		const told = JSON.stringify(t.raw.queue.messages.filter((m: Json) => JSON.stringify(m).includes('premiereCancelled')));
+		assert.ok(told.includes('"owner"') && !told.includes('"before"'), told);
+	});
+
+	it('starts by the tier of the owner of today', async () => {
+		const t = await setup();
+		await t.putVideo({ userId: 'before' });
+		const s = await t.made();
+		await t.env.videos.put(`livestream:${s.id}`, JSON.stringify({ ...(await t.stream(s.id)), userId: 'before' }));
+		await t.tick(Date.now() + 2 * HOUR);
+		assert.equal((await t.stream(s.id)).status, 'live');
+	});
+
+	it('waits while the channel cannot be read, and tells by its owner of today', async () => {
+		const t = await setup();
+		const s = await t.made();
+		await t.env.videos.put(`livestream:${s.id}`, JSON.stringify({ ...(await t.stream(s.id)), userId: 'before' }));
+		// Even where the account the record names may premiere
+		t.db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('before', 'creator', 'admin', 'test', '2026-11-01')").run();
+		const broken = { ...t.env, channels: { get: async () => Promise.reject(new Error('R2 down')) } };
+		const due = Date.parse(s.scheduledStartTime) + 1000;
+		assert.equal(await startPremiere(broken as never, s.id, { now: due }), 'waiting');
+		assert.equal((await t.stream(s.id)).status, 'scheduled');
+		assert.equal(await startPremiere(t.env as never, s.id, { now: due }), 'started');
+		await t.settle();
+		const told = JSON.stringify(t.raw.queue.messages.filter((m: Json) => m.payload?.kind === 'live_started'));
+		assert.ok(told.includes('"owner"') && !told.includes('"before"'), told);
 	});
 
 	it('refuses what cannot be a premiere', async () => {

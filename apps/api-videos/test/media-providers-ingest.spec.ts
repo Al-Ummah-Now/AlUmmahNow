@@ -239,6 +239,33 @@ describe('R2-only upload through our own TUS target', () => {
 		assert.ok(e.MEDIA_ORIGINALS.store.has(originalManifestKey(ID)));
 	});
 
+	it('an upload that was given up takes no chunk until it is resumed', async () => {
+		const e = env();
+		const t = await r2Upload(e);
+		const uploadId = (await t.post()).headers.get('Location')!.split('/').pop()!;
+		await t.patch(uploadId, 0);
+		await e.videos.put(ID, JSON.stringify({ ...e.videos.read(ID), uploadStatus: 'failed' }));
+		assert.equal((await t.patch(uploadId, CHUNK)).status, 409);
+	});
+
+	it('follows the channel at the last chunk and on a delete', async () => {
+		const e = env() as any;
+		const t = await r2Upload(e);
+		e.channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+		const uploadId = (await t.post()).headers.get('Location')!.split('/').pop()!;
+		await t.patch(uploadId, 0);
+		await t.patch(uploadId, CHUNK);
+		const put = e.MEDIA_ORIGINALS.put.bind(e.MEDIA_ORIGINALS);
+		e.MEDIA_ORIGINALS.put = async (...args: unknown[]) => {
+			e.channels.store.set('ch', JSON.stringify({ id: 'ch', userId: 'bob' }));
+			return put(...args);
+		};
+		assert.equal((await t.patch(uploadId, 2 * CHUNK)).status, 404, 'moved with the last chunk on its way');
+		assert.equal(e.videos.read(ID).uploadStatus, 'uploading');
+		assert.equal((await t.del(uploadId)).status, 404, 'nor is it theirs to delete any more');
+		assert.ok([...e.MEDIA_ORIGINALS.store.keys()].some((k: string) => k.startsWith(`src/${ID}/`)));
+	});
+
 	it('refuses an upload without its size, larger than announced, or past its length', async () => {
 		const e = env();
 		const t = await r2Upload(e);

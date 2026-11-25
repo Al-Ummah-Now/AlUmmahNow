@@ -44,6 +44,8 @@ import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, retryJob, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers, STARTED_JOB_SQL, TRANSFER_LOCK_SQL } from '../src/lib/admin/service';
 import { createJob, getJob } from '../src/lib/admin/jobs';
+import { windowStart } from '../src/middleware/rate-limit';
+import { UPLOAD_SESSION_OPERATION } from '../src/middleware/upload-limits';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 import { AuthDb } from './auth-db';
@@ -651,6 +653,11 @@ describe('channel actions', () => {
 		db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
 		await assert.rejects(run(), /index is being rebuilt/);
 		assert.deepEqual(stored(), { changedHands: false });
+		// Another delivery of the job got further meanwhile: this one's "no" does not replace its "yes"
+		db.db.prepare(`UPDATE admin_jobs SET result = '{"changedHands":true}' WHERE id = ?`).run(id);
+		await assert.rejects(Promise.resolve(ADMIN_JOB_HANDLERS['channel.transfer']!(env as never, { ...res.body.result.job, result: null })), /index is being rebuilt/);
+		assert.deepEqual(stored(), { changedHands: true });
+		db.db.prepare(`UPDATE admin_jobs SET result = '{"changedHands":false}' WHERE id = ?`).run(id);
 		// The write lands but the worker never hears of it: the earlier "no" is gone
 		db.db.prepare(`INSERT OR REPLACE INTO search_meta (key, value, updated_at) VALUES (?, '1', 't')`).run(ownershipCompleteKey('playlist'));
 		const put = raw.channels.put.bind(raw.channels);
@@ -672,6 +679,64 @@ describe('channel actions', () => {
 		const last = (await run()) as any;
 		assert.deepEqual(last.result, { skipped: 'channel_not_found', changedHands: true });
 		assert.ok(jobOf);
+	});
+
+	it('a stopped upload\'s bytes, claim and session go once; a Bunny failure is tried again, a copy already gone is done', async () => {
+		const now = new Date().toISOString();
+		const { raw, db, env, call, jobs, jobOf } = await setup({
+			videos: {
+				mine: videoFixture({ id: 'mine', title: 'mine', userId: OWNER, channelId: 'ch1', uploadStatus: 'uploading', dateCreated: now, uploadFingerprint: 'fp' }),
+				trashed: videoFixture({ id: 'trashed', title: 'trashed', userId: OWNER, channelId: 'ch1', uploadStatus: 'uploading', isDeleted: true, deletedAt: 'before', dateCreated: now }),
+			},
+		});
+		Object.assign(env, { MEDIA_ORIGINALS: new MemoryBucket({ 'src/mine/u1/0': { x: 1 }, 'src/other/u1/0': { x: 1 } }), global_settings: new MemoryBucket({ 'ops/upload-fingerprints/fp.json': { videoId: 'mine', userId: OWNER, channelId: 'ch1' } }) });
+		const at = Math.floor(Date.parse(now) / 1000);
+		for (const period of ['hour', 'day'] as const) db.db.prepare('INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, ?, ?, ?, 5)').run(OWNER, UPLOAD_SESSION_OPERATION, period, windowStart(period, at));
+		const counted = () => (db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = ? AND period = 'hour'").get(OWNER) as { count: number }).count;
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		const run = async () => ADMIN_JOB_HANDLERS['channel.transfer']!(env as never, (await getJob(env as never, res.body.result.job.id)) as never);
+		const mine = () => JSON.parse(raw.videos.store.get('mine')!);
+		try {
+			bunny.status = 500;
+			await assert.rejects(run(), /could not be updated/);
+			assert.deepEqual([mine().isDeleted, mine().abandoned.bunnyDeleted, counted()], [true, false, 5]);
+			assert.deepEqual([...(env as any).MEDIA_ORIGINALS.store.keys()], ['src/other/u1/0']);
+			bunny.status = 404;
+			assert.equal(((await run()) as any).done, true, 'the retry finds it again');
+		} finally {
+			bunny.status = 200;
+		}
+		assert.deepEqual([mine().abandoned.bunnyDeleted, counted(), (env as any).global_settings.store.size], [true, 4, 0]);
+		await run();
+		assert.equal(counted(), 4, 'given back once');
+		const trashed = JSON.parse(raw.videos.store.get('trashed')!);
+		assert.deepEqual([trashed.abandoned, trashed.deletedAt, trashed.userId], [undefined, 'before', OTHER], 'removed already: only its owner changes');
+		bunny.calls.length = 0;
+		assert.ok(jobs && jobOf);
+	});
+
+	it('a stopped upload another delivery finished discarding meanwhile is not given back again', async () => {
+		const now = new Date().toISOString();
+		const { raw, db, env, call } = await setup({ videos: { mine: videoFixture({ id: 'mine', title: 'mine', userId: OWNER, channelId: 'ch1', uploadStatus: 'uploading', dateCreated: now }) } });
+		const at = Math.floor(Date.parse(now) / 1000);
+		for (const period of ['hour', 'day'] as const) db.db.prepare('INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, ?, ?, ?, 5)').run(OWNER, UPLOAD_SESSION_OPERATION, period, windowStart(period, at));
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		// The other delivery marks it done while this one is at Bunny
+		const real = globalThis.fetch;
+		globalThis.fetch = (async (url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE' && String(url).includes('/videos/mine')) {
+				const video = JSON.parse(raw.videos.store.get('mine')!);
+				raw.videos.store.set('mine', JSON.stringify({ ...video, abandoned: { ...video.abandoned, bunnyDeleted: true } }));
+			}
+			return real(url, init);
+		}) as typeof fetch;
+		try {
+			await ADMIN_JOB_HANDLERS['channel.transfer']!(env as never, (await getJob(env as never, res.body.result.job.id)) as never);
+		} finally {
+			globalThis.fetch = real;
+		}
+		assert.equal((db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = ? AND period = 'hour'").get(OWNER) as { count: number }).count, 5, 'the other delivery gives it back');
+		bunny.calls.length = 0;
 	});
 
 	it('stops the previous owner\'s own unfinished uploads, and nobody else\'s', async () => {

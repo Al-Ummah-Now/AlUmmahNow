@@ -66,14 +66,14 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
  * Spread after publicVideoFields() in list views.
  */
 export function uploaderProcessingIssue(
-    video: { userId?: string | null; processingIssue?: { kind?: string; reason?: string; at?: string } | null },
+    video: { userId?: string | null; channelId?: string | null; processingIssue?: { kind?: string; reason?: string; at?: string } | null },
     channel: ChannelRoleSource | null | undefined,
     viewerId: string | null | undefined,
 ): { processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string } } {
     const issue = video.processingIssue;
     if (!issue?.kind || !viewerId) return {};
-    // The channel of now; the record's own owner only where there is none
-    const mayUpload = channel ? can(channelRoleOf(channel, viewerId), 'video.upload') : !!video.userId && video.userId === viewerId;
+    // The channel of now; the record's own owner only where it names none
+    const mayUpload = channel ? can(channelRoleOf(channel, viewerId), 'video.upload') : !video.channelId && !!video.userId && video.userId === viewerId;
     if (!mayUpload) return {};
     return {
         processingIssue: {

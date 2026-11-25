@@ -10,7 +10,7 @@ import R2Repository from "../../lib/r2Repo";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
-import { channelsVideoIds, ownerContentIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { channelsVideoIds, ownVideoIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { publicSearchCandidateIds } from "../../lib/feedIndex";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
@@ -173,7 +173,7 @@ export class VideoSearch extends OptionalAuthRoute {
 		const indexedIds = channelIdList.length > 0
 			? await channelsVideoIds(c.env as never, channelIdList, INDEXED_CANDIDATES)
 			: isOwner && userId
-				? await ownerContentIds(c.env as never, 'video', userId, INDEXED_CANDIDATES)
+				? await ownVideoIds(c.env as never, userId, { newest: INDEXED_CANDIDATES })
 				: await publicSearchCandidateIds(c.env, query);
 		let videos: { cursor: string; items: VideoType[] };
 		if (indexedIds) {
@@ -181,6 +181,7 @@ export class VideoSearch extends OptionalAuthRoute {
 			videos = { cursor: "", items: loaded.filter((video): video is VideoType => video !== null) };
 		} else {
 			if (channelIdList.length > 0 || isOwner) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
+			if (channelIdList.length === 0 && isOwner) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'channel');
 			const PAGE = 100;
 			const MAX_PAGES = FALLBACK_SCAN_OBJECTS / PAGE;
 			videos = await repository.listObjects(PAGE);

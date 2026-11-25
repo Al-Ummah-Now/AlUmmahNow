@@ -1,4 +1,7 @@
-import { canOnVideo } from "../../lib/channelAccess";
+import { can } from '@al-ummah/shared-types';
+import { apiError } from '../../lib/api-error';
+import { roleOnRecord } from "../../lib/channelAccess";
+import { isStoppedUpload } from '../../lib/uploads/lifecycle';
 import { OpenAPIRoute } from "chanfana";
 import { Str } from "../../lib/chanfana-params";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -104,15 +107,22 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 			const repository = new R2Repository<VideoType>(bucket);
 			const video = await repository.getObject(videoId);
 
-			if (!video) {
+			if (!video || isStoppedUpload(video)) {
 				return c.json({
 					success: false,
 					error: "Video not found",
 				}, 404);
 			}
 
-			// Check ownership
-			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
+			// Check ownership: the channel of now; one that cannot be read is asked again, never refused
+			let mayUpload: boolean;
+			try {
+				mayUpload = can(await roleOnRecord(c.env as never, video, userId), 'video.upload');
+			} catch (error) {
+				logger.warn('[UploadComplete] Channel record unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
+				return apiError(c, 503, 'service_unavailable', undefined, { 'Retry-After': '5' });
+			}
+			if (!mayUpload) {
 				return c.json({
 					success: false,
 					error: "Forbidden - you can only complete uploads for your own videos",
@@ -133,7 +143,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				tusUpload: undefined,
 				uploadWatch: undefined,
 				...(fresh.processingIssue?.kind === 'needs_reupload' ? { processingIssue: undefined } : {}),
-			} as Partial<VideoType>), { ownerId: video.userId });
+			} as Partial<VideoType>), { ownerId: video.userId, gone: isStoppedUpload });
 			if (saved.status === 'missing') {
 				return c.json({ success: false, error: "Video not found" }, 404);
 			}
@@ -181,7 +191,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 					const failed = await patchVideo(repository, videoId, (fresh) => fresh.uploadStatus === 'ready' ? false : {
 						uploadStatus: 'failed' as const,
 						dateModified: new Date().toISOString(),
-					}, { ownerId: authorizedOwner });
+					}, { ownerId: authorizedOwner, gone: isStoppedUpload });
 
 					if (failed.status === 'ok' && failed.changed) {
 						// Send failure event

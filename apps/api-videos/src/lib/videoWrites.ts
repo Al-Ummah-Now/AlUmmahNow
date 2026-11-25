@@ -20,18 +20,20 @@ export type VideoPatchResult<V> =
  * fields, or false for "nothing to change") to the stored video.
  *
  * With `ownerId`, the write only happens when the stored video still belongs
- * to that user. A missing video is never re-created (a delete wins).
+ * to that user. A missing video is never re-created (a delete wins); `gone` says which
+ * stored videos count as missing, whoever they belong to by now.
  */
 export async function patchVideo<V extends { userId?: string }>(
 	repository: R2Repository<V>,
 	videoId: string,
 	patch: Partial<V> | ((fresh: V) => Partial<V> | false),
-	opts: { ownerId?: string } = {},
+	opts: { ownerId?: string; gone?: (fresh: V) => boolean } = {},
 ): Promise<VideoPatchResult<V>> {
 	let previous = undefined as V | undefined;
 	let changed = false;
-	const { data, rejected } = await repository.updateObjectOrReject<'forbidden'>(videoId, (fresh) => {
+	const { data, rejected } = await repository.updateObjectOrReject<'forbidden' | 'missing'>(videoId, (fresh) => {
 		changed = false;
+		if (opts.gone?.(fresh)) return { reject: 'missing' };
 		if (opts.ownerId !== undefined && fresh.userId !== opts.ownerId) return { reject: 'forbidden' };
 		previous = { ...fresh };
 		const fields = typeof patch === 'function' ? patch(fresh) : patch;
@@ -41,7 +43,7 @@ export async function patchVideo<V extends { userId?: string }>(
 		return true;
 	});
 	if (!data) return { status: 'missing' };
-	if (rejected) return { status: 'forbidden' };
+	if (rejected) return { status: rejected };
 	return { status: 'ok', video: data, previous: previous ?? data, changed };
 }
 

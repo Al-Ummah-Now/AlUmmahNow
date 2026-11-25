@@ -17,6 +17,7 @@ import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
 import { enqueueNotification } from '../notifications';
 import { markPublished } from '../published';
+import { ownerOfRecord } from '../channelAccess';
 import R2Repository, { NonVideoRepository } from '../r2Repo';
 import { scheduleDateProblem } from '../videoSchedule';
 import { streamKey, type LiveStreamRecord } from './streams';
@@ -123,6 +124,8 @@ export interface NewPremiere {
 export async function createPremiere(env: PremiereEnv, input: NewPremiere, now = Date.now()): Promise<{ stream: PremiereStream } | { problem: PremiereProblem | 'forbidden' | 'not_found' }> {
 	const id = crypto.randomUUID();
 	const at = new Date(now).toISOString();
+	// The stream belongs to its channel's owner now; the video's record can still name an earlier one
+	const ownerId = (await ownerOfRecord(env as never, input.video)) ?? input.video.userId;
 	const held = await hold(env, input.video.id, input.video.userId, { streamId: id, heldAt: at, heldBy: input.actorId });
 	if ('problem' in held) return held;
 	const video = held.video;
@@ -139,8 +142,8 @@ export async function createPremiere(env: PremiereEnv, input: NewPremiere, now =
 		durationSeconds: Math.max(1, Math.round(Number(video.duration))),
 		// The creator's word for it on the source platform: no chat, no replay, no reminders
 		...(isMadeForKids(video as ContentFlagFields) ? { madeForKids: true } : {}),
-		userId: video.userId,
-		...(input.actorId !== video.userId ? { createdBy: input.actorId } : {}),
+		userId: ownerId,
+		...(input.actorId !== ownerId ? { createdBy: input.actorId } : {}),
 		channelId: video.channelId,
 		status: 'scheduled',
 		scheduledStartTime: new Date(input.scheduledStartTime).toISOString(),
@@ -200,6 +203,16 @@ export async function swapPremiere(env: PremiereEnv, stream: PremiereStream, vid
 	return { stream: saved.data };
 }
 
+/** The stream's owner now (its channel's); null when the channel cannot be read: nobody is told by mistake. */
+async function ownerNow(env: PremiereEnv, stream: PremiereStream): Promise<string | null> {
+	try {
+		return await ownerOfRecord(env as never, stream);
+	} catch (error) {
+		logger.warn('[Premiere] Channel record unavailable', { streamId: stream.id, error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
 /** Cancels a premiere that has not started, then frees the video. 'started': the start won. */
 export async function cancelPremiere(env: PremiereEnv, streamId: string, reason: 'owner' | 'video_unavailable' | 'missed', now = Date.now()): Promise<{ outcome: 'cancelled' | 'already' | 'started' | 'missing'; stream: PremiereStream | null }> {
 	const { data, rejected } = await streams(env).updateObjectOrReject<'already' | 'started'>(streamKey(streamId), (fresh) => {
@@ -217,10 +230,11 @@ export async function cancelPremiere(env: PremiereEnv, streamId: string, reason:
 	if (!rejected) {
 		logger.info('[Premiere] Cancelled', { streamId, reason });
 		// Not by its owner: they are told
-		if (reason !== 'owner') {
+		const recipientUserId = reason === 'owner' ? null : await ownerNow(env, data);
+		if (recipientUserId) {
 			await enqueueNotification(env as never, {
 				notificationId: crypto.randomUUID(),
-				recipientUserId: data.userId,
+				recipientUserId,
 				notificationKey: 'premiereCancelled',
 				params: { streamTitle: data.title || '' },
 				actionUrl: data.channelId ? `/studio/${data.channelId}/content/live` : `/live/${streamId}`,
@@ -253,7 +267,9 @@ async function readiness(env: PremiereEnv, stream: PremiereStream): Promise<'go'
 	if (video.premiereHold?.streamId !== stream.id) return 'never';
 	if (!isVideoReady(video) || stream.isHidden || hasSuspensionHolds(stream as Record<string, unknown>)) return 'wait';
 	if (!(await featureGate(env as never, 'livePremieres')).on) return 'wait';
-	if (!tierAllowsLiveCapability(await channelOwnerTier(env.SEARCH_DB!, stream.userId), 'livePremieres')) return 'wait';
+	// A channel that cannot be read: its owner's tier is not known, and nobody else's counts
+	const owner = await ownerNow(env, stream);
+	if (!owner || !tierAllowsLiveCapability(await channelOwnerTier(env.SEARCH_DB!, owner), 'livePremieres')) return 'wait';
 	return 'go';
 }
 
@@ -304,7 +320,8 @@ async function finishStart(env: PremiereEnv, stream: PremiereStream, now: number
 		return true;
 	});
 	// One notification per premiere: this one, and not "new video" too (the processor de-duplicates repeats)
-	const announced = !stream.channelId || (await announceLiveStarted(env as never, { id: stream.id, channelId: stream.channelId, userId: stream.userId, title: stream.title, madeForKids: isMadeForKids(video as ContentFlagFields | null) || stream.madeForKids === true }).catch(() => false));
+	const owner = await ownerNow(env, stream);
+	const announced = !stream.channelId || (!!owner && await announceLiveStarted(env as never, { id: stream.id, channelId: stream.channelId, userId: owner, title: stream.title, madeForKids: isMadeForKids(video as ContentFlagFields | null) || stream.madeForKids === true }).catch(() => false));
 	if (!announced) {
 		logger.warn('[Premiere] Not announced yet; the next minute tries again', { streamId: stream.id });
 		return;

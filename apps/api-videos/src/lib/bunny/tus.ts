@@ -317,6 +317,13 @@ export async function createTusProxySession(
 
   return tusSessionId;
 }
+
+/** Takes back a session that was just made (its upload was stopped meanwhile). */
+export async function deleteTusProxySession(kv: KVNamespace, userId: string, tusSessionId: string): Promise<void> {
+  await kv.delete(getTusSessionKey(tusSessionId));
+  await kv.delete(`${tusUserIndexPrefix(userId)}${tusSessionId}`);
+}
+
 interface SecretLike { text?(): Promise<string>; get?(): Promise<string> }
 
 /** Library and Bunny GUID of recent uploads (neither ever changes): one record read per video and isolate, not per TUS chunk */
