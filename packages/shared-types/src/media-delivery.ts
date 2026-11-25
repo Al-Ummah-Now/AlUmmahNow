@@ -207,6 +207,11 @@ export function sanitizeSourceFacts(value: unknown): TranscodeSourceFacts | null
 
 export type SourceVerdict = 'has_video' | 'audio_only' | 'half_written' | 'unreadable';
 
+/** Why a video could not be made, as the creator reads it (en + ar in the apps; the stored reason is English) */
+export const UPLOAD_ISSUE_CODES = ['source_changed', 'audio_only', 'half_written', 'unreadable'] as const;
+export type UploadIssueCode = (typeof UPLOAD_ISSUE_CODES)[number];
+export const isUploadIssueCode = (code: unknown): code is UploadIssueCode => (UPLOAD_ISSUE_CODES as readonly unknown[]).includes(code);
+
 /** What a source most likely is. A media file is never mostly zeros at either end; one still being copied is. */
 export function sourceVerdict(f: Pick<TranscodeSourceFacts, 'container' | 'streams' | 'zeroStartPercent' | 'zeroEndPercent'>): SourceVerdict {
 	if (f.container === 'zeros' || f.zeroStartPercent >= 50 || f.zeroEndPercent >= 50) return 'half_written';

@@ -5,7 +5,7 @@ import { resolvePublicProfilePrivacy } from './userHandles';
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { audibleAudioTracks, can, channelRoleOf, creatorReviewView, isMadeForKids, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
+import { audibleAudioTracks, can, isUploadIssueCode, type UploadIssueCode, channelRoleOf, creatorReviewView, isMadeForKids, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { withoutMoveMark } from './channelMoveData';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
@@ -66,10 +66,10 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
  * Spread after publicVideoFields() in list views.
  */
 export function uploaderProcessingIssue(
-    video: { userId?: string | null; channelId?: string | null; processingIssue?: { kind?: string; reason?: string; at?: string } | null },
+    video: { userId?: string | null; channelId?: string | null; processingIssue?: { kind?: string; reason?: string; at?: string; code?: string } | null },
     channel: ChannelRoleSource | null | undefined,
     viewerId: string | null | undefined,
-): { processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string } } {
+): { processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string; code?: UploadIssueCode } } {
     const issue = video.processingIssue;
     if (!issue?.kind || !viewerId) return {};
     // The channel of now; the record's own owner only where it names none
@@ -80,6 +80,7 @@ export function uploaderProcessingIssue(
             kind: issue.kind as 'encode_failed' | 'needs_reupload' | 'stalled',
             ...(issue.reason ? { reason: issue.reason } : {}),
             ...(issue.at ? { at: issue.at } : {}),
+            ...(isUploadIssueCode(issue.code) ? { code: issue.code } : {}),
         },
     };
 }

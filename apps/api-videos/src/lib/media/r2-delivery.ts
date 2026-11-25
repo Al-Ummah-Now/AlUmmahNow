@@ -29,6 +29,8 @@ import {
 	compactRungs,
 	sanitizeFailure,
 	sanitizeSourceFacts,
+	isUploadIssueCode,
+	type UploadIssueCode,
 	SOURCE_SHA256,
 	underHold,
 	sourceVerdict,
@@ -344,6 +346,13 @@ async function recordSourceFacts(env: Pick<MediaEnv, 'SEARCH_DB'>, ev: Transcode
 		.catch((error) => logger.warn('[Media] Could not record what the source is', { videoId: ev.videoId, error: error instanceof Error ? error.message : String(error) }));
 }
 
+/** What the file is, for its creator; nothing when it does hold a video (the failure is then ours to look at). */
+function issueCodeOf(ev: TranscodeJobEvent): { code?: UploadIssueCode } {
+	const facts = sanitizeSourceFacts(ev.sourceFacts);
+	const verdict = facts && sourceVerdict(facts);
+	return isUploadIssueCode(verdict) ? { code: verdict } : {};
+}
+
 /** "audio_only; mov,mp4: audio aac, cover mjpeg; 812 s; zeros 0% at the start, 0% at the end" */
 export function sourceFactsLine(f: Omit<TranscodeSourceFacts, 'sha256'>): string {
 	const streams = f.streams ? f.streams.map((s) => `${s.kind} ${s.codec}`).join(', ') || 'no streams' : 'not readable by ffprobe';
@@ -585,7 +594,7 @@ export async function applyJobEvent(
 					}
 				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
 					v.uploadStatus = 'failed';
-					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
+					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at, ...issueCodeOf(ev) };
 					transition = 'failed';
 				}
 			}

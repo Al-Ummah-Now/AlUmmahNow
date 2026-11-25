@@ -131,7 +131,7 @@ export class ChannelContentList extends AuthenticatedRoute {
 		const premieres = await premiereTimes(c.env as never, loaded);
 		const items = loaded
 			.filter((video): video is VideoType => !!video && !video.isDeleted)
-			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video), ...(premieres.get(video.id) ? { premiere: premieres.get(video.id) } : {}) }));
+			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video), ...(video.processingIssue ? { processingIssue: { kind: video.processingIssue.kind, code: video.processingIssue.code } } : {}), ...(premieres.get(video.id) ? { premiere: premieres.get(video.id) } : {}) }));
 
 		// Held videos show the live queue time (VR6); read once per list, only when one is held
 		const held = items.some((item) => item.studioStatus === "in_review" && (item as { review?: { status?: string } }).review?.status !== "checking");
