@@ -160,10 +160,10 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 	const g = await d1(env, GROUPS_SQL, [since.toISOString(), env]);
 	if (!g.ok) return p(`- not readable: ${g.error}`), p();
 	// Each with its latest sample, which can say more than the group's own row
-	const read: { row: any; ev: any; error?: string }[] = [];
+	const read: { row: any; ev: any; error?: true }[] = [];
 	for (const row of g.rows) {
 		const e = await d1(env, LATEST_EVENT_SQL, [row.id]);
-		read.push({ row, ev: e.rows[0], ...(e.ok ? {} : { error: e.error }) });
+		read.push({ row, ev: e.rows[0], ...(e.ok ? {} : { error: true }) });
 	}
 	const kept = unrestricted(read);
 	const bySql = await leftOutBySql(env, GROUPS_LEFT_OUT_SQL, since);
@@ -172,6 +172,13 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 	data.groups = kept.rows.map((x) => x.row);
 	p();
 	for (const { row, ev, error } of kept.rows) {
+		if (error) {
+			// Its sample could not be checked, so only what cannot say anything about an area
+			p(`### [${row.app}] ${row.kind}: group ${row.id}, ×${row.occurrences}, last ${row.last_seen}`);
+			p('- latest sample not readable');
+			p();
+			continue;
+		}
 		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${clip(row.message, 300)}`);
 		p(`- group ${row.id}, status ${row.status}${row.test ? ', test' : ''}, ×${row.occurrences}, users ${row.users}`);
 		p(`- route ${row.route ?? '–'}, culprit ${row.culprit ?? '–'}`);
@@ -183,7 +190,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 			if (ev.origin) p(`- origin: ${originLine(ev.origin)}`);
 			for (const f of topFrames(ev.stack)) p(`  - ${clip(f, 240)}`);
 			if (ev.extra) p(`- extra: ${ev.extra}`);
-		} else if (error) p(`- latest sample not readable: ${error}`);
+		}
 		p();
 	}
 }

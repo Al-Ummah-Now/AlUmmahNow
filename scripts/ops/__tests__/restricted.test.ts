@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { logLines, pathLines } from '../prod-errors.ts';
 import { leftOutLine, messageTemplate, placeLog, restrictedPath, restrictedText, unrestricted } from '../restricted.ts';
 
@@ -14,7 +17,7 @@ const line = (message: string, source: object = {}, url?: string, requestId = `r
 
 /** One per tag, path, source file and word: none may be in the report. SECRET is in every one of them. */
 const RESTRICTED = [
-	...['[CSAM]', '[ChildSafety]', '[SafetyMail]', '[ReportRetention]', '[GuestReport]', '[csam]'].map((t) => line(`${t} SECRET`, {}, '/api/x')),
+	...['[CSAM]', '[ChildSafety]', '[SafetyMail]', '[ReportRetention]', '[GuestReport]', '[guest-report]', '[ImageOwners]', '[csam]'].map((t) => line(`${t} SECRET`, {}, '/api/x')),
 	line('[2026-11-25T10:00:00Z] [SafetyMail] SECRET', {}, '/api/x'),
 	...['/api/csam', `/api/csam/${ID}/hold`, '/internal/csam/x', '/internal/guest-reports', '/webhooks/cloudflare/notifications', '/moderation/csam', `/en/moderation/csam/${ID}`, '/ar/moderation/csam'].map((p) => line('[Api] SECRET', {}, p)),
 	line('[Api] slow SECRET request GET /internal/guest-reports 200', {}, '/x'),
@@ -22,6 +25,8 @@ const RESTRICTED = [
 	line('[Api] SECRET', { url: `https://x.example/webhooks/cloudflare/notifications?a=1` }, '/x'),
 	...['src/lib/moderation/childSafety.ts:1:2', 'src/lib/moderation/safetyMail.ts', 'apps/admin-api/src/lib/moderation/retention.ts:4', 'src/lib/moderation/takedown.ts', 'src/endpoints/moderation/GuestReportSubmit.ts:9', 'src/lib/guest-report-limits.ts', 'src/lib/csam/contain.ts', 'src/routers/csam.router.ts'].map((f) => line('[Api] SECRET', { stack: `Error: SECRET\n    at f (${f})` }, '/x')),
 	line('[Api] SECRET', { module: 'lib/moderation/takedown' }, '/x'),
+	line('[Content] Item under a takedown refused SECRET', { userId: 'SECRET', type: 'video', id: 'SECRET' }, '/api/content/videos/1'),
+	line('[guest-report] admin-api unreachable SECRET', {}, '/api/report'),
 	line('[Api] D1_ERROR: no such table: csam_cases SECRET', {}, '/x'),
 	line('[Api] SECRET', { deep: { list: [{ child_safety: 1 }] } }, '/x'),
 	line('[Api] SECRET', { kind: 'Child Safety' }, '/x'),
@@ -86,4 +91,33 @@ test('matching stays linear on long text', () => {
 		messageTemplate(text);
 	}
 	assert.ok(Date.now() - started < 3000);
+});
+
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+/** The source files whose log lines may never be in the report. */
+const SOURCES = [
+	'apps/admin-api/src/lib/csam.ts', 'apps/admin-api/src/routers/csam.router.ts', 'apps/admin-api/src/endpoints/moderation/GuestReportSubmit.ts', 'apps/admin-api/src/lib/guest-report-limits.ts',
+	...['childSafety', 'safetyMail', 'retention', 'takedown'].map((f) => `apps/admin-api/src/lib/moderation/${f}.ts`),
+	'apps/api-videos/src/lib/csam', 'apps/api-videos/src/routers/csam.router.ts', 'apps/web/src/app/api/report/route.ts',
+	'apps/admin-web/src/app/(protected)/moderation/csam', 'apps/admin-web/src/app/api/csam', 'apps/admin-web/src/lib/api/csam.ts', 'packages/shared-types/src/csam.ts',
+];
+const files = (path: string): string[] => (statSync(join(ROOT, path)).isDirectory() ? readdirSync(join(ROOT, path)).flatMap((f) => files(`${path}/${f}`)) : /\.tsx?$/.test(path) ? [path] : []);
+/** A quoted text that starts with a tag, as the first thing given to a logger or put into a log message. */
+const tagsOf = (source: string) => [...source.matchAll(/['"`](\[[A-Za-z][A-Za-z0-9 _.:-]{0,60}\]) /g)].map((m) => m[1]!);
+
+test('every log tag of the restricted source files is left out (a new one fails here)', () => {
+	const found = new Map<string, string>();
+	for (const path of SOURCES.flatMap(files)) for (const tag of tagsOf(readFileSync(join(ROOT, path), 'utf8'))) found.set(tag, path);
+	assert.ok(found.size >= 6, [...found.keys()].join(' '));
+	for (const [tag, path] of found) assert.equal(restrictedText(`${tag} x`), true, `${tag} (${path}) is not in TAGS`);
+	assert.equal(restrictedText('[Unheard] x'), false);
+});
+
+test('every log message of the restricted source files has a covered tag or word', () => {
+	for (const path of SOURCES.flatMap(files)) {
+		const source = readFileSync(join(ROOT, path), 'utf8');
+		for (const m of source.matchAll(/(?:logger|console)\.(?:debug|info|warn|error|log)\(\s*(['"`])((?:(?!\1)[^\\\n]|\\.){0,300})\1/g)) {
+			assert.equal(restrictedText(m[2]), true, `${path}: ${m[2]}`);
+		}
+	}
 });
