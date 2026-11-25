@@ -37,7 +37,7 @@ import type { Report } from '../types';
 export type DecisionEnv = AdminBindings & VideosClientEnv;
 
 export class DecisionError extends Error {
-  constructor(readonly status: 403 | 409 | 503, readonly code: string, message: string) {
+  constructor(readonly status: 403 | 404 | 409 | 503, readonly code: string, message: string) {
     super(message);
   }
 }

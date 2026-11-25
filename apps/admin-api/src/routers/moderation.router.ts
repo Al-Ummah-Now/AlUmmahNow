@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { ReportsList, ReportGet, ReportAction, ReportStats } from '../endpoints/moderation';
+import { ReportsList, ReportGet, ReportAction, ReportReview, ReportStats } from '../endpoints/moderation';
 import { AiConfigGet, AiConfigUpdate, AiQueueList, AiSignalGet, AiSignalReview, AiSignalVisibility, AiSignalsList, AiUsageGet } from '../endpoints/aiModeration';
 
 const app = new Hono();
@@ -13,6 +13,7 @@ moderationRouter.get('/reports/stats', ReportStats);
 // Single report operations
 moderationRouter.get('/reports/:reportId', ReportGet);
 moderationRouter.post('/reports/:reportId/action', ReportAction);
+moderationRouter.post('/reports/:reportId/review', ReportReview);
 
 // AI-assisted moderation (Epic 28)
 moderationRouter.get('/ai/signals', AiSignalsList);
