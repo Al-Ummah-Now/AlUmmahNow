@@ -5,6 +5,7 @@
  * suggestions, the upload rate counters and slots and the creator tier keyed by them. Real SQL on the real schemas (admin-api and search migrations).
  */
 import { join } from 'path';
+import { CURRENT_CREATOR_TERMS_VERSION } from '@al-ummah/shared-types';
 import { createSqliteD1, REPORTS_MIGRATIONS_DIR } from './sqlite-d1';
 import { eraseUserTraces } from '../erasure/user-traces';
 
@@ -42,6 +43,7 @@ function seed() {
     search.raw.prepare(`INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, 'upload', 'day', 1, 3)`).run(userId);
     search.raw.prepare(`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at) VALUES (?, 'upload', 'lease_1', 9999999999999)`).run(userId);
     search.raw.prepare(`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'creator', 'admin', 'usr_admin', '2026-11-13')`).run(userId);
+    search.raw.prepare(`INSERT INTO creator_terms_acceptances (user_id, terms_version, accepted_at) VALUES (?, ?, ?)`).run(userId, CURRENT_CREATOR_TERMS_VERSION, now);
     search.raw.prepare(`INSERT INTO caption_minute_usage (user_id, period, minutes, updated_at) VALUES (?, '2026-11', 12, ?)`).run(userId, now);
     search.raw.prepare(`INSERT INTO caption_minute_overdraft (user_id, minutes, updated_at) VALUES (?, 3, ?)`).run(userId, now);
     search.raw
@@ -102,7 +104,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, tierRequests: 2, billing: 6, support: 5, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, creatorTerms: 1, captionMinutes: 5, tierRequests: 2, billing: 6, support: 5, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -118,6 +120,7 @@ describe('eraseUserTraces (#1059)', () => {
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_windows').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_leases').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM creator_tier_assignments').all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare('SELECT user_id FROM creator_terms_acceptances').all()).toEqual([{ user_id: OTHER }]);
     // Caption minutes (usage, overdraft, holds, ledger, grants): the erased user's rows only
     for (const table of ['caption_minute_usage', 'caption_minute_overdraft', 'caption_minute_holds', 'caption_minute_ledger', 'caption_minute_grants']) {
       expect(search.raw.prepare(`SELECT user_id FROM ${table}`).all()).toEqual([{ user_id: OTHER }]);
@@ -148,7 +151,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, tierRequests: 0, billing: 0, support: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, creatorTerms: 0, captionMinutes: 0, tierRequests: 0, billing: 0, support: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

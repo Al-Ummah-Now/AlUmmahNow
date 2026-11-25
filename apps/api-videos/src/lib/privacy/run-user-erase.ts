@@ -26,6 +26,7 @@
  * throws, so the job is retried with backoff rather than falling back to a scan.
  */
 import { eraseTierHistory } from '../tierChanges';
+import { eraseCreatorTermsAcceptance } from '../creatorTerms';
 import { postLocationKey } from '../community-posts';
 import { eraseChannelHandleHistory } from './handle-history';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
@@ -249,8 +250,9 @@ export async function eraseRunUserData(
 			budget.spend(3);
 			await forgetFootprints(db as never, userId);
 			await eraseCaptionMinutes(db, userId);
-			// Tier requests (name, about) and tier changes
+			// Tier requests (name, about), tier changes, and creator Terms acceptance
 			await eraseTierHistory(db as unknown as D1Database, userId);
+			await eraseCreatorTermsAcceptance(db as unknown as D1Database, userId);
 			// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
 			budget.spend(2);
 			await eraseYoutubeImports(db, env as never, userId);

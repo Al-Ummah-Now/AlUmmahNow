@@ -22,6 +22,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
 import { editableVideo } from '../captions/captionDrafts';
 import { AudioTrackError, addTrack, completeUpload, deleteTrack, requestProbe, retryTrack, studioTrack, studioView, updateTrack } from '../../lib/audio-tracks/service';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 
 const languages = AUDIO_TRACK_LANGUAGES.map((l) => l.code) as [string, ...string[]];
 const Track = z.object({
@@ -150,6 +151,8 @@ export class AudioTrackCreate extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
+		const termsRefused = await enforceCreatorTerms(c, userId);
+		if (termsRefused) return termsRefused;
 		try {
 			const { track } = await addTrack(c.env as never, ctxOf(c), { video: access.video as never, userId, roles: rolesOf(c), body: body as never });
 			const uploadUrl = track.source.type === 'upload' ? `/api/videos/${encodeURIComponent(params.videoId)}/audio-tracks/${track.id}/upload` : undefined;

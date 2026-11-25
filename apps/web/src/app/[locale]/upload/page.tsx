@@ -28,7 +28,8 @@ import { clearUploadResult, useUploadResult } from "@/lib/notifications/upload-r
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
-import { useCreatorAccess } from "@/hooks/useCreatorAccess";
+import { needsCreatorTerms, useCreatorAccess } from "@/hooks/useCreatorAccess";
+import { CreatorTermsDialog, CreatorTermsGate } from "@/components/legal/CreatorTermsGate";
 import { useFeatures } from "@/hooks/useFeatures";
 import { VideosPendingDeletionNotice } from "@/components/VideosNotices";
 import { login } from "@/lib/actions";
@@ -127,6 +128,13 @@ const UploadPage: React.FC = () => {
   const [uploadedVideo, setUploadedVideo] = useState<VideoObject | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  // Once the upload form mounts, keep it mounted across focus refreshes or 403 terms_required so drafts stay intact
+  const formMountedRef = useRef(false);
+  const [termsModalDismissed, setTermsModalDismissed] = useState(false);
+  const termsNeeded = needsCreatorTerms(creator);
+  useEffect(() => {
+    if (!termsNeeded) setTermsModalDismissed(false);
+  }, [termsNeeded]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Batch category: a default for every video, each row can have its own
@@ -470,8 +478,17 @@ const UploadPage: React.FC = () => {
   // Hidden when off: the not-found page, rendered here (a client notFound() after hydration breaks Next's router)
   if (creator.status === 'ready' && !creator.access.canUpload) return <NotFoundPage />;
 
-  // Wait for the session's channels before deciding the user has none
-  if (!uploadChannelId && (sessionLoading || (uploadChannels.length > 0 && !rememberedReady))) {
+  // Play UGC / Store compliance: accept Terms of Service & Community Guidelines once per account before first upload.
+  // Before the form mounts, show the full-page gate; once the form is mounted (e.g. a draft or stale tab when Terms
+  // are turned on or bumped), keep the form mounted and open CreatorTermsDialog over it so no draft or files are lost.
+  const canPromptTerms = termsNeeded && !isUploading && !singleWork.busy && !uploadComplete;
+  if (canPromptTerms && !formMountedRef.current && files.length === 0) return <CreatorTermsGate />;
+
+  // Wait for creator access and session channels before deciding whether Terms or channel creation is needed
+  if (
+    (creator.status === 'loading' && !formMountedRef.current && !isUploading && !singleWork.busy) ||
+    (!uploadChannelId && (sessionLoading || (uploadChannels.length > 0 && !rememberedReady)))
+  ) {
     return (
       <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
         <div
@@ -543,6 +560,8 @@ const UploadPage: React.FC = () => {
     );
   }
 
+  formMountedRef.current = true;
+
   return (
     <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto w-full">
@@ -557,6 +576,23 @@ const UploadPage: React.FC = () => {
         </div>
 
         {/* Where the video goes: before any file is chosen, in both modes */}
+        {canPromptTerms && termsModalDismissed && (
+          <div
+            role="status"
+            data-testid="upload-terms-banner"
+            className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--fanous-color-accent)] bg-[var(--fanous-color-surface)] p-4 text-sm text-[var(--fanous-color-text-primary)]"
+          >
+            <p className="flex-1">{t.creator.termsRequired}</p>
+            <button
+              type="button"
+              data-testid="upload-terms-reopen"
+              onClick={() => setTermsModalDismissed(false)}
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              {t.upload.termsGateReviewAction}
+            </button>
+          </div>
+        )}
         <UploadChannelPicker
           channels={uploadChannels}
           value={uploadChannelId}
@@ -917,6 +953,12 @@ const UploadPage: React.FC = () => {
         testId="upload-channel-switch"
       />
       {batchSetValues.panel}
+      <CreatorTermsDialog
+        open={canPromptTerms && !termsModalDismissed}
+        onOpenChange={(open) => {
+          if (!open) setTermsModalDismissed(true);
+        }}
+      />
     </main>
   );
 };

@@ -12,7 +12,8 @@ import { UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPl
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { useLanguage } from '@/hooks/useLanguage';
-import { showsUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { showsUpload, markCreatorTermsRequired, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -81,6 +82,7 @@ export default function VideoDashboardPage() {
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   // "Add to playlist": a playlist belongs to one channel, so the videos come from one
   const [playlistTarget, setPlaylistTarget] = useState<{ channelId: string; videos: PickedVideo[] } | null>(null);
@@ -386,6 +388,12 @@ export default function VideoDashboardPage() {
       const responses = await Promise.all(
         Array.from(idsByChannel.entries()).map(([channelId, videoIds]) => bulkUpdateVideos(videoIds, changes, { channelId }))
       );
+      if (responses.some((r) => r?.code === 'terms_required')) {
+        markCreatorTermsRequired();
+        setTermsOpen(true);
+        setErrorMessage(t.upload.termsGateBody);
+        return false;
+      }
       const updated = new Set<string>();
       let failed = 0;
       responses.forEach((r, index) => {
@@ -802,6 +810,13 @@ export default function VideoDashboardPage() {
           confirmLabel={t.common.delete}
           typeToConfirm={t.confirmDialog.deleteWord}
           testId="dashboard-bulk-delete-dialog"
+        />
+        <CreatorTermsDialog
+          open={termsOpen}
+          onOpenChange={setTermsOpen}
+          onAccepted={() => {
+            setErrorMessage(null);
+          }}
         />
       </div>
     </div>

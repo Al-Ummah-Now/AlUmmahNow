@@ -21,6 +21,11 @@ jest.mock('@/lib/api/videos', () => ({
   undoBulkEdit: (...args: unknown[]) => mockUndo(...args),
 }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn() }));
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted: true } }),
+  acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+  markCreatorTermsRequired: jest.fn(),
+}));
 const mockGetPlaylist = jest.fn();
 const mockReorder = jest.fn();
 jest.mock('@/lib/api/playlists', () => ({

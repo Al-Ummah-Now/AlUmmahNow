@@ -47,6 +47,7 @@ export interface UserTracesResult {
   categorySuggestions: number;
   rateLimits: number;
   creatorTier: number;
+  creatorTerms: number;
   captionMinutes: number;
   tierRequests: number;
   billing: number;
@@ -79,12 +80,13 @@ export async function eraseUserTraces(
       )
       .bind(erasedMarker, userId),
   ]);
-  const [suggestions, windows, leases, tier, requests, decided, ...captions] = search
+  const [suggestions, windows, leases, tier, terms, requests, decided, ...captions] = search
     ? await search.batch([
         search.prepare('DELETE FROM category_suggestions WHERE user_id = ? RETURNING subject_id').bind(userId),
         search.prepare('DELETE FROM upload_rate_windows WHERE user_id = ? RETURNING operation').bind(userId),
         search.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? RETURNING operation').bind(userId),
         search.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ? RETURNING tier_id').bind(userId),
+        search.prepare('DELETE FROM creator_terms_acceptances WHERE user_id = ? RETURNING user_id').bind(userId),
         search.prepare('DELETE FROM tier_requests WHERE user_id = ? RETURNING id').bind(userId),
         search.prepare('UPDATE tier_requests SET decided_by = ? WHERE decided_by = ? RETURNING id').bind(erasedMarker, userId),
         ...CAPTION_MINUTE_TABLES.map((table) => search.prepare(`DELETE FROM ${table} WHERE user_id = ? RETURNING user_id`).bind(userId)),
@@ -123,6 +125,7 @@ export async function eraseUserTraces(
     categorySuggestions: count(suggestions),
     rateLimits: count(windows) + count(leases),
     creatorTier: count(tier),
+    creatorTerms: count(terms),
     captionMinutes: captions.reduce((n: number, r) => n + count(r), 0),
     tierRequests: count(requests) + count(decided),
     billing: billing.reduce((n, r) => n + count(r), 0),

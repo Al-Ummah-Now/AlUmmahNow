@@ -28,6 +28,7 @@ import {
 	type PerVideoChanges,
 } from "../../lib/bulkEdit";
 import { OPERATION_ID, readUndo, writeUndo, type BulkUndoRecord, type UndoKv } from "../../lib/bulkEditUndo";
+import { enforceCreatorTerms } from "../../middleware/upload-limits";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { markPublished } from "../../lib/published";
 
@@ -186,6 +187,26 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 		const now = new Date().toISOString();
 		const mayEdit = editChecker(env, userId);
 
+		// Only gate when the bulk edit actually opens at least one closed (draft/private) video,
+		// so closing public -> unlisted stays allowed (matching VideoUpdate).
+		const opensVideo = changes.visibility === 'public' || changes.visibility === 'unlisted' || changes.isPublic === true;
+		const prefetched = new Map<string, VideoType | null>();
+		if (opensVideo) {
+			let opensAnyClosed = false;
+			await Promise.all(videoIds.map(async (videoId) => {
+				const current = await repository.getObject(videoId);
+				prefetched.set(videoId, current);
+				if (!current || current.isDeleted) return;
+				if (!(await mayEdit(current))) return;
+				const wasClosed = current.isDraft === true || (current.isPublic === false && current.isUnlisted !== true);
+				if (wasClosed) opensAnyClosed = true;
+			}));
+			if (opensAnyClosed) {
+				const termsRefused = await enforceCreatorTerms(c, userId);
+				if (termsRefused) return termsRefused;
+			}
+		}
+
 		// Playlists are checked once for the whole request
 		const playlistIds = Array.from(new Set([...(changes.addPlaylists ?? []), ...(changes.removePlaylists ?? [])]));
 		const playlistRepo = new R2Repository<PlaylistType>(env.playlists);
@@ -209,7 +230,7 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 					results.set(videoId, { videoId, success: true, changed: false, replayed: true });
 					return;
 				}
-				const current = await repository.getObject(videoId);
+				const current = prefetched.has(videoId) ? prefetched.get(videoId) : await repository.getObject(videoId);
 				if (!current || current.isDeleted) return void results.set(videoId, fail(videoId, 'not_found'));
 				if (!(await mayEdit(current))) return void results.set(videoId, fail(videoId, 'forbidden'));
 				for (const id of changes.addPlaylists ?? []) {
@@ -377,13 +398,36 @@ export class VideoBulkUndo extends AuthenticatedRoute {
 
 		const records = new Map<string, BulkUndoRecord>();
 		const results = new Map<string, Outcome>();
+		const undoPrefetch = new Map<string, { record: BulkUndoRecord | null; current: VideoType | null }>();
+		let reopensAnyClosed = false;
+		await Promise.all(ids.map(async (videoId) => {
+			const record = await readUndo(kv, userId, body.operationId, videoId);
+			if (!record || record.undoneAt) {
+				undoPrefetch.set(videoId, { record, current: null });
+				return;
+			}
+			const current = await repository.getObject(videoId);
+			undoPrefetch.set(videoId, { record, current });
+			if (!current || current.isDeleted) return;
+			if (!(await mayEdit(current))) return;
+			const currentClosed = current.isDraft === true || (current.isPublic === false && current.isUnlisted !== true);
+			if (!currentClosed) return;
+			const reverted = revertFields(current, record.before, record.after, now);
+			const nextOpen = reverted.video.isDraft !== true && (reverted.video.isPublic !== false || reverted.video.isUnlisted === true);
+			if (reverted.restored.length > 0 && nextOpen) reopensAnyClosed = true;
+		}));
+		if (reopensAnyClosed) {
+			const termsRefused = await enforceCreatorTerms(c, userId);
+			if (termsRefused) return termsRefused;
+		}
 		await Promise.all(ids.map(async (videoId) => {
 			try {
-				const record = await readUndo(kv, userId, body.operationId, videoId);
+				const pref = undoPrefetch.get(videoId);
+				const record = pref ? pref.record : await readUndo(kv, userId, body.operationId, videoId);
 				// Unchanged by the edit, or the record expired: nothing to put back (not a failure)
 				if (!record) return void results.set(videoId, { videoId, success: true, changed: false, code: 'nothing_to_undo', error: MESSAGES.nothing_to_undo });
 				if (record.undoneAt) return void results.set(videoId, { videoId, success: true, changed: false, replayed: true });
-				const current = await repository.getObject(videoId);
+				const current = pref ? pref.current : await repository.getObject(videoId);
 				if (!current || current.isDeleted) return void results.set(videoId, fail(videoId, 'not_found'));
 				if (!(await mayEdit(current))) return void results.set(videoId, fail(videoId, 'forbidden'));
 

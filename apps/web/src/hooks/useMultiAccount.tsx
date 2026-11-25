@@ -16,14 +16,15 @@ import {
   switchChannel,
   reloadUserChannels,
   reloadActiveProfile,
-  createChannelForActiveUser,
+  createChannelForActiveUserResult,
   logoutCurrentAccount,
   logoutAllAccounts,
   getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
 import { clearClientAuthToken } from '@/lib/auth/client-token';
 import { stopWebPushOnSignOut } from '@/lib/push/web-push';
-import type { AccessibleChannel, Channel, ChannelCreateRequest, ChannelRole } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, type AccessibleChannel, type Channel, type ChannelCreateRequest, type ChannelRole } from '@al-ummah/shared-types';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
 import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
 import { sameChannelList } from '@/lib/channels/menu';
@@ -110,7 +111,7 @@ interface MultiAccountContextValue {
   switchAccount: (userId: string) => Promise<void>;
   removeAccount: (userId: string) => Promise<void>;
   switchToChannel: (channelId: string | null) => Promise<void>;
-  createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
+  createChannel: (data: ChannelCreateRequest, options?: { onTermsRequired?: () => void }) => Promise<Channel | null>;
   /** True while a channel creation request is in flight */
   creatingChannel: boolean;
   reloadChannels: () => Promise<void>;
@@ -581,21 +582,27 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   // clicks, Enter + click) share that request instead of creating duplicates.
   const createChannelInFlight = useRef<Promise<Channel | null> | null>(null);
   const [creatingChannel, setCreatingChannel] = useState(false);
-  const createChannel = useCallback((data: ChannelCreateRequest): Promise<Channel | null> => {
+  const createChannel = useCallback((data: ChannelCreateRequest, options?: { onTermsRequired?: () => void }): Promise<Channel | null> => {
     if (createChannelInFlight.current) return createChannelInFlight.current;
     const run = (async () => {
       setCreatingChannel(true);
       try {
         setError(null);
 
-        const newChannel = await createChannelForActiveUser(data);
+        const result = await createChannelForActiveUserResult(data);
 
-        if (newChannel) {
+        if (result.channel) {
           await loadSessionData();
           // The menu's live list shows the new channel right away, whichever page created it
           await refreshLiveChannels(true);
           router.refresh();
-          return newChannel;
+          return result.channel;
+        }
+
+        if (result.code === CREATOR_ERROR_CODES.termsRequired) {
+          markCreatorTermsRequired();
+          options?.onTermsRequired?.();
+          return null;
         }
 
         setError(t.errors.failedToCreate);

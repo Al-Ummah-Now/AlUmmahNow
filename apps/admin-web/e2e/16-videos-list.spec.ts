@@ -68,6 +68,11 @@ test.describe('videos list', () => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only: the tests change their own video');
     await skipUntilClientListsDeployed();
     const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
+    const access = await videosApi('/api/me/creator');
+    const termsVersion = (access.body.result as { termsVersion?: string } | undefined)?.termsVersion;
+    if (termsVersion) {
+      await videosApi('/api/me/creator/terms', { method: 'POST', body: JSON.stringify({ version: termsVersion }) });
+    }
     const channel = await videosApi('/api/channels', {
       method: 'POST',
       body: JSON.stringify({ name: `E2E list ${tag}`, description: '[e2e-admin] videos list', isMain: false }),

@@ -141,6 +141,7 @@ async function eraseLocalRows(users: LedgerUser[]): Promise<void> {
   await stackSql('al-ummah-now-reports', `DELETE FROM admin_staff WHERE user_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-reports', `DELETE FROM auth_moderation_requests WHERE subject_user_id IN (${quoteList(ids)}) OR requested_by_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-search', `DELETE FROM creator_tier_assignments WHERE user_id IN (${quoteList(ids)})`);
+  await stackSql('al-ummah-now-search', `DELETE FROM creator_terms_acceptances WHERE user_id IN (${quoteList(ids)})`);
   // Site-wide tier settings ("Allow tier requests", the default tier): keep the rows, drop who set them
   await stackSql('al-ummah-now-search', `UPDATE creator_tier_settings SET updated_by = NULL WHERE updated_by IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-d1', `DELETE FROM rbac_user_roles WHERE user_id IN (${quoteList(ids)})`);

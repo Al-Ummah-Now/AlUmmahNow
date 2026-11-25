@@ -15,6 +15,11 @@ jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, fea
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
 jest.mock('@/lib/auth/client-token', () => ({ fetchClientAuthToken: jest.fn(async () => 'tok') }));
 jest.mock('@/lib/runtime-config', () => ({ getApiUrl: () => 'https://api.test' }));
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted: true } }),
+  acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+  markCreatorTermsRequired: jest.fn(),
+}));
 
 const listAudioTracks = jest.fn();
 const addAudioTrack = jest.fn();

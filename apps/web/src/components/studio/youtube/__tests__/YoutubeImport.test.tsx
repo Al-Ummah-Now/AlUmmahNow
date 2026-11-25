@@ -36,6 +36,12 @@ jest.mock('@/components/common/AppLink', () => ({ __esModule: true, default: ({ 
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), debug: jest.fn(), info: jest.fn() } }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ERR-TEST-0001') }));
 jest.mock('@/lib/share/short-link', () => ({ shareLink: (t: { id: string }) => `https://alummahnow.link/v/${t.id}` }));
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'ready', access: { canUpload: true, canCreateChannel: true, termsAccepted: true } }),
+  needsCreatorTerms: () => false,
+  markCreatorTermsRequired: jest.fn(),
+  acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+}));
 
 const mockStudio = STUDIO_EN;
 const text = STUDIO_EN.youtube;

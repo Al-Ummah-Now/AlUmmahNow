@@ -501,6 +501,7 @@ export const STUDIO_EN = {
       live_provider_error: 'The live service could not be reached. Try again.',
       live_hours_used: 'This month’s live streaming hours are used. They renew on the 1st.',
       live_concurrent_limit: 'You already have the most streams live at once. End one to go live.',
+      terms_required: 'Please review and agree to the Terms of Service and Community Guidelines before going live.',
       generic: 'That didn’t work. Please try again.',
     },
     apps: {
@@ -1115,6 +1116,7 @@ export const STUDIO_AR: StudioTranslations = {
       live_provider_error: 'تعذّر الوصول إلى خدمة البث. حاول مرة أخرى.',
       live_hours_used: 'انتهت ساعات البث المباشر لهذا الشهر، وتتجدد في اليوم الأول من الشهر.',
       live_concurrent_limit: 'لديك أقصى عدد من البثوث المباشرة المتزامنة. أنهِ أحدها لتبدأ البث.',
+      terms_required: 'يُرجى مراجعة شروط الاستخدام وإرشادات المجتمع والموافقة عليها قبل بدء البث.',
       generic: 'لم تنجح العملية. حاول مرة أخرى.',
     },
     apps: {

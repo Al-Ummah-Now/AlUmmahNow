@@ -16,7 +16,11 @@ const fetchContentPage = jest.fn();
 const push = jest.fn();
 const mockRouter = { push, refresh: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
-jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => ({ status: 'loading' }) }));
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'loading' }),
+  needsCreatorTerms: () => false,
+  markCreatorTermsRequired: jest.fn(),
+}));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, liveWatch: mockWatch, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel', loading: 'Loading' }, autocomplete: mockAny }, lang: 'en', isRTL: false }),
 }));

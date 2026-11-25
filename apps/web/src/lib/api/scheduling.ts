@@ -4,7 +4,7 @@ import {
   VideoScheduleResponse,
   ScheduledVideoListResponse,
 } from '@al-ummah/shared-types';
-import { apiRequestServer, buildApiUrl } from './api-client';
+import { apiRequestServer, apiRequestServerResult, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import { ApiHeaders } from './types';
 import { logger } from '@/lib/logger-client';
@@ -23,6 +23,7 @@ export async function scheduleVideo(
   success: boolean;
   result?: VideoScheduleResponse;
   error?: string;
+  code?: string;
 } | null> {
   try {
     logger.debug('[scheduleVideo] Scheduling video', {
@@ -32,10 +33,11 @@ export async function scheduleVideo(
       notifyOnPublish,
     });
 
-    return apiRequestServer<{
+    const res = await apiRequestServerResult<{
       success: boolean;
       result?: VideoScheduleResponse;
       error?: string;
+      code?: string;
     }>(
       {
         method: 'POST',
@@ -48,12 +50,17 @@ export async function scheduleVideo(
         functionName: 'scheduleVideo',
       },
       async () => ({
-        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
       true
     );
+    if (res.data) return res.data;
+    const errBody = res.errorBody as { code?: string; error?: string; message?: string } | undefined;
+    if (errBody?.code || errBody?.error || errBody?.message) {
+      return { success: false, code: errBody.code, error: errBody.message || errBody.error };
+    }
+    return null;
   } catch (error) {
     logger.error('[scheduleVideo] Error scheduling video', { error, videoId });
     return null;
@@ -74,6 +81,7 @@ export async function updateSchedule(
   success: boolean;
   result?: VideoScheduleResponse;
   error?: string;
+  code?: string;
 } | null> {
   try {
     logger.debug('[updateSchedule] Updating video schedule', {
@@ -82,10 +90,11 @@ export async function updateSchedule(
       timezone,
     });
 
-    return apiRequestServer<{
+    const res = await apiRequestServerResult<{
       success: boolean;
       result?: VideoScheduleResponse;
       error?: string;
+      code?: string;
     }>(
       {
         method: 'PUT',
@@ -98,12 +107,17 @@ export async function updateSchedule(
         functionName: 'updateSchedule',
       },
       async () => ({
-        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
       true
     );
+    if (res.data) return res.data;
+    const errBody = res.errorBody as { code?: string; error?: string; message?: string } | undefined;
+    if (errBody?.code || errBody?.error || errBody?.message) {
+      return { success: false, code: errBody.code, error: errBody.message || errBody.error };
+    }
+    return null;
   } catch (error) {
     logger.error('[updateSchedule] Error updating schedule', { error, videoId });
     return null;
@@ -159,14 +173,16 @@ export async function publishNow(
   success: boolean;
   result?: { message: string; videoId: string };
   error?: string;
+  code?: string;
 } | null> {
   try {
     logger.debug('[publishNow] Publishing video immediately', { videoId });
 
-    return apiRequestServer<{
+    const res = await apiRequestServerResult<{
       success: boolean;
       result?: { message: string; videoId: string };
       error?: string;
+      code?: string;
     }>(
       {
         method: 'POST',
@@ -174,12 +190,17 @@ export async function publishNow(
         functionName: 'publishNow',
       },
       async () => ({
-        
         channelId: headers.channelId,
         accessToken: (await getServerAuthContext())?.accessToken || '',
       }),
       true
     );
+    if (res.data) return res.data;
+    const errBody = res.errorBody as { code?: string; error?: string; message?: string } | undefined;
+    if (errBody?.code || errBody?.error || errBody?.message) {
+      return { success: false, code: errBody.code, error: errBody.message || errBody.error };
+    }
+    return null;
   } catch (error) {
     logger.error('[publishNow] Error publishing video', { error, videoId });
     return null;

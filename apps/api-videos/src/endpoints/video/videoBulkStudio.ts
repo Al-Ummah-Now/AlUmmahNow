@@ -10,6 +10,7 @@ import { announceSchedule, applySchedule, scheduleDateProblem, scheduleRefusal }
 import { canOnVideo } from "../../lib/channelAccess";
 import { checkBulkScheduleAllowed } from "../../lib/studioLimits";
 import { featureOff } from "../../lib/features/off";
+import { enforceCreatorTerms } from "../../middleware/upload-limits";
 
 /** At most a week between two videos. */
 const MAX_INTERVAL_MINUTES = 7 * 24 * 60;
@@ -61,6 +62,8 @@ export class VideoBulkSchedule extends AuthenticatedRoute {
 		const userId = this.getUserId(c) as string;
 		// Not in the entitlements: bulk scheduling is hidden in Studio (404 feature_off)
 		if (await checkBulkScheduleAllowed(c.env, userId)) return featureOff(c, 'bulkSchedule');
+		const termsRefused = await enforceCreatorTerms(c, userId);
+		if (termsRefused) return termsRefused;
 		const repository = new R2Repository<VideoObject>(c.env.videos);
 		const now = new Date();
 		const start = new Date(body.startAt).getTime();

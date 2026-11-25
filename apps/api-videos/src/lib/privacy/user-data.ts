@@ -42,6 +42,7 @@
  */
 
 import { eraseTierHistory } from '../tierChanges';
+import { eraseCreatorTermsAcceptance, readCreatorTermsAcceptance } from '../creatorTerms';
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
 import { getEmailSettings, getQuietHours, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
@@ -395,6 +396,7 @@ export interface UserDataExport {
 	notes: string[];
 	profile: Json | null;
 	privacyConsent: Json | null;
+	creatorTermsAcceptance: Json | null;
 	channels: Json[];
 	channelSections: Json[];
 	channelTabs: Json[];
@@ -476,6 +478,7 @@ function emptyExport(userId: string): UserDataExport {
 		notes: [...EXPORT_NOTES],
 		profile: null,
 		privacyConsent: null,
+		creatorTermsAcceptance: null,
 	} as UserDataExport;
 	for (const field of EXPORT_LIST_FIELDS) out[field] = [];
 	return out;
@@ -751,6 +754,19 @@ export async function collectUserData(
 				if (!sdb) return;
 				ctx.budget.spend();
 				out.channelMoveOffers.push(...(await exportMoveOffers(sdb, userId)));
+			}),
+		// Creator Terms acceptance record (SEARCH_DB creator_terms_acceptances)
+		(ctx) =>
+			atomically(async () => {
+				const db = env.SEARCH_DB as D1Database | undefined;
+				if (!db) return;
+				ctx.budget.spend();
+				try {
+					const accepted = await readCreatorTermsAcceptance(db, userId);
+					if (accepted) out.creatorTermsAcceptance = { ...accepted };
+				} catch (error) {
+					if (!isMissingTable(error)) throw error;
+				}
 			}),
 	];
 
@@ -1488,6 +1504,13 @@ export async function eraseUserData(
 			} catch (error) {
 				if (!isMissingTable(error)) throw error;
 			}
+		},
+
+		// Creator Terms acceptance (search migration 0125) — own resumable phase so the final phase budget stays unchanged
+		async (ctx) => {
+			if (!db) return;
+			ctx.budget.spend();
+			await eraseCreatorTermsAcceptance(db as unknown as D1Database, userId);
 		},
 
 		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile

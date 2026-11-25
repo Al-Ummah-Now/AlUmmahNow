@@ -9,7 +9,7 @@ import {
   SubscriptionRequest,
   PaginationResponse
 } from "./types";
-import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { apiRequestServer, apiRequestServerResult, buildApiUrl, buildQueryParams, type ApiResult } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { Channel, VideoObject, Playlist } from "@al-ummah/shared-types";
 import { logger } from '@/lib/logger-server';
@@ -119,7 +119,14 @@ export async function createChannel(
   data: ChannelCreateRequest,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ channel: Channel }> | null> {
-  return apiRequestServer<ApiResponse<{ channel: Channel }>>({
+  return (await createChannelResult(data, headers)).data;
+}
+
+export async function createChannelResult(
+  data: ChannelCreateRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<ApiResult<ApiResponse<{ channel: Channel }>>> {
+  return apiRequestServerResult<ApiResponse<{ channel: Channel }>>({
     method: 'POST',
     url: buildApiUrl('/api/channels'),
     body: data,

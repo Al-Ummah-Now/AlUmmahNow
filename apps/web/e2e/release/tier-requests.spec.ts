@@ -38,10 +38,10 @@ async function answerConsent(context: BrowserContext): Promise<void> {
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
 }
 
-async function creatorAccess(user: WebUser): Promise<{ canUpload: boolean; canCreateChannel: boolean; tier: { id: string } | null }> {
+async function creatorAccess(user: WebUser): Promise<{ canUpload: boolean; canCreateChannel: boolean; tier: { id: string } | null; termsAccepted?: boolean; termsVersion?: string }> {
   const res = await apiFetch(user, '/api/me/creator');
   expect(res.status, 'GET /api/me/creator').toBe(200);
-  return ((await res.json()) as { result: { canUpload: boolean; canCreateChannel: boolean; tier: { id: string } | null } }).result;
+  return ((await res.json()) as { result: { canUpload: boolean; canCreateChannel: boolean; tier: { id: string } | null; termsAccepted?: boolean; termsVersion?: string } }).result;
 }
 
 /** Opens /upgrade and asks for Creator through the dialog; returns once the page shows it pending. */
@@ -140,6 +140,16 @@ test.describe('Release: tier requests', () => {
     await expect.poll(async () => (await creatorAccess(user)).canUpload, { message: 'canUpload after approval', timeout: 20000 }).toBe(true);
     const access = await creatorAccess(user);
     expect([access.tier?.id, access.canCreateChannel]).toEqual(['creator', true]);
+    if (access.termsVersion) {
+      const termsRes = await apiFetch(user, '/api/me/creator/terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: access.termsVersion }),
+      });
+      if (termsRes.status !== 404) {
+        expect(termsRes.status, 'accept creator terms after approval').toBeLessThan(300);
+      }
+    }
     const channelId = await ownData.createChannel(user, { isMain: true });
     const started = await apiFetch(user, '/api/videos/upload/initiate', {
       method: 'POST',

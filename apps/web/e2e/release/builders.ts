@@ -321,15 +321,32 @@ export class DataScope {
     // The assignment is removed again (before the user is erased: cleanup runs newest first)
     this.undo.push({
       what: `tier ${tier} of ${id}`,
-      run: () =>
-        onLocalStack()
-          ? fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: `DELETE FROM creator_tier_assignments WHERE user_id = '${id}'` })
-          : setCreatorTier(user, null),
+      run: async () => {
+        if (onLocalStack()) {
+          await fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: `DELETE FROM creator_tier_assignments WHERE user_id = '${id}'` });
+          await fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: `DELETE FROM creator_terms_acceptances WHERE user_id = '${id}'` });
+        } else {
+          await setCreatorTier(user, null);
+        }
+      },
     });
     if (onLocalStack()) {
-      const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', '${tier}', 'admin', 'e2e-builder-${ns()}', '${new Date().toISOString()}')`;
+      const now = new Date().toISOString();
+      const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', '${tier}', 'admin', 'e2e-builder-${ns()}', '${now}')`;
       const res = await fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
       expect(res.ok, `local stack tier write: ${await res.text()}`).toBe(true);
+      await apiFetch(user, '/api/me/creator')
+        .then((r) => r.json() as Promise<{ result?: { termsVersion?: string } }>)
+        .then((b) =>
+          b?.result?.termsVersion
+            ? apiFetch(user, '/api/me/creator/terms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ version: b.result.termsVersion }),
+              })
+            : null,
+        )
+        .catch(() => null);
     } else if (tier === 'creator') {
       await grantCreatorTier(user);
     } else {

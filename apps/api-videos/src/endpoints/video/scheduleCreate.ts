@@ -9,6 +9,7 @@ import { heldForPremiere } from '../../lib/live/premieres';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 
 const VideoScheduleResponseSchema = z.object({
   videoId: Str({ description: 'Video ID' }),
@@ -179,6 +180,10 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
       const current = await videoRepo.getObject(videoId);
       if (current) await heldForPremiere(c.env as never, { ...current, id: videoId });
       const allowedOwner = current && (await canOnVideo(c.env as never, current, userId, 'video.schedule')) ? current.userId : null;
+      if (allowedOwner) {
+        const termsRefused = await enforceCreatorTerms(c, userId);
+        if (termsRefused) return termsRefused;
+      }
       const { data: video, rejected } = await videoRepo.updateObjectOrReject<Refusal>(videoId, (fresh) => {
         // Check the caller may schedule this video
         if (!allowedOwner || fresh.userId !== allowedOwner) {

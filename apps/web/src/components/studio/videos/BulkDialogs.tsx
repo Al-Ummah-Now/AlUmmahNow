@@ -6,14 +6,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
-import { bulkScheduleVideos, type BulkSummary } from '@/lib/api/studio-content';
+import { bulkScheduleVideos, type BulkSummary, type TermsRefusal } from '@/lib/api/studio-content';
 import type { LimitRefusal } from '@/lib/studio/limits';
 
 interface DialogProps {
   open: boolean;
   videoIds: string[];
   onOpenChange: (open: boolean) => void;
-  onDone: (summary: BulkSummary | LimitRefusal | null) => void | Promise<void>;
+  onDone: (summary: BulkSummary | LimitRefusal | TermsRefusal | null) => void | Promise<void>;
 }
 
 export function BulkScheduleDialog({ open, videoIds, onOpenChange, onDone }: DialogProps) {

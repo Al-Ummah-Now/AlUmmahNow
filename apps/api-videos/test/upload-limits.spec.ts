@@ -9,7 +9,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
-import { CREATOR_ERROR_CODES, DEFAULT_CREATOR_TIER, syncOwnership, type SearchDb } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, CURRENT_CREATOR_TERMS_VERSION, DEFAULT_CREATOR_TIER, forgetFeatureSwitches, syncOwnership, type SearchDb } from '@al-ummah/shared-types';
 import {
   continueLimitsOf,
   countReused,
@@ -26,7 +26,8 @@ import {
   UPLOADS_BY_INVITATION_MESSAGE,
 } from '../src/middleware/upload-limits';
 import { assignTier, deleteTier, readTier, readTiers, resolveCreator, saveTier, validateTier } from '../src/lib/creatorTiers';
-import { channelCreateGate, creatorAccess } from '../src/endpoints/creator/creatorAccess';
+import { recordCreatorTermsAcceptance } from '../src/lib/creatorTerms';
+import { channelCreateGate, creatorAccess, handleAcceptCreatorTerms } from '../src/endpoints/creator/creatorAccess';
 import { listCreators } from '../src/lib/admin/creators';
 import { createTusRouter } from '../src/endpoints/video/tus/tusProxy';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -61,16 +62,33 @@ interface Options {
   channels?: Record<string, string>;
   /** false: the channel stand-in does not index ownership (the queue has not run yet) */
   indexChannels?: boolean;
+  /** false: do not pre-accept creator Terms for the seeded users */
+  acceptTerms?: boolean;
+  /** true: turn on the default-off creatorTerms feature switch in feature_switches */
+  creatorTermsOn?: boolean;
   /** What the initiate stand-in answers (default: a new video) */
   initiateAnswer?: () => { status: number; body: unknown };
 }
 
 async function harness(opts: Options = {}) {
+  forgetFeatureSwitches();
   const db = new SqliteD1();
   const d1 = db as unknown as D1Database;
+  if (opts.creatorTermsOn) {
+    db.db
+      .prepare(
+        `INSERT OR REPLACE INTO feature_switches (key, enabled, version, updated_by, updated_at)
+         VALUES ('creatorTerms', 1, 1, 'test', '2026-11-24T00:00:00Z')`,
+      )
+      .run();
+  }
   await saveTier(d1, 'small', SMALL, 'test', { create: true });
-  for (const [user, tier] of Object.entries(opts.tiers ?? { alice: 'small', bob: 'small', mallory: 'small' })) {
+  const seededTiers = opts.tiers ?? { alice: 'small', bob: 'small', mallory: 'small' };
+  for (const [user, tier] of Object.entries(seededTiers)) {
     await assignTier(d1, user, tier, 'test');
+    if (opts.acceptTerms !== false) {
+      await recordCreatorTermsAcceptance(d1, user);
+    }
   }
   const tusKv = memoryKv();
   const created: string[] = [];
@@ -91,6 +109,7 @@ async function harness(opts: Options = {}) {
   for (const path of UPLOAD_SESSION_PATHS) app.use(path, limiter);
   const continueLimiter = uploadContinueLimitMiddleware();
   for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, continueLimiter);
+  app.post('/api/me/creator/terms', handleAcceptCreatorTerms);
   app.use('/api/channels', channelCreateGate);
   // Stand-in for ChannelCreate. The real one indexes ownership from the queue
   // (later); indexChannels: false leaves the index behind, x-test-fail fails it.
@@ -244,6 +263,7 @@ describe('creator tiers: who may upload', () => {
 
   it('assigning a tier lets the user upload at once; moving them to Free blocks the next request (no re-sign-in)', async () => {
     const h = await harness();
+    await recordCreatorTermsAcceptance(h.d1, 'carol');
     assert.equal((await h.initiate('carol')).status, 403);
     await assignTier(h.d1, 'carol', 'creator', 'admin-1');
     assert.equal((await h.initiate('carol')).status, 200);
@@ -354,6 +374,7 @@ describe('creator tiers: who may upload', () => {
   it('super admins are unlimited without a tier: a batch of 15 after 1,000 uploads in the hour still passes', async () => {
     const h = await harness();
     const owner = 'usr_owner';
+    await recordCreatorTermsAcceptance(h.d1, owner);
     const superAdmin = { 'x-test-roles': 'Super Admin' };
     for (let i = 0; i < 1000; i++) assert.equal((await h.initiate(owner, superAdmin)).status, 200, `upload ${i + 1}`);
     // Even counters far past every limit do not apply to them
@@ -381,6 +402,7 @@ describe('creator tiers: who may upload', () => {
 
   it('managers and editors upload to a tiered owner\'s channel under the owner\'s tier and limits', async () => {
     const h = await harness({ tiers: { owner: 'small' }, channels: { 'ch-1': 'owner' } });
+    await recordCreatorTermsAcceptance(h.d1, 'member');
     // The member has no tier of their own
     assert.equal((await h.initiate('member')).status, 403);
     assert.equal((await h.initiate('member', { channelId: 'ch-1' })).status, 200);
@@ -528,6 +550,7 @@ describe('creator tiers: channels, access and admin', () => {
     // Unlimited and super admins have no channel limit
     await assignTier(h.d1, 'alice', 'unlimited', 'admin');
     assert.equal((await h.createChannel('alice')).status, 200);
+    await recordCreatorTermsAcceptance(h.d1, 'owner');
     for (let i = 0; i < 5; i++) assert.equal((await h.createChannel('owner', { 'x-test-roles': 'Super Admin' })).status, 200);
   });
 
@@ -729,5 +752,111 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal(page.limitHits7d, 1);
     const needs = await listCreators({ SEARCH_DB: h.d1, profiles }, { filter: 'needs_tier' });
     assert.deepEqual(needs.items.map((r) => r.userId), ['usr_migrated']);
+  });
+
+  it('leaves uploads and channel create open when creatorTerms switch is off (default), and enforces when on', async () => {
+    // 1. Default (switch off): no enforcement, /api/me/creator omits termsAccepted
+    const offH = await harness({ tiers: { alice: 'small' }, acceptTerms: false, creatorTermsOn: false });
+    assert.equal((await offH.initiate('alice')).status, 200, 'initiate allowed when creatorTerms switch is off');
+    assert.equal((await offH.request('alice', '/api/channels', { method: 'POST', body: '{}' })).status, 200, 'channel create allowed when switch is off');
+    assert.equal((await offH.request('alice', '/api/live-streams', { method: 'POST', body: '{}' })).status, 200, 'live create allowed when switch is off');
+    const offAccess = await creatorAccess(offH.d1, 'alice', undefined, { SEARCH_DB: offH.d1 });
+    assert.equal(offAccess.termsAccepted, undefined, 'termsAccepted omitted when switch is off');
+
+    // 2. Switch on: enforces on session starts & channel create
+    const h = await harness({
+      tiers: { alice: 'small', bob: 'small' },
+      channels: { 'ch-alice': 'alice' },
+      acceptTerms: false,
+      creatorTermsOn: true,
+    });
+    const expectTermsRequired = async (res: Response, label: string) => {
+      assert.equal(res.status, 403, `${label}: expected 403`);
+      const body = (await res.json()) as { code?: string };
+      assert.equal(body.code, CREATOR_ERROR_CODES.termsRequired, `${label}: expected terms_required`);
+    };
+
+    await expectTermsRequired(await h.initiate('alice'), 'POST /api/videos/upload/initiate');
+    await expectTermsRequired(await h.request('alice', '/api/videos/upload', { method: 'POST', body: '{}' }), 'POST /api/videos/upload');
+    await expectTermsRequired(await h.batch('alice', 2), 'POST /api/videos/upload/batch/initiate');
+    await expectTermsRequired(await h.request('alice', '/api/videos', { method: 'POST', body: '{}' }), 'POST /api/videos');
+    await expectTermsRequired(await h.request('alice', '/api/live-streams', { method: 'POST', body: '{}' }), 'POST /api/live-streams');
+    await expectTermsRequired(await h.request('alice', '/api/channels', { method: 'POST', body: '{}' }), 'POST /api/channels');
+
+    // Super admins accept Terms like any other creator when uploading
+    await expectTermsRequired(
+      await h.request('admin-uploader', '/api/videos/upload/initiate', {
+        method: 'POST',
+        headers: { 'x-test-roles': 'Super Admin' },
+        body: '{}',
+      }),
+      'super admin upload initiate requires terms',
+    );
+
+    // Older accepted version is also refused with 403 terms_required
+    await recordCreatorTermsAcceptance(h.d1, 'alice', '2025-01-01');
+    await expectTermsRequired(await h.initiate('alice'), 'older version row refused');
+
+    // In-flight uploads (/api/videos/upload/complete & TUS create for an existing session) must not be cut off
+    await h.issueSession('sess-in-flight', 'alice', 'ch-alice');
+    const completeRes = await h.request('alice', '/api/videos/upload/complete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tusSessionId: 'sess-in-flight' }),
+    });
+    assert.equal(completeRes.status, 200, 'in-flight upload complete is allowed for unaccepted user');
+
+    // TUS create for an already-initiated session is exempt from the Terms gate (uploadContinueLimitMiddleware)
+    const tusCreate = await h.tusCreate('alice', {
+      'upload-metadata': `tusSessionId ${btoa('sess-in-flight')}`,
+    });
+    assert.notEqual(tusCreate.status, 403, 'TUS create for existing session is not blocked by terms_required');
+    assert.equal(h.continueHour('alice'), 2, 'complete + TUS create both counted through uploadContinueLimitMiddleware');
+
+    // Admin-import TUS create bypasses BOTH tier and Terms gates (charlie has NO tier and NO terms)
+    await h.issueSession('sess-admin-import', 'charlie', 'ch-alice', { adminImport: true });
+    const adminTus = await h.tusCreate('charlie', {
+      'upload-metadata': `tusSessionId ${btoa('sess-admin-import')}`,
+    });
+    assert.notEqual(adminTus.status, 403, 'admin-import TUS create bypasses tier and Terms gates for non-creator staff');
+    assert.equal(h.continueHour('charlie'), 0, 'admin-import TUS create is uncounted');
+    const nonAdminTus = await h.tusCreate('charlie', {
+      'upload-metadata': `tusSessionId ${btoa('sess-in-flight')}`,
+    });
+    assert.equal(nonAdminTus.status, 403, 'without adminImport flag, charlie is refused');
+
+    // Channel member uploading under owner's tier: uploader (bob) must accept per account; owner (alice) accepting does not accept for bob
+    const acceptAlice = await h.request('alice', '/api/me/creator/terms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: CURRENT_CREATOR_TERMS_VERSION }),
+    });
+    assert.equal(acceptAlice.status, 200);
+    await expectTermsRequired(
+      await h.request('bob', '/api/videos/upload/initiate', { method: 'POST', headers: { channelId: 'ch-alice' }, body: '{}' }),
+      'channel member bob must accept Terms even when owner alice accepted',
+    );
+    assert.equal(
+      (await h.request('bob', '/api/me/creator/terms', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: CURRENT_CREATOR_TERMS_VERSION }),
+      })).status,
+      200,
+    );
+    assert.equal(
+      (await h.request('bob', '/api/videos/upload/initiate', { method: 'POST', headers: { channelId: 'ch-alice' }, body: '{}' })).status,
+      200,
+    );
+
+    // Accepting Terms unlocks all session creation & channel create paths for alice
+    assert.equal((await h.initiate('alice')).status, 200);
+    assert.equal((await h.request('alice', '/api/live-streams', { method: 'POST', body: '{}' })).status, 200);
+    assert.equal((await h.request('alice', '/api/channels', { method: 'POST', body: '{}' })).status, 200);
+
+    // D1 error when reading creator_terms_acceptances fails closed with 503 during enforcement
+    h.db.db.exec('DROP TABLE creator_terms_acceptances');
+    const broken = await h.initiate('alice');
+    assert.equal(broken.status, 503, 'D1 terms lookup failure fails closed with 503');
   });
 });

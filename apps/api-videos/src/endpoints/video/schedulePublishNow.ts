@@ -13,6 +13,7 @@ import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { markPublished } from '../../lib/published';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 
 export class VideoSchedulePublishNow extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -131,6 +132,9 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
           409
         );
       }
+
+      const termsRefused = await enforceCreatorTerms(c, userId);
+      if (termsRefused) return termsRefused;
 
       // Publish on the fresh video with a conditional write (SCALABILITY-AUDIT AV-3)
       const now = new Date().toISOString();

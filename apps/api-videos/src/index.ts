@@ -72,7 +72,7 @@ import { errorHandler } from "./middleware/error-handler";
 import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
 import { pruneLimitHits } from "./lib/creatorTiers";
-import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
+import { channelCreateGate, handleAcceptCreatorTerms, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
 import { handleCreateTierRequest, handleMyTier, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
 import { handleAbandonCheckout, handlePaymentReceipt, handleBillingPlans, handleFakeCancel, handleMyCheckout, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
 import billingInternalRouter from "./routers/billing.router";
@@ -336,6 +336,7 @@ app.get('/api/categories', handleListCategories);
 app.post('/internal/categories/invalidate', handleInvalidateCategories);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
+app.post('/api/me/creator/terms', authMiddleware, handleAcceptCreatorTerms);
 // Which user-facing features this caller sees (lib/features; auth optional): every client hides what is not true
 app.get('/api/me/features', handleUserFeatures);
 // Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)

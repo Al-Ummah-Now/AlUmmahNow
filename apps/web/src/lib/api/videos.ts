@@ -228,6 +228,7 @@ export interface BulkEditOutcome {
 
 export interface BulkEditResponse {
   success: boolean;
+  code?: string;
   operationId?: string;
   results: BulkEditOutcome[];
   summary: { total: number; succeeded: number; failed: number };
@@ -250,7 +251,7 @@ export async function bulkEditVideos(
 ): Promise<BulkEditResponse | null> {
   try {
     logger.debug('[bulkEditVideos] Editing videos', { count: input.ids.length, operationId: input.operationId, fields: Object.keys(input.changes), titles: Object.keys(input.perVideo ?? {}).length });
-    return apiRequestServer<BulkEditResponse>(
+    const res = await apiRequestServerResult<BulkEditResponse>(
       {
         method: 'PATCH',
         url: buildApiUrl('/api/videos/bulk'),
@@ -263,6 +264,17 @@ export async function bulkEditVideos(
       }),
       true
     );
+    if (res.data) return res.data;
+    const errCode = (res.errorBody as { code?: string } | undefined)?.code;
+    if (errCode === 'terms_required') {
+      return {
+        success: false,
+        code: 'terms_required',
+        results: input.ids.map((videoId) => ({ videoId, success: false, code: 'terms_required' })),
+        summary: { total: input.ids.length, succeeded: 0, failed: input.ids.length },
+      };
+    }
+    return null;
   } catch (error) {
     logger.error('bulkEditVideos error:', error);
     return null;
@@ -277,7 +289,7 @@ export async function undoBulkEdit(
 ): Promise<BulkEditResponse | null> {
   try {
     logger.debug('[undoBulkEdit] Undoing bulk edit', { operationId, count: ids.length });
-    return apiRequestServer<BulkEditResponse>(
+    const res = await apiRequestServerResult<BulkEditResponse>(
       {
         method: 'POST',
         url: buildApiUrl('/api/videos/bulk/undo'),
@@ -290,6 +302,17 @@ export async function undoBulkEdit(
       }),
       true
     );
+    if (res.data) return res.data;
+    const errCode = (res.errorBody as { code?: string } | undefined)?.code;
+    if (errCode === 'terms_required') {
+      return {
+        success: false,
+        code: 'terms_required',
+        results: ids.map((videoId) => ({ videoId, success: false, code: 'terms_required' })),
+        summary: { total: ids.length, succeeded: 0, failed: ids.length },
+      };
+    }
+    return null;
   } catch (error) {
     logger.error('undoBulkEdit error:', error);
     return null;

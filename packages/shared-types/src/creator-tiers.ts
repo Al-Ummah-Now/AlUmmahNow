@@ -332,6 +332,9 @@ export interface CreatorTierAssignment {
  */
 export type CreatorTierVia = 'tier' | 'super_admin' | 'default' | 'none';
 
+/** Current version of the Creator Terms of Service and Community Guidelines agreement. */
+export const CURRENT_CREATOR_TERMS_VERSION = '2026-11-24';
+
 /**
  * What the signed-in user may do (GET /api/me/creator), for the web UI to show
  * or hide upload and channel-create controls. `via` says why: the stored
@@ -368,12 +371,22 @@ export interface CreatorAccess {
   upgradeMode?: 'pay' | 'request' | 'closed';
   /** Set while an admin deletion of the user's videos data is pending: nothing can be uploaded or created */
   pendingDeletion?: boolean;
+  /** True once this account has accepted the current Terms of Service and Community Guidelines. */
+  termsAccepted?: boolean;
+  /** ISO timestamp when this account accepted the Terms, or null if not yet accepted. */
+  termsAcceptedAt?: string | null;
+  /** Version identifier of the current creator Terms & Community Guidelines. */
+  termsVersion?: string;
 }
 
 /** Error codes the upload and channel-create paths answer with (the web maps them to en/ar messages). */
 export const CREATOR_ERROR_CODES = {
   /** 403: the user's tier does not allow uploads (or channel creation) */
   uploadsByInvitation: 'uploads_by_invitation',
+  /** 403: the user has not yet accepted the current creator Terms of Service and Community Guidelines */
+  termsRequired: 'terms_required',
+  /** 409: the Terms version shown to the client is older than CURRENT_CREATOR_TERMS_VERSION */
+  termsVersionChanged: 'terms_version_changed',
   /** 403: the tier's channel limit is reached */
   channelLimit: 'channel_limit',
   /** 429: an upload limit was reached; `retryAfter` (s) says when uploading works again */

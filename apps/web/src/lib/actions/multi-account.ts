@@ -13,7 +13,7 @@ import { revalidatePath } from 'next/cache';
 import { headers as getHeaders, cookies as getCookies } from "next/headers";
 import { getOpenAuthClient } from "../auth/openauth-client";
 import { SessionManager, type AccountInfo } from '../auth/session-manager';
-import { createChannel } from '../api/channels';
+import { createChannelResult } from '../api/channels';
 import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
 import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
@@ -269,11 +269,11 @@ export async function reloadActiveProfile(): Promise<void> {
 }
 
 /**
- * Create a new channel for the active user
+ * Create a new channel for the active user, returning any API refusal code (e.g. `terms_required`).
  */
-export async function createChannelForActiveUser(
+export async function createChannelForActiveUserResult(
   data: ChannelCreateRequest
-): Promise<Channel | null> {
+): Promise<{ channel: Channel | null; code?: string }> {
   try {
     const session = await SessionManager.getActiveSession();
     if (!session) {
@@ -281,11 +281,19 @@ export async function createChannelForActiveUser(
     }
 
     // Create channel via API
-    const response = await createChannel(data, {
-      
+    const result = await createChannelResult(data, {
       channelId: session.channelId || '', // Use empty string if no channel selected
     });
 
+    if (!result.data) {
+      const code =
+        result.errorBody && typeof result.errorBody === 'object' && 'code' in result.errorBody && typeof (result.errorBody as { code?: unknown }).code === 'string'
+          ? (result.errorBody as { code: string }).code
+          : undefined;
+      return { channel: null, code };
+    }
+
+    const response = result.data;
     // POST /api/channels responds with { success, result: { channel } };
     // `data.channel` is kept for the ApiResponse shape the client is typed with
     const created =
@@ -301,14 +309,23 @@ export async function createChannelForActiveUser(
       }
 
       revalidatePath('/');
-      return created;
+      return { channel: created };
     }
 
-    return null;
+    return { channel: null };
   } catch (error) {
     logger.error('[createChannelForActiveUser] Error:', error);
-    return null;
+    return { channel: null };
   }
+}
+
+/**
+ * Create a new channel for the active user
+ */
+export async function createChannelForActiveUser(
+  data: ChannelCreateRequest
+): Promise<Channel | null> {
+  return (await createChannelForActiveUserResult(data)).channel;
 }
 
 /** Result of a sign-out action: where the browser goes next. */

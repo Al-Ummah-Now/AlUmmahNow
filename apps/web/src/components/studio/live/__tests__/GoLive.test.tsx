@@ -12,9 +12,34 @@ const mockRefresh = jest.fn();
 // Next's router is the same object on every render
 const mockRouter = { push: jest.fn(), refresh: mockRefresh };
 jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
-jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => ({ status: 'loading' }) }));
+const mockMarkTermsRequired = jest.fn();
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => ({ status: 'loading' }),
+  markCreatorTermsRequired: () => mockMarkTermsRequired(),
+  acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
+}));
 jest.mock('@/hooks/useLanguage', () => ({
-  useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en', isRTL: false }),
+  useLanguage: () => ({
+    t: {
+      studio: mockStudio,
+      confirmDialog: { typeToConfirm: 'Type {value}' },
+      common: { cancel: 'Cancel' },
+      upload: {
+        termsGateTitle: 'Accept Creator Terms',
+        termsGateBody: 'Review Terms',
+        termsGateTermsLink: 'Terms',
+        termsGateGuidelinesLink: 'Guidelines',
+        termsGateCheckbox: 'I agree',
+        termsGateAgree: 'Agree',
+        termsGateWorking: 'Saving...',
+        termsGateError: 'Error',
+        termsGateVersionChanged: 'Updated',
+      },
+    },
+    lang: 'en',
+    dir: 'ltr',
+    isRTL: false,
+  }),
 }));
 jest.mock('@/lib/live/api', () => {
   const actual = jest.requireActual('@/lib/live/api');
@@ -188,5 +213,25 @@ describe('GoLive', () => {
     const error = await screen.findByTestId('studio-golive-error');
     expect(error).toHaveTextContent(STUDIO_EN.live.errors.live_hours_used);
     expect(error.querySelector('a')).toBeNull();
+  });
+
+  it('opens CreatorTermsDialog on 403 terms_required from startStream', async () => {
+    setup();
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    startStream.mockRejectedValue(new LiveApiError(403, 'terms_required'));
+    fireEvent.click(await screen.findByTestId('studio-golive-start'));
+    expect(await screen.findByTestId('creator-terms-modal')).toBeInTheDocument();
+    expect(mockMarkTermsRequired).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('studio-golive-error')).toHaveAttribute('data-code', 'terms_required');
+  });
+
+  it('opens CreatorTermsDialog instead of showing forbidden on 403 terms_required from getIngest', async () => {
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    getStream.mockResolvedValue({ id: 's1', channelId: 'c1', title: 'Live', status: 'scheduled', isPrivate: false });
+    getIngest.mockRejectedValue(new LiveApiError(403, 'terms_required'));
+    render(<GoLive locale="en" channelId="c1" streamId="s1" />);
+    expect(await screen.findByTestId('creator-terms-modal')).toBeInTheDocument();
+    expect(mockMarkTermsRequired).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('studio-golive-review-terms')).toBeInTheDocument();
   });
 });

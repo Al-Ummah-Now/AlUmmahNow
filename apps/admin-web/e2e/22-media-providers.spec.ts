@@ -11,7 +11,8 @@
  */
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { ADMIN_WEB_URL, RUN_ID, VIDEOS_API_URL, storageStatePath } from './support/env';
+import { ADMIN_WEB_URL, RUN_ID, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
+import { createVideosProfile } from './support/profiles';
 
 /** Local stack only (placement.ts): on a deployed target this would move every viewer's playback. */
 const LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL);
@@ -54,7 +55,16 @@ test.describe('video providers', () => {
     }
     const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
     channelName = `E2E providers ${tag}`;
-    const channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: channelName, description: '[e2e-admin] providers', isMain: false }) });
+    const access = await videosApi('/api/me/creator');
+    const termsVersion = (access.body.result as { termsVersion?: string } | undefined)?.termsVersion;
+    if (termsVersion) {
+      await videosApi('/api/me/creator/terms', { method: 'POST', body: JSON.stringify({ version: termsVersion }) });
+    }
+    let channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: channelName, description: '[e2e-admin] providers', isMain: false }) });
+    if (channel.status === 404) {
+      await createVideosProfile(superToken(), accounts.superadmin.email, 'E2E super admin');
+      channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: channelName, description: '[e2e-admin] providers', isMain: false }) });
+    }
     channelId = String((channel.body.result as { channel?: { id?: string } } | undefined)?.channel?.id ?? '');
     expect(channelId, `channel create -> ${channel.status}`).toBeTruthy();
     const video = await videosApi('/api/videos/upload/initiate', {

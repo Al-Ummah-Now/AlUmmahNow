@@ -18,7 +18,7 @@ import { VIDEO_PICKER_ACCEPT, isAcceptedVideoFile, videoFormatsText, videoMimeTy
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, scheduleUploadedVideo } from "@/lib/api/upload-client";
 import { creatorRefusalMessage } from "@/lib/upload/friendly-error";
-import { refreshCreatorAccess } from "@/hooks/useCreatorAccess";
+import { markCreatorTermsRequired, refreshCreatorAccess } from "@/hooks/useCreatorAccess";
 import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
 import { VideoFormatChoice, type VideoFormatChoiceValue } from "@/components/videoFormat/VideoFormatChoice";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -426,6 +426,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           if (refusal) {
             logger.warn('[VideoUpload] Upload refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
+            if (initiateResult.code === 'terms_required') markCreatorTermsRequired();
             throw Object.assign(new Error(refusal), { refusal: true });
           }
           throw Object.assign(new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED), { status: initiateResult.status, serverRef: initiateResult.serverRef });

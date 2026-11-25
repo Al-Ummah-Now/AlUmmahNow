@@ -9,6 +9,8 @@ import { useChannels } from '@/hooks/useChannels';
 import { ChannelManagementSectionProps, CreateChannelFormData } from '../types';
 import { ChannelGridRTL } from './ChannelGrid';
 import { CreateChannelDialog } from '../CreateChannelDialog';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { needsCreatorTerms } from '@/hooks/useCreatorAccess';
 import { mayCreateChannel, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -32,6 +34,9 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const creatorAccess = useCreatorAccess();
   const canCreate = mayCreateChannel(creatorAccess);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [termsDialogOpen, setTermsDialogOpen] = useState(false);
+  const [openCreateAfterTerms, setOpenCreateAfterTerms] = useState(false);
+  const termsTriggeredRef = React.useRef(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Get userId from auth - use user's first channel or empty string
@@ -48,6 +53,11 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   } = useChannels({
     channelId,
     autoFetch: true,
+    onTermsRequired: () => {
+      termsTriggeredRef.current = true;
+      setOpenCreateAfterTerms(false);
+      setTermsDialogOpen(true);
+    },
   });
 
   // Show toast message
@@ -67,8 +77,18 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   }, [deletedNotice, t.channel.deleteSuccess]);
 
   // Handle create channel
-  const handleCreateChannel = async (data: CreateChannelFormData) => {
+  const handleOpenCreate = () => {
+    if (needsCreatorTerms(creatorAccess)) {
+      setOpenCreateAfterTerms(true);
+      setTermsDialogOpen(true);
+    } else {
+      setDialogOpen(true);
+    }
+  };
+
+  const handleCreateChannel = async (data: CreateChannelFormData): Promise<boolean> => {
     logger.debug('ChannelManagementSection (RTL): Creating channel with data:', data);
+    termsTriggeredRef.current = false;
 
     const success = await createChannel({
       name: data.name,
@@ -78,9 +98,14 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     if (success) {
       showToast('تم إنشاء القناة بنجاح!');
       setDialogOpen(false);
-    } else {
-      showToast('فشل إنشاء القناة. يرجى المحاولة مرة أخرى.');
+      return true;
     }
+    if (termsTriggeredRef.current) {
+      // Keep CreateChannelDialog mounted with the user's draft while CreatorTermsDialog opens over it
+      return false;
+    }
+    showToast('فشل إنشاء القناة. يرجى المحاولة مرة أخرى.');
+    return false;
   };
 
   // Handle edit channel
@@ -120,7 +145,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         </div>
         {channels.length > 0 && canCreate && (
           <button
-            onClick={() => setDialogOpen(true)}
+            onClick={handleOpenCreate}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,17 +199,30 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         onEdit={handleEditChannel}
         onDelete={handleDeleteChannel}
         onView={handleViewChannel}
-        onCreate={canCreate ? () => setDialogOpen(true) : undefined}
+        onCreate={canCreate ? handleOpenCreate : undefined}
         isLoading={isLoading}
       />
 
-      {/* Create Channel Dialog */}
+      {/* Keep CreateChannelDialog mounted so a focus refresh or 403 terms_required preserves typed form fields */}
       <CreateChannelDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSubmit={handleCreateChannel}
         isLoading={isLoading}
         lang="ar"
+      />
+      <CreatorTermsDialog
+        open={termsDialogOpen}
+        onOpenChange={(open) => {
+          setTermsDialogOpen(open);
+          if (!open) setOpenCreateAfterTerms(false);
+        }}
+        onAccepted={() => {
+          if (openCreateAfterTerms) {
+            setOpenCreateAfterTerms(false);
+            setDialogOpen(true);
+          }
+        }}
       />
 
       {/* Toast Message */}

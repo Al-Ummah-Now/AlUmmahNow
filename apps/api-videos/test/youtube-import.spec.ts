@@ -18,6 +18,7 @@ import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YtImportJob } from '@al-umma
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { UploadInitiateEndpoint } from '../src/endpoints/video/uploadInitiate';
+import { recordCreatorTermsAcceptance } from '../src/lib/creatorTerms';
 import { decryptToken, encryptToken, pkcePair } from '../src/lib/youtube-import/crypto';
 import { googleClientSecret, readYtSettings, saveYtClientSecret, saveYtSettings, ytReadyConfig, ytSettingsView, YT_SECRET_KEY, YT_SETTINGS_KEY, YtSettingsError } from '../src/lib/youtube-import/settings';
 import {
@@ -871,6 +872,7 @@ describe('YouTube import: tiers and announcements', () => {
 		await assignTier(db, 'alice', 'free-imports', 'admin');
 		await assignTier(db, 'carol', 'free-imports', 'admin');
 		await assignTier(db, 'bob', 'counted', 'admin');
+		for (const u of ['alice', 'carol', 'bob']) await recordCreatorTermsAcceptance(db, u);
 		const app = new Hono();
 		app.use('*', async (c, next) => {
 			const user = c.req.header('x-user')!;

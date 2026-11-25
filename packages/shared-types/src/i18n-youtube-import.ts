@@ -121,6 +121,7 @@ export const YT_IMPORT_EN = {
     errors: {
       upload_limit: 'Your upload limit was reached. It continues when the limit resets.',
       uploads_by_invitation: 'This channel can’t take uploads, so this video wasn’t imported.',
+      terms_required: 'Please review and agree to the Terms of Service and Community Guidelines before importing.',
       youtube_item_taken: 'This video was already imported.',
       youtube_import_not_found: 'This import was stopped or changed in another tab. Reload the page to see where it stands.',
       video_removed: 'Its video was deleted here. Try again to upload it once more.',
@@ -148,6 +149,7 @@ export const YT_IMPORT_EN = {
     youtube_no_channel: 'That Google account has no YouTube channel. Sign in with the account that owns the channel.',
     youtube_import_not_found: 'This import no longer exists.',
     uploads_by_invitation: 'This channel can’t take uploads, so videos can’t be imported to it.',
+    terms_required: 'Please review and agree to the Terms of Service and Community Guidelines before importing.',
     failed: 'Connecting to YouTube didn’t work. Try again.',
     connect_other_account: 'This connection was started from another account on Al Ummah Now. Connect again while signed in to the account that started it.',
     connect_expired: 'This connection link has expired or was already used. Connect again.',
@@ -290,6 +292,7 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
     errors: {
       upload_limit: 'بلغت حد الرفع. يكمل النقل عند تجدد الحد.',
       uploads_by_invitation: 'لا تقبل هذه القناة الرفع، لذا لم يُنقل هذا المرئي.',
+      terms_required: 'يُرجى مراجعة شروط الاستخدام وإرشادات المجتمع والموافقة عليها قبل النقل.',
       youtube_item_taken: 'نُقل هذا المرئي من قبل.',
       youtube_import_not_found: 'أُوقف هذا النقل أو تغيّر في نافذة أخرى. أعد تحميل الصفحة لترى ما وصل إليه.',
       video_removed: 'حُذف مرئيه هنا. أعد المحاولة لترفعه من جديد.',
@@ -317,6 +320,7 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
     youtube_no_channel: 'لا توجد قناة على يوتيوب لهذا الحساب. سجّل الدخول بالحساب الذي يملك القناة.',
     youtube_import_not_found: 'لم يعد هذا النقل موجودًا.',
     uploads_by_invitation: 'لا تقبل هذه القناة الرفع، لذا لا يمكن نقل مرئيات إليها.',
+    terms_required: 'يُرجى مراجعة شروط الاستخدام وإرشادات المجتمع والموافقة عليها قبل النقل.',
     failed: 'تعذّر الربط بيوتيوب. أعد المحاولة.',
     connect_other_account: 'بدأ هذا الربطَ حسابٌ آخر على الأمة الآن. اربط مرة أخرى وأنت مسجّل الدخول بالحساب الذي بدأه.',
     connect_expired: 'انتهت صلاحية رابط الربط هذا أو استُخدم من قبل. اربط مرة أخرى.',

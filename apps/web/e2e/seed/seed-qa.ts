@@ -367,6 +367,15 @@ async function ensureChannel(
   existing: ChannelRecord[],
   def: { name: string; nameAr: string; description: string; descriptionAr: string; isMain: boolean },
 ): Promise<ChannelRecord | undefined> {
+  if (MODE !== 'check') {
+    const accessRes = await api
+      .get<{ result?: { termsVersion?: string } }>('/api/me/creator', { token: session.accessToken })
+      .catch(() => null);
+    const termsVersion = accessRes?.data?.result?.termsVersion;
+    if (termsVersion) {
+      await api.post('/api/me/creator/terms', { version: termsVersion }, { token: session.accessToken, allowStatus: [404] });
+    }
+  }
   const found = existing.find((c) => c.name === def.name);
   if (found) {
     record('channel', def.name, 'exists', `id=${found.id}`);

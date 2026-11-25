@@ -18,9 +18,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/common/Switch';
 import { useLanguage } from '@/hooks/useLanguage';
 import { createStream, deleteStream, isLiveOff, listChannelStreams, liveErrorCode, type LiveStreamRow } from '@/lib/live/api';
+import { markCreatorTermsRequired, needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
-import { useCreatorAccess } from '@/hooks/useCreatorAccess';
 import type { LiveOffers } from '@/lib/studio/nav';
 import { LiveKindBadges } from '@/components/live/LiveKindBadges';
 import { LiveOptionsFields, offeredOptions, optionsOf } from './LiveOptionsFields';
@@ -90,6 +91,8 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
     return () => controller.abort();
   }, [load]);
 
+  const [termsOpen, setTermsOpen] = useState(false);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim()) {
@@ -99,6 +102,10 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
     const at = offers.schedule ? readStart(start) : 'empty';
     if (at === 'incomplete' || at === 'past') {
       setFormError(at === 'past' ? text.apps.timeTooSoon : text.apps.timeRequired);
+      return;
+    }
+    if (needsCreatorTerms(creator)) {
+      setTermsOpen(true);
       return;
     }
     setCreating(true);
@@ -114,6 +121,10 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
         return;
       }
       const code = liveErrorCode(error);
+      if (code === 'terms_required') {
+        markCreatorTermsRequired();
+        setTermsOpen(true);
+      }
       if (code === 'generic') logger.error('[StudioLive] Could not create a live stream', { channelId, error });
       setFormError(text.errors[code]);
       setFormErrorCode(code);
@@ -174,10 +185,30 @@ export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Prop
           {offers.schedule && <StartFields value={start} onChange={setStart} legend={text.apps.startOptional} />}
           <LiveOptionsFields value={options} onChange={setOptions} offers={offers} />
           {formError && (
-            <p role="alert" className="text-sm text-destructive" data-testid="studio-live-error" data-code={formErrorCode}>
-              {formError}
-            </p>
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-live-error" data-code={formErrorCode}>
+              <span>{formError}</span>
+              {formErrorCode === 'terms_required' && (
+                <button
+                  type="button"
+                  onClick={() => setTermsOpen(true)}
+                  className="underline font-medium text-[var(--fanous-color-accent)]"
+                  data-testid="studio-live-review-terms"
+                >
+                  {t.upload.termsGateReviewAction}
+                </button>
+              )}
+            </div>
           )}
+          <CreatorTermsDialog
+            open={termsOpen}
+            onOpenChange={setTermsOpen}
+            onAccepted={() => {
+              if (formErrorCode === 'terms_required') {
+                setFormError('');
+                setFormErrorCode('');
+              }
+            }}
+          />
           <div>
             <Button type="submit" disabled={creating} className="min-h-11" data-testid="studio-live-create">
               {creating ? text.form.creating : text.form.create}

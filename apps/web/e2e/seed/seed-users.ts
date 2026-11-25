@@ -84,6 +84,15 @@ export async function ensureChannels(
   const existing = await listOwnChannels(api, session);
   const created: string[] = [];
   const result: ChannelRecord[] = [];
+  // Accept Creator Terms on every seed run (idempotent) so existing creators stay accepted
+  // even when the switch turns on or the version bumps.
+  const accessRes = await api
+    .get<{ result?: { termsVersion?: string } }>('/api/me/creator', { token: session.accessToken })
+    .catch(() => null);
+  const termsVersion = accessRes?.data?.result?.termsVersion;
+  if (termsVersion) {
+    await api.post('/api/me/creator/terms', { version: termsVersion }, { token: session.accessToken, allowStatus: [404] });
+  }
   for (const spec of specs) {
     const found = existing.find((c) => c.name === spec.name);
     if (found) {

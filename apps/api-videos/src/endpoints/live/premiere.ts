@@ -24,6 +24,7 @@ import { eventTagRefused } from '../../lib/live/events';
 import { LiveEventTypeInput } from '../../lib/model/input';
 import { LiveChatSettingsInput } from './liveChat';
 import { publicStream } from './liveSession';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 
 const Result = { description: 'The premiere', content: { 'application/json': { schema: z.object({ success: z.boolean(), result: z.object({ stream: z.record(z.string(), z.any()) }) }) } } };
 const Err = (description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), code: z.string().optional(), error: z.string() }) } } });
@@ -66,6 +67,8 @@ export class VideoPremiereCreate extends AuthenticatedRoute {
 		if (premiereTimeProblem(body.scheduledStartTime, now)) return apiError(c, 400, 'premiere_bad_time');
 		const video = await scheduleable(c, params.id, userId);
 		if (video instanceof Response) return video;
+		const termsRefused = await enforceCreatorTerms(c, userId);
+		if (termsRefused) return termsRefused;
 		const problem = premiereProblem(video);
 		if (problem) return refuse(c, problem);
 		const tagRefused = await eventTagRefused(c, await ownerOfRecord(c.env as never, video), body.eventType);
@@ -93,6 +96,8 @@ export class PremiereSwap extends AuthenticatedRoute {
 		if (!isPremiere(stream) || !(await canManageLiveStream(c.env as never, stream, userId))) return apiError(c, 404, 'not_found');
 		const video = await scheduleable(c, body.videoId, userId);
 		if (video instanceof Response) return video;
+		const termsRefused = await enforceCreatorTerms(c, userId);
+		if (termsRefused) return termsRefused;
 		const problem = premiereProblem(video);
 		if (problem) return refuse(c, problem);
 		const swapped = await swapPremiere(envOf(c), stream as PremiereStream, video, userId);

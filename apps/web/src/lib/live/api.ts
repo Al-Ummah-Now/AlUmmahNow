@@ -210,9 +210,9 @@ export async function setReminder(id: string, on: boolean): Promise<{ set: boole
 }
 
 /** The refusal codes Studio explains in its own words; anything else is the generic message. */
-export const LIVE_ERROR_CODES = ['live_capacity', 'live_provider_error', 'live_hours_used', 'live_concurrent_limit'] as const;
+export const LIVE_ERROR_CODES = ['live_capacity', 'live_provider_error', 'live_hours_used', 'live_concurrent_limit', 'terms_required'] as const;
 /** Quota refusals by the channel owner's creator tier (402/403), not failures: never reported as errors. */
-export const LIVE_TIER_CODES: readonly string[] = ['live_hours_used', 'live_concurrent_limit'];
+export const LIVE_TIER_CODES: readonly string[] = ['live_hours_used', 'live_concurrent_limit', 'terms_required'];
 export type LiveErrorCode = (typeof LIVE_ERROR_CODES)[number] | 'generic';
 
 /**

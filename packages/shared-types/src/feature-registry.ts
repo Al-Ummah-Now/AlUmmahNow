@@ -73,6 +73,7 @@ export interface FeatureDefinition {
 export const FEATURE_KEYS = [
   'upload',
   'createChannel',
+  'creatorTerms',
   'youtubeImport',
   'bulkSchedule',
   'audioTracks',
@@ -152,6 +153,22 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'off',
     requires: [],
     userFeatureKeys: ['createChannel'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'creatorTerms',
+    group: 'create',
+    name: { en: 'Creator Terms agreement', ar: 'الموافقة على شروط المنشئين' },
+    help: {
+      en: 'Creators must accept the Terms of Service and Community Guidelines once per account before uploading, publishing, going live, or creating a channel. While off, no gate is shown and actions proceed without checking acceptance.',
+      ar: 'يجب على المنشئين الموافقة على شروط الاستخدام وإرشادات المجتمع مرة واحدة لكل حساب قبل الرفع أو النشر أو البث المباشر أو إنشاء قناة. وعند إيقافها لا تظهر بوابة الموافقة وتعمل الإجراءات دون التحقق.',
+    },
+    offMessage: { en: 'Creator Terms agreement isn’t active right now.', ar: 'بوابة الموافقة على شروط المنشئين غير مفعّلة الآن.' },
+    default: false,
+    toggle: 'superAdmin',
+    confirm: 'both',
+    requires: [],
+    userFeatureKeys: [],
     offline: 'lastKnownElseHidden',
   },
   {
