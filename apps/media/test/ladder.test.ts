@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, posterTime, progressSeconds, stillsArgs } from '../container/ladder.mjs';
+import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, isNoFrameFailure, posterTime, progressSeconds, stillWithFallbacks, stillsArgs } from '../container/ladder.mjs';
 
 describe('ladderFor', () => {
 	it('gives a 1080p landscape source all four rungs at 16:9', () => {
@@ -134,6 +134,89 @@ describe('stills of a short MPEG-TS clip (#1946)', () => {
 				assert.equal(r.status, 0, `${name}: ${String(r.stderr).slice(-300)}`);
 				assert.ok(statSync(join(dir, file)).size > 0, name);
 			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe('stillWithFallbacks (#1946)', () => {
+	const noFrame = () => Object.assign(new Error('ffmpeg exited 234'), { exitCode: 234, stderrTail: ['[vf#0:0] No filtered frames for output stream, trying to initialize anyway.', 'Conversion failed!'] });
+	const other = (message: string, extra: object = {}) => Object.assign(new Error(message), extra);
+	const ways = [['seek-before'], ['seek-after'], ['first-frame']];
+	/** A runner that answers each call from the list: an Error is thrown, anything else is a success */
+	const runner = (answers: Array<Error | 'ok'>) => {
+		const calls: Array<{ args: string[]; timeoutMs: number | undefined }> = [];
+		const run = async (_cmd: string, args: string[], _onLine: unknown, timeoutMs?: number) => {
+			calls.push({ args, timeoutMs });
+			const answer = answers[calls.length - 1];
+			if (answer instanceof Error) throw answer;
+			return '';
+		};
+		const logs: string[] = [];
+		return { calls, logs, ctx: { run, log: (m: string) => logs.push(m), timeoutMs: 60_000 } };
+	};
+
+	it('recognises only a seek that left no frame', () => {
+		assert.equal(isNoFrameFailure(noFrame()), true);
+		assert.equal(isNoFrameFailure(other('x', { exitCode: 234, stderrTail: ['Nothing was written into output file, because at least one of its streams received no packets.'] })), true);
+		assert.equal(isNoFrameFailure(other('x', { exitCode: 1, stderrTail: ['No space left on device'] })), false);
+		assert.equal(isNoFrameFailure(other('spawn ffmpeg ENOENT')), false);
+		assert.equal(isNoFrameFailure(other('ffmpeg timed out after 60000 ms', { timedOut: true })), false);
+	});
+	it('recovers: a seek with no frame is followed by the next way, and stops at the first that works', async () => {
+		const { calls, logs, ctx } = runner([noFrame(), 'ok']);
+		await stillWithFallbacks(ctx, ways[0], [ways[1], ways[2]]);
+		assert.deepEqual(calls.map((c) => c.args), [ways[0], ways[1]]);
+		assert.equal(logs.length, 1);
+	});
+	it('runs once and passes the per-attempt timeout when the first seek works', async () => {
+		const { calls, ctx } = runner(['ok']);
+		await stillWithFallbacks(ctx, ways[0], [ways[1], ways[2]]);
+		assert.deepEqual(calls.map((c) => c.timeoutMs), [60_000]);
+	});
+	it('throws any other error at once with its own message, and never retries it', async () => {
+		for (const error of [other('ffmpeg exited 1', { exitCode: 1, stderrTail: ['No space left on device'] }), other('ffmpeg timed out after 60000 ms', { timedOut: true }), other('spawn ffmpeg ENOENT')]) {
+			const { calls, ctx } = runner([error, 'ok']);
+			await assert.rejects(() => stillWithFallbacks(ctx, ways[0], [ways[1], ways[2]]), (e: Error) => e === error);
+			assert.equal(calls.length, 1);
+		}
+	});
+	it('after a no-frame failure an unrelated error from the next way is thrown as it is', async () => {
+		const disk = other('ffmpeg exited 1', { exitCode: 1, stderrTail: ['No space left on device'] });
+		const { calls, ctx } = runner([noFrame(), disk, 'ok']);
+		await assert.rejects(() => stillWithFallbacks(ctx, ways[0], [ways[1], ways[2]]), (e: Error) => e === disk);
+		assert.equal(calls.length, 2);
+	});
+	it('when all three ways find no frame it throws the last error after exactly three attempts', async () => {
+		const last = noFrame();
+		const { calls, ctx } = runner([noFrame(), noFrame(), last]);
+		await assert.rejects(() => stillWithFallbacks(ctx, ways[0], [ways[1], ways[2]]), (e: Error) => e === last);
+		assert.equal(calls.length, 3);
+	});
+
+	const haveFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+	it('recovers on a real 5 s MPEG-TS clip with a runner that reports ffmpeg failures the way the container does', { skip: !haveFfmpeg && 'ffmpeg is not installed' }, async () => {
+		const dir = mkdtempSync(join(tmpdir(), 'stills-run-'));
+		try {
+			const input = join(dir, 'clip.ts');
+			const made = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25', '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-output_ts_offset', '1.4', '-f', 'mpegts', input]);
+			assert.equal(made.status, 0, String(made.stderr));
+			// The container's run(): a non-zero exit rejects with exitCode and the last stderr lines
+			const run = (cmd: string, args: string[]) =>
+				new Promise<string>((resolve, reject) => {
+					const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+					let tail = '';
+					p.stderr.on('data', (d) => (tail = (tail + d.toString()).slice(-4000)));
+					p.on('close', (code) => (code === 0 ? resolve('') : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code, stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20) }))));
+				});
+			const s = stillsArgs({ input, out: dir, durationSeconds: 5 });
+			await stillWithFallbacks({ run, log: () => undefined, timeoutMs: 60_000 }, s.thumb, s.thumbFallbacks);
+			await stillWithFallbacks({ run, log: () => undefined, timeoutMs: 60_000 }, s.thumbSmall, s.thumbSmallFallbacks);
+			assert.ok(statSync(join(dir, 'thumb.jpg')).size > 0 && statSync(join(dir, 'thumb_640.jpg')).size > 0);
+			// A file that is not media is not a "no frame" case: it fails at once, with ffmpeg's own error
+			const bad = stillsArgs({ input: join(dir, 'missing.ts'), out: dir, durationSeconds: 5 });
+			await assert.rejects(() => stillWithFallbacks({ run, log: () => undefined, timeoutMs: 60_000 }, bad.thumb, bad.thumbFallbacks), (e: { exitCode?: number }) => typeof e.exitCode === 'number');
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

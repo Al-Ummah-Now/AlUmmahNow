@@ -171,6 +171,35 @@ export function stillsArgs(o) {
 	};
 }
 
+/**
+ * True when ffmpeg failed because the seek left it with no frame to write (exit 234: "No filtered frames
+ * for output stream" / "Nothing was written into output file ... received no packets"). Only this is worth
+ * another way of seeking; a missing binary, a timeout, a full disk or an undecodable stream fails at once
+ * with its own error.
+ */
+export function isNoFrameFailure(error) {
+	const text = Array.isArray(error?.stderrTail) ? error.stderrTail.join('\n') : '';
+	return typeof error?.exitCode === 'number' && /No filtered frames|Nothing was written into output file|received no packets/i.test(text);
+}
+
+/**
+ * Runs a still's ffmpeg arguments, then each fallback in turn while the failure is "no frame". Any other
+ * error is thrown at once, and when every way found no frame the last error is thrown. `run(cmd, args,
+ * onLine, timeoutMs)` is the container's process runner (its timeout bounds each attempt).
+ */
+export async function stillWithFallbacks({ run, log, timeoutMs }, args, fallbacks) {
+	const ways = [args, ...fallbacks];
+	for (let i = 0; i < ways.length; i++) {
+		try {
+			await run('ffmpeg', ways[i], undefined, timeoutMs);
+			return;
+		} catch (error) {
+			if (!isNoFrameFailure(error) || i === ways.length - 1) throw error;
+			log('still found no frame, trying the next way', { way: i + 1, of: ways.length, error: String(error.message).slice(0, 200) });
+		}
+	}
+}
+
 /** Parse ffmpeg `-progress` lines; returns seconds encoded so far or null. */
 export function progressSeconds(line) {
 	const m = /^out_time_(?:us|ms)=(\d+)/.exec(line);
