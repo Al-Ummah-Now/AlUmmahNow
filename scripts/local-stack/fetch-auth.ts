@@ -14,7 +14,7 @@
  * local-stack.tar.gz (prebuilt auth, profile and admin workers, their wrangler configs, every
  * migration) and local-stack.tar.gz.sha256 (AlUmmahNowAuth .github/workflows/local-stack-bundle.yml).
  * This resolves the released commit (resolve-refs.ts), downloads both, checks the sha256 and
- * unpacks into AUTH_DIR. Prints auth_sha=<sha> (append to $GITHUB_OUTPUT in CI).
+ * unpacks into AUTH_DIR. GitHub's 5xx, 429 and network errors are waited out (github-get.ts). Prints auth_sha=<sha> (append to $GITHUB_OUTPUT in CI).
  *
  * Nothing from that repo is checked out or installed here, so main and release runs of this repo
  * execute no second checkout (CodeQL actions/cache-poisoning). Uses GITHUB_TOKEN / GH_TOKEN when set.
@@ -24,6 +24,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AUTH_DIR, CMS_DIR, STATE_DIR, WWW_DIR } from './stack.ts';
+import { githubGet, HttpStatusError, type GetDeps } from './github-get.ts';
 import { releasedRefs, SIBLINGS, type Sibling } from './resolve-refs.ts';
 
 const TARGET_DIR: Record<Sibling, string> = { auth: AUTH_DIR, cms: CMS_DIR, www: WWW_DIR };
@@ -33,10 +34,22 @@ export function bundleTag(sha: string): string {
   return `local-stack-${sha.slice(0, 12)}`;
 }
 
-async function download(url: string, token: string | undefined): Promise<Buffer> {
-  const res = await fetch(url, { headers: { Accept: 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, redirect: 'follow' });
-  if (!res.ok) throw new Error(`GET ${url} answered ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+export function download(url: string, token: string | undefined, deps?: Partial<GetDeps>): Promise<Buffer> {
+  return githubGet(url, { accept: 'application/octet-stream', token, read: async (res) => Buffer.from(await res.arrayBuffer()) }, deps);
+}
+
+export interface BundleRelease {
+  assets: { name: string; url: string }[];
+}
+
+/** The release of a bundle tag; null when there is none. Anything but that is an error, never "no bundle". */
+export async function bundleRelease(repo: string, tag: string, token: string | undefined, deps?: Partial<GetDeps>): Promise<BundleRelease | null> {
+  try {
+    return await githubGet(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, { accept: 'application/vnd.github+json', token, read: (res) => res.json() as Promise<BundleRelease> }, deps);
+  } catch (error) {
+    if (error instanceof HttpStatusError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 async function main(): Promise<void> {
@@ -52,16 +65,14 @@ async function main(): Promise<void> {
   const candidates = args.includes('--sha') && given ? [given] : (await releasedRefs(name)).slice(0, 5).map((r) => r.sha);
   let sha = '';
   let tag = '';
-  let release: Response | null = null;
+  let release: BundleRelease | null = null;
   for (const candidate of candidates) {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${bundleTag(candidate)}`, {
-      headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (res.ok) {
-      [sha, tag, release] = [candidate, bundleTag(candidate), res];
+    release = await bundleRelease(REPO, bundleTag(candidate), token);
+    if (release) {
+      [sha, tag] = [candidate, bundleTag(candidate)];
       break;
     }
-    process.stderr.write(`[local-stack] ${REPO} ${candidate.slice(0, 7)}: no ${bundleTag(candidate)} yet (${res.status})\n`);
+    process.stderr.write(`[local-stack] ${REPO} ${candidate.slice(0, 7)}: no ${bundleTag(candidate)} yet\n`);
   }
   if (!release) {
     if (optional) {
@@ -70,7 +81,7 @@ async function main(): Promise<void> {
     }
     throw new Error(`${REPO}: none of its last released commits has a local-stack bundle; run its local-stack-bundle workflow by hand with sha=${candidates[0]}`);
   }
-  const { assets } = (await release.json()) as { assets: { name: string; url: string }[] };
+  const { assets } = release;
   const asset = (name: string) => {
     const found = assets.find((a) => a.name === name);
     if (!found) throw new Error(`${tag} has no ${name}`);

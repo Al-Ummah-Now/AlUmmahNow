@@ -48,6 +48,9 @@ on its own port:
   `local-stack-<sha12>` (its `local-stack-bundle.yml` workflow). The tarball holds the prebuilt auth,
   profile and admin workers, their wrangler configs and every migration.
   `scripts/local-stack/fetch-auth.ts` downloads the newest one, verifies the sha256 and unpacks it.
+  GitHub's own trouble (5xx, 429, network errors) is tried again with growing pauses, or after what
+  `Retry-After` asks, for about three minutes (`github-get.ts`); any other status fails at once, and only a
+  404 means that a commit has no bundle.
   Nothing of that repo is checked out or installed. That is what lets the local suites run on pushes
   to `main` and in releases without CodeQL's cache-poisoning finding.
 - **The CMS and www, when their bundles exist.** AlUmmahNowCMS and AlUmmahNowUI publish the same
