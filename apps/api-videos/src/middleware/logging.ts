@@ -1,5 +1,6 @@
 import { Context, Next } from 'hono';
 import { configureLogging, SLOW_MS } from '@al-ummah/logger';
+import { stepSummary } from '@al-ummah/shared-types/request-steps';
 import { logger } from '../lib/logger';
 
 const LOGGED = Symbol.for('al-ummah.request-logged');
@@ -63,15 +64,19 @@ export async function loggingMiddleware(c: Context, next: Next) {
 	} finally {
 		const status = thrown ? 500 : c.res.status;
 		const auth = c.get('auth') as { userId?: string } | undefined;
+		const route = new URL(c.req.url).pathname;
+		const durationMs = Date.now() - startTime;
+		const slowMs = slowThresholdMs(c.req.method, route);
 		const summary = {
 			method: c.req.method,
-			route: new URL(c.req.url).pathname,
+			route,
 			status,
-			durationMs: Date.now() - startTime,
+			durationMs,
 			ray: c.req.header('cf-ray') || undefined,
 			userId: auth?.userId,
+			// Where the time went, only when it was long
+			...(durationMs >= slowMs ? stepSummary() : {}),
 		};
-		const slowMs = slowThresholdMs(summary.method, summary.route);
 		if (status >= 500 || thrown) {
 			if (!raw[ERROR_LOGGED]) {
 				logger.request({ ...summary, error: thrown ?? (await errorMessage(c.res)) ?? `HTTP ${status}` }, slowMs);

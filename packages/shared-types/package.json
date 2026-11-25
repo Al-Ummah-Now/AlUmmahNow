@@ -17,6 +17,10 @@
       "types": "./dist/release-check.d.ts",
       "default": "./dist/release-check.js"
     },
+    "./request-steps": {
+      "types": "./dist/request-steps.d.ts",
+      "default": "./dist/request-steps.js"
+    },
     "./page-blocks.css": "./src/page-blocks.css"
   },
   "scripts": {

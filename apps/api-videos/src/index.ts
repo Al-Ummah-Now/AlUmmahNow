@@ -7,6 +7,7 @@ import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withE
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { withReleaseCheck } from '@al-ummah/shared-types/release-check';
+import { runWithSteps, timedBindings } from '@al-ummah/shared-types/request-steps';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { runReleaseIndex } from './lib/app-updates/run';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
@@ -1071,7 +1072,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
 	const resolved = resolveApiVersion(request);
 	if (resolved.kind === 'unsupported') return envelopeResponse(unsupportedVersionResponse(resolved.version), request);
 	// Content buckets are wrapped so every R2 write also updates the search index (lib/search/sync.ts).
-	const response = await app.fetch(resolved.request, withSearchSync(env, ctx), ctx);
+	// Bindings are timed for the slow request line (shared-types request-steps)
+	const response = await app.fetch(resolved.request, withSearchSync(timedBindings(env), ctx), ctx);
 	const deprecation = findDeprecation(request.method, new URL(resolved.request.url).pathname);
 	if (resolved.kind === 'unversioned' && !deprecation) return response;
 	const out = new Response(response.body, response);
@@ -1185,7 +1187,7 @@ function reportJobFailure(env: AppBindings, ctx: ExecutionContext, job: string, 
 
 // Uncaught exceptions and 5xx answers are reported to the admin Errors page (docs/features/error-reporting.md)
 const loggedWorker = withLogging({
-	fetch: withErrorReporting<AppBindings & ErrorReporterEnv, ExecutionContext>('api-videos', handleFetch as never),
+	fetch: withErrorReporting<AppBindings & ErrorReporterEnv, ExecutionContext>('api-videos', ((request: Request, env: AppBindings, ctx: ExecutionContext) => runWithSteps(() => handleFetch(request, env, ctx))) as never),
 	scheduled,
 	queue,
 });
