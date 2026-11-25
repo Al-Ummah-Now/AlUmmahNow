@@ -15,7 +15,7 @@ describe('video failure words', () => {
       const key = failureReasonLabel(reason);
       assert.notEqual(t.en(key), key, reason);
       assert.match(t.ar(key), /[؀-ۿ]/, reason);
-      assert.doesNotMatch(t.ar(key).replace(/R2|Bunny|FFmpeg/g, ''), /فيديو|[a-z]/, reason);
+      assert.doesNotMatch(t.ar(key).replace(/R2|Bunny|FFmpeg|HDR|SDR|Dolby Vision/g, ''), /فيديو|[a-z]/, reason);
     }
     for (const step of VIDEO_FAILURE_STEPS) {
       for (const importBatchId of [null, 'b1']) {

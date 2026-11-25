@@ -22,6 +22,10 @@ describe('why a transcode failed', () => {
 		assert.deepEqual(of(job('encode_failed', source({ streams: undefined }))), ['unreadable', 'file', 'send_original']);
 		assert.deepEqual(of(job('source_changed', source())), ['source_changed', 'file', 'send_original']);
 		assert.deepEqual(of(job('source_missing')), ['source_missing', 'file', 'send_again']);
+		// An HDR format we cannot convert (some Dolby Vision): the same file fails again; exported as SDR it plays
+		assert.deepEqual(of(job('colour_unsupported', source({ streams: [{ kind: 'video', codec: 'hevc' }] }))), ['colour_unsupported', 'file', 'send_sdr']);
+		assert.deepEqual(of(explainTranscodeFailure({ reason: 'colour_unsupported', source: null }, 'colour_unsupported')), ['colour_unsupported', 'file', 'send_sdr']);
+		assert.deepEqual((({ where, reason, step }) => [where, reason, step])(explainVideoFailure({ uploadStatus: 'failed', issue: { kind: 'encode_failed', code: 'colour_unsupported' }, r2Decides: true })!), ['r2', 'colour_unsupported', 'send_sdr']);
 		// The record's own code, when the job kept no facts
 		assert.deepEqual(of(explainTranscodeFailure({ reason: 'no_video_stream', source: null }, 'audio_only')), ['audio_only', 'file', 'send_with_picture']);
 	});

@@ -10,6 +10,7 @@ export const VIDEO_FAILURE_REASONS = [
   'audio_only',
   'half_written',
   'unreadable',
+  'colour_unsupported',
   'source_changed',
   'source_missing',
   'upload_missing',
@@ -39,10 +40,11 @@ export type VideoFailureCause = 'file' | 'ours' | 'unknown';
 
 /**
  * send_with_picture: the original has no picture. send_original: the file arrived changed or damaged.
- * send_again: it never arrived whole. retry: our side. retry_to_learn: an older failure that did not record
+ * send_again: it never arrived whole. send_sdr: its colours are an HDR format we cannot convert: exported as
+ * standard video (SDR), it plays. retry: our side. retry_to_learn: an older failure that did not record
  * what the file is; a retry does. retry_then_send: retry once, then replace the file.
  */
-export const VIDEO_FAILURE_STEPS = ['send_with_picture', 'send_original', 'send_again', 'retry', 'retry_to_learn', 'retry_then_send'] as const;
+export const VIDEO_FAILURE_STEPS = ['send_with_picture', 'send_original', 'send_again', 'send_sdr', 'retry', 'retry_to_learn', 'retry_then_send'] as const;
 export type VideoFailureStep = (typeof VIDEO_FAILURE_STEPS)[number];
 
 /** Where it failed */
@@ -60,6 +62,7 @@ const FILE_STEP: Partial<Record<VideoFailureReason, VideoFailureStep>> = {
   audio_only: 'send_with_picture',
   half_written: 'send_again',
   unreadable: 'send_original',
+  colour_unsupported: 'send_sdr',
   source_changed: 'send_original',
   source_missing: 'send_again',
   upload_missing: 'send_again',
