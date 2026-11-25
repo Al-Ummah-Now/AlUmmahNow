@@ -78,6 +78,7 @@
 --   apps/api-videos/migrations/search/0124_admin_comments_by_id.sql
 --   apps/api-videos/migrations/search/0125_creator_terms_acceptance.sql
 --   apps/api-videos/migrations/search/0126_content_ownership_category.sql
+--   apps/api-videos/migrations/search/0127_media_source_facts.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -148,7 +149,7 @@ CREATE TABLE media_backfill_items (run_id TEXT NOT NULL, video_id TEXT NOT NULL,
 CREATE TABLE media_backfill_runs (id TEXT PRIMARY KEY, status TEXT NOT NULL, scope TEXT NOT NULL, settings TEXT NOT NULL, estimate TEXT, cursor TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, stop_reason TEXT, tick_at TEXT, last_start_at TEXT) WITHOUT ROWID;
 CREATE TABLE media_bunny_removals (video_id TEXT PRIMARY KEY, library_id INTEGER NOT NULL, guid TEXT, status TEXT NOT NULL, scheduled_by TEXT NOT NULL, scheduled_at TEXT NOT NULL, delete_after TEXT NOT NULL, removed_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE media_erase_targets (target_kind TEXT NOT NULL, target_id TEXT NOT NULL, job_id TEXT NOT NULL, erased_at TEXT, media TEXT, held_by TEXT, claimed_at TEXT, claim_token TEXT, first_deleted_at TEXT, last_deleted_at TEXT, stopped_at TEXT, PRIMARY KEY (target_kind, target_id, job_id)) WITHOUT ROWID;
-CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL, start_cold INTEGER, start_dispatch_ms INTEGER, start_ready_ms INTEGER, start_accept_ms INTEGER, start_ffmpeg_ms INTEGER);
+CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL, start_cold INTEGER, start_dispatch_ms INTEGER, start_ready_ms INTEGER, start_accept_ms INTEGER, start_ffmpeg_ms INTEGER, source_facts TEXT);
 CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT, keep TEXT);
 CREATE TABLE media_provider_health (provider TEXT NOT NULL, minute TEXT NOT NULL, reporter TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (provider, minute, reporter));
 CREATE TABLE media_provider_refs (provider TEXT NOT NULL, ref TEXT NOT NULL, video_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, ref));

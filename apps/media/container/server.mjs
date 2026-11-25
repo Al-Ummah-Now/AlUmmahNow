@@ -23,6 +23,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs, stillWithFallbacks } from './ladder.mjs';
+import { SourceFacts, streamFacts } from './source-facts.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
@@ -42,6 +43,8 @@ let reviewing = false;
 /** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
 let stage = { name: 'start', detail: undefined };
 let sourceBytesSoFar = 0;
+/** What the current job's source is (source-facts.mjs); null until it is downloaded */
+let sourceFacts = null;
 /** Per-rung state of the current job (null before the probe) */
 let tracker = null;
 function setStage(name, detail) {
@@ -76,7 +79,7 @@ async function event(body) {
 }
 
 /** Download the source in 64 MiB ranges (each retried), so one dropped connection costs one chunk. */
-async function download(dest, url = 'http://source.internal/src') {
+async function download(dest, url = 'http://source.internal/src', reader = null) {
 	const out = createWriteStream(dest);
 	let offset = 0;
 	let total = Infinity;
@@ -98,6 +101,7 @@ async function download(dest, url = 'http://source.internal/src') {
 				return ab;
 			});
 			if (buf.length === 0) break;
+			reader?.update(buf);
 			if (!out.write(buf)) await new Promise((r) => out.once('drain', r));
 			offset += buf.length;
 			sourceBytesSoFar = offset;
@@ -218,6 +222,7 @@ async function extractReview(job, src, info) {
 
 async function probe(file) {
 	const json = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file]));
+	if (sourceFacts) sourceFacts = { ...sourceFacts, ...streamFacts(json) };
 	const v = (json.streams || []).find((s) => s.codec_type === 'video' && !(s.disposition && s.disposition.attached_pic));
 	if (!v) throw Object.assign(new Error('no_video_stream'), { fatal: true });
 	const rotation = Number(v.tags?.rotate ?? (v.side_data_list || []).find((d) => d.rotation !== undefined)?.rotation ?? 0);
@@ -493,9 +498,12 @@ async function runJob(job) {
 	setStage('fetch_source');
 	sourceFile = undefined;
 	sourceBytesSoFar = 0;
+	sourceFacts = null;
 	tracker = null;
 	setStage('start');
-	const sourceBytes = await download(src);
+	const reader = new SourceFacts();
+	const sourceBytes = await download(src, undefined, reader);
+	sourceFacts = reader.finish(sourceBytes);
 	const tDownload = Date.now();
 	setStage('probe');
 	const info = await probe(src);
@@ -788,6 +796,7 @@ const server = createServer(async (req, res) => {
 					error: current.error,
 					fatal: !!error?.fatal,
 					...(tracker ? { rungs: tracker.snapshot() } : {}),
+					...(sourceFacts ? { sourceFacts } : {}),
 					failure: {
 						stage: stage.name,
 						...(stage.detail ? { stageDetail: stage.detail } : {}),

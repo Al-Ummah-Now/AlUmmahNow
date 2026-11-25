@@ -463,6 +463,40 @@ describe('failure details', () => {
 		assert.equal(d.extra.stage, 'encode');
 		assert.ok(Object.keys(d.extra).length <= 12, 'Errors page keeps at most 12 extra keys');
 	});
+
+	const SHA = 'ab'.repeat(32);
+	const AUDIO = { bytes: 13_654_915, container: 'mp4', zeroStartPercent: 1.2, zeroEndPercent: 0, sha256: SHA, format: 'mov,mp4,m4a', streams: [{ kind: 'audio', codec: 'aac' }, { kind: 'cover', codec: 'mjpeg' }], durationSeconds: 812 } as const;
+
+	it('records what the container saw in the source, beside the job and never on the video record', async () => {
+		const { env: base, raw, videos } = setup();
+		const db = new SqliteD1();
+		const env = { ...base, SEARCH_DB: db } as never;
+		await enqueueTranscode(env, ID, 'upload');
+		const first = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const failed = (job: TranscodeJobMessage, over = {}) => ev(job, { type: 'failed', error: 'no_video_stream', final: true, failure: { stage: 'probe', error: 'no_video_stream', attempt: 1, elapsedMs: 3338, at: '2026-11-25T07:00:23.449Z', source: { file: 'original', bytes: AUDIO.bytes } }, sourceFacts: { ...AUDIO, streams: [...AUDIO.streams] }, ...over });
+		await applyJobEvent(env, undefined, failed(first));
+		const stored = async () => (await db.prepare('SELECT source_facts AS f FROM media_jobs WHERE video_id = ?').bind(ID).first<{ f: string | null }>())!.f;
+		assert.deepEqual(JSON.parse((await stored())!), AUDIO);
+		assert.ok(!JSON.stringify(videos.read(ID)).includes(SHA));
+		// A new job has its own facts
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		assert.equal(await stored(), null);
+		// Anything malformed is not stored, and never fails the event
+		const second = raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage;
+		assert.equal((await applyJobEvent(env, undefined, failed(second, { sourceFacts: { sha256: 'x' } }))).applied, true);
+		assert.equal(await stored(), null);
+	});
+
+	it('tells an audio file from a damaged one on the Errors page, without the hash', async () => {
+		const { failureDetails } = await import('../src/lib/media/r2-delivery');
+		const about = (f: object) => failureDetails({ videoId: ID, jobId: 'j', attempt: 1, error: 'no_video_stream', sourceFacts: { ...AUDIO, ...f } as never }, undefined);
+		const d = about({});
+		assert.match(d.error.stack!, /source is: audio_only; mov,mp4,m4a: audio aac, cover mjpeg; 812 s; zeros 1\.2% at the start, 0% at the end/);
+		assert.ok(!JSON.stringify([d.summary, d.error.stack, d.extra]).includes(SHA));
+		assert.ok(Object.keys(d.extra).length <= 12, 'Errors page keeps at most 12 extra keys');
+		assert.match(about({ zeroEndPercent: 100 }).error.stack!, /source is: half_written/);
+		assert.match(about({ streams: undefined, format: undefined, container: 'unknown' }).error.stack!, /source is: unreadable; unknown: not readable by ffprobe/);
+	});
 });
 
 describe('per-rung progress', () => {
