@@ -10,6 +10,7 @@ import { cancelPremiere, endPremiere, isPremiere } from '../live/premieres';
 import { endOpenSession, readStream, streamEnd, streamKey, type LiveStreamRecord, type StreamsEnv } from '../live/streams';
 import { NonVideoRepository } from '../r2Repo';
 import { broadcast } from '../websocket-notify';
+import { hasSuspensionHolds } from './frozen';
 
 export type LiveModerationAction = 'removed' | 'warning' | 'banned' | 'deleted' | 'restored';
 
@@ -49,7 +50,11 @@ async function moderateMessage(env: StreamsEnv, input: LiveModerationInput, now:
 async function moderateStream(env: StreamsEnv, input: LiveModerationInput, now: number): Promise<{ found: boolean; changed: boolean }> {
 	const at = new Date(now).toISOString();
 	const reason = input.notes?.trim() || null;
+	let held = false;
 	const saved = await new NonVideoRepository<LiveStreamRecord>(env.videos).updateObject(streamKey(input.entityId), (fresh) => {
+		// Held (a takedown, a suspended channel or owner): lifting this decision does not show it again
+		held = input.action === 'restored' && (!!(fresh as { csamTakedown?: unknown }).csamTakedown || hasSuspensionHolds(fresh as never));
+		if (held) return false;
 		// The same flags admin-api's contentModeration puts on videos, channels and playlists
 		if (input.action === 'warning') Object.assign(fresh, { hasWarning: true, warningAt: at, warningReason: reason ?? 'Content flagged for policy violation' });
 		else if (input.action === 'restored') Object.assign(fresh, { isHidden: false, isDeleted: false });
@@ -58,8 +63,10 @@ async function moderateStream(env: StreamsEnv, input: LiveModerationInput, now: 
 			if (input.action === 'deleted') Object.assign(fresh, { isDeleted: true, deletedAt: at, deletedBy: input.actorId });
 		}
 		fresh.dateModified = at;
+		return undefined;
 	});
 	if (!saved) return { found: false, changed: false };
+	if (held) return { found: true, changed: false };
 	if (input.action === 'warning' || input.action === 'restored') return { found: true, changed: true };
 	// Hidden: it ends whatever its status, with its session, and a premiere does not start. Go live and the
 	// encoder settings are refused while it is hidden (endpoints/live/liveSession.ts)

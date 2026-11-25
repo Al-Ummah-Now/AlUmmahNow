@@ -32,6 +32,8 @@ import { purgeDeletion, purgeVideoForCsam, ADMIN_JOB_HANDLERS } from '../src/lib
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { CHUNK_BYTES, EvidenceKeyError, openChunk, parseEvidenceKeys, sealChunk } from '../src/lib/csam/crypto';
 import { resolveCsamUrl } from '../src/lib/csam/resolve';
+import { moderateLive } from '../src/lib/admin/liveModeration';
+import { liveSessionAccess } from '../src/lib/live/access';
 import { finalizeSelfHosted } from '../src/lib/live/finalize';
 import { setOnVodReady } from '../src/lib/live/vod-ready';
 import { startLiveVodReview } from '../src/lib/review/live';
@@ -880,6 +882,43 @@ describe('taking a live stream down', () => {
 		assert.ok(!job || job.status === 'failed');
 		assert.equal(t.env.LIVE_MEDIA.store.size, 1);
 		(t.env.videos as any).put = put;
+	});
+
+	it('a moderator cannot show it again, and the edge stays closed whatever its flags say', async () => {
+		const t = setup();
+		await start(t, [['sess-synth-01', 'selfhosted', null]]);
+		const restore = () => moderateLive(t.env as never, { entityType: 'livestream', entityId: 'live-synth-01', action: 'restored', actorId: 'usr_mod' });
+		assert.deepEqual(await restore(), { found: true, changed: false });
+		assert.equal(record(t).isHidden, true);
+		assert.equal(liveSessionAccess({ ...record(t), isHidden: false, suspensionHolds: [] }, 'sess-synth-01'), 'none');
+		// Nor one held for another reason; one that is only hidden comes back
+		const put = (over: object) => t.env.videos.store.set('livestream:live-synth-01', JSON.stringify({ id: 'live-synth-01', userId: OWNER, status: 'ended', isHidden: true, ...over }));
+		put({ suspensionHolds: ['channel:chan-synth-01'] });
+		assert.deepEqual(await restore(), { found: true, changed: false });
+		put({});
+		assert.deepEqual(await restore(), { found: true, changed: true });
+		assert.equal(record(t).isHidden, false);
+	});
+
+	it('shown again while the job runs, it is hidden again before the next step', async () => {
+		const t = setup();
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', PLACEHOLDER);
+		const put = t.env.CSAM_EVIDENCE.createMultipartUpload.bind(t.env.CSAM_EVIDENCE);
+		(t.env.CSAM_EVIDENCE as any).createMultipartUpload = async (key: string, opts: never) => {
+			t.env.videos.store.set('livestream:live-synth-01', JSON.stringify({ ...record(t), isHidden: false }));
+			return put(key, opts);
+		};
+		const job = await start(t, [['sess-synth-01', 'selfhosted', null]]);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		assert.equal(record(t).isHidden, true);
+	});
+
+	it('a stream whose record is not there: the case says nothing was hidden', async () => {
+		const t = setup();
+		t.env.videos.store.delete('livestream:live-synth-01');
+		const job = await start(t, [['sess-synth-01', 'selfhosted', null]]);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		assert.deepEqual((await manifestOf(t)).missing.map((m: { name: string }) => m.name), ['record-live-stream.json']);
 	});
 
 	it('a self-hosted recording is kept whole (best rendition, in order), then every object of it is removed and the CDN purged', async () => {
