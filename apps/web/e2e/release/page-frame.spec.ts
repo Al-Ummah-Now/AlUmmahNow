@@ -25,6 +25,30 @@ async function answerConsent(context: BrowserContext): Promise<void> {
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
 }
 
+/** MEASURE ONLY: logs every change of the header parts */
+async function probeHeader(page: Page): Promise<void> {
+  page.on('console', (m) => { if (m.text().startsWith('HDR ')) process.stdout.write(`${m.text()}\n`); });
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) process.stdout.write(`HDR ${Date.now()} framenavigated ${new URL(f.url()).pathname}\n`); });
+  page.on('request', (r) => { if (r.isNavigationRequest() || r.method() === 'POST' && r.url().startsWith(target().web)) process.stdout.write(`HDR ${Date.now()} request ${r.method()} ${new URL(r.url()).pathname} nav=${r.isNavigationRequest()}\n`); });
+  await page.addInitScript(() => {
+    const doc = Math.random().toString(36).slice(2, 6);
+    let last = '';
+    let headerRef: Element | null = null;
+    let headerNo = 0;
+    const size = (n: Element | null) => { if (!n) return 'absent'; const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : `0x0(display=${getComputedStyle(n).display};style=${n.getAttribute('style') ?? ''})`; };
+    const sample = (why: string) => {
+      const h = document.querySelector('header.ah');
+      if (h !== headerRef) { headerRef = h; headerNo++; }
+      const input = h?.querySelector('[data-testid="header-search-input"]') as HTMLElement | null;
+      const now = JSON.stringify({ headers: document.querySelectorAll('header.ah').length, headerNo, brand: size(h?.querySelector('.aun-brand') ?? null), upload: size(h?.querySelector('[data-testid="header-upload"]') ?? null), uploads: document.querySelectorAll('[data-testid="header-upload"]').length, search: size(h?.querySelector('.ah-search-wrap .ah-search') ?? null), input: input ? (input.offsetParent !== null ? 'offsetParent' : 'no-offsetParent') : 'absent', open: size(h?.querySelector('[data-testid="header-search-open"]') ?? null), w: innerWidth });
+      if (now !== last) { last = now; console.log(`HDR ${Date.now()} ${doc} ${why} ${now}`); }
+    };
+    new MutationObserver(() => sample('mutation')).observe(document, { subtree: true, childList: true, attributes: true });
+    const frame = () => { sample('frame'); requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+  });
+}
+
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, 'page scrolls sideways').toBeLessThanOrEqual(0);
@@ -49,6 +73,7 @@ async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void
     };
     const input = el.querySelector('[data-testid="header-search-input"]');
     const inputShown = !!input && (input as HTMLElement).offsetParent !== null;
+    console.log(`HDR ${Date.now()} measure connected=${el.isConnected} current=${el === document.querySelector('header.ah')} brand=${!!box(el.querySelector('.aun-brand'))} upload=${!!box(el.querySelector('[data-testid="header-upload"]'))} input=${!!input} inputShown=${inputShown} search=${!!box(el.querySelector('.ah-search-wrap .ah-search'))} open=${!!box(el.querySelector('[data-testid="header-search-open"]'))} w=${innerWidth}`);
     return {
       logo: box(el.querySelector('.aun-brand')),
       upload: box(el.querySelector('[data-testid="header-upload"]')),
@@ -253,6 +278,7 @@ test.describe('Release: page frame', () => {
     // Uploading and creating channels are by invitation: an admin makes the new user a Creator
     await grantCreatorTier(user);
 
+    await probeHeader(page);
     await page.goto(`${target().web}/en`);
     const upload = page.getByTestId('header-upload');
     // A tier that may create channels gets the normal Upload, never a greyed control (owner review 2026-11-16):
@@ -283,6 +309,7 @@ test.describe('Release: page frame', () => {
     await expect(upload).toHaveAttribute('data-state', 'ready', { timeout: 30000 });
     await expect(upload).toHaveAccessibleName(UPLOAD_LABEL.en);
     // A creator's Upload is the first header tool after the search, labelled on desktop
+    process.stdout.write(`HDR ${Date.now()} measuring\n`);
     await expectUploadAfterSearch(page, 'en');
     await expect(upload.locator('.upload-action-label')).toBeVisible();
     await upload.click();
