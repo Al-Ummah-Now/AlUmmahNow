@@ -27,6 +27,7 @@ export interface PlaceholderRecord {
 	fileSize?: number;
 	tusUpload?: VideoTusUpload;
 	processingIssue?: { kind: string; reason?: string; at: string; code?: string };
+	suspensionHolds?: unknown;
 	[key: string]: unknown;
 }
 
