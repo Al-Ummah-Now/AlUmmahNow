@@ -76,10 +76,11 @@ export function isTestOwnerEmail(email: unknown): boolean {
 /**
  * The seed accounts whose videos rank anyway: exact addresses in RANK_SEED_OWNERS (QA and stage, whose
  * whole public library belongs to the seed's creator; without them every rail there is empty).
- * Empty, and refused, in production.
+ * Fails closed: ignored unless SITES_ENV says exactly qa or stage, and ENVIRONMENT does not say production.
  */
-export function seedOwners(env: Pick<DiscoveryEnv, 'ENVIRONMENT' | 'RANK_SEED_OWNERS'>): ReadonlySet<string> {
-	if ((env.ENVIRONMENT ?? '').toLowerCase() === 'production') return new Set();
+export function seedOwners(env: Pick<DiscoveryEnv, 'ENVIRONMENT' | 'SITES_ENV' | 'RANK_SEED_OWNERS'>): ReadonlySet<string> {
+	if (env.SITES_ENV !== 'qa' && env.SITES_ENV !== 'stage') return new Set();
+	if ((env.ENVIRONMENT ?? '').trim().toLowerCase() === 'production') return new Set();
 	const listed = (env.RANK_SEED_OWNERS ?? '').split(',').map((email) => email.trim().toLowerCase());
 	// An address, never a domain or a pattern
 	return new Set(listed.filter((email) => /^[^\s@*]+@[^\s@*]+$/.test(email)));
@@ -103,7 +104,9 @@ interface Db {
 export interface DiscoveryEnv extends JobEnv {
 	NOTIFICATIONS_DB?: unknown;
 	ENVIRONMENT?: string;
-	/** Exact seed addresses whose videos rank outside production (seedOwners) */
+	/** production | qa | stage (white-label sites' marker, set in every wrangler env) */
+	SITES_ENV?: string;
+	/** Exact seed addresses whose videos rank on QA and stage (seedOwners) */
 	RANK_SEED_OWNERS?: string;
 }
 

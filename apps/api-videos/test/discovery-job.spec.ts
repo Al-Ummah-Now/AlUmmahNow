@@ -9,6 +9,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { syncSearchDocument, VideoCategory } from '@al-ummah/shared-types';
 import { readFileSync } from 'node:fs';
+import { parseJsonc } from '../../../scripts/release/jsonc';
+import { APPS } from '../../../scripts/release/apps';
 import { SEED_ACCOUNTS } from '../../web/e2e/seed/seed-config';
 import { runDiscoveryRank, readLastRun, isTestOwnerEmail, seedOwners } from '../src/lib/ranking/job';
 import { railPage } from '../src/lib/ranking/serve';
@@ -116,7 +118,7 @@ describe('discovery ranking job', () => {
 		assert.ok(ids.every((id) => Number(id.slice(1)) % 6 !== 1), 'a run account video is on a rail');
 	});
 
-	it('outside production the listed seed owner ranks; another test account, and production, never', async () => {
+	it('on QA and stage the listed seed owner ranks; another test account, and anywhere else, never', async () => {
 		const SEED = 'qa-creator@delivered.resend.dev';
 		const run = async (vars: Record<string, string>) => {
 			const { search, env } = await library(24);
@@ -129,14 +131,14 @@ describe('discovery ranking job', () => {
 			const ids = (search.db.prepare('SELECT DISTINCT video_id FROM discovery_rail_items').all() as Array<{ video_id: string }>).map((r) => Number(r.video_id.slice(1)));
 			return { summary, ids, items: rails(search).reduce((n, r) => n + r.items, 0) };
 		};
-		for (const vars of [{ RANK_SEED_OWNERS: SEED }, { ENVIRONMENT: 'stage', RANK_SEED_OWNERS: `someone@e2e.alummahnow.net, ${SEED}` }] as Array<Record<string, string>>) {
+		for (const vars of [{ SITES_ENV: 'qa', RANK_SEED_OWNERS: SEED }, { SITES_ENV: 'stage', ENVIRONMENT: 'stage', RANK_SEED_OWNERS: `someone@e2e.alummahnow.net, ${SEED}` }] as Array<Record<string, string>>) {
 			const { summary, ids, items } = await run(vars);
 			assert.equal(summary.eligible, 12);
 			assert.ok(items > 0);
 			assert.ok(ids.length > 0 && ids.every((i) => i % 2 === 1), 'only the listed owner ranks');
 		}
 		// Production drops them even when the list is set by mistake; unset and patterns list nobody
-		for (const vars of [{ ENVIRONMENT: 'production', RANK_SEED_OWNERS: SEED }, {}, { RANK_SEED_OWNERS: '@delivered.resend.dev,*@delivered.resend.dev,delivered.resend.dev' }] as Array<Record<string, string>>) {
+		for (const vars of [{ ENVIRONMENT: 'production', SITES_ENV: 'production', RANK_SEED_OWNERS: SEED }, { SITES_ENV: 'qa' }, { SITES_ENV: 'qa', RANK_SEED_OWNERS: '@delivered.resend.dev,*@delivered.resend.dev,delivered.resend.dev' }] as Array<Record<string, string>>) {
 			const { summary, ids, items } = await run(vars);
 			assert.equal(summary.eligible, 0);
 			assert.equal(summary.excluded, 24);
@@ -144,12 +146,30 @@ describe('discovery ranking job', () => {
 		}
 	});
 
+	it('the list is ignored unless the environment is explicitly QA or stage', () => {
+		const RANK_SEED_OWNERS = 'qa-creator@delivered.resend.dev';
+		for (const SITES_ENV of [undefined, '', ' qa', 'qa ', 'QA', 'stage\n', 'prod', 'production', ' production ', 'preview', 'local', 'staging']) {
+			for (const ENVIRONMENT of [undefined, 'stage', 'qa', 'preview']) assert.equal(seedOwners({ RANK_SEED_OWNERS, SITES_ENV, ENVIRONMENT }).size, 0, `${SITES_ENV} / ${ENVIRONMENT}`);
+		}
+		for (const ENVIRONMENT of ['production', ' production ', 'Production']) assert.equal(seedOwners({ RANK_SEED_OWNERS, SITES_ENV: 'qa', ENVIRONMENT }).size, 0, ENVIRONMENT);
+		for (const SITES_ENV of ['qa', 'stage']) assert.equal(seedOwners({ RANK_SEED_OWNERS, SITES_ENV }).size, 1);
+	});
+
 	it('the configs list exactly the seed’s creator on QA and stage, and nobody in production', () => {
-		const at = (file: string) => [...readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').matchAll(/"RANK_SEED_OWNERS": "([^"]*)"/g)].map((m) => m[1]);
+		type Vars = Record<string, string>;
+		type Config = { vars: Vars; env?: Record<string, { vars: Vars }> };
+		const config = (file: string) => parseJsonc(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')) as Config;
+		const main = config('wrangler.jsonc');
+		const qa = config('wrangler.qa.jsonc');
 		const creator = SEED_ACCOUNTS.find((a) => a.key === 'creator')!.email.split('@')[0];
-		assert.deepEqual(at('wrangler.jsonc'), ['', `${creator}@e2e.alummahnow.net`]);
-		assert.deepEqual(at('wrangler.qa.jsonc'), [`${creator}@delivered.resend.dev`]);
-		assert.deepEqual([...seedOwners({ RANK_SEED_OWNERS: at('wrangler.qa.jsonc')[0] })], [`${creator}@delivered.resend.dev`]);
+		assert.deepEqual([...seedOwners(qa.vars)], [`${creator}@delivered.resend.dev`]);
+		assert.deepEqual(Object.keys(main.env ?? {}), ['stage']);
+		assert.deepEqual([...seedOwners(main.env!.stage.vars)], [`${creator}@e2e.alummahnow.net`]);
+		assert.equal(main.vars.RANK_SEED_OWNERS, '');
+		assert.equal(seedOwners({ ...main.vars, RANK_SEED_OWNERS: 'qa-creator@delivered.resend.dev' }).size, 0);
+		// check:config refuses any other value in production
+		const pinned = APPS.find((a) => a.app === 'api-videos')!.production.vars;
+		assert.deepEqual([pinned?.RANK_SEED_OWNERS, pinned?.ENVIRONMENT, pinned?.SITES_ENV], ['', 'production', 'production']);
 	});
 
 	it('an admin exclusion keeps a channel off every rail', async () => {

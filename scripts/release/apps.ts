@@ -114,8 +114,10 @@ export const APPS: AppRule[] = [
 			vars: {
 				Issuer: AUTH_ISSUER,
 				VIDEO_REVIEW_ALLOWED: 'true',
-				// No test account's videos reach a rail (lib/ranking/job.ts)
+				// No test account's videos reach a rail: the list is empty, and both markers its guard reads say production (lib/ranking/job.ts)
 				RANK_SEED_OWNERS: '',
+				ENVIRONMENT: 'production',
+				SITES_ENV: 'production',
 				// The API's own base URL (subtitle links are built from it); not a JWT audience check
 				Audience: 'https://videos.api.alummahnow.net',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
