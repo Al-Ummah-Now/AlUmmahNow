@@ -3,7 +3,7 @@
  * a search result as an Autocomplete item, what a user is called, and the typed
  * confirmation. The picker itself is the shared Autocomplete (issue #713).
  */
-import { isolateText, stripBidiControls, type AdminUserSearchItem } from '@al-ummah/shared-types';
+import { OFFICIAL_CHANNEL_HANDLES, isolateText, stripBidiControls, type AdminUserSearchItem } from '@al-ummah/shared-types';
 import type { MessageKey, Translator } from '@/i18n/translate';
 import type { AutocompleteItem } from '@/components/search/autocomplete-model';
 import { adminUserName } from '@/lib/user-name';
@@ -40,6 +40,12 @@ export function transferItem(user: AdminUserSearchItem, t: Translator): Autocomp
     disabled: !!user.isBanned,
   };
 }
+
+/** Whether the channel's handle is one of the site's official names. */
+export const isOfficialHandle = (handle: string | null): boolean => !!handle && (OFFICIAL_CHANNEL_HANDLES as readonly string[]).includes(handle.toLowerCase());
+
+/** An official handle goes to someone outside the site team only with a tick of its own (wiki AUN-CHANNEL-CLAIM §3.5). */
+export const needsOfficialTick = (handle: string | null, to: Pick<AdminUserSearchItem, 'isStaff'> | null): boolean => isOfficialHandle(handle) && !!to && to.isStaff !== true;
 
 /** Values the admin may type to confirm a transfer: the channel's @handle (with or without "@") or the new owner's user id. */
 export function transferConfirmValues(handle: string | null, userId: string): string[] {

@@ -131,3 +131,14 @@ export async function getActiveStaff(db: D1Database, userId: string, roles: read
     .bind(userId, ...roles)
     .first<StaffRow>();
 }
+
+/** Which of `userIds` are active staff (by primary key). */
+export async function activeStaffIds(db: D1Database, userIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(userIds)].slice(0, 90);
+  if (!ids.length) return new Set();
+  const { results } = await db
+    .prepare(`SELECT user_id FROM admin_staff WHERE user_id IN (${ids.map(() => '?').join(', ')}) AND active = 1 AND role IN (${STAFF_ROLES.map(() => '?').join(', ')})`)
+    .bind(...ids, ...STAFF_ROLES)
+    .all<{ user_id: string }>();
+  return new Set((results ?? []).map((row) => row.user_id));
+}

@@ -185,7 +185,11 @@ export async function settleRevokedInvites(env: InviteEraseEnv, rows: InviteRow[
     transferChannel:
       deps.transferChannel ??
       (async (id: string, newOwnerId: string) => {
-        await callVideos(env, `/channels/${encodeURIComponent(id)}/transfer`, { method: 'POST', json: { newOwnerId }, actorId: CLEANUP_ACTOR });
+        await callVideos(env, `/channels/${encodeURIComponent(id)}/transfer`, { method: 'POST',
+          // Back to the owner it came from: nothing new is given
+          json: { newOwnerId, allowOfficialHandle: true },
+          actorId: CLEANUP_ACTOR,
+        });
       }),
     jobStatus:
       deps.jobStatus ??

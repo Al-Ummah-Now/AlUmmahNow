@@ -573,12 +573,17 @@ export interface TransferOptions {
 	keepContactEmail?: boolean;
 	/** The admin's reason, shown to the previous owner with the notice (CC-D11) */
 	reason?: string;
+	/** A channel with an official handle may go to this receiver: they are staff, or the admin ticked it (§3.5) */
+	allowOfficialHandle?: boolean;
 	/** Move only from this owner (an accepted offer): refused with owner_changed when someone else owns it by then */
 	expectedOwnerId?: string;
 	/** The accepted offer this move carries out; asked under the lock whether it still stands */
 	offerId?: string;
 	confirm?: () => Promise<boolean>;
 }
+
+/** Whether the channel holds an official handle; it goes only to staff, or with the admin's own tick (wiki AUN-CHANNEL-CLAIM §3.5). */
+const holdsOfficialHandle = (channel: Row): boolean => OFFICIAL_HANDLES.has(String(channel.handle ?? '').toLowerCase());
 
 export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
@@ -610,6 +615,8 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 		if (!fresh || fresh.isDeleted) throw new AdminError(404, 'channel_not_found');
 		if (options.expectedOwnerId && fresh.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
 		if (fresh.userId === newOwnerId) throw new AdminError(409, 'already_owner');
+		// Under the lock too: the channel may have been given the handle meanwhile
+		if (holdsOfficialHandle(fresh) && !options.allowOfficialHandle) throw new AdminError(409, 'official_handle_confirm');
 		if (options.confirm && !(await options.confirm())) throw new AdminError(404, 'offer_not_found');
 		job = await createJob(env, {
 			kind: 'channel.transfer',

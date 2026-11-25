@@ -73,6 +73,7 @@ import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '
 import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
+import { STAFF_ROLES, activeStaffIds, getActiveStaff } from '../lib/admin-staff';
 import { apiError } from '../lib/api-error';
 import { proposeChange, ruleNeedsApproval, WorkflowError } from '../lib/workflows/engine';
 import { planBulk, readTierOp, runTierOp, tierScope, TierOpError, DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID } from '../lib/workflows/tier-actions';
@@ -273,7 +274,14 @@ app.post('/channels/:id/transfer', async (c) => {
   const options = {
     keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true,
     keepContactEmail: input.keepContactEmail === true,
+    allowOfficialHandle: input.allowOfficialHandle === true,
   };
+  // An official handle goes to a non-staff account only with the admin's own tick (§3.5); api-videos refuses without it
+  const staff = await getActiveStaff(c.env.REPORTS_DB, newOwnerId, STAFF_ROLES).catch((error: unknown) => {
+    logger.warn('[Content] Could not read the staff list', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  });
+  const allowOfficialHandle = options.allowOfficialHandle || !!staff;
   const current = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
   let started: unknown;
   try {
@@ -281,7 +289,7 @@ app.post('/channels/:id/transfer', async (c) => {
       videos(c, `/channels/${encodeURIComponent(id)}/transfer`, {
         method: 'POST',
         // The reason reaches the previous owner with the notice (CC-D11)
-        json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail },
+        json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail, allowOfficialHandle },
       }));
   } catch (error) {
     // A refusal changed nothing, so its audit row was dropped; keep a row of the refused request (wiki AUN-CHANNEL-CLAIM §3.7)
@@ -487,6 +495,17 @@ async function withInvites<T extends { id: string }>(c: C, items: T[]): Promise<
   return items.map((i) => ({ ...i, invite: byUser.get(i.id) ?? null }));
 }
 
+/** Who is on the staff list (admin_staff, by primary key); left out when it cannot be read, as if nobody were. */
+async function withStaff<T extends { id: string }>(c: C, items: T[]): Promise<Array<T & { isStaff?: boolean }>> {
+  try {
+    const staff = await activeStaffIds(c.env.REPORTS_DB, items.map((i) => i.id));
+    return items.map((i) => ({ ...i, isStaff: staff.has(i.id) }));
+  } catch (error) {
+    logger.warn('[Content] Could not read the staff list', { users: items.length, error: error instanceof Error ? error.message : String(error) });
+    return items;
+  }
+}
+
 /** Users carry their warning count ("2 warnings" in lists and the report triage); left out when it cannot be read. */
 async function withWarningCounts<T extends { id: string }>(c: C, items: T[]): Promise<Array<T & { warningCount?: number }>> {
   try {
@@ -509,7 +528,7 @@ app.get('/users/search', async (c) => {
   const { q = '', exclude, channelId } = c.req.query();
   const found = await videos<{ items: Array<{ id: string }> }>(c, '/users/search', { query: { q, ...(exclude ? { exclude } : {}), ...(channelId ? { channelId } : {}) } });
   // Invited users (not signed in yet) are valid new owners; the picker badges them
-  return ok(c, Array.isArray(found?.items) ? { ...found, items: await withInvites(c, found.items) } : found);
+  return ok(c, Array.isArray(found?.items) ? { ...found, items: await withStaff(c, await withInvites(c, found.items)) } : found);
 });
 
 app.get('/users/:id', async (c) => {

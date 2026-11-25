@@ -21,7 +21,7 @@ import { JobStatusChip } from '@/components/content/jobs';
 import { SectionCard } from '@/components/content/parts';
 import { Autocomplete, type AutocompleteSource } from '@/components/search/Autocomplete';
 import type { AutocompleteItem } from '@/components/search/autocomplete-model';
-import { bidiIsolate, transferConfirmValues, transferItem, userName } from '@/components/content/transfer-model';
+import { bidiIsolate, isOfficialHandle, needsOfficialTick, transferConfirmValues, transferItem, userName } from '@/components/content/transfer-model';
 import { logger } from '@/lib/logger-client';
 import { useAdminLive } from '@/lib/live/useAdminLive';
 
@@ -112,20 +112,26 @@ export function ChannelTransfer({ channel }: Props) {
       setFollowed({ job: result.job, to });
       setTarget(null);
       setOptions(NO_OPTIONS);
+    } else if (official) {
+      // Refused: they may have left the site team since the search, so the box shows from here on
+      setTarget((current) => (current?.id === to.id ? { ...current, isStaff: false } : current));
     }
   }
 
+  const official = isOfficialHandle(channel.handle);
+  const needsTick = needsOfficialTick(channel.handle, target);
+  const iso = (value: string) => bidiIsolate(value);
   // What the move changes besides the owner, in the dialog's own words (§3.4, §3.5)
   const consequences = [
     t(options.keepPreviousOwnerAsAdmin ? 'channels.transferKeepsOldOwner' : 'channels.transferOldOwnerLoses'),
     ...(options.keepContactEmail ? [] : [t('channels.transferClearsContact')]),
     t('channels.transferLiveKeys'),
+    ...(official ? [t('channels.transferOfficialHandle', { handle: iso(`@${channel.handle}`) })] : []),
   ];
   const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
 
   const name = target ? userName(target) : '';
   const confirmValues = target ? transferConfirmValues(channel.handle, target.id) : [];
-  const iso = (value: string) => bidiIsolate(value);
 
   return (
     <SectionCard title={t('channels.transferTitle')} id={`${ids}-transfer`} testId="channel-transfer">
@@ -155,6 +161,8 @@ export function ChannelTransfer({ channel }: Props) {
             }}
             onChange={(id) => {
               setTarget(id ? (found.current.get(id) ?? null) : null);
+              // The tick is about this person
+              setOptions((o) => ({ ...o, allowOfficialHandle: false }));
               setError(null);
             }}
             disabled={!!busy}
@@ -165,6 +173,7 @@ export function ChannelTransfer({ channel }: Props) {
           <legend className="text-sm text-fg-muted mb-1">{t('channels.transferOptions')}</legend>
           <TransferOption id={`${ids}-keep-admin`} checked={options.keepPreviousOwnerAsAdmin} onChange={toggle('keepPreviousOwnerAsAdmin')} label={t('channels.transferKeepOldOwner')} testId="channel-transfer-keep-admin" />
           <TransferOption id={`${ids}-keep-contact`} checked={options.keepContactEmail} onChange={toggle('keepContactEmail')} label={t('channels.transferKeepContact')} testId="channel-transfer-keep-contact" />
+          {needsTick && <TransferOption id={`${ids}-official`} checked={options.allowOfficialHandle} onChange={toggle('allowOfficialHandle')} label={t('channels.transferAllowOfficial', { handle: iso(`@${channel.handle}`) })} testId="channel-transfer-official" />}
         </fieldset>
         <div>
           <ConfirmButton
@@ -189,7 +198,7 @@ export function ChannelTransfer({ channel }: Props) {
                 : t('channels.transferTypeToConfirmNoHandle', { id: iso(target?.id ?? '') })
             }
             danger
-            disabled={!!busy || !target || confirmValues.length === 0}
+            disabled={!!busy || !target || confirmValues.length === 0 || (needsTick && !options.allowOfficialHandle)}
             busy={busy === 'transfer'}
             testId="channel-transfer-submit"
             onConfirm={confirm}
@@ -200,7 +209,7 @@ export function ChannelTransfer({ channel }: Props) {
   );
 }
 
-const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false };
+const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false, allowOfficialHandle: false };
 
 function TransferOption({ id, checked, onChange, label, testId }: { id: string; checked: boolean; onChange: (e: ChangeEvent<HTMLInputElement>) => void; label: string; testId: string }) {
   return (
