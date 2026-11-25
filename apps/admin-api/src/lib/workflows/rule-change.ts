@@ -10,7 +10,7 @@ import {
   isWorkflowActionType,
   validateWorkflowRule,
   WORKFLOW_SET_LABELS,
-  workflowScopeLabel,
+  workflowScopeName,
   workflowSetKey,
   workflowSetPeople,
   type WorkflowActionType,
@@ -106,7 +106,7 @@ export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: 
   async describe(ctx, p) {
     const current = await ruleInForce(ctx, p.type, p.scope);
     const label = WORKFLOW_ACTIONS[p.type].label;
-    const scope = p.scope ? workflowScopeLabel(p.type, p.scope) ?? { en: p.scope, ar: p.scope } : null;
+    const scope = p.scope ? workflowScopeName(p.type, p.scope) ?? { en: p.scope, ar: p.scope } : null;
     return {
       title: { en: `Approval rule: ${label.en}${scope ? ` (${scope.en})` : ''}`, ar: `قاعدة الموافقة: ${label.ar}${scope ? ` (${scope.ar})` : ''}` },
       fields: ruleFields(current.config, p.config),

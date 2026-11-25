@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, formatMoney, isolateText, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { currencyExponent, formatMoney, isolateText, workflowFieldChanged, workflowScopeName, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -110,7 +110,7 @@ export const permissionLabel = (t: Translator) => (p: string) => {
  */
 export function scopeName(type: WorkflowActionType, scope: string, locale: Locale): { text: string; named: boolean } | null {
   if (!scope) return null;
-  const label = workflowScopeLabel(type, scope);
+  const label = workflowScopeName(type, scope);
   if (label) return { text: label[locale], named: true };
   return { text: scope, named: false };
 }

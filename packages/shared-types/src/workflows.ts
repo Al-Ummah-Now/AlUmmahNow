@@ -9,7 +9,6 @@
  * effect at approval: there are no scheduled effective dates (owner, WF-D6). The engine lives in
  * admin-api (lib/workflows); the tables in the search D1.
  */
-import { featureDefinition, isFeatureKey } from './feature-registry';
 import type { SupportPermission } from './support';
 
 /**
@@ -303,9 +302,8 @@ export const WORKFLOW_SET_LABELS: Readonly<Record<string, WorkflowLocalized>> = 
   ),
 });
 
-/** A scope's name for people (null: show the scope as it is, such as a feature switch named elsewhere). */
+/** A scope's name for people; feature switches are named by `workflowScopeName` (null: show the scope as it is). */
 export function workflowScopeLabel(type: WorkflowActionType, scope: string): WorkflowLocalized | null {
-  if (type === 'features.set' && isFeatureKey(scope)) return featureDefinition(scope).name;
   return SCOPE_LABELS[type]?.[scope] ?? null;
 }
 

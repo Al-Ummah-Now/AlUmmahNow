@@ -247,6 +247,6 @@ test('every group has a name in both languages, and a scope its own', () => {
     const label = w.WORKFLOW_SET_LABELS[w.workflowSetKey(set as never)];
     assert.ok(label?.en && /[\u0600-\u06ff]/.test(label.ar), JSON.stringify(set));
   }
-  assert.equal(w.workflowScopeLabel('features.set', 'live')?.en, 'Live streaming');
-  assert.equal(w.workflowScopeLabel('features.set', 'nope'), null);
+  assert.equal(w.workflowScopeLabel('tiers.change', 'default')?.en, 'The default tier');
+  assert.equal(w.workflowScopeLabel('tiers.change', 'nope'), null);
 });
