@@ -257,6 +257,29 @@ describe('admin live client', () => {
     assert.deepEqual(jobsLive, [false]);
   });
 
+  it('super admins also get what only they may see, on its own channel, as the page\'s topic', async () => {
+    const h = harness();
+    const updates: any[] = [];
+    const live: boolean[] = [];
+    const off = h.client.subscribe('media', (u) => updates.push(u), (l) => live.push(l));
+    const s = await goLive(h.sockets, ['media', 'restricted']);
+    assert.deepEqual(live, [false, true]);
+    s.receive({ type: 'admin.update', channel: 'admin:restricted', data: { type: 'admin.update', topic: 'restricted', events: [{ kind: 'job', key: 'media|job:v1', of: 'media', status: 'failed' }, { kind: 'job', key: 'jobs|job:j1', of: 'jobs' }] } });
+    assert.deepEqual(updates, [{ type: 'admin.update', topic: 'media', events: [{ kind: 'job', key: 'job:v1', status: 'failed' }] }]);
+    off();
+    assert.deepEqual(s.sent.slice(-2), [{ type: 'unsubscribe', channel: 'admin:media' }, { type: 'unsubscribe', channel: 'admin:restricted' }]);
+  });
+
+  it('anyone else is refused that channel; the page is live all the same', async () => {
+    const h = harness();
+    const live: boolean[] = [];
+    h.client.subscribe('jobs', () => {}, (l) => live.push(l));
+    const s = await goLive(h.sockets, ['jobs']);
+    assert.deepEqual(s.last(), { type: 'subscribe', channel: 'admin:restricted' });
+    s.receive({ type: 'error', code: 'FORBIDDEN' });
+    assert.deepEqual([h.client.isLive('jobs'), live], [true, [false, true]]);
+  });
+
   it('closes when no page follows anything, and after 5 minutes hidden; reopens when visible', async () => {
     const h = harness();
     const off = h.client.subscribe('jobs', () => {}, () => {});

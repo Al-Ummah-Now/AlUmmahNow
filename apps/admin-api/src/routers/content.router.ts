@@ -21,6 +21,7 @@ import {
   type AdminPostRow,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
+  isSuperAdminOnlyJob,
   FEATURE_REGISTRY,
   type FeatureKey,
   type AdminDeletionKind,
@@ -182,7 +183,7 @@ async function withReportCounts<T extends { id: string; openReports?: number }>(
  */
 async function jobsFor(c: C, targetKind: AdminJob['targetKind'], targetId: string): Promise<AdminJob[] | null> {
   try {
-    return (await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { targetKind, targetId, limit: '5' } })).items.map((j) => redactJob(c, j));
+    return (await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { targetKind, targetId, limit: '5', shown: jobsShown(c) } })).items.map((j) => redactJob(c, j));
   } catch (error) {
     logger.warn('[Content] Could not read the item\'s jobs', { targetKind, targetId, error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -1127,6 +1128,8 @@ const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
  * managed with import_sources:manage, a super admin permission; wiki TOOLS-ADMIN TA-9).
  */
 const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync', 'import.takeout-match', 'profiles.repair-emails']);
+/** Which jobs the reader's lists and counts hold: not those only super admins see, for anyone else. */
+const jobsShown = (c: C): 'all' | 'admins' => (isSuperAdmin(c.get('auth')?.roles) ? 'all' : 'admins');
 function redactJob(c: C, job: AdminJob): AdminJob {
   if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
   return {
@@ -1147,12 +1150,14 @@ async function jobForAction(c: C, jobId: string): Promise<AdminJob | Response> {
 }
 
 app.get('/jobs', async (c) => {
-  const out = await videos<{ items: AdminJob[] }>(c, '/jobs', { query: c.req.query() });
+  const out = await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { ...c.req.query(), shown: jobsShown(c) } });
   return ok(c, Array.isArray(out?.items) ? { ...out, items: out.items.map((j) => redactJob(c, j)) } : out);
 });
-app.get('/jobs/counts', async (c) => ok(c, await videos(c, '/jobs/counts')));
+app.get('/jobs/counts', async (c) => ok(c, await videos(c, '/jobs/counts', { query: { shown: jobsShown(c) } })));
 app.get('/jobs/:id', async (c) => {
   const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(c.req.param('id'))}`);
+  // One only super admins see: as if there were none
+  if (job?.kind && isSuperAdminOnlyJob(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return apiError(c, 404, 'job_not_found', { error: 'Job not found' });
   return ok(c, job?.kind ? redactJob(c, job) : job);
 });
 

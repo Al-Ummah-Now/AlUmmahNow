@@ -23,6 +23,7 @@ import {
 	newMediaRev,
 	publicMp4Path,
 	publishAdminLive,
+	publishAdminLiveFor,
 	type AdminLiveEvent,
 	reportNeedsAction,
 	resolveNeedsAction,
@@ -1194,10 +1195,9 @@ export interface MediaLiveEnv extends MediaEnv {
 }
 
 /** The job as the admin pages show it. */
-export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'> & { csamTakedown?: unknown }): AdminLiveEvent | null {
+export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'>): AdminLiveEvent | null {
 	const r2 = video.r2;
-	// Every admin gets it: nothing about a video under a takedown (only super admins see those; their pages refetch)
-	if (!r2 || video.csamTakedown) return null;
+	if (!r2) return null;
 	const f = r2.failure;
 	return {
 		kind: 'job',
@@ -1244,7 +1244,9 @@ export function pushMediaLive(env: MediaLiveEnv, ctx: ExecutionContextLike | und
 	const work = (async () => {
 		const events: AdminLiveEvent[] = [];
 		const job = video ? mediaJobEvent(video) : null;
-		if (job) events.push(job);
+		// A video under a takedown: on admin:restricted, for super admins only
+		if (job && (video as { csamTakedown?: unknown }).csamTakedown) await publishAdminLiveFor(env as never, 'media', true, job);
+		else if (job) events.push(job);
 		const now = Date.now();
 		if (now - lastLiveAt >= LIVE_EVERY_MS) {
 			lastLiveAt = now;

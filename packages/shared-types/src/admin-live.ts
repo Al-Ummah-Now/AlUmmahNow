@@ -11,10 +11,12 @@
  * Events are hints, not the source of truth: a page patches what it shows or
  * refetches its own API. Missing one is never wrong.
  */
-import { isAdmin, isModerator } from './roles';
+import { isAdmin, isModerator, isSuperAdmin } from './roles';
 
 /** Who may subscribe to a topic. */
-export type AdminLiveLevel = 'admin' | 'moderator';
+export type AdminLiveLevel = 'super' | 'admin' | 'moderator';
+
+const LEVEL_RANK: Record<AdminLiveLevel, number> = { moderator: 0, admin: 1, super: 2 };
 
 export const ADMIN_LIVE_TOPICS = {
   /** Admin jobs: purges, transfers, erasures, rebuilds, repairs. */
@@ -33,6 +35,11 @@ export const ADMIN_LIVE_TOPICS = {
   live: 'admin',
   /** Platform metrics: threshold alerts and new collector data. */
   ops: 'admin',
+  /**
+   * The events of the topics below about items only super admins see (under a takedown), each with `of`, its topic.
+   * Clients route them to that topic's listeners (restrictedAdminLiveEvent).
+   */
+  restricted: 'super',
 } as const satisfies Record<string, AdminLiveLevel>;
 
 export type AdminLiveTopic = keyof typeof ADMIN_LIVE_TOPICS;
@@ -64,8 +71,9 @@ export function adminLiveTopicOf(channel: string): AdminLiveTopic | null {
   return Object.prototype.hasOwnProperty.call(ADMIN_LIVE_TOPICS, topic) ? (topic as AdminLiveTopic) : null;
 }
 
-/** The admin level a token's roles give: 'admin' (admins, super admins), 'moderator', or null. */
+/** The admin level a token's roles give: 'super', 'admin', 'moderator', or null. */
 export function adminLevelOf(roles: unknown): AdminLiveLevel | null {
+  if (isSuperAdmin(roles)) return 'super';
   if (isAdmin(roles)) return 'admin';
   if (isModerator(roles)) return 'moderator';
   return null;
@@ -75,7 +83,7 @@ export function adminLevelOf(roles: unknown): AdminLiveLevel | null {
 export function canSubscribeAdminLive(level: AdminLiveLevel | null | undefined, channel: string): boolean {
   const topic = adminLiveTopicOf(channel);
   if (!topic || !level) return false;
-  return ADMIN_LIVE_TOPICS[topic] === 'moderator' || level === 'admin';
+  return LEVEL_RANK[level] >= LEVEL_RANK[ADMIN_LIVE_TOPICS[topic]];
 }
 
 /**
@@ -96,6 +104,29 @@ export interface AdminLiveUpdate {
   events: AdminLiveEvent[];
   /** True when events were dropped: refetch instead of patching. */
   resync?: boolean;
+}
+
+/** The topics whose events about such items go on `restricted` instead. */
+export const RESTRICTED_ADMIN_LIVE_TOPICS = ['media', 'uploads', 'jobs'] as const satisfies readonly AdminLiveTopic[];
+export type RestrictedAdminLiveTopic = (typeof RESTRICTED_ADMIN_LIVE_TOPICS)[number];
+
+/** A `topic` event for `restricted`: `of` names the topic; the key is kept apart from other topics' keys. */
+export function restrictedAdminLiveEvent(topic: RestrictedAdminLiveTopic, event: AdminLiveEvent): AdminLiveEvent {
+  return { ...event, of: topic, key: `${topic}|${adminLiveEventKey(event)}` };
+}
+
+/** A `restricted` event as its own topic's (null when it names none): `of` and the key's prefix dropped. */
+export function unrestrictedAdminLiveEvent(event: AdminLiveEvent): { topic: RestrictedAdminLiveTopic; event: AdminLiveEvent } | null {
+  const topic = event.of;
+  if (typeof topic !== 'string' || !(RESTRICTED_ADMIN_LIVE_TOPICS as readonly string[]).includes(topic)) return null;
+  const { of: _of, ...rest } = event;
+  const key = typeof event.key === 'string' && event.key.startsWith(`${topic}|`) ? event.key.slice(topic.length + 1) : undefined;
+  return { topic: topic as RestrictedAdminLiveTopic, event: { ...rest, ...(key !== undefined ? { key } : {}) } as AdminLiveEvent };
+}
+
+/** Sends one event to its topic, or to `restricted` when it is about an item only super admins see. */
+export function publishAdminLiveFor(env: AdminLiveEnv, topic: RestrictedAdminLiveTopic, restricted: boolean, event: AdminLiveEvent, fetcher?: typeof fetch): Promise<boolean> {
+  return restricted ? publishAdminLive(env, 'restricted', restrictedAdminLiveEvent(topic, event), fetcher) : publishAdminLive(env, topic, event, fetcher);
 }
 
 export function adminLiveEventKey(event: AdminLiveEvent): string {

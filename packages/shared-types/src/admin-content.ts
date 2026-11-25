@@ -740,6 +740,9 @@ export const ADMIN_JOB_KINDS = [
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
+/** Jobs only super admins see at all (lists, counts, details, live events): a takedown's. */
+export const SUPER_ADMIN_ONLY_JOB_KINDS = ['csam.contain'] as const satisfies readonly AdminJobKind[];
+export const isSuperAdminOnlyJob = (kind: string): boolean => (SUPER_ADMIN_ONLY_JOB_KINDS as readonly string[]).includes(kind);
 /** `cancelled`: an admin stopped it (Jobs page Cancel); it runs again only through Retry. */
 export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];

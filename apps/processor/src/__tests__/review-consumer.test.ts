@@ -123,6 +123,24 @@ describe('the automated check', () => {
     expect(alerts[0].notificationKey).toBe('reviewNeeded');
   });
 
+  it('the live admin queue is told of the review, not of its video (every admin gets it)', async () => {
+    const t = setup();
+    const broadcasts: any[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      broadcasts.push(...JSON.parse(String(init?.body)).items);
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    try {
+      await handleVideoReviewScan(t.payload('Clip [review-fixture:nsfw_frame@42000]'), { ...t.env, WEBSOCKET_URL: 'https://realtime.test' }, logger, { lastAttempt: false, now: NOW });
+    } finally {
+      globalThis.fetch = real;
+    }
+    const events = broadcasts.filter((b) => b.channel === 'admin:moderation').flatMap((b) => b.message.data.events);
+    expect(events).toEqual([expect.objectContaining({ kind: 'review_needed', key: 'review:r1', reviewId: 'r1' })]);
+    expect(JSON.stringify(events)).not.toContain('v1');
+  });
+
   it('explicit Arabic speech holds as NSFW (explicit language counts)', async () => {
     const t = setup();
     const r = await handleVideoReviewScan(t.payload('درس [review-fixture:explicit_ar_transcript]'), t.env, logger, { lastAttempt: false, now: NOW });

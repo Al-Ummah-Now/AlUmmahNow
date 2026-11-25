@@ -207,7 +207,7 @@ test('eventsOf reads only well-formed admin updates', () => {
 // ---- Shared helpers ----
 
 test('admin levels follow the site roles', () => {
-  assert.equal(adminLevelOf(['Super Admin']), 'admin');
+  assert.equal(adminLevelOf(['Super Admin']), 'super');
   assert.equal(adminLevelOf(['admin']), 'admin');
   assert.equal(adminLevelOf(['Moderator']), 'moderator');
   assert.equal(adminLevelOf(['creator']), null);
@@ -215,6 +215,12 @@ test('admin levels follow the site roles', () => {
   assert.equal(canSubscribeAdminLive('moderator', 'admin:moderation'), true);
   assert.equal(canSubscribeAdminLive('moderator', 'admin:media'), false);
   assert.equal(canSubscribeAdminLive('admin', 'admin:media'), true);
+  assert.equal(canSubscribeAdminLive('super', 'admin:media'), true);
+  assert.equal(canSubscribeAdminLive('super', 'admin:moderation'), true);
+  // What only super admins may see
+  assert.equal(canSubscribeAdminLive('admin', 'admin:restricted'), false);
+  assert.equal(canSubscribeAdminLive('moderator', 'admin:restricted'), false);
+  assert.equal(canSubscribeAdminLive('super', 'admin:restricted'), true);
   assert.equal(canSubscribeAdminLive('admin', 'user:1'), false);
   assert.equal(canSubscribeAdminLive(null, 'admin:moderation'), false);
 });
