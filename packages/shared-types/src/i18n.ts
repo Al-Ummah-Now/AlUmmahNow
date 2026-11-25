@@ -169,6 +169,7 @@ export interface AppTranslations {
   creator: {
     /** A refused upload on an account that can no longer upload: a plain fact, no upsell (hidden when off) */
     uploadsOff: string;
+    termsRequired: string;
     invitationShort: string;
     /** Link to /upgrade wherever uploading is by invitation */
     requestAccess: string;
@@ -1166,6 +1167,17 @@ export interface AppTranslations {
     channelRequiredMessage: string;
     createChannel: string;
     goHome: string;
+    // Creator Terms acceptance before first upload or channel creation
+    termsGateTitle: string;
+    termsGateBody: string;
+    termsGateTermsLink: string;
+    termsGateGuidelinesLink: string;
+    termsGateCheckbox: string;
+    termsGateAgree: string;
+    termsGateWorking: string;
+    termsGateError: string;
+    termsGateVersionChanged: string;
+    termsGateReviewAction: string;
     // Destination channel picker
     channelPickerLabel: string;
     channelPickerHint: string;

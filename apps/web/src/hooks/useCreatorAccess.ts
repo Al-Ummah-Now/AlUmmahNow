@@ -30,6 +30,13 @@ let lastFetch = 0;
 /** The account the cached answer is for: switching accounts (no page load) reads it again. */
 let cachedFor: string | null = null;
 let generation = 0;
+/**
+ * After a 403 `terms_required` refusal, keep `termsAccepted: false` sticky past the
+ * 30-second Worker isolate switch memo so a stale isolate's `/api/me/creator` response
+ * (which omits `termsAccepted`) cannot close an open Terms dialog.
+ */
+let termsRequiredUntil = 0;
+const TERMS_REQUIRED_STICKY_MS = 35_000;
 const listeners = new Set<(state: CreatorAccessState) => void>();
 
 function publish(state: CreatorAccessState) {
@@ -62,7 +69,22 @@ export function refreshCreatorAccess(): Promise<void> {
   const request: Promise<void> = fetchCreatorAccess()
     .then((state) => {
       // An answer for the account before a switch is dropped
-      if (mine === generation) publish(state);
+      if (mine !== generation) return;
+      if (
+        state.status === 'ready' &&
+        state.access.termsAccepted === undefined &&
+        Date.now() < termsRequiredUntil
+      ) {
+        publish({
+          status: 'ready',
+          access: { ...state.access, termsAccepted: false },
+        });
+        return;
+      }
+      if (state.status === 'ready' && state.access.termsAccepted === true) {
+        termsRequiredUntil = 0;
+      }
+      publish(state);
     })
     .finally(() => {
       if (inflight === request) inflight = null;
@@ -81,6 +103,7 @@ export function useCreatorAccess(): CreatorAccessState {
     // Another account: drop the previous one's answer at once, then read this one's
     if (!first) {
       generation += 1;
+      termsRequiredUntil = 0;
       publish({ status: 'loading' });
       inflight = null;
       void refreshCreatorAccess();
@@ -112,3 +135,106 @@ export const mayUpload = (state: CreatorAccessState) => state.status !== 'ready'
  */
 export const showsUpload = (state: CreatorAccessState) => state.status === 'ready' && state.access.canUpload;
 export const mayCreateChannel = (state: CreatorAccessState) => state.status !== 'ready' || state.access.canCreateChannel;
+/** True when the server explicitly reported that this account has not yet accepted the creator Terms. */
+export const needsCreatorTerms = (state: CreatorAccessState) =>
+  state.status === 'ready' && state.access.termsAccepted === false;
+
+/** Marks the active account as needing Creator Terms acceptance (e.g. after a 403 `terms_required` refusal). */
+export function markCreatorTermsRequired(): void {
+  generation += 1;
+  inflight = null;
+  termsRequiredUntil = Date.now() + TERMS_REQUIRED_STICKY_MS;
+  if (current.status === 'ready') {
+    publish({
+      status: 'ready',
+      access: {
+        ...current.access,
+        termsAccepted: false,
+      },
+    });
+  }
+  void refreshCreatorAccess();
+}
+
+export type AcceptCreatorTermsResult =
+  | { ok: true }
+  | { ok: false; code?: string; currentVersion?: string };
+
+/** Records creator Terms & Community Guidelines acceptance on the server and updates local state. */
+export async function acceptCreatorTerms(
+  version?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AcceptCreatorTermsResult> {
+  const mine = generation;
+  const auth = await fetchClientAuthInfo();
+  if (!auth.accessToken) return { ok: false, code: 'authentication_required' };
+  try {
+    const shownVersion = version ?? (current.status === 'ready' ? current.access.termsVersion : undefined);
+    const res = await fetchImpl(`${getApiUrl()}/api/me/creator/terms`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        ...(shownVersion ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(shownVersion ? { body: JSON.stringify({ version: shownVersion }) } : {}),
+      cache: 'no-store',
+    });
+    const body = (await res.json().catch(() => null)) as {
+      code?: string;
+      currentVersion?: string;
+      result?: { termsAccepted?: boolean; termsAcceptedAt?: string; termsVersion?: string };
+    } | null;
+    // Account switched while Agree was in flight: never write the previous account's answer onto the new one
+    if (mine !== generation) return { ok: false, code: 'account_switched' };
+    if (!res.ok) {
+      // Switch turned off while the gate was open: clear terms fields so open gates unblock cleanly
+      if (res.status === 404 && body?.code === 'feature_off') {
+        generation += 1;
+        inflight = null;
+        termsRequiredUntil = 0;
+        if (current.status === 'ready') {
+          const { termsAccepted: _a, termsAcceptedAt: _at, termsVersion: _v, ...rest } = current.access;
+          publish({ status: 'ready', access: rest });
+        }
+        void refreshCreatorAccess();
+        return { ok: true };
+      }
+      if (res.status === 409 && body?.code === 'terms_version_changed') {
+        if (current.status === 'ready' && body.currentVersion) {
+          publish({
+            status: 'ready',
+            access: {
+              ...current.access,
+              termsAccepted: false,
+              termsVersion: body.currentVersion,
+            },
+          });
+        }
+        void refreshCreatorAccess();
+        return { ok: false, code: body.code, currentVersion: body.currentVersion };
+      }
+      return { ok: false, code: body?.code };
+    }
+    // Drop any in-flight focus refresh started before acceptance so it cannot overwrite termsAccepted: true
+    generation += 1;
+    inflight = null;
+    termsRequiredUntil = 0;
+    if (current.status === 'ready') {
+      publish({
+        status: 'ready',
+        access: {
+          ...current.access,
+          termsAccepted: body?.result?.termsAccepted ?? true,
+          termsAcceptedAt: body?.result?.termsAcceptedAt ?? new Date().toISOString(),
+          termsVersion: body?.result?.termsVersion ?? current.access.termsVersion,
+        },
+      });
+    } else {
+      void refreshCreatorAccess();
+    }
+    return { ok: true };
+  } catch (error) {
+    logger.warn('[creator-access] Accepting terms failed', { error });
+    return { ok: false };
+  }
+}

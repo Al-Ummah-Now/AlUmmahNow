@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Channel } from '@al-ummah/shared-types';
-import { listChannels, createChannel as createChannelAPI, updateChannel as updateChannelAPI, deleteChannel as deleteChannelAPI } from '@/lib/api/channels';
+import { Channel, CREATOR_ERROR_CODES } from '@al-ummah/shared-types';
+import { listChannels, createChannelResult as createChannelAPI, updateChannel as updateChannelAPI, deleteChannel as deleteChannelAPI } from '@/lib/api/channels';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { ChannelCreateRequest, ChannelUpdateRequest, ApiHeaders } from '@/lib/api/types';
 import { logger } from '@/lib/logger-client';
 
@@ -10,6 +11,8 @@ interface UseChannelsOptions {
   autoFetch?: boolean;
   /** Channels already loaded on the server: shown immediately, first fetch skipped */
   initialChannels?: Channel[];
+  /** Called when channel creation is refused with 403 `terms_required`. */
+  onTermsRequired?: () => void;
   // Note: userId is now extracted from JWT token in Authorization header server-side
 }
 
@@ -28,7 +31,7 @@ interface UseChannelsReturn {
  * Fetches channels using ChannelsAPI and provides CRUD operations
  */
 export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn => {
-  const { channelId, autoFetch = true, initialChannels } = options;
+  const { channelId, autoFetch = true, initialChannels, onTermsRequired } = options;
 
   const [channels, setChannels] = useState<Channel[]>(initialChannels ?? []);
   const skipInitialFetch = useRef(initialChannels !== undefined);
@@ -121,13 +124,22 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         channelId
       };
 
-      const response = await createChannelAPI(data, headers);
+      const result = await createChannelAPI(data, headers);
 
-      if (!response) {
+      if (!result.data) {
+        const code =
+          result.errorBody && typeof result.errorBody === 'object' && 'code' in result.errorBody
+            ? (result.errorBody as { code?: unknown }).code
+            : undefined;
+        if (result.status === 403 && code === CREATOR_ERROR_CODES.termsRequired) {
+          markCreatorTermsRequired();
+          onTermsRequired?.();
+          return false;
+        }
         throw new Error('Failed to create channel');
       }
 
-      logger.debug('useChannels: Channel created successfully:', response);
+      logger.debug('useChannels: Channel created successfully:', result.data);
 
       // Refetch channels after creation
       await refetch();
@@ -140,7 +152,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     } finally {
       setIsLoading(false);
     }
-  }, [channelId, refetch]);
+  }, [channelId, onTermsRequired, refetch]);
 
   const updateChannel = useCallback(async (
     id: string,

@@ -76,6 +76,7 @@
 --   apps/api-videos/migrations/search/0122_live_chat_ai_hold.sql
 --   apps/api-videos/migrations/search/0123_image_owners_channel.sql
 --   apps/api-videos/migrations/search/0124_admin_comments_by_id.sql
+--   apps/api-videos/migrations/search/0125_creator_terms_acceptance.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -111,6 +112,7 @@ CREATE TABLE channel_quran_translations (channel_id TEXT NOT NULL, lang TEXT NOT
 CREATE TABLE channel_transfer_locks (channel_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_translation_settings (channel_id TEXT PRIMARY KEY, viewer_titles INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, status TEXT, PRIMARY KEY (kind, id));
+CREATE TABLE creator_terms_acceptances (user_id TEXT PRIMARY KEY, terms_version TEXT NOT NULL, accepted_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tier_changes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('request', 'admin', 'subscription')), from_tier_id TEXT, to_tier_id TEXT NOT NULL, request_id TEXT, created_at TEXT NOT NULL, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
 CREATE TABLE creator_tier_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;

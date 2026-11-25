@@ -78,9 +78,10 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (the live app features, caption download, creator support, offline/listen, event calendar, quiet hours, E21, app update notices and channel moves start off)', () => {
+test('defaults keep today’s behaviour (the live app features, creator terms gate, caption download, creator support, offline/listen, event calendar, quiet hours, E21, app update notices and channel moves start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
   assert.deepEqual(off, [
+    'creatorTerms',
     'liveChat',
     'livePremieres',
     'liveReminders',
@@ -110,7 +111,7 @@ test('defaults keep today’s behaviour (the live app features, caption download
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'recitationTools', 'ageRules'],
+    ['upload', 'createChannel', 'creatorTerms', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'recitationTools', 'ageRules'],
   );
 });
 

@@ -14,6 +14,8 @@ import React, { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { VideoObject } from '@/interfaces';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
@@ -47,6 +49,8 @@ export function ScheduledVideosList({
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
   // A failed cancel / publish-now, shown inline
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
+  const [termsOpen, setTermsOpen] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Filter videos by status
@@ -123,9 +127,16 @@ export function ScheduledVideosList({
       });
 
       if (result?.success) {
+        setActionErrorCode(null);
         // Refresh the list
         onRefresh?.();
+      } else if (result?.code === 'terms_required') {
+        markCreatorTermsRequired();
+        setActionErrorCode('terms_required');
+        setActionError(t.upload.termsGateBody);
+        setTermsOpen(true);
       } else {
+        setActionErrorCode(result?.code ?? null);
         setActionError(t.errors.genericError);
       }
     } catch (err) {
@@ -177,10 +188,30 @@ export function ScheduledVideosList({
     <div className={className}>
       {confirmDialog}
       {actionError && (
-        <p role="alert" data-testid="scheduled-videos-action-error" className="mb-4 rounded-lg p-3 text-sm border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
-          {actionError}
-        </p>
+        <div role="alert" data-testid="scheduled-videos-action-error" data-code={actionErrorCode ?? undefined} className="mb-4 flex flex-wrap items-center gap-2 rounded-lg p-3 text-sm border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
+          <span>{actionError}</span>
+          {actionErrorCode === 'terms_required' && (
+            <button
+              type="button"
+              onClick={() => setTermsOpen(true)}
+              className="underline font-medium text-[var(--fanous-color-accent)]"
+              data-testid="scheduled-videos-review-terms"
+            >
+              {t.upload.termsGateReviewAction}
+            </button>
+          )}
+        </div>
       )}
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          if (actionErrorCode === 'terms_required') {
+            setActionError(null);
+            setActionErrorCode(null);
+          }
+        }}
+      />
       {/* Filters */}
       <div className="mb-6 flex items-center gap-4">
         <label htmlFor="scheduled-status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">

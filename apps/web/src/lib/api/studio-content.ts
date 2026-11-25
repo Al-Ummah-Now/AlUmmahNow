@@ -51,6 +51,10 @@ export interface BulkSummary {
   failed: number;
 }
 
+export interface TermsRefusal {
+  termsRequired: true;
+}
+
 async function postBulk(path: string, functionName: string, body: unknown): Promise<BulkSummary | LimitRefusal | null> {
   let refusal: LimitRefusal | null = null;
   const response = await apiRequestServer<{ summary: BulkSummary }>({
@@ -64,8 +68,27 @@ async function postBulk(path: string, functionName: string, body: unknown): Prom
 }
 
 /** POST /api/videos/bulk-schedule */
-export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | LimitRefusal | null> {
-  return postBulk('/api/videos/bulk-schedule', 'bulkScheduleVideos', input);
+export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | LimitRefusal | TermsRefusal | null> {
+  let refusal: LimitRefusal | TermsRefusal | null = null;
+  const response = await apiRequestServer<{ summary: BulkSummary }>({
+    method: 'POST',
+    url: buildApiUrl('/api/videos/bulk-schedule'),
+    body: input as unknown as Record<string, unknown>,
+    functionName: 'bulkScheduleVideos',
+    onFailure: (status, text) => {
+      if (status === 403) {
+        try {
+          const parsed = JSON.parse(text) as { code?: string };
+          if (parsed?.code === 'terms_required') {
+            refusal = { termsRequired: true };
+            return;
+          }
+        } catch { /* fall through */ }
+      }
+      refusal = parseLimitRefusal(status, text);
+    },
+  }, getServerAuthContext, true);
+  return response?.summary ?? refusal;
 }
 
 export interface DeletedVideo {

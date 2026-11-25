@@ -26,6 +26,11 @@ function uniqueSuffix(): string {
 
 async function createThrowawayChannel(label: string): Promise<ApiChannel> {
   const u = userApi('scratch');
+  const accessRes = await u.api.get<{ result?: { termsVersion?: string } }>('/api/me/creator', { token: u.token }).catch(() => null);
+  const termsVersion = accessRes?.data?.result?.termsVersion;
+  if (termsVersion) {
+    await u.api.post('/api/me/creator/terms', { version: termsVersion }, { token: u.token, allowStatus: [404] });
+  }
   const res = await u.api.post<{ result: { channel: ApiChannel } }>(
     '/api/channels',
     { name: `E2E Temp Channel ${label} ${uniqueSuffix()}` },

@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { logger } from '@/lib/logger-client';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { isActiveSchedule, toLocalDateInput, toLocalTimeInput } from './schedule-inputs';
 
 interface ScheduleSectionProps {
@@ -49,6 +51,8 @@ export default function ScheduleSection({
   const [status, setStatus] = useState(initialStatus || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [termsOpen, setTermsOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
   // Parse initial scheduled date
@@ -113,8 +117,15 @@ export default function ScheduleSection({
         setSuccess(s.scheduleSuccess ?? 'Video scheduled successfully');
         setStatus(result.result?.status || 'scheduled');
         setIsScheduled(true);
+        setErrorCode(null);
         onScheduleChange?.(true, scheduledDateTime.toISOString());
+      } else if (result?.code === 'terms_required') {
+        markCreatorTermsRequired();
+        setErrorCode('terms_required');
+        setError(t.upload.termsGateBody);
+        setTermsOpen(true);
       } else {
+        setErrorCode(result?.code ?? null);
         setError(result?.error || s.scheduleFailed || 'Failed to schedule video');
       }
     } catch (err) {
@@ -170,8 +181,15 @@ export default function ScheduleSection({
         setSuccess(s.publishedSuccessfully ?? 'Video published successfully');
         setIsScheduled(false);
         setStatus('published');
+        setErrorCode(null);
         onScheduleChange?.(false);
+      } else if (result?.code === 'terms_required') {
+        markCreatorTermsRequired();
+        setErrorCode('terms_required');
+        setError(t.upload.termsGateBody);
+        setTermsOpen(true);
       } else {
+        setErrorCode(result?.code ?? null);
         setError(result?.error || s.publishFailed || 'Failed to publish video');
       }
     } catch (err) {
@@ -248,9 +266,19 @@ export default function ScheduleSection({
 
         {/* Error/Success Messages */}
         {error && (
-          <div role="alert" data-testid="edit-schedule-error" className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
-            <AlertCircle className="w-4 h-4" />
+          <div role="alert" data-testid="edit-schedule-error" data-code={errorCode ?? undefined} className="flex flex-wrap items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-[var(--fanous-color-error-text)] rounded-lg">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="text-sm">{error}</span>
+            {errorCode === 'terms_required' && (
+              <button
+                type="button"
+                onClick={() => setTermsOpen(true)}
+                className="text-sm underline font-medium text-[var(--fanous-color-accent)]"
+                data-testid="edit-schedule-review-terms"
+              >
+                {t.upload.termsGateReviewAction}
+              </button>
+            )}
           </div>
         )}
         {success && (
@@ -386,6 +414,16 @@ export default function ScheduleSection({
           </div>
         )}
       </div>
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          if (errorCode === 'terms_required') {
+            setError(null);
+            setErrorCode(null);
+          }
+        }}
+      />
     </Card>
   );
 }

@@ -20,6 +20,9 @@ interface Props {
   done: boolean;
   retrying: ReadonlySet<string>;
   onRetry: (item: YtImportItem) => void;
+  /** Opens the Creator Terms dialog when an item or queue is paused on `terms_required`. */
+  onReviewTerms?: () => void;
+  termsPaused?: boolean;
   onCancel: () => void;
   /** The files picker shown when items wait for their files (after a reload) */
   resume: ReactNode;
@@ -32,7 +35,7 @@ interface Props {
 }
 
 export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportStep(props, headingRef) {
-  const { locale, current, items, live, counts, done, retrying, onRetry, onCancel, resume, channelHref, contentHref, shortUrl, onDownloadCsv, onNewImport, notice } = props;
+  const { locale, current, items, live, counts, done, retrying, onRetry, onReviewTerms, termsPaused, onCancel, resume, channelHref, contentHref, shortUrl, onDownloadCsv, onNewImport, notice } = props;
   const { t } = useLanguage();
   const fill = useFill();
   const text = t.studio.youtube.progress;
@@ -78,6 +81,15 @@ export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportS
 
       {resume}
 
+      {termsPaused && onReviewTerms && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] p-3 text-sm" data-testid="yt-terms-paused-banner">
+          <span className="text-[var(--fanous-color-error-text)]">{text.errors.terms_required}</span>
+          <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onReviewTerms} data-testid="yt-review-terms">
+            {t.upload.termsGateReviewAction}
+          </Button>
+        </div>
+      )}
+
       {quotaWaiting && (
         <p className="yt-note mb-4 flex items-start gap-2 rounded-md p-3 text-sm" data-testid="yt-quota-note">
           <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -87,7 +99,7 @@ export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportS
 
       <ul className="yt-list" data-testid="yt-progress-list">
         {items.map((item) => (
-          <ProgressRow key={item.id} item={item} live={live.get(item.id)} lang={lang} retrying={retrying.has(item.id)} onRetry={() => onRetry(item)} />
+          <ProgressRow key={item.id} item={item} live={live.get(item.id)} lang={lang} retrying={retrying.has(item.id)} onRetry={() => onRetry(item)} onReviewTerms={onReviewTerms} />
         ))}
       </ul>
 
@@ -121,7 +133,7 @@ function stepLabel(name: string, state: YtStepState, steps: Record<YtStepState, 
   return `${name}: ${steps[state]}`;
 }
 
-function ProgressRow({ item, live, lang, retrying, onRetry }: { item: YtImportItem; live: LiveState | undefined; lang: string; retrying: boolean; onRetry: () => void }) {
+function ProgressRow({ item, live, lang, retrying, onRetry, onReviewTerms }: { item: YtImportItem; live: LiveState | undefined; lang: string; retrying: boolean; onRetry: () => void; onReviewTerms?: () => void }) {
   const { t } = useLanguage();
   const fill = useFill();
   const text = t.studio.youtube.progress;
@@ -162,10 +174,16 @@ function ProgressRow({ item, live, lang, retrying, onRetry }: { item: YtImportIt
         {captionsGone && <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-captions-gone">{text.captionsDisconnected}</p>}
       </div>
       {phase === 'failed' && (
-        <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onRetry} disabled={retrying} data-testid="yt-retry">
-          <RotateCcw className="h-4 w-4" aria-hidden="true" />
-          {text.tryAgain}
-        </Button>
+        errorKey === 'terms_required' && onReviewTerms ? (
+          <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onReviewTerms} data-testid="yt-row-review-terms">
+            {t.upload.termsGateReviewAction}
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onRetry} disabled={retrying} data-testid="yt-retry">
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            {text.tryAgain}
+          </Button>
+        )
       )}
       {phase === 'ready' && item.videoId && (
         // In a div: pages.css flattens a list item whose direct child links to a video

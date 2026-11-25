@@ -25,6 +25,7 @@ import { queueReviewScan } from '../../lib/review/scan';
 import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { markPublished } from "../../lib/published";
 import { applyVisibilityInput } from '../../lib/visibility';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 
 export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
@@ -150,6 +151,19 @@ export class VideoUpdate extends AuthenticatedRoute {
 				},
 				403
 			);
+		}
+
+		// Publishing a draft or private video requires accepted Creator Terms when the switch is on
+		// (legacy public videos have isPublic === undefined, matching lib/visibility.ts)
+		const wasClosed = existingVideo.isDraft === true || (existingVideo.isPublic === false && existingVideo.isUnlisted !== true);
+		const opensVideo =
+			videoUpdateInput.visibility === 'public' ||
+			videoUpdateInput.visibility === 'unlisted' ||
+			videoUpdateInput.isPublic === true ||
+			videoUpdateInput.isUnlisted === true;
+		if (wasClosed && opensVideo) {
+			const termsRefused = await enforceCreatorTerms(c, effectiveUserId);
+			if (termsRefused) return termsRefused;
 		}
 
 		// An active category, or the (possibly retired) one the video already has

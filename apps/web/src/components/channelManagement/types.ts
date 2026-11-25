@@ -27,7 +27,8 @@ export interface ChannelGridProps {
 export interface CreateChannelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateChannelFormData) => Promise<void>;
+  /** Returns false when submission was paused (e.g. terms_required) so the form stays open with its typed values. */
+  onSubmit: (data: CreateChannelFormData) => Promise<boolean | void>;
   isLoading?: boolean;
   lang?: 'en' | 'ar';
 }

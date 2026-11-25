@@ -54,6 +54,9 @@ export async function setCreatorTier(user: WebUser, wanted: string | null): Prom
       return body.result?.tier?.id ?? null;
     }, { message: `GET /api/me/creator does not show tier ${tierId}`, timeout: 20000 })
     .toBe(tierId);
+  if (tierId !== 'member') {
+    await acceptCreatorTermsIfNeeded(user);
+  }
 }
 
 /**
@@ -64,10 +67,13 @@ export async function setCreatorTier(user: WebUser, wanted: string | null): Prom
 export async function grantCreatorTier(user: WebUser): Promise<void> {
   if (releaseEnv() !== 'local') return setCreatorTier(user, 'creator');
   const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+  const now = new Date().toISOString();
+  const base = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
   // REPLACE: sign-up already stored the default tier (every account has one)
-  const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', 'creator', 'admin', 'e2e', '${new Date().toISOString()}')`;
-  const res = await fetch(`${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
+  const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', 'creator', 'admin', 'e2e', '${now}')`;
+  const res = await fetch(`${base}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
   expect(res.ok, `local stack tier write: ${await res.text()}`).toBe(true);
+  await acceptCreatorTermsIfNeeded(user);
   await expect
     .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { id?: string } | null } }).result?.tier?.id ?? null, {
       message: 'GET /api/me/creator does not show the creator tier',
@@ -85,14 +91,18 @@ export async function grantCreatorTier(user: WebUser): Promise<void> {
 export async function switchCreatorTier(user: WebUser, tierId: 'creator' | 'unlimited' | null): Promise<void> {
   if (releaseEnv() !== 'local') return setCreatorTier(user, tierId);
   const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+  const now = new Date().toISOString();
   // The stack runs one statement per call
   const statements = [
     `DELETE FROM creator_tier_assignments WHERE user_id = '${id}'`,
-    ...(tierId ? [`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', '${tierId}', 'admin', 'e2e', '${new Date().toISOString()}')`] : []),
+    ...(tierId ? [`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', '${tierId}', 'admin', 'e2e', '${now}')`] : []),
   ];
   for (const sql of statements) {
     const res = await fetch(`${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
     expect(res.ok, `local stack tier switch: ${await res.text()}`).toBe(true);
+  }
+  if (tierId) {
+    await acceptCreatorTermsIfNeeded(user);
   }
   await expect
     .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { id?: string } | null } }).result?.tier?.id ?? null, {
@@ -101,6 +111,19 @@ export async function switchCreatorTier(user: WebUser, tierId: 'creator' | 'unli
     })
     // Every account has a tier (#1443): with its row gone it works as Free ('member'), which hides creator features
     .toBe(tierId ?? 'member');
+}
+
+/** Accepts the active Creator Terms version reported by GET /api/me/creator (no-op when the switch is off). */
+export async function acceptCreatorTermsIfNeeded(user: WebUser): Promise<void> {
+  const res = await apiFetch(user, '/api/me/creator').catch(() => null);
+  const body = (await res?.json().catch(() => null)) as { result?: { termsVersion?: string } } | null;
+  const version = body?.result?.termsVersion;
+  if (!version) return;
+  await apiFetch(user, '/api/me/creator/terms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  }).catch(() => null);
 }
 
 /** Takes the tier away again (the "off" half of a hidden-when-off toggle). */

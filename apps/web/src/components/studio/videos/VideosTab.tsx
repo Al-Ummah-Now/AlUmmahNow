@@ -29,7 +29,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
-import type { BulkSummary, StudioVideo } from '@/lib/api/studio-content';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
+import type { BulkSummary, StudioVideo, TermsRefusal } from '@/lib/api/studio-content';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { appealVideoReview, fetchContentCounts, fetchContentPage, resubmitVideoReview, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
 import { studioLiveHref } from '@/components/studio/live/href';
@@ -77,6 +79,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState('');
+  const [termsNotice, setTermsNotice] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Pending>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
@@ -217,11 +221,20 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const run = async (work: () => Promise<unknown>, success: string) => {
     try {
       const result = await work();
+      if ((result as { code?: string } | null)?.code === 'terms_required') {
+        markCreatorTermsRequired();
+        setTermsNotice(true);
+        setNotice(t.upload.termsGateBody);
+        setTermsOpen(true);
+        return;
+      }
       if (result === null || (result as { success?: boolean })?.success === false) throw new Error('rejected');
+      setTermsNotice(false);
       setNotice(success);
       await load();
     } catch (error) {
       logger.error('[Studio] Row action failed', { channelId, error });
+      setTermsNotice(false);
       setNotice(text.actionFailed);
     }
   };
@@ -245,8 +258,16 @@ export function VideosTab({ locale, channelId, role }: Props) {
     await load();
   };
 
-  const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
+  const finishBulk = async (summary: BulkSummary | LimitRefusal | TermsRefusal | null) => {
     setBulkDialog(null);
+    if (summary && 'termsRequired' in summary) {
+      markCreatorTermsRequired();
+      setTermsNotice(true);
+      setNotice(t.upload.termsGateBody);
+      setTermsOpen(true);
+      return;
+    }
+    setTermsNotice(false);
     if (isLimitRefusal(summary)) {
       const message = limitRefusalMessage(t.studio.limits, summary, locale);
       // A feature that is off has no words: re-read the features and its button goes
@@ -318,7 +339,19 @@ export function VideosTab({ locale, channelId, role }: Props) {
   return (
     <div data-testid="studio-videos">
       <h1 className="sr-only">{t.studio.tabs.videos}</h1>
-      <p role="status" aria-live="polite" className={notice ? 'mb-3 text-sm text-foreground' : 'sr-only'}>{notice}</p>
+      <div role="status" aria-live="polite" className={notice ? 'mb-3 flex flex-wrap items-center gap-2 text-sm text-foreground' : 'sr-only'}>
+        {notice && <span>{notice}</span>}
+        {termsNotice && (
+          <button
+            type="button"
+            onClick={() => setTermsOpen(true)}
+            className="underline font-medium text-[var(--fanous-color-accent)]"
+            data-testid="studio-videos-review-terms"
+          >
+            {t.upload.termsGateReviewAction}
+          </button>
+        )}
+      </div>
 
       <div role="group" aria-label={text.statusLabel} className="mb-4 flex flex-wrap gap-2">
         {STATUSES.map((status) => (
@@ -592,6 +625,16 @@ export function VideosTab({ locale, channelId, role }: Props) {
         confirmLabel={text.confirmDelete.confirm}
         cancelLabel={text.confirmDelete.cancel}
         testId="studio-confirm-delete"
+      />
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          if (termsNotice) {
+            setTermsNotice(false);
+            setNotice('');
+          }
+        }}
       />
     </div>
   );

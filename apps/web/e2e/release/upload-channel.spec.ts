@@ -213,6 +213,18 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
       expect(invitation, 'the editor does not see the invitation').toBeTruthy();
       const accepted = await apiFetch(editor.user, `/api/channel-invites/${invitation!.id}/accept`, { method: 'POST' });
       expect(accepted.status, `accept: ${await accepted.clone().text()}`).toBe(200);
+      await apiFetch(editor.user, '/api/me/creator')
+        .then((r) => r.json() as Promise<{ result?: { termsVersion?: string } }>)
+        .then((b) =>
+          b?.result?.termsVersion
+            ? apiFetch(editor.user, '/api/me/creator/terms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ version: b.result.termsVersion }),
+              })
+            : null,
+        )
+        .catch(() => null);
 
       // The API names the channel for the editor, whose own tier allows no uploads
       const access = async () =>

@@ -22,7 +22,11 @@ jest.mock('@/lib/live/api', () => {
   };
 });
 const mockCreator = jest.fn();
-jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => mockCreator() }));
+jest.mock('@/hooks/useCreatorAccess', () => ({
+  useCreatorAccess: () => mockCreator(),
+  needsCreatorTerms: () => false,
+  markCreatorTermsRequired: jest.fn(),
+}));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), debug: jest.fn() } }));
 
 const mockStudio = STUDIO_EN;

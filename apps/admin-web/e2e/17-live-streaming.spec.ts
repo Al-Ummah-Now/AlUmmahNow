@@ -67,6 +67,17 @@ test.describe('live streaming', () => {
 
     const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
     channelName = `E2E live ${tag}`;
+    const accessRes = await fetch(`${VIDEOS_API_URL}/api/me/creator`, {
+      headers: { authorization: `Bearer ${superToken()}` },
+    });
+    const termsVersion = ((await accessRes.json().catch(() => null)) as { result?: { termsVersion?: string } } | null)?.result?.termsVersion;
+    if (termsVersion) {
+      await fetch(`${VIDEOS_API_URL}/api/me/creator/terms`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${superToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ version: termsVersion }),
+      });
+    }
     const createChannel = () =>
       fetch(`${VIDEOS_API_URL}/api/channels`, {
         method: 'POST',

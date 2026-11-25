@@ -10,9 +10,11 @@ describe('friendly creator-tier refusals (never the server text)', () => {
     expect(creatorRefusalMessage(en, { code: 'upload_limit' })).toBe("You’ve reached the upload limit; try again in a moment");
   });
 
-  it('explains uploads by invitation and the channel limit', () => {
+  it('explains uploads by invitation, terms required, and the channel limit', () => {
     expect(creatorRefusalMessage(en, { code: 'uploads_by_invitation' })).toBe("This account can’t upload videos.");
     expect(creatorRefusalMessage(ar, { code: 'uploads_by_invitation' })).toBe('لا يمكن رفع المرئيات من هذا الحساب.');
+    expect(creatorRefusalMessage(en, { code: 'terms_required' })).toBe(en.creator.termsRequired);
+    expect(creatorRefusalMessage(ar, { code: 'terms_required' })).toBe(ar.creator.termsRequired);
     expect(creatorRefusalMessage(en, { code: 'channel_limit', maxChannels: 3 })).toBe('You can own up to 3 channels');
   });
 

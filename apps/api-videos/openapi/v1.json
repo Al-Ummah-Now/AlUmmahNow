@@ -66822,6 +66822,7 @@
             "enum": [
               "upload",
               "createChannel",
+              "creatorTerms",
               "youtubeImport",
               "bulkSchedule",
               "audioTracks",

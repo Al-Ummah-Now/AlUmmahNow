@@ -57,6 +57,7 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('admin-api', 'POST', '/api/admin/import/sources/:id/sync', 'upload'),
   r('admin-api', 'POST', '/api/admin/import/sources/:id/takeout/files/:fileId/upload', 'upload'),
   r('api-videos', 'POST', '/api/channels', 'createChannel'),
+  r('api-videos', 'POST', '/api/me/creator/terms', 'creatorTerms'),
   r('api-videos', 'POST', '/api/youtube-import/oauth/start', 'youtubeImport'),
   r('api-videos', 'POST', '/api/youtube-import/:importId/start', 'youtubeImport'),
   r('api-videos', 'POST', '/api/videos/bulk-schedule', 'bulkSchedule'),

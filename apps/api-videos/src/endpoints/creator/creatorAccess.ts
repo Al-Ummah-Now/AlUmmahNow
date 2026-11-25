@@ -13,18 +13,23 @@ import type { Context, Next } from 'hono';
 import {
 	CHANNEL_ACCESS_TABLE,
 	CREATOR_ERROR_CODES,
+	CURRENT_CREATOR_TERMS_VERSION,
 	OWNERSHIP_TABLE,
 	can,
+	featureGate,
 	isChannelRole,
 	tierAllowsChannels,
 	tierAllowsUploads,
 	type CreatorAccess,
+	type SwitchesEnv,
 } from '@al-ummah/shared-types';
 import { countChannelSlots, reserveChannelSlot, resolveCreator, settleChannelSlot } from '../../lib/creatorTiers';
+import { readCreatorTermsAcceptance, recordCreatorTermsAcceptance } from '../../lib/creatorTerms';
+import { apiError } from '../../lib/api-error';
 import { upgradeMode } from '../../lib/upgradeMode';
 import { logger } from '../../lib/logger';
 import { cachedPendingUserDeletion } from '../../lib/admin/pendingUserDeletion';
-import { invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
+import { enforceCreatorTerms, invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
 import { windowStart } from '../../middleware/rate-limit';
 import { liveAccess } from '../../lib/live/tier-gate';
 
@@ -83,17 +88,46 @@ export async function memberUploadChannelIds(db: D1Database, userId: string, rol
 	return eligible.flat();
 }
 
-export async function creatorAccess(db: D1Database, userId: string, roles: readonly string[] | undefined): Promise<CreatorAccess> {
+export async function creatorAccess(
+	db: D1Database,
+	userId: string,
+	roles: readonly string[] | undefined,
+	env?: SwitchesEnv,
+): Promise<CreatorAccess> {
 	const creator = await resolveCreator(db, { userId, roles });
-	const [channelsOwned, usage, uploadChannelIds, live] = await Promise.all([
+	const termsSwitchOn = env
+		? (await featureGate(env, 'creatorTerms').catch((error) => {
+			logger.warn('[Creator] creatorTerms switch read failed; omitting termsAccepted', { userId, error: error instanceof Error ? error.message : String(error) });
+			return { on: false as const };
+		})).on
+		: false;
+	const [channelsOwned, usage, uploadChannelIds, live, termsResult] = await Promise.all([
 		countChannelSlots(db, userId),
 		uploadUsage(db, userId),
 		memberUploadChannelIds(db, userId, roles),
 		liveAccess(db, userId, roles),
+		termsSwitchOn
+			? readCreatorTermsAcceptance(db, userId)
+				.then((row) => ({ ok: true as const, row }))
+				.catch((error) => {
+					logger.warn('[Creator] Terms acceptance read failed; omitting termsAccepted from /api/me/creator', {
+						userId,
+						error: error instanceof Error ? error.message : String(error),
+					});
+					return { ok: false as const, row: null };
+				})
+			: Promise.resolve({ ok: false as const, row: null }),
 	]);
 	const tier = creator.tier;
 	const channels = tierAllowsChannels(tier);
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
+	const termsFields = termsSwitchOn && termsResult.ok
+		? {
+			termsAccepted: termsResult.row?.termsVersion === CURRENT_CREATOR_TERMS_VERSION,
+			termsAcceptedAt: termsResult.row?.acceptedAt ?? null,
+			termsVersion: CURRENT_CREATOR_TERMS_VERSION,
+		}
+		: {};
 	return {
 		tier: tier ? { id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null, unlimited: tier.unlimited, uploads: tierAllowsUploads(tier), channels } : null,
 		via: creator.via,
@@ -105,7 +139,49 @@ export async function creatorAccess(db: D1Database, userId: string, roles: reado
 		limits: tier && !tier.unlimited ? { perHour: tier.perHour, perDay: tier.perDay, maxConcurrent: tier.maxConcurrent } : null,
 		usage,
 		live,
+		...termsFields,
 	};
+}
+
+/**
+ * POST /api/me/creator/terms — records acceptance of the creator Terms & Community Guidelines once per account.
+ * Contract: HTTP 409 on this route is reserved exclusively for `terms_version_changed` (native clients such as
+ * Android #72 map every 409 on this route to `terms_version_changed` while Core#61 drops error codes).
+ */
+export async function handleAcceptCreatorTerms(c: Context) {
+	const userId = c.get('userId') as string | undefined;
+	if (!userId) return apiError(c, 401, 'authentication_required', { error: 'Authentication required' });
+	const contentType = c.req.header('content-type') ?? '';
+	const body = contentType.includes('application/json')
+		? ((await c.req.json().catch(() => null)) as { version?: unknown } | null)
+		: null;
+	const requestedVersion = typeof body?.version === 'string' ? body.version.trim() : '';
+	if (!requestedVersion || requestedVersion !== CURRENT_CREATOR_TERMS_VERSION) {
+		return apiError(c, 409, CREATOR_ERROR_CODES.termsVersionChanged, {
+			error: 'The Terms of Service were updated; please review the latest version.',
+			currentVersion: CURRENT_CREATOR_TERMS_VERSION,
+		});
+	}
+	try {
+		const deletion = await cachedPendingUserDeletion(c.env.SEARCH_DB, userId);
+		if (deletion) {
+			return apiError(c, 403, 'videos_account_pending_deletion', {
+				error: 'This account has a pending data deletion.',
+			});
+		}
+		const accepted = await recordCreatorTermsAcceptance(c.env.SEARCH_DB, userId, requestedVersion);
+		return c.json({
+			success: true,
+			result: {
+				termsAccepted: accepted.termsVersion === CURRENT_CREATOR_TERMS_VERSION,
+				termsAcceptedAt: accepted.acceptedAt,
+				termsVersion: accepted.termsVersion,
+			},
+		});
+	} catch (error) {
+		logger.error('[Creator] Terms acceptance failed', { userId, error: error instanceof Error ? error.message : String(error) });
+		return unavailable(c);
+	}
 }
 
 export async function handleCreatorAccess(c: Context) {
@@ -113,7 +189,7 @@ export async function handleCreatorAccess(c: Context) {
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
 		const [access, deletion, mode] = await Promise.all([
-			creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)),
+			creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c), c.env as SwitchesEnv),
 			cachedPendingUserDeletion(c.env.SEARCH_DB, userId),
 			// The header pill follows the Upgrade page's mode; if it cannot be read there is no mode and no pill
 			upgradeMode(c.env).then((m) => m.mode).catch((error) => {
@@ -144,6 +220,8 @@ export async function channelCreateGate(c: Context, next: Next) {
 			logger.info('[Creator] Channel create refused: the tier allows no channels', { userId, tierId: creator.tier?.id ?? null });
 			return invitationOnly(c);
 		}
+		const termsRefused = await enforceCreatorTerms(c, userId);
+		if (termsRefused) return termsRefused;
 		const max = creator.tier.unlimited ? null : creator.tier.maxChannels;
 		if (max !== null) {
 			reservation = await reserveChannelSlot(c.env.SEARCH_DB, userId, max);

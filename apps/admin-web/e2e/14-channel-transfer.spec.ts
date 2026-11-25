@@ -37,6 +37,17 @@ let creatorAccount: Account | undefined;
 const superToken = () => readTokens().superadmin;
 
 async function createChannel(label: string, token = superToken()): Promise<{ id: string; handle: string | null }> {
+  const accessRes = await fetch(`${VIDEOS_API_URL}/api/me/creator`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const termsVersion = ((await accessRes.json().catch(() => null)) as { result?: { termsVersion?: string } } | null)?.result?.termsVersion;
+  if (termsVersion) {
+    await fetch(`${VIDEOS_API_URL}/api/me/creator/terms`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ version: termsVersion }),
+    });
+  }
   const res = await fetch(`${VIDEOS_API_URL}/api/channels`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },

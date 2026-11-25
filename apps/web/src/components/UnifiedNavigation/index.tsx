@@ -14,7 +14,8 @@ import { useFitToViewport } from '@/hooks/useFitToViewport';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { mayCreateChannel, needsCreatorTerms, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { CreatorTermsGate } from '@/components/legal/CreatorTermsGate';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from '@/components/common/AppLink';
 import { login } from '@/lib/actions';
@@ -205,6 +206,7 @@ export function UnifiedNavigation() {
     ? creatorAccess.access.maxChannels
     : null;
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+  const [navTermsRequired, setNavTermsRequired] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   // The menu never leaves the screen (docs/design/NAV.md); refit when the view changes
   const menuRef = useFitToViewport<HTMLDivElement>(isOpen, view, isCreatingChannel);
@@ -267,17 +269,20 @@ export function UnifiedNavigation() {
 
   const handleCreateChannel = async () => {
     if (!newChannelName.trim() || creatingChannel) return;
-    const created = await createChannel({
-      name: newChannelName.trim(),
-    });
+    let termsBlocked = false;
+    const created = await createChannel(
+      { name: newChannelName.trim() },
+      { onTermsRequired: () => { termsBlocked = true; setNavTermsRequired(true); } },
+    );
     if (created) {
       setNewChannelName('');
+      setNavTermsRequired(false);
       setIsCreatingChannel(false);
       // Reload channels to show the newly created channel
       await reloadChannels();
     }
     // One more channel (or a refusal): the tier's channel allowance may have changed
-    void refreshCreatorAccess();
+    if (!termsBlocked) void refreshCreatorAccess();
   };
 
   // Scholars write articles in the CMS (SSO: no second sign-in), AlUmmahNowCMS docs/SCHOLARS.md
@@ -617,6 +622,18 @@ export function UnifiedNavigation() {
                     <Plus className="aun-menu-icon" aria-hidden="true" />
                     <span className="aun-menu-text">{t.navigation.createChannel}</span>
                   </button>
+                ) : needsCreatorTerms(creatorAccess) || navTermsRequired ? (
+                  <div className="aun-menu-form">
+                    <CreatorTermsGate
+                      compact
+                      autoFocus
+                      onAccepted={() => setNavTermsRequired(false)}
+                      onCancel={() => {
+                        setNavTermsRequired(false);
+                        setIsCreatingChannel(false);
+                      }}
+                    />
+                  </div>
                 ) : (
                   <div className="aun-menu-form">
                     <label className="aun-menu-label" htmlFor="nav-new-channel-name">

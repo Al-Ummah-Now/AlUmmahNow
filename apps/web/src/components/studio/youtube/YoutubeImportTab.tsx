@@ -38,6 +38,8 @@ import {
 } from '@/lib/youtube-import/api';
 import { addTakeoutFiles, emptyTakeoutSet, keyOfMatch, removeTakeoutFile, type TakeoutSet } from '@/lib/youtube-import/takeout';
 import { ImportUploader } from '@/lib/youtube-import/uploader';
+import { markCreatorTermsRequired, needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
 import {
   computeMatches,
   connectErrorKey,
@@ -77,6 +79,7 @@ function errorCodeOf(error: unknown): string | null {
 
 export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   const { t } = useLanguage();
+  const creator = useCreatorAccess();
   const text = t.studio.youtube;
   const lang = locale === 'ar' ? 'ar' : 'en';
 
@@ -106,6 +109,8 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   const [live, setLive] = useState<Map<string, LiveState>>(new Map());
   const [retrying, setRetrying] = useState<Set<string>>(new Set());
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsPaused, setTermsPaused] = useState(false);
   const [notice, setNotice] = useState('');
   const uploaderRef = useRef<ImportUploader | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -187,7 +192,11 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         // Switched off meanwhile: api.ts is already taking the user to the dashboard
         if (controller.signal.aborted || isFeatureOff(error)) return;
         const code = errorCodeOf(error);
-        if (code === 'uploads_by_invitation' || code === 'youtube_import_not_found') {
+        if (code === 'uploads_by_invitation' || code === 'youtube_import_not_found' || code === 'terms_required') {
+          if (code === 'terms_required') {
+            markCreatorTermsRequired();
+            setTermsOpen(true);
+          }
           setLoadError(text.errors[code]);
         } else {
           logger.error('[YtImport] Could not load the import', { channelId, error });
@@ -259,6 +268,12 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     });
   }, []);
 
+  const handleTermsRequired = useCallback(() => {
+    markCreatorTermsRequired();
+    setTermsPaused(true);
+    setTermsOpen(true);
+  }, []);
+
   const uploader = useCallback(() => {
     if (!current) return null;
     if (!uploaderRef.current) {
@@ -267,15 +282,25 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         channelId,
         takeout,
         onState: setItemLive,
+        onTermsRequired: handleTermsRequired,
         onServerChanged: () => void refreshRef.current().catch((error: unknown) => logger.warn('[YtImport] Refresh after a refusal failed', { error })),
       });
     }
     return uploaderRef.current;
-  }, [channelId, current, setItemLive, takeout]);
+  }, [channelId, current, handleTermsRequired, setItemLive, takeout]);
 
   useEffect(() => {
     uploaderRef.current?.setTakeout(takeout);
   }, [takeout]);
+
+  // Resume automatically if the creator accepted Terms in another tab or the switch was turned off
+  useEffect(() => {
+    if (!termsPaused) return;
+    if (creator.status === 'ready' && creator.access.termsAccepted !== false) {
+      setTermsPaused(false);
+      uploaderRef.current?.resume();
+    }
+  }, [creator, termsPaused]);
 
   // Leaving the page pauses the uploads (stored offsets stay; coming back resumes them)
   useEffect(() => () => void uploaderRef.current?.stop(), []);
@@ -299,7 +324,11 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     } catch (error) {
       if (isFeatureOff(error)) return;
       const code = errorCodeOf(error);
-      setConnectError(code === 'uploads_by_invitation' ? text.errors[code] : shown(text.errors.failed, error, 'oauth-start'));
+      if (code === 'terms_required') {
+        markCreatorTermsRequired();
+        setTermsOpen(true);
+      }
+      setConnectError(code === 'uploads_by_invitation' || code === 'terms_required' ? text.errors[code] : shown(text.errors.failed, error, 'oauth-start'));
       setConnecting(false);
     }
   };
@@ -345,6 +374,10 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
 
   const start = async () => {
     if (!current) return;
+    if (needsCreatorTerms(creator)) {
+      setTermsOpen(true);
+      return;
+    }
     setSaving(true);
     setStepError('');
     try {
@@ -370,6 +403,10 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
 
   const retry = async (item: YtImportItem) => {
     if (!current) return;
+    if (uploaderRef.current?.isPausedForTerms() || live.get(item.id)?.errorCode === 'terms_required') {
+      setTermsOpen(true);
+      return;
+    }
     setRetrying((prev) => new Set(prev).add(item.id));
     try {
       const updated = await retryItem(current.id, item.id);
@@ -552,6 +589,8 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
               done={done}
               retrying={retrying}
               onRetry={(item) => void retry(item)}
+              onReviewTerms={() => setTermsOpen(true)}
+              termsPaused={termsPaused}
               onCancel={() => setConfirmCancel(true)}
               resume={waitingForFiles ? <div className="mb-5"><FilesStep takeout={takeout} reading={reading} onAdd={(files) => void addResumeFiles(files)} onRemove={(name) => setTakeout(removeTakeoutFile(takeout, name))} matched={0} selected={0} resume /></div> : null}
               channelHref={channelPath(locale, { id: channelId, handle: channelHandle })}
@@ -573,6 +612,14 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         confirmLabel={text.progress.cancelConfirm}
         cancelLabel={text.progress.cancelKeep}
         testId="yt-cancel-dialog"
+      />
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          setTermsPaused(false);
+          uploaderRef.current?.resume();
+        }}
       />
     </div>
   );

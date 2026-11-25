@@ -25,6 +25,8 @@ export function creatorRefusalMessage(t: Pick<AppTranslations, 'creator'>, call:
   switch (call?.code) {
     case CREATOR_ERROR_CODES.uploadsByInvitation:
       return t.creator.uploadsOff;
+    case CREATOR_ERROR_CODES.termsRequired:
+      return t.creator.termsRequired;
     case CREATOR_ERROR_CODES.uploadLimit:
       return call.retryAfter && call.retryAfter > 0
         ? t.creator.limitReached.replace('{time}', formatWait(t, call.retryAfter, lang))

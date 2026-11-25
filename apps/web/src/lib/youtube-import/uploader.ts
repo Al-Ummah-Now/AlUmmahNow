@@ -21,7 +21,7 @@ import { zipEntryFileReader } from './zip-entry-reader';
 export const IMPORT_CONCURRENCY = 2;
 
 /** Refusal codes with their own message (t.studio.youtube.progress.errors). */
-const KNOWN_CODES = new Set(['upload_limit', 'uploads_by_invitation', 'youtube_item_taken', 'youtube_import_not_found']);
+const KNOWN_CODES = new Set(['upload_limit', 'uploads_by_invitation', 'terms_required', 'youtube_item_taken', 'youtube_import_not_found']);
 
 export function initiateErrorCode(result: Pick<ApiResult<unknown>, 'code'>): string {
   return result.code && KNOWN_CODES.has(result.code) ? result.code : 'generic';
@@ -32,6 +32,8 @@ export interface ImportUploaderOptions {
   channelId: string;
   takeout: TakeoutSet;
   onState: (itemId: string, state: LiveState | null) => void;
+  /** Called once when the server refuses with `terms_required`; the queue pauses until `resume()` is called. */
+  onTermsRequired?: () => void;
   /** The server's import moved on without this page (another tab, a cancel): read it again */
   onServerChanged?: () => void;
   /** Test seams */
@@ -54,6 +56,7 @@ export class ImportUploader {
   private queue: YtImportItem[] = [];
   private active = new Map<string, Pick<ResilientUpload, 'start' | 'abort'> | null>();
   private stopped = false;
+  private pausedForTerms = false;
   private takeout: TakeoutSet;
   private readonly deps: UploaderDeps;
 
@@ -71,9 +74,17 @@ export class ImportUploader {
     return this.active.has(itemId) || this.queue.some((i) => i.id === itemId);
   }
 
+  isPausedForTerms(): boolean {
+    return this.pausedForTerms;
+  }
+
   /** Queues items (already queued or running ones are ignored). */
   enqueue(items: readonly YtImportItem[]): void {
     if (this.stopped) return;
+    if (this.pausedForTerms) {
+      this.opts.onTermsRequired?.();
+      return;
+    }
     for (const item of items) {
       if (this.has(item.id)) continue;
       this.queue.push(item);
@@ -82,16 +93,27 @@ export class ImportUploader {
     this.pump();
   }
 
+  /** Resumes the queue after the creator accepts Terms. */
+  resume(): void {
+    if (this.stopped || !this.pausedForTerms) return;
+    this.pausedForTerms = false;
+    for (const item of this.queue) {
+      this.opts.onState(item.id, { phase: 'waiting' });
+    }
+    this.pump();
+  }
+
   /** Stops every upload (Cancel import, leaving the page). Unfinished uploads keep their stored offsets. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.pausedForTerms = false;
     this.queue = [];
     await Promise.all([...this.active.values()].map((u) => u?.abort().catch(() => undefined)));
     this.active.clear();
   }
 
   private pump(): void {
-    while (!this.stopped && this.active.size < IMPORT_CONCURRENCY && this.queue.length > 0) {
+    while (!this.stopped && !this.pausedForTerms && this.active.size < IMPORT_CONCURRENCY && this.queue.length > 0) {
       const item = this.queue.shift()!;
       this.active.set(item.id, null);
       void this.run(item).finally(() => {
@@ -134,6 +156,15 @@ export class ImportUploader {
     );
     if (!initiated.success || !initiated.result) {
       const code = initiateErrorCode(initiated);
+      if (code === 'terms_required') {
+        const firstPause = !this.pausedForTerms;
+        this.pausedForTerms = true;
+        // Put the item back at the front so resuming after acceptance retries it automatically
+        if (!this.queue.some((q) => q.id === item.id)) this.queue.unshift(item);
+        this.fail(item, code, Object.assign(new Error(initiated.error || 'terms_required'), { status: initiated.status }), 'initiate');
+        if (firstPause) this.opts.onTermsRequired?.();
+        return;
+      }
       if (code === 'youtube_item_taken') {
         // Already processing or imported (another tab, an earlier try): the server's state takes over
         onState(item.id, { phase: 'processing' });

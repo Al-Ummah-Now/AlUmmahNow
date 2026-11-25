@@ -20,7 +20,7 @@ import { holdReload, recoverFromVersionSkew } from '@/lib/version-skew/recovery'
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
 import { reportUploadError, uploadErrorMessage, type UploadErrorContext, type UploadStep } from '@/lib/upload/report-upload-error';
 import { creatorRefusalMessage, formatWait } from '@/lib/upload/friendly-error';
-import { refreshCreatorAccess } from '@/hooks/useCreatorAccess';
+import { markCreatorTermsRequired, refreshCreatorAccess } from '@/hooks/useCreatorAccess';
 import { MAX_BATCH_FILES, planBatchSelection, remainingSlots } from '@/lib/upload/batch-selection';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -312,6 +312,7 @@ export function useBatchUpload({
           if (refusal) {
             logger.warn('[useBatchUpload] Batch refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter, count: freshFiles.length });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
+            if (initiateResult.code === 'terms_required') markCreatorTermsRequired();
             throw new FriendlyUploadError(refusal);
           }
           initiateStatus = initiateResult.status;

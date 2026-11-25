@@ -7,6 +7,8 @@ import { apiErrorMessage } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/hooks/useLanguage';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { LiveApiError, isLiveOff, schedulePremiere } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
 import type { LiveOffers } from '@/lib/studio/nav';
@@ -26,6 +28,8 @@ export function PremiereForm({ locale, channelId, offers }: { locale: string; ch
   const [options, setOptions] = useState(() => optionsOf());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
+  const [problemCode, setProblemCode] = useState('');
+  const [termsOpen, setTermsOpen] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -35,6 +39,7 @@ export function PremiereForm({ locale, channelId, offers }: { locale: string; ch
     if (at === 'past') return setProblem(text.timeTooSoon);
     setBusy(true);
     setProblem('');
+    setProblemCode('');
     try {
       const stream = await schedulePremiere(video.id, { ...(title.trim() ? { title: title.trim() } : {}), scheduledStartTime: at.iso, ...offeredOptions(options, offers) });
       router.push(studioLiveHref(locale, channelId, stream.id));
@@ -43,7 +48,15 @@ export function PremiereForm({ locale, channelId, offers }: { locale: string; ch
       if (isLiveOff(error)) return router.refresh();
       const api = error instanceof LiveApiError ? error : null;
       if (!api?.code) logger.error('[StudioPremiere] Not scheduled', { videoId: video.id, error });
-      setProblem(apiErrorMessage(api?.code ?? '', api?.status ?? 0, lang));
+      if (api?.code === 'terms_required') {
+        markCreatorTermsRequired();
+        setProblemCode('terms_required');
+        setProblem(apiErrorMessage('terms_required', 403, lang));
+        setTermsOpen(true);
+      } else {
+        setProblemCode(api?.code ?? '');
+        setProblem(apiErrorMessage(api?.code ?? '', api?.status ?? 0, lang));
+      }
       setBusy(false);
     }
   };
@@ -75,7 +88,31 @@ export function PremiereForm({ locale, channelId, offers }: { locale: string; ch
       )}
       <StartFields value={start} onChange={setStart} required />
       <LiveOptionsFields value={options} onChange={setOptions} offers={offers} />
-      {problem && <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-premiere-problem">{problem}</p>}
+      {problem && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--fanous-color-error-text)]" data-testid="studio-premiere-problem" data-code={problemCode || undefined}>
+          <span>{problem}</span>
+          {problemCode === 'terms_required' && (
+            <button
+              type="button"
+              onClick={() => setTermsOpen(true)}
+              className="underline font-medium text-[var(--fanous-color-accent)]"
+              data-testid="studio-premiere-review-terms"
+            >
+              {t.upload.termsGateReviewAction}
+            </button>
+          )}
+        </div>
+      )}
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          if (problemCode === 'terms_required') {
+            setProblem('');
+            setProblemCode('');
+          }
+        }}
+      />
       <div>
         <Button type="submit" disabled={busy} className="min-h-11" data-testid="studio-premiere-schedule">{busy ? text.scheduling : text.schedule}</Button>
       </div>

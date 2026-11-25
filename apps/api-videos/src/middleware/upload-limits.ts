@@ -39,10 +39,11 @@
  * the limits; the tier gate itself applies everywhere.
  */
 import type { Context } from 'hono';
-import { channelRoleOf, CREATOR_ERROR_CODES, tierAllowsUploads, type CreatorTier } from '@al-ummah/shared-types';
+import { channelRoleOf, CREATOR_ERROR_CODES, CURRENT_CREATOR_TERMS_VERSION, featureGate, tierAllowsUploads, type CreatorTier, type SwitchesEnv } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { featureOff } from '../lib/features/off';
 import { recordLimitHit, resolveCreator, type ResolvedCreator } from '../lib/creatorTiers';
+import { hasAcceptedCreatorTerms } from '../lib/creatorTerms';
 import { getTusSessionKey, parseTusMetadata, type TusProxySession } from '../lib/bunny/tus';
 import { loadChannelRecord, memberMayActAs } from '../lib/channelAccess';
 import {
@@ -191,6 +192,55 @@ export function invitationOnly(c: Context) {
   return apiError(c, 403, CREATOR_ERROR_CODES.uploadsByInvitation, { error: UPLOADS_BY_INVITATION_MESSAGE });
 }
 
+export function termsRequired(c: Context) {
+  return apiError(c, 403, CREATOR_ERROR_CODES.termsRequired, {
+    error: 'Accept the Terms of Service and Community Guidelines before uploading, going live, publishing, or creating a channel',
+    termsVersion: CURRENT_CREATOR_TERMS_VERSION,
+  });
+}
+
+/**
+ * Enforces Creator Terms acceptance for the calling user when the `creatorTerms` switch is on.
+ * Returns null when allowed (including when the switch is off, with zero D1 reads),
+ * 403 `terms_required` when unaccepted/stale, or 503 fail-closed when the switch or D1 is unreadable.
+ * Per policy, super admins accept Terms like any other uploader; only staff imports and system jobs are exempt.
+ */
+export async function enforceCreatorTerms(c: Context, userId: string): Promise<Response | null> {
+  let termsSwitchOn = false;
+  try {
+    termsSwitchOn = (await featureGate((c.env ?? {}) as SwitchesEnv, 'creatorTerms')).on;
+  } catch (error) {
+    logger.error('[Uploads] creatorTerms switch lookup failed; refusing creator action', {
+      userId,
+      path: c.req.path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return unavailable(c);
+  }
+  if (!termsSwitchOn) return null;
+  const db = c.env?.SEARCH_DB as D1Database | undefined;
+  if (!db) {
+    logger.error('[Uploads] SEARCH_DB is not configured; refusing creator action', { userId, path: c.req.path });
+    return unavailable(c);
+  }
+  let accepted: boolean;
+  try {
+    accepted = await hasAcceptedCreatorTerms(db, userId);
+  } catch (error) {
+    logger.error('[Uploads] Creator terms lookup failed; refusing creator action', {
+      userId,
+      path: c.req.path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return unavailable(c);
+  }
+  if (!accepted) {
+    logger.info('[Uploads] Creator action refused: creator terms not accepted', { userId, path: c.req.path });
+    return termsRequired(c);
+  }
+  return null;
+}
+
 function unavailable(c: Context, retryAfter = RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS) {
   return apiError(c, 503, 'upload_limits_unavailable', { error: 'Uploads are briefly unavailable; try again shortly', retryAfter }, { 'Retry-After': String(retryAfter) });
 }
@@ -258,6 +308,10 @@ function creatorUploadMiddleware(options: GateOptions) {
       // Live is hidden without uploads, so its create answers like any other feature that is off
       if (/^\/api\/live-streams\/?$/.test(c.req.path)) return featureOff(c, 'live');
       return invitationOnly(c);
+    }
+    if (options.sessions) {
+      const termsRefused = await enforceCreatorTerms(c, userId);
+      if (termsRefused) return termsRefused;
     }
     c.set('creatorTier', creator);
     if (creator.tier.unlimited || !uploadLimitsEnforced(c.env ?? {})) return next();

@@ -8,17 +8,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { needsCreatorTerms, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
 
 export function StudioNoChannel({ locale }: { locale: string }) {
   const { t } = useLanguage();
   const router = useRouter();
+  const creator = useCreatorAccess();
   const { createChannel, creatingChannel, reloadChannels } = useMultiAccount();
   const [name, setName] = useState('');
+  const [termsOpen, setTermsOpen] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim() || creatingChannel) return;
-    const created = await createChannel({ name: name.trim() });
+    if (needsCreatorTerms(creator)) {
+      setTermsOpen(true);
+      return;
+    }
+    const created = await createChannel(
+      { name: name.trim() },
+      { onTermsRequired: () => setTermsOpen(true) },
+    );
     if (created) {
       await reloadChannels();
       router.push(`/${locale}/studio/${encodeURIComponent(created.id)}/dashboard`);
@@ -37,6 +48,7 @@ export function StudioNoChannel({ locale }: { locale: string }) {
           {t.studio.noChannel.create}
         </Button>
       </form>
+      <CreatorTermsDialog open={termsOpen} onOpenChange={setTermsOpen} />
     </main>
   );
 }

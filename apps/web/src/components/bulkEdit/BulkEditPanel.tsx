@@ -13,6 +13,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, Undo2, RotateCcw } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { CreatorTermsDialog } from '@/components/legal/CreatorTermsGate';
+import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { bulkEditVideos, undoBulkEdit } from '@/lib/api/videos';
@@ -103,6 +105,8 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
   const [run, setRun] = useState<RunState | null>(null);
   const [busyUndo, setBusyUndo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsRequired, setTermsRequired] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const subjects = useMemo(() => videos.map((v, i) => toSubject(v, i)), [videos]);
   const byId = useMemo(() => new Map(videos.map((v) => [v.id, v])), [videos]);
@@ -158,9 +162,17 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     result.outcomes.forEach((o, id) => outcomes.set(id, o));
     const succeeded = Array.from(outcomes.values()).filter((o) => o.success).length;
     const failed = Array.from(outcomes.values()).filter((o) => !o.success).length;
+    const hitTerms = Array.from(outcomes.values()).some((o) => !o.success && o.code === 'terms_required');
     setRun({ ...state, outcomes, progress: { done: result.done, total, succeeded, failed }, cancelled: result.cancelled });
     setStep('result');
     abortRef.current = null;
+    if (hitTerms) {
+      markCreatorTermsRequired();
+      setTermsRequired(true);
+      setTermsOpen(true);
+    } else {
+      setTermsRequired(false);
+    }
     logger.info('[BulkEditPanel] Bulk edit finished', { operationId: state.operationId, succeeded, failed, cancelled: result.cancelled });
     if (failed > 0 && succeeded === 0) reportError(new Error('Bulk edit failed for every video'), { shown: true, extra: { operationId: state.operationId, failed, reasons: failureReasons(outcomes.values()).map((r) => `${r.code}:${r.count}`).join(',') } });
     if (state.playlistOrder && !result.cancelled) {
@@ -231,9 +243,15 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     const restored = outcomes.filter((o) => o.success && o.code !== 'changed_since' && o.code !== 'nothing_to_undo').length;
     const kept = outcomes.filter((o) => o.code === 'changed_since').length;
     const failed = outcomes.filter((o) => !o.success).length;
+    const hitTerms = outcomes.some((o) => !o.success && o.code === 'terms_required');
     logger.info('[BulkEditPanel] Bulk edit undone', { operationId: run.operationId, restored, kept, failed });
     setRun((r) => (r ? { ...r, undo: { restored, kept, failed } } : r));
     setBusyUndo(false);
+    if (hitTerms) {
+      markCreatorTermsRequired();
+      setTermsRequired(true);
+      setTermsOpen(true);
+    }
     onApplied?.(outcomes.filter((o) => o.success).map((o) => o.videoId));
   };
 
@@ -353,6 +371,11 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
           )}
 
           <div className="flex flex-wrap gap-2">
+            {termsRequired && (
+              <button type="button" className="b b-primary" onClick={() => setTermsOpen(true)} data-testid="bulk-edit-review-terms">
+                {t.upload.termsGateReviewAction}
+              </button>
+            )}
             {(failedOutcomes.length > 0 || run.cancelled) && (
               <button type="button" className="b b-secondary" onClick={retryFailed} data-testid="bulk-edit-retry">
                 <RotateCcw aria-hidden="true" />
@@ -377,6 +400,13 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
           )}
         </div>
       )}
+      <CreatorTermsDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        onAccepted={() => {
+          setTermsRequired(false);
+        }}
+      />
     </BulkDrawer>
   );
 }

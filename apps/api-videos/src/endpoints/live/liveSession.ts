@@ -38,6 +38,7 @@ import { readChatStream } from '../../lib/live/chat';
 import { reminderCounts, shownEventType, switchOn } from '../../lib/live/events';
 import { hasReminder, remindable } from '../../lib/live/reminders';
 import { cancelPremiere, endPremiere, isPremiere, startPremiere } from '../../lib/live/premieres';
+import { enforceCreatorTerms } from '../../middleware/upload-limits';
 import { chatState } from './liveChat';
 import { PollAfterMs } from './pollAfter';
 
@@ -241,6 +242,8 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		// An ended stream only shows its last settings; anything that may provision a session is gated
 		let tier: SessionTier = {};
 		if (stream.status !== 'ended' && stream.status !== 'cancelled') {
+			const termsRefused = await enforceCreatorTerms(c, this.getUserId(c));
+			if (termsRefused) return termsRefused;
 			const gate = await liveTierGate(c, stream, 'ingest', this.getUserId(c));
 			if (gate instanceof Response) return gate;
 			tier = gate;
@@ -274,6 +277,8 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		if (!(await switchOn(c, key))) return featureOff(c, key);
 		// A channel being moved to another owner can't go live until the move finishes (wiki AUN-CHANNEL-CLAIM §3.3)
 		if (stream.channelId && (await openTransferJob(c.env as never, stream.channelId))) return fail(c, 409, 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.');
+		const termsRefused = await enforceCreatorTerms(c, this.getUserId(c));
+		if (termsRefused) return termsRefused;
 		if (isPremiere(stream)) {
 			const outcome = await startPremiere(c.env as never, stream.id, { early: true });
 			if (outcome !== 'started') return outcome === 'waiting' ? apiError(c, 409, 'premiere_not_startable') : apiError(c, 409, outcome === 'cancelled' ? 'premiere_video_not_ready' : 'premiere_started');

@@ -103,12 +103,13 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
 
     // Submit with properly formatted data
     try {
-      await onSubmit({
+      const submitted = await onSubmit({
         name: primaryText(names),
         nameLocalized: names,
         description: primaryText(descriptions),
         descriptionLocalized: descriptions
       });
+      if (submitted === false) return;
       // Reset form on success
       setFormData({
         name: '',

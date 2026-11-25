@@ -4,7 +4,7 @@
 // Hidden when off (wiki "Product rules → Hidden when off"): without a creator tier the channel
 // section shows no "by invitation" notice and no empty state that invites creating a channel.
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChannelManagementSection } from '../index';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
@@ -17,20 +17,29 @@ jest.mock('@/lib/logger-client', () => ({ logger: { debug: jest.fn(), info: jest
 jest.mock('@/components/channelManagement/DeleteChannelDialog', () => ({ CHANNEL_DELETED_PARAM: 'deleted', DeleteChannelDialog: () => null }));
 
 let mockChannels: Array<{ id: string; name: string; userId: string }> = [];
+const mockCreateChannel = jest.fn();
+let capturedOnTermsRequired: (() => void) | undefined;
 jest.mock('@/hooks/useChannels', () => ({
-  useChannels: () => ({ channels: mockChannels, isLoading: false, error: null, createChannel: jest.fn(), refetch: jest.fn() }),
+  useChannels: (opts?: { onTermsRequired?: () => void }) => {
+    capturedOnTermsRequired = opts?.onTermsRequired;
+    return { channels: mockChannels, isLoading: false, error: null, createChannel: mockCreateChannel, refetch: jest.fn() };
+  },
 }));
 
-type Access = { tier: { id: string; channels?: boolean; unlimited?: boolean } | null; canCreateChannel: boolean; maxChannels: number | null; pendingDeletion: boolean };
+type Access = { tier: { id: string; channels?: boolean; unlimited?: boolean } | null; canCreateChannel: boolean; maxChannels: number | null; pendingDeletion: boolean; termsAccepted?: boolean; termsVersion?: string };
 let mockAccess: Access;
 jest.mock('@/hooks/useCreatorAccess', () => ({
   useCreatorAccess: () => ({ status: 'ready', access: mockAccess }),
   mayCreateChannel: (state: { status: string; access: Access }) => state.status !== 'ready' || state.access.canCreateChannel,
+  needsCreatorTerms: (state: { status: string; access: Access }) => state.status === 'ready' && state.access.termsAccepted === false,
+  acceptCreatorTerms: jest.fn().mockResolvedValue({ ok: true }),
 }));
 
 describe('ChannelManagementSection, hidden when off', () => {
   beforeEach(() => {
     mockChannels = [];
+    mockCreateChannel.mockReset();
+    capturedOnTermsRequired = undefined;
     mockAccess = { tier: null, canCreateChannel: false, maxChannels: null, pendingDeletion: false };
   });
 
@@ -65,5 +74,26 @@ describe('ChannelManagementSection, hidden when off', () => {
     mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false };
     render(<ChannelManagementSection initialChannels={[]} />);
     expect(screen.getByRole('button', { name: /create channel/i })).toBeInTheDocument();
+  });
+
+  it('keeps CreateChannelDialog mounted with typed values and opens CreatorTermsDialog over it on 403 terms_required', async () => {
+    mockChannels = [{ id: 'c1', name: 'Noor', userId: 'u1' }];
+    mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false, termsAccepted: true };
+    mockCreateChannel.mockImplementation(async () => {
+      capturedOnTermsRequired?.();
+      return false;
+    });
+
+    render(<ChannelManagementSection initialChannels={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: /create channel/i }));
+
+    const nameInput = screen.getByLabelText(/channel name/i) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Preserved Draft Channel' } });
+    fireEvent.submit(nameInput.closest('form')!);
+
+    await waitFor(() => expect(screen.getByTestId('creator-terms-modal')).toBeInTheDocument());
+    // Form stays mounted with typed value intact, and no generic error toast is shown
+    expect((screen.getByLabelText(/channel name/i) as HTMLInputElement).value).toBe('Preserved Draft Channel');
+    expect(screen.queryByTestId('channel-toast')).toBeNull();
   });
 });
