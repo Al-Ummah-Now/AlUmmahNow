@@ -148,6 +148,19 @@ describe('channel move offers through the mounted app', () => {
 		});
 	}
 
+	it('the receiver picker opens on every admin: an empty q is no q', async () => {
+		const { get } = setup();
+		for (const [query, ids] of [['', [TO]], ['?q=', [TO]], ['?q=%20', [TO]], ['?q=of%20to', [TO]], ['?q=nobody', []]] as const) {
+			const res = await get(OWNER_NOW, `/api/channels/ch1/move-receivers${query}`);
+			assert.equal(res.status, 200, `${query} ${res.text}`);
+			assert.deepEqual(res.body.data.items.map((i: { userId: string }) => i.userId), ids, query);
+		}
+		assert.equal((await get(OWNER_NOW, `/api/channels/ch1/move-receivers?q=${'x'.repeat(201)}`)).status, 400);
+		// A page of my offers, and a cursor that is none
+		assert.equal((await get(TO, '/api/move-offers?side=received&cursor=9')).status, 200);
+		assert.equal((await get(TO, '/api/move-offers?side=received&cursor=x')).status, 400);
+	});
+
 	it('offering, accepting, declining and withdrawing are counted against a limiter, per account', async () => {
 		const { env, get } = setup();
 		const keys: string[] = [];
