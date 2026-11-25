@@ -11487,12 +11487,6 @@
                             "from": {
                               "type": "object",
                               "properties": {
-                                "userId": {
-                                  "type": [
-                                    "string",
-                                    "null"
-                                  ]
-                                },
                                 "name": {
                                   "type": [
                                     "string",
@@ -11513,7 +11507,6 @@
                                 }
                               },
                               "required": [
-                                "userId",
                                 "name",
                                 "avatarUrl"
                               ]
@@ -11521,12 +11514,6 @@
                             "to": {
                               "type": "object",
                               "properties": {
-                                "userId": {
-                                  "type": [
-                                    "string",
-                                    "null"
-                                  ]
-                                },
                                 "name": {
                                   "type": [
                                     "string",
@@ -11547,7 +11534,6 @@
                                 }
                               },
                               "required": [
-                                "userId",
                                 "name",
                                 "avatarUrl"
                               ]
@@ -11690,12 +11676,6 @@
                         "channelId": {
                           "type": "string"
                         },
-                        "fromUserId": {
-                          "type": "string"
-                        },
-                        "toUserId": {
-                          "type": "string"
-                        },
                         "status": {
                           "type": "string"
                         },
@@ -11709,8 +11689,6 @@
                       "required": [
                         "id",
                         "channelId",
-                        "fromUserId",
-                        "toUserId",
                         "status",
                         "createdAt",
                         "expiresAt"
@@ -11834,7 +11812,7 @@
           "Channels"
         ],
         "summary": "Who the owner can move the channel to",
-        "description": "🔒 Owner only. The channel’s current admins (channel roles), matched on name or @username. A channel moves only to one of its admins, picked by user id.",
+        "description": "🔒 Owner only. The channel’s current admins (channel roles), matched on name. A channel moves only to one of its admins, picked by user id.",
         "operationId": "get_ChannelMoveReceivers",
         "parameters": [
           {
@@ -11883,13 +11861,16 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
-                              },
-                              "userName": {
                                 "type": [
                                   "string",
                                   "null"
                                 ]
+                              },
+                              "nameLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
                               },
                               "avatarUrl": {
                                 "type": [
@@ -11901,7 +11882,6 @@
                             "required": [
                               "userId",
                               "name",
-                              "userName",
                               "avatarUrl"
                             ]
                           }
@@ -25517,8 +25497,31 @@
           "Channels"
         ],
         "summary": "My open channel offers",
-        "description": "🔒 Offers made to me and by me that are still open, newest first, 20 of each at most, with the channel and both people by name.",
+        "description": "🔒 Offers made to me and by me that are still open (being accepted included), newest first, with the channel and both people by name. 10 of each side; for more, `side` with that side’s cursor.",
         "operationId": "get_MyMoveOffers",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "received",
+                "sent"
+              ]
+            },
+            "required": false,
+            "name": "side",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,15}$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Open offers",
@@ -25610,12 +25613,6 @@
                               "from": {
                                 "type": "object",
                                 "properties": {
-                                  "userId": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
                                   "name": {
                                     "type": [
                                       "string",
@@ -25636,7 +25633,6 @@
                                   }
                                 },
                                 "required": [
-                                  "userId",
                                   "name",
                                   "avatarUrl"
                                 ]
@@ -25644,12 +25640,6 @@
                               "to": {
                                 "type": "object",
                                 "properties": {
-                                  "userId": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
                                   "name": {
                                     "type": [
                                       "string",
@@ -25670,7 +25660,6 @@
                                   }
                                 },
                                 "required": [
-                                  "userId",
                                   "name",
                                   "avatarUrl"
                                 ]
@@ -25775,12 +25764,6 @@
                               "from": {
                                 "type": "object",
                                 "properties": {
-                                  "userId": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
                                   "name": {
                                     "type": [
                                       "string",
@@ -25801,7 +25784,6 @@
                                   }
                                 },
                                 "required": [
-                                  "userId",
                                   "name",
                                   "avatarUrl"
                                 ]
@@ -25809,12 +25791,6 @@
                               "to": {
                                 "type": "object",
                                 "properties": {
-                                  "userId": {
-                                    "type": [
-                                      "string",
-                                      "null"
-                                    ]
-                                  },
                                   "name": {
                                     "type": [
                                       "string",
@@ -25835,7 +25811,6 @@
                                   }
                                 },
                                 "required": [
-                                  "userId",
                                   "name",
                                   "avatarUrl"
                                 ]
@@ -25862,11 +25837,25 @@
                               "viewerRole"
                             ]
                           }
+                        },
+                        "receivedCursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sentCursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "received",
-                        "sent"
+                        "sent",
+                        "receivedCursor",
+                        "sentCursor"
                       ]
                     }
                   },
@@ -25989,12 +25978,6 @@
                         "from": {
                           "type": "object",
                           "properties": {
-                            "userId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
                             "name": {
                               "type": [
                                 "string",
@@ -26015,7 +25998,6 @@
                             }
                           },
                           "required": [
-                            "userId",
                             "name",
                             "avatarUrl"
                           ]
@@ -26023,12 +26005,6 @@
                         "to": {
                           "type": "object",
                           "properties": {
-                            "userId": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
                             "name": {
                               "type": [
                                 "string",
@@ -26049,7 +26025,6 @@
                             }
                           },
                           "required": [
-                            "userId",
                             "name",
                             "avatarUrl"
                           ]

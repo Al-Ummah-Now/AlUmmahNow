@@ -56,9 +56,9 @@ import handleChannelAvatarUpdate from '../src/endpoints/channel/channelAvatarUpd
 import handleChannelCoverUpdate from '../src/endpoints/channel/channelCoverUpdate';
 import { footprintCompleteKey } from '../src/lib/privacy/footprints';
 import { OperationBudget } from '../src/lib/privacy/scan';
-import { channelMoveState, LAST_MOVE_SQL, OPEN_OFFER_SQL, readOfferView } from '../src/lib/channelMoveViews';
+import { channelMoveState, LAST_MOVE_SQL, offerViews, OPEN_OFFER_SQL, readOfferView } from '../src/lib/channelMoveViews';
 import { memberMayActAs } from '../src/lib/channelAccess';
-import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, stopMoveOffer } from '../src/lib/channelMoves';
+import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, stopMoveOffer, MOVE_OFFERS_PAGE, MY_OFFERS_SQL } from '../src/lib/channelMoves';
 import { createSqliteD1 } from './sqlite-d1';
 import { scheduleKey } from '../src/lib/videoSideRecords';
 
@@ -1418,7 +1418,7 @@ describe('channel actions', () => {
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: 'ch1', authTime: fresh }), 'offer_open');
 		const offered = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.notificationKey === 'channelMoveOffered');
 		assert.deepEqual([offered?.recipientUserId, offered?.params?.channel], [OTHER, 'Channel ch1']);
-		assert.equal((await myMoveOffers(env as never, OTHER)).received.length, 1);
+		assert.equal((await myMoveOffers(env as never, OTHER, 'received')).offers.length, 1);
 		// Someone else can't accept it; the admin does, and the move runs at once
 		await refused(acceptMoveOffer(env as never, offer.id, 'usr_viewer'), 'offer_not_found');
 		const { jobId } = await acceptMoveOffer(env as never, offer.id, OTHER);
@@ -2440,11 +2440,12 @@ describe('channel actions', () => {
 		assert.deepEqual(seen.body.data, {
 			id: offer.id, status: 'offered', createdAt: offer.created_at, expiresAt: offer.expires_at, respondedAt: null, keepContactEmail: true,
 			channel: { id: 'ch1', name: 'Channel ch1', nameLocalized: { ar: 'أذكار الصباح' }, handle: 'morning', avatarUrl: null },
-			from: { userId: OWNER, name: 'Bilal Ahmed', nameLocalized: { en: 'Bilal Ahmed', ar: 'بلال أحمد' }, avatarUrl: null },
-			to: { userId: OTHER, name: 'Amina Yusuf', avatarUrl: 'https://cdn.test/a.jpg' },
+			from: { name: 'Bilal Ahmed', nameLocalized: { en: 'Bilal Ahmed', ar: 'بلال أحمد' }, avatarUrl: null },
+			to: { name: 'Amina Yusuf', avatarUrl: 'https://cdn.test/a.jpg' },
 			viewerRole: 'to',
 		});
 		assert.ok(!JSON.stringify(seen.body).includes('@example.com'), 'no email');
+		assert.ok(!JSON.stringify(seen.body).includes('usr_'), 'no account id');
 		assert.equal((await as(OWNER)(path)).body.data.viewerRole, 'from');
 		for (const id of ['usr_stranger', 'usr_editor']) {
 			for (const p of [path, '/api/channels/ch1/move-offers']) {
@@ -2452,7 +2453,7 @@ describe('channel actions', () => {
 				assert.equal(refused.status, 404, `${id} ${p}`);
 				assert.deepEqual(Object.keys(refused.body).sort(), ['code', 'success']);
 			}
-			assert.deepEqual((await as(id)('/api/move-offers')).body.data, { received: [], sent: [] });
+			assert.deepEqual((await as(id)('/api/move-offers')).body.data, { received: [], sent: [], receivedCursor: null, sentCursor: null });
 		}
 		assert.equal((await as(OTHER)('/api/channels/ch1/move-offers')).status, 404, 'channel settings: the owner only');
 		assert.equal((await as(OWNER)('/api/move-offers/nope')).status, 404);
@@ -2476,14 +2477,97 @@ describe('channel actions', () => {
 		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), isDeleted: true }));
 		raw.profiles.store.delete(OWNER);
 		const gone = (await as(OTHER)(path)).body.data;
-		assert.deepEqual([gone.channel, gone.from], [{ id: 'ch1', name: null, handle: null, avatarUrl: null }, { userId: null, name: null, avatarUrl: null }]);
+		assert.deepEqual([gone.channel, gone.from], [{ id: 'ch1', name: null, handle: null, avatarUrl: null }, { name: null, avatarUrl: null }]);
 		assert.equal((await as('usr_stranger')(path)).status, 404, 'the owner of a deleted channel reads nothing');
 		// Every read through an index
-		for (const [sql, index] of [[OPEN_OFFER_SQL, 'idx_channel_move_offers'], [LAST_MOVE_SQL, 'idx_channel_move_offers_channel'], ['SELECT * FROM channel_move_offers WHERE id = ?', 'sqlite_autoindex_channel_move_offers_1']]) {
+		for (const [sql, index] of [[MY_OFFERS_SQL.to_user_id, 'idx_channel_move_offers_to'], [MY_OFFERS_SQL.from_user_id, 'idx_channel_move_offers_from'], [OPEN_OFFER_SQL, 'idx_channel_move_offers'], [LAST_MOVE_SQL, 'idx_channel_move_offers_channel'], ['SELECT * FROM channel_move_offers WHERE id = ?', 'sqlite_autoindex_channel_move_offers_1']]) {
 			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('x') as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
 			assert.match(plan, new RegExp(`SEARCH channel_move_offers USING (COVERING )?INDEX ${index}`), plan);
 			assert.ok(!/SCAN|TEMP B-TREE/.test(plan), plan);
 		}
+	});
+
+	it('my offers: accepting ones are open, pages are bounded and lose nothing, and expired ones end the list (CC-7)', async () => {
+		const { raw, env, db } = await setup({ profiles: { [OWNER]: profile(OWNER), [OTHER]: profile(OTHER) } });
+		const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+		const later = new Date(Date.now() + 86_400_000).toISOString();
+		const add = (n: number, status: string, over: { expires?: string; updated?: string } = {}) => {
+			raw.channels.store.set(`c${n}`, JSON.stringify(channel(`c${n}`)));
+			db.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, '2026', ?, ?)`).run(`o${n}`, `c${n}`, OWNER, OTHER, status, over.expires ?? later, over.updated ?? at(1));
+		};
+		// Oldest first: 15 that expired unsaid, then 24 open ones (every fourth being accepted), one accept that never finished, and closed ones
+		for (let n = 100; n < 115; n++) add(n, 'offered', { expires: at(1) });
+		for (let n = 3; n < 27; n++) add(n, n % 4 === 0 ? 'accepting' : 'offered');
+		add(27, 'accepting', { updated: at(11) });
+		for (const [i, status] of ['declined', 'moved', 'cancelled'].entries()) add(28 + i, status);
+		for (const [side, userId] of [['received', OTHER], ['sent', OWNER]] as const) {
+			const seen: string[] = [];
+			let cursor: string | null = null;
+			let pages = 0;
+			do {
+				const page: { offers: Array<{ id: string }>; cursor: string | null } = await myMoveOffers(env as never, userId, side, cursor);
+				assert.ok(page.offers.length <= MOVE_OFFERS_PAGE);
+				seen.push(...page.offers.map((o) => o.id));
+				cursor = page.cursor;
+				pages++;
+			} while (cursor && pages < 10);
+			assert.deepEqual(seen, Array.from({ length: 24 }, (_, i) => `o${26 - i}`), side);
+			assert.equal(pages, 3);
+		}
+		// One request reads each record once: at most a channel and a person per offer of a page, and the reader
+		const reads: string[] = [];
+		for (const name of ['channels', 'profiles'] as const) {
+			const get = raw[name].get.bind(raw[name]);
+			raw[name].get = (async (key: string) => { reads.push(`${name}/${key}`); return get(key); }) as typeof get;
+		}
+		const page = await myMoveOffers(env as never, OTHER, 'received');
+		const views = await offerViews(env as never, page.offers, OTHER);
+		assert.equal(views.length, page.offers.length);
+		assert.equal(new Set(reads).size, reads.length, 'no record twice');
+		assert.equal(reads.length, page.offers.length + 2);
+		// One row past the page is read, and no more
+		db.trace = [];
+		await myMoveOffers(env as never, OTHER, 'received');
+		assert.deepEqual(db.trace.map((q) => q.params.at(-1)), [MOVE_OFFERS_PAGE + 1]);
+		db.trace = null;
+		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${MY_OFFERS_SQL.to_user_id}`).all('x', 1, 1) as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.match(plan, /MERGE \(UNION ALL\)/, plan);
+		assert.equal((plan.match(/to_user_id=\? AND status=\? AND rowid<\?/g) ?? []).length, 2, plan);
+	});
+
+	it('a person without a name is never shown by id, handle or email; receivers are found by name in any language (CC-7)', async () => {
+		const { raw, env } = await setup({
+			profiles: {
+				[OWNER]: profile(OWNER, { channels: ['ch1'], displayName: '', userName: 'ownerhandle' }),
+				[OTHER]: profile(OTHER, { displayName: '', userName: 'otherhandle' }),
+				usr_named: profile('usr_named', { displayName: 'Amina', displayNameLocalized: { ar: 'أمينة' }, userName: 'zzz' }),
+				usr_going: profile('usr_going', { displayName: 'Going', adminDeletion: { at: '2026', by: 'usr_admin' } }),
+			},
+			channels: { ch1: channel('ch1', { members: [OTHER, 'usr_named', 'usr_going'].map((userId) => ({ userId, role: 'admin', addedBy: OWNER, addedAt: '2026' })) }) },
+		});
+		const names = async (q: string) => (await moveReceivers(env as never, 'ch1', OWNER, q)).map((r) => [r.userId, r.name]);
+		assert.deepEqual(await names(''), [[OTHER, null], ['usr_named', 'Amina']], 'nobody whose data is being deleted');
+		assert.deepEqual(await names('أمين'), [['usr_named', 'Amina']]);
+		assert.deepEqual([await names('zzz'), await names('otherhandle')], [[], []], 'a user has no handle');
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		await declineMoveOffer(env as never, offer.id, OTHER);
+		const params = raw.queue.messages.map((m: any) => m.payload).filter((p: any) => /^channelMove(Offered|Declined)$/.test(p?.notificationKey ?? '')).map((p: any) => p.params);
+		assert.deepEqual([params[0].owner, params[0].owner_ar, params[1].member, params[1].member_ar], ['Someone', 'أحد الأشخاص', 'Someone', 'أحد الأشخاص']);
+		assert.ok(!/usr_|handle|@example/.test(JSON.stringify([params[0].owner, params[1].member])));
+		assert.deepEqual((await readOfferView(env as never, offer.id, OTHER))!.from, { name: null, avatarUrl: null });
+	});
+
+	it('a channel hidden with its owner’s account is not moved (CC-7)', async () => {
+		const { raw, env } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		const stored = raw.channels.store.get('ch1')!;
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(stored), isHidden: true, suspensionHolds: [`user:${OWNER}`] }));
+		await assert.rejects(acceptMoveOffer(env as never, offer.id, OTHER), (e: unknown) => e instanceof MoveError && e.code === 'channel_suspended');
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(stored), suspensionHolds: [] }));
+		await acceptMoveOffer(env as never, offer.id, OTHER);
 	});
 
 	it('channel settings show an offer only while it is open (CC-7)', async () => {
@@ -2912,6 +2996,11 @@ describe('videos bans (users)', () => {
 	it('which requests a banned user may still make', () => {
 		assert.equal(isBlockedForBannedUser('GET', '/api/videos/v1'), false);
 		assert.equal(isBlockedForBannedUser('GET', '/api/profile'), true);
+		for (const path of ['/api/move-offers', '/api/move-offers/x', '/api/channels/ch1/move-offers', '/api/channels/ch1/move-receivers']) {
+			assert.equal(isBlockedForBannedUser('GET', path), true, path);
+			assert.equal(isBlockedForPendingDeletion('GET', path), true, path);
+		}
+		assert.equal(isBlockedForBannedUser('GET', '/api/channels/ch1'), false);
 		assert.equal(isBlockedForBannedUser('DELETE', '/api/privacy/data'), false);
 		assert.equal(isBlockedForBannedUser('POST', '/api/videos/upload/initiate'), true);
 		assert.equal(isBlockedForBannedUser('PUT', '/api/channels/ch1'), true);

@@ -9,11 +9,11 @@ import { ResponseError } from '../../lib/types';
 import { NO_STORE } from './channelMembers';
 import { apiError } from '../../lib/api-error';
 import { channelMoveState, offerViews, readOfferView } from '../../lib/channelMoveViews';
-import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, type MoveOfferRow } from '../../lib/channelMoves';
+import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MOVE_OFFERS_PAGE, MoveError, myMoveOffers, type MoveOfferPage, type MoveOfferRow } from '../../lib/channelMoves';
 
 const ChannelParams = z.object({ id: z.string().min(1).max(200).describe('Channel id') });
 const OfferParams = z.object({ id: z.string().min(1).max(200).describe('Offer id') });
-const Offer = z.object({ id: z.string(), channelId: z.string(), fromUserId: z.string(), toUserId: z.string(), status: z.string(), createdAt: z.string(), expiresAt: z.string() });
+const Offer = z.object({ id: z.string(), channelId: z.string(), status: z.string(), createdAt: z.string(), expiresAt: z.string() });
 const errors = {
 	'403': { description: 'move_not_owner or reauth_required', content: { 'application/json': { schema: ResponseError } } },
 	'404': { description: 'channel_not_found or offer_not_found', content: { 'application/json': { schema: ResponseError } } },
@@ -24,7 +24,7 @@ const errors = {
 	'503': { description: 'move_check_unavailable', content: { 'application/json': { schema: ResponseError } } },
 };
 
-const Person = z.object({ userId: z.string().nullable(), name: z.string().nullable(), nameLocalized: z.record(z.string(), z.string()).optional(), avatarUrl: z.string().nullable() });
+const Person = z.object({ name: z.string().nullable(), nameLocalized: z.record(z.string(), z.string()).optional(), avatarUrl: z.string().nullable() });
 const OfferView = z.object({
 	id: z.string(),
 	status: z.enum(['offered', 'accepting', 'moved', 'declined', 'cancelled', 'expired', 'stopped', 'refused']),
@@ -38,7 +38,7 @@ const OfferView = z.object({
 	viewerRole: z.enum(['from', 'to', 'owner']),
 });
 
-const view = (o: MoveOfferRow) => ({ id: o.id, channelId: o.channel_id, fromUserId: o.from_user_id, toUserId: o.to_user_id, status: o.status, createdAt: o.created_at, expiresAt: o.expires_at });
+const view = (o: MoveOfferRow) => ({ id: o.id, channelId: o.channel_id, status: o.status, createdAt: o.created_at, expiresAt: o.expires_at });
 
 /**
  * The codes these routes answer where the move's own code also belongs to other routes (Go live,
@@ -73,10 +73,10 @@ export class ChannelMoveReceivers extends AuthenticatedRoute {
 	schema = {
 		tags: ['Channels'],
 		summary: 'Who the owner can move the channel to',
-		description: '🔒 Owner only. The channel’s current admins (channel roles), matched on name or @username. A channel moves only to one of its admins, picked by user id.',
+		description: '🔒 Owner only. The channel’s current admins (channel roles), matched on name. A channel moves only to one of its admins, picked by user id.',
 		request: { params: ChannelParams, query: z.object({ q: z.string().max(200).default('') }) },
 		responses: {
-			'200': { description: 'The channel’s admins', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ items: z.array(z.object({ userId: z.string(), name: z.string(), userName: z.string().nullable(), avatarUrl: z.string().nullable() })) }) }) } } },
+			'200': { description: 'The channel’s admins', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ items: z.array(z.object({ userId: z.string(), name: z.string().nullable(), nameLocalized: z.record(z.string(), z.string()).optional(), avatarUrl: z.string().nullable() })) }) }) } } },
 			...errors,
 		},
 	};
@@ -117,15 +117,21 @@ export class MyMoveOffers extends AuthenticatedRoute {
 	schema = {
 		tags: ['Channels'],
 		summary: 'My open channel offers',
-		description: '🔒 Offers made to me and by me that are still open, newest first, 20 of each at most, with the channel and both people by name.',
-		responses: { '200': { description: 'Open offers', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ received: z.array(OfferView), sent: z.array(OfferView) }) }) } } } },
+		description: `🔒 Offers made to me and by me that are still open (being accepted included), newest first, with the channel and both people by name. ${MOVE_OFFERS_PAGE} of each side; for more, \`side\` with that side’s cursor.`,
+		request: { query: z.object({ side: z.enum(['received', 'sent']).optional(), cursor: z.string().regex(/^\d{1,15}$/).optional() }) },
+		responses: { '200': { description: 'Open offers', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ received: z.array(OfferView), sent: z.array(OfferView), receivedCursor: z.string().nullable(), sentCursor: z.string().nullable() }) }) } } } },
 	};
 	async handle(c: AppContext) {
+		const { query } = await this.getValidatedData<typeof this.schema>();
+		const none: MoveOfferPage = { offers: [], cursor: null };
 		try {
 			const userId = this.getUserId(c);
-			const { received, sent } = await myMoveOffers(c.env as never, userId);
-			const views = await offerViews(c.env as never, [...received, ...sent], userId);
-			return c.json({ success: true, data: { received: views.slice(0, received.length), sent: views.slice(received.length) } }, 200, NO_STORE);
+			// A cursor is one side's
+			const page = (side: 'received' | 'sent') => (query.side && query.side !== side ? none : myMoveOffers(c.env as never, userId, side, query.side ? query.cursor : null));
+			const [received, sent] = await Promise.all([page('received'), page('sent')]);
+			const views = new Map((await offerViews(c.env as never, [...received.offers, ...sent.offers], userId)).map((v) => [v.id, v]));
+			const of = (p: MoveOfferPage) => p.offers.flatMap((o) => views.get(o.id) ?? []);
+			return c.json({ success: true, data: { received: of(received), sent: of(sent), receivedCursor: received.cursor, sentCursor: sent.cursor } }, 200, NO_STORE);
 		} catch (error) {
 			return refused(c, error);
 		}
