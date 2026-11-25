@@ -311,7 +311,7 @@ describe('money', () => {
     const out = await proposeChange(ctx(), await actor('u-fin1'), { type: 'support.fees.set', payload: { key: 'fee', value: '290' }, reason: 'PayGood terms' });
     assert.equal(out.status, 'pending_approval');
     const id = out.status === 'pending_approval' ? out.request.id : '';
-    assert.equal(await waitingCount(ctx(), 'u-fin2'), 1);
+    assert.equal(await waitingCount(ctx(), 'u-fin2', true), 1);
     assert.equal(await waitingCount(ctx(), 'u-fin3'), 0, 'lacks support:providers');
     assert.equal(await waitingCount(ctx(), 'owner'), 0);
     assert.equal(await waitingCount(ctx(), 'u-sa2'), 0);
@@ -376,16 +376,18 @@ describe('rules and storage', () => {
       "SELECT COALESCE(MAX(seq), 0) + 1 FROM workflow_steps WHERE request_id = 'x'",
       "SELECT id FROM workflow_requests WHERE status = 'pending' AND expires_at <= 'x' ORDER BY expires_at LIMIT 50",
       "SELECT r.id FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = 'u' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = 'u' AND r.domain <> 'money' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = 'u' AND r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE r.proposed_by = 'u' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_requests r WHERE r.proposed_by = 'u' AND r.domain <> 'money' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_requests r WHERE r.proposed_by = 'u' AND r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE r.status IN ('pending', 'approved') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_requests r WHERE r.status IN ('pending', 'approved') AND r.domain <> 'money' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_requests r WHERE r.status IN ('pending', 'approved') AND r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE r.action_type = 'a' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_requests r WHERE r.action_type = 'a' AND r.domain <> 'money' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_requests r WHERE r.action_type = 'a' AND r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE 1 = 1 ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_requests r WHERE 1 = 1 AND r.domain <> 'money' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_requests r WHERE 1 = 1 AND r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT COUNT(*) FROM workflow_inbox WHERE user_id = 'u'",
+      "SELECT COUNT(*) FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = 'u' AND r.domain IN ('platform', 'people', 'governance')",
+      "SELECT r.id FROM workflow_requests r WHERE r.domain IN ('platform', 'people', 'governance') ORDER BY r.proposed_at DESC LIMIT 200",
       "SELECT user_id FROM workflow_inbox WHERE request_id = 'x'",
       "DELETE FROM workflow_inbox WHERE request_id = 'x'",
       "SELECT roles FROM support_finance_members WHERE user_id = 'u' AND removed_at IS NULL AND approved_by IS NOT NULL",
@@ -440,10 +442,10 @@ describe('review fixes (#1825)', () => {
     await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'a', value: '1' }, reason: 'r' });
     finance('u-fin9', ['support:providers']);
     await proposeChange(ctx(), await actor('u-fin1'), { type: 'support.fees.set', payload: { key: 'fee', value: '1' }, reason: 'r' });
-    assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open' })).items.length, 2);
-    assert.deepEqual((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'support.fees.set' })).items.map((i) => i.type), ['support.fees.set']);
+    assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open', money: true })).items.length, 2);
+    assert.deepEqual((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'support.fees.set', money: true })).items.map((i) => i.type), ['support.fees.set']);
     assert.deepEqual((await listRequests(ctx(), 'u-fin9', { view: 'waiting', type: 'features.set' })).items, []);
-    assert.equal((await listRequests(ctx(), 'u-fin9', { view: 'waiting', type: 'support.fees.set' })).items.length, 1);
+    assert.equal((await listRequests(ctx(), 'u-fin9', { view: 'waiting', type: 'support.fees.set', money: true })).items.length, 1);
     search.raw.exec("UPDATE workflow_requests SET status = 'approved' WHERE action_type = 'features.set'");
     assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'features.set' })).items.length, 1);
   });

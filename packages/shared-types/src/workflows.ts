@@ -25,6 +25,10 @@ export type WorkflowLocalized = { en: string; ar: string };
 
 export const WORKFLOW_DOMAINS = ['money', 'platform', 'people', 'governance'] as const;
 export type WorkflowDomain = (typeof WORKFLOW_DOMAINS)[number];
+/** Domains whose requests every admin role sees; a request in any other needs the right to see money (§8). */
+export const WORKFLOW_OPEN_DOMAINS: readonly WorkflowDomain[] = Object.freeze(WORKFLOW_DOMAINS.filter((d) => d !== 'money'));
+/** Whether a reader sees a request by the domain stored with it. */
+export const workflowDomainVisible = (domain: string, seesMoney: boolean): boolean => seesMoney || (WORKFLOW_OPEN_DOMAINS as readonly string[]).includes(domain);
 
 export const WORKFLOW_DOMAIN_LABELS: Readonly<Record<WorkflowDomain, WorkflowLocalized>> = Object.freeze({
   money: { en: 'Money', ar: 'المال' },

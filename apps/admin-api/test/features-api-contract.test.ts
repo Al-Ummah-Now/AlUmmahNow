@@ -164,6 +164,9 @@ describe('admin-web reads /api/features as admin-api answers it', () => {
     await t.env.SEARCH_DB.prepare("UPDATE workflow_requests SET domain = 'money'").run();
     assert.equal(await waiting('super_admin'), true);
     for (const roles of ['admin', 'moderator']) assert.equal(await waiting(roles), false, roles);
+    // The finance list sees money whatever their role, as on the Approvals pages
+    await t.env.SEARCH_DB.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('sa1', ?, 'x', 'y', '2026-11-23T00:00:00Z')").bind(JSON.stringify(['support:providers'])).run();
+    assert.equal(await waiting('moderator'), true);
   });
 
   it('any other refusal is left to the server message', async () => {

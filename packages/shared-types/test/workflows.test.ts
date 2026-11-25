@@ -221,3 +221,10 @@ test('a short diff shows what changes and the people it is about, whose ids are 
   assert.deepEqual(w.workflowFieldPeople(fields), ['u1', 'u2', 'u3']);
   assert.deepEqual(w.workflowFieldPeople(fields, 2), ['u1', 'u2']);
 });
+
+test('every domain but money is open; a domain nobody named is not', () => {
+  assert.deepEqual([...w.WORKFLOW_OPEN_DOMAINS], w.WORKFLOW_DOMAINS.filter((d) => d !== 'money'));
+  for (const d of w.WORKFLOW_DOMAINS) assert.equal(w.workflowDomainVisible(d, false), d !== 'money');
+  for (const d of ['', 'finance', 'MONEY']) assert.equal(w.workflowDomainVisible(d, false), false);
+  for (const d of [...w.WORKFLOW_DOMAINS, 'finance']) assert.equal(w.workflowDomainVisible(d, true), true);
+});

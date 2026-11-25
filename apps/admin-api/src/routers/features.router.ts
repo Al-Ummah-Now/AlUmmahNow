@@ -19,10 +19,10 @@ import {
   isFeatureKey,
   isSuperAdmin,
   errorLangOf,
-  hasContentPermission,
   readFeatureSwitches,
   readSwitchHistory,
   readSwitchRows,
+  workflowDomainVisible,
   writeFeatureSwitch,
   SwitchWriteError,
   DEFAULT_FEATURE_SWITCHES,
@@ -40,7 +40,7 @@ import { checkCanTurnOn, FEATURE_PRECONDITIONS, type FeaturePrecondition } from 
 import { apiError } from '../lib/api-error';
 import { proposeChange, ruleNeedsApproval, WorkflowError } from '../lib/workflows/engine';
 import { registerFeatureExecutor } from '../lib/workflows/feature-actions';
-import { workflowCtx } from './workflows.router';
+import { seesMoney as workflowSeesMoney, workflowCtx } from './workflows.router';
 import { stepUpAnswer } from '../middleware/passkeys';
 import type { AdminBindings, AuthContext } from '../base/types';
 import type { D1Database } from '../lib/types';
@@ -85,10 +85,10 @@ export function canToggle(callerRoles: readonly string[] | undefined, def: Featu
 
 /**
  * Switch changes waiting for approval, by feature: one read of the open-request lock index
- * (idx_workflow_requests_open). A failure only hides the pending marks. `money`: whether the reader sees
- * requests stored as money (as on the Approvals pages).
+ * (idx_workflow_requests_open). A failure only hides the pending marks. `seesMoney`: whether the reader
+ * sees money, asked only when a row is stored outside the open domains (as on the Approvals pages).
  */
-async function pendingSwitchChanges(db: D1Database | undefined, money: boolean): Promise<Map<FeatureKey, { requestId: string; enabled: boolean }>> {
+async function pendingSwitchChanges(db: D1Database | undefined, seesMoney: () => Promise<boolean>): Promise<Map<FeatureKey, { requestId: string; enabled: boolean }>> {
   const out = new Map<FeatureKey, { requestId: string; enabled: boolean }>();
   if (!db) return out;
   const keys = FEATURE_REGISTRY.map((d) => `features.set:feature:${d.key}`);
@@ -98,7 +98,7 @@ async function pendingSwitchChanges(db: D1Database | undefined, money: boolean):
       .bind(...keys)
       .all<{ id: string; target_id: string; payload: string; domain: string }>();
     for (const r of results ?? []) {
-      if (!isFeatureKey(r.target_id) || (r.domain === 'money' && !money)) continue;
+      if (!isFeatureKey(r.target_id) || (!workflowDomainVisible(r.domain, false) && !(await seesMoney()))) continue;
       const enabled = (JSON.parse(r.payload) as { enabled?: unknown }).enabled;
       out.set(r.target_id, { requestId: r.id, enabled: enabled === true });
     }
@@ -129,7 +129,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
     const actorIds = [...switches.rows.values()].map((r) => r.updatedBy);
     const names = await resolveNames(c.env.SEARCH_DB as never, { profiles: actorIds });
     const ready: FeatureStateReport['ready'] = { ...state.ready, newsletter: newsletterReady };
-    const pending = await pendingSwitchChanges(c.env.SEARCH_DB as never, hasContentPermission(roles(c), 'support:read'));
+    const pending = await pendingSwitchChanges(c.env.SEARCH_DB as never, async () => workflowSeesMoney(c, await workflowCtx(c.env as never).directory.actor(actorOf(c), roles(c) ?? [])));
     const items: FeatureItem[] = FEATURE_REGISTRY.map((def) => {
       const row = switches.rows.get(def.key);
       const isReady = ready[def.key] ?? true;
