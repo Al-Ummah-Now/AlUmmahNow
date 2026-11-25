@@ -39,6 +39,13 @@ export interface EncodeLadder {
 		evenDimensions: true;
 	};
 	audio: { codec: 'aac'; channels: 2 };
+	/**
+	 * Every rung is SDR BT.709, limited range, tagged so, whatever the source. An HDR source (HLG, PQ) is
+	 * tone mapped through these .cube files (apps/media/container/colour.mjs cubeText, SHA-256 of the
+	 * text). An encoder whose own tables differ, or that does not know this block, leaves such files to
+	 * the server, which refuses HDR rungs anyway.
+	 */
+	colour: { output: 'bt709'; range: 'tv'; version: number; cubes: { hlg: string; pq: string } };
 	hls: {
 		segmentType: 'fmp4';
 		playlistType: 'vod';
@@ -52,7 +59,7 @@ export interface EncodeLadder {
 }
 
 export const ENCODE_LADDER: EncodeLadder = {
-	version: 1,
+	version: 2,
 	rungs: [
 		{ name: '360p', short: 360, maxrate: 800_000, audio: 96_000 },
 		{ name: '480p', short: 480, maxrate: 1_400_000, audio: 128_000 },
@@ -73,6 +80,12 @@ export const ENCODE_LADDER: EncodeLadder = {
 		evenDimensions: true,
 	},
 	audio: { codec: 'aac', channels: 2 },
+	colour: {
+		output: 'bt709',
+		range: 'tv',
+		version: 1,
+		cubes: { hlg: '7e848ffd9f28621c3c38736ac96da2533ed0d311dd0d5f950cb4a1526624bd42', pq: '689cea89150f9590ffa0defb4232720875588830873f7bb57e26d56913b01d64' },
+	},
 	hls: {
 		segmentType: 'fmp4',
 		playlistType: 'vod',

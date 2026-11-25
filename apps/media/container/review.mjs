@@ -2,6 +2,8 @@
 // audio extracted in the transcode pass, uploaded under MEDIA_PRIVATE review/<videoId>/<rev>/.
 // Pure helpers (tested in test/review-extract.test.ts); server.mjs runs them.
 
+import { toJpegFilters, toSdrFilters } from './colour.mjs';
+
 /** Audio chunks of at most 10 minutes (the AUN-CAPTIONS format, Whisper's sweet spot). */
 export const AUDIO_CHUNK_SECONDS = 600;
 
@@ -28,7 +30,9 @@ export function framesArgs(o) {
 	const scene = Math.min(0.9, Math.max(0.05, Number(o.sceneThreshold) || 0.3));
 	const select = `select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,${o.interval})+gt(scene\\,${scene})'`;
 	const scale = "scale='if(gt(iw\\,ih)\\,min(512\\,iw)\\,-2)':'if(gt(iw\\,ih)\\,-2\\,min(512\\,ih))'";
-	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', `mpdecimate=hi=768:lo=320:frac=0.33,${select},${scale},showinfo`, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
+	// The reviewer sees the colours viewers get (colour.mjs), whatever the source is
+	const colour = [o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '', toJpegFilters].filter(Boolean).join(',');
+	return ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-an', '-vf', `mpdecimate=hi=768:lo=320:frac=0.33,${select},${scale},${colour},showinfo`, '-fps_mode', 'vfr', '-q:v', '5', `${o.out}/%06d.jpg`];
 }
 
 /** Frame times (ms) from showinfo's stderr lines, in output order. */

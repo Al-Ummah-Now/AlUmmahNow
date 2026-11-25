@@ -26,6 +26,7 @@ export const TRANSCODE_REASONS = [
   'container_silent',
   'no_video_stream',
   'source_changed',
+  'colour_unsupported',
   'encode_failed',
   'upload_failed',
   'cancelled',
@@ -67,6 +68,8 @@ export function transcodeErrorReason(raw: string | null | undefined): TranscodeR
     source_missing: 'source_missing',
     no_video_stream: 'no_video_stream',
     source_changed: 'source_changed',
+    dolby_vision_5: 'colour_unsupported',
+    colour_unsupported: 'colour_unsupported',
     cancelled: 'cancelled',
   };
   if (exact[head]) return exact[head]!;

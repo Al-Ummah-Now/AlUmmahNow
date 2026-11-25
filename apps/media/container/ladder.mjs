@@ -3,6 +3,10 @@
 // Rungs are named by the short side, so a Short (portrait) gets 360x640 …
 // 1080x1920 and a landscape video 640x360 … 1920x1080. Never above the source.
 
+import { SDR_TAGS, toJpegFilters, toSdrFilters, toWebpFilters } from './colour.mjs';
+
+/** @typedef {import('./colour.mjs').SdrPlan} SdrPlan */
+
 /** Short side → peak bitrate cap (bits/s). CRF 23 keeps lectures well under it. */
 export const RUNGS = [
 	{ name: '360p', short: 360, maxrate: 800_000, audio: 96_000 },
@@ -49,12 +53,16 @@ export function ladderFor(src) {
 /**
  * FFmpeg arguments for one pass: decode once, split, scale per rung, fMP4 HLS
  * with a master playlist. Output: <out>/<rung>/index.m3u8, init.mp4, seg_00001.m4s …
- * @param {{ input: string, out: string, rungs: ReturnType<typeof ladderFor>, hasAudio: boolean, fps?: number, preset?: string }} o
+ * Every rung is SDR BT.709 and tagged so (colour.mjs); `plan` says what the source needs for that, `cube`
+ * is the tone-mapping table of an HDR one.
+ * @param {{ input: string, out: string, rungs: ReturnType<typeof ladderFor>, hasAudio: boolean, fps?: number, preset?: string, plan?: SdrPlan, cube?: string }} o
  */
 export function ffmpegArgs(o) {
 	const n = o.rungs.length;
-	const split = `[0:v]split=${n}${o.rungs.map((_, i) => `[v${i}]`).join('')}`;
-	const scales = o.rungs.map((r, i) => `[v${i}]scale=w=${r.width}:h=${r.height}:flags=bicubic,format=yuv420p[v${i}o]`);
+	const top = o.rungs[n - 1];
+	const sdr = o.plan ? toSdrFilters(o.plan, { cube: o.cube, size: { width: top.width, height: top.height } }) : '';
+	const split = `[0:v]${sdr ? `${sdr},` : ''}split=${n}${o.rungs.map((_, i) => `[v${i}]`).join('')}`;
+	const scales = o.rungs.map((r, i) => `[v${i}]scale=w=${r.width}:h=${r.height}:flags=bicubic,format=yuv420p,${SDR_TAGS}[v${i}o]`);
 	const args = ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-filter_complex', [split, ...scales].join(';')];
 	// Cap at 30 fps above 30 (lectures; halves the work for 60 fps phone video)
 	const fps = o.fps && o.fps > 31 ? 30 : undefined;
@@ -154,8 +162,16 @@ export function posterTime(durationSeconds) {
 export function stillsArgs(o) {
 	const t = posterTime(o.durationSeconds).toFixed(2);
 	const pt = Math.min(posterTime(o.durationSeconds), Math.max(0, o.durationSeconds - 4)).toFixed(2);
+	const sized = (width) => `scale='min(${width},iw)':-2`;
+	// HDR: sized first, then tone mapped (a still costs one small frame); SDR: converted, then sized
+	const vf = (width, tail) => {
+		const sdr = o.plan ? toSdrFilters(o.plan, { cube: o.cube }) : '';
+		const hdr = o.plan && (o.plan.kind === 'hlg' || o.plan.kind === 'pq');
+		return (hdr ? [sized(width), sdr, tail] : [sdr, sized(width), tail]).filter(Boolean).join(',');
+	};
 	const frame = (width, quality, file, seek) => {
-		const tail = ['-frames:v', '1', '-vf', `scale='min(${width},iw)':-2`, '-q:v', quality, `${o.out}/${file}`];
+		// A seek past the last frame writes no file and would end well: abort_on makes it the failure it is
+		const tail = ['-abort_on', 'empty_output', '-frames:v', '1', '-vf', vf(width, toJpegFilters), '-q:v', quality, `${o.out}/${file}`];
 		return {
 			before: ['-hide_banner', '-nostdin', '-y', '-ss', t, '-i', o.input, ...tail],
 			after: ['-hide_banner', '-nostdin', '-y', '-i', o.input, '-ss', t, ...tail],
@@ -167,19 +183,19 @@ export function stillsArgs(o) {
 		thumbSmall: frame(640, '4', 'thumb_640.jpg', 'before'),
 		thumbFallbacks: [frame(1280, '3', 'thumb.jpg', 'after'), frame(1280, '3', 'thumb.jpg', 'first')],
 		thumbSmallFallbacks: [frame(640, '4', 'thumb_640.jpg', 'after'), frame(640, '4', 'thumb_640.jpg', 'first')],
-		preview: ['-hide_banner', '-nostdin', '-y', '-ss', pt, '-t', '4', '-i', o.input, '-an', '-vf', "fps=8,scale='min(320,iw)':-2", '-loop', '0', '-c:v', 'libwebp', '-quality', '60', `${o.out}/preview.webp`],
+		preview: ['-hide_banner', '-nostdin', '-y', '-ss', pt, '-t', '4', '-i', o.input, '-an', '-vf', `fps=8,${vf(320, toWebpFilters)}`, '-loop', '0', '-c:v', 'libwebp', '-quality', '60', `${o.out}/preview.webp`],
 	};
 }
 
 /**
- * True when ffmpeg failed because the seek left it with no frame to write (exit 234: "No filtered frames
+ * True when ffmpeg failed because the seek left it with no frame to write ("nothing was encoded" under abort_on, or exit 234: "No filtered frames
  * for output stream" / "Nothing was written into output file ... received no packets"). Only this is worth
  * another way of seeking; a missing binary, a timeout, a full disk or an undecodable stream fails at once
  * with its own error.
  */
 export function isNoFrameFailure(error) {
 	const text = Array.isArray(error?.stderrTail) ? error.stderrTail.join('\n') : '';
-	return typeof error?.exitCode === 'number' && /No filtered frames|Nothing was written into output file|received no packets/i.test(text);
+	return typeof error?.exitCode === 'number' && /No filtered frames|nothing was encoded|Nothing was written into output file|received no packets/i.test(text);
 }
 
 /**

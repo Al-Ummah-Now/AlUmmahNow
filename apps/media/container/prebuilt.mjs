@@ -7,6 +7,7 @@
 //
 // Pure (unit-tested in apps/media/test/prebuilt.test.ts); server.mjs does the I/O and ffprobe.
 
+import { isHdrColour, WIDE } from './colour.mjs';
 import { GOP_SECONDS, SEGMENT_SECONDS, playlistFiles } from './ladder.mjs';
 
 /** A segment may run this much past SEGMENT_SECONDS (keyframes land on GOP boundaries). */
@@ -202,15 +203,31 @@ export function contentMatches(o) {
 }
 
 /**
+ * What is wrong with an uploaded rung's colour, or null. Published rungs are SDR BT.709 and never carry
+ * HDR tags (importers have encoded an HDR source to 8 bits with its tags kept, which browsers on HDR
+ * screens blow out). A rung without tags is taken only for a source that is BT.709 itself.
+ * @param {(import('./colour.mjs').Colour & { hdrData?: boolean }) | undefined} c
+ * @param {import('./colour.mjs').SdrPlan | undefined} plan of the source
+ * @returns {'hdr' | 'colour' | null}
+ */
+export function renditionColour(c, plan) {
+	if (c && (c.hdrData || isHdrColour(c))) return 'hdr';
+	const untouched = !plan || plan.kind === 'as_is';
+	if (!c || !c.matrix) return c?.full || (c?.primaries && WIDE.includes(c.primaries)) || !untouched ? 'colour' : null;
+	if (c.matrix !== 'bt709' || c.full || (c.primaries && WIDE.includes(c.primaries))) return 'colour';
+	return null;
+}
+
+/**
  * Check what the creator uploaded against the ladder for this source.
  * @param {{
  *   ladder: { name: string, width: number, height: number, maxrate: number, audio: number }[],
- *   source: { durationSeconds: number, hasAudio: boolean },
+ *   source: { durationSeconds: number, hasAudio: boolean, plan?: import('./colour.mjs').SdrPlan },
  *   rungs: {
  *     name: string,
  *     playlist: ReturnType<typeof parseMediaPlaylist>,
  *     sizes: Record<string, number>,
- *     probe: { video?: { codec: string, width: number, height: number, pixFmt: string, profile?: string, level?: number, keyframeSeconds?: number[] }, audio?: { codec: string, channels: number } } | null,
+ *     probe: { video?: { codec: string, width: number, height: number, pixFmt: string, profile?: string, level?: number, keyframeSeconds?: number[], colour?: import('./colour.mjs').Colour & { hdrData?: boolean } }, audio?: { codec: string, channels: number } } | null,
  *   }[],
  * }} o
  * @returns {{ ok: true } | { ok: false, reason: string, rung?: string }}
@@ -230,6 +247,8 @@ export function verifyRenditions(o) {
 		if (!v) return fail('no_video');
 		if (v.codec !== 'h264') return fail('video_codec');
 		if (v.pixFmt !== 'yuv420p') return fail('pixel_format');
+		const colour = renditionColour(v.colour, o.source.plan);
+		if (colour) return fail(colour);
 		if (v.width !== want.width || v.height !== want.height) return fail('size');
 		if (o.source.hasAudio) {
 			const a = rung.probe?.audio;

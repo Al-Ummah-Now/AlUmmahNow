@@ -49,6 +49,7 @@ import {
 	type TranscodeJobEvent,
 	type TranscodeResult,
 	type TranscodeSourceFacts,
+	transcodeErrorReason,
 	type TranscodeJobMessage,
 	type VideoR2State,
 	type VideoVisibilityFields,
@@ -348,6 +349,7 @@ async function recordSourceFacts(env: Pick<MediaEnv, 'SEARCH_DB'>, ev: Transcode
 
 /** What the file is, for its creator; nothing when it does hold a video (the failure is then ours to look at). */
 function issueCodeOf(ev: TranscodeJobEvent): { code?: UploadIssueCode } {
+	if (transcodeErrorReason(ev.error) === 'colour_unsupported') return { code: 'colour_unsupported' };
 	const facts = sanitizeSourceFacts(ev.sourceFacts);
 	const verdict = facts && sourceVerdict(facts);
 	return isUploadIssueCode(verdict) ? { code: verdict } : {};

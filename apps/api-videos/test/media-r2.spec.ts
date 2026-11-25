@@ -597,10 +597,10 @@ describe('failure details', () => {
 
 	it('a failed video says what its file is, as a code its creator\'s app words', async () => {
 		const { uploaderProcessingIssue } = await import('../src/lib/transformations');
-		const codeOf = async (sourceFacts: unknown) => {
+		const codeOf = async (sourceFacts: unknown, error = 'no_video_stream') => {
 			const { env, raw, videos } = setup({ uploadStatus: 'processing', media: { providers: { r2: { ref: ID, status: 'pending' } } } });
 			await enqueueTranscode(env, ID, 'upload');
-			await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error: 'no_video_stream', final: true, sourceFacts } as never));
+			await applyJobEvent(env, undefined, ev(raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage, { type: 'failed', error, final: true, sourceFacts } as never));
 			assert.equal(videos.read(ID).processingIssue.kind, 'encode_failed');
 			return videos.read(ID).processingIssue.code;
 		};
@@ -609,6 +609,7 @@ describe('failure details', () => {
 		assert.equal(await codeOf({ ...AUDIO, streams: [] }), 'unreadable');
 		assert.equal(await codeOf({ ...AUDIO, streams: [{ kind: 'video', codec: 'h264' }] }), undefined);
 		assert.equal(await codeOf(undefined), undefined);
+		assert.equal(await codeOf({ ...AUDIO, streams: [{ kind: 'video', codec: 'hevc' }] }, 'dolby_vision_5'), 'colour_unsupported');
 		const video = (code: string) => ({ userId: 'u1', processingIssue: { kind: 'encode_failed', code } });
 		assert.equal(uploaderProcessingIssue(video('audio_only'), null, 'u1').processingIssue?.code, 'audio_only');
 		assert.equal(uploaderProcessingIssue(video('x'), null, 'u1').processingIssue?.code, undefined);
