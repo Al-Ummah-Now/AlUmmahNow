@@ -66,7 +66,7 @@ export const REPORT_OUTCOMES_BY_TYPE: Readonly<Record<ReportableEntityType, read
 const DELETES_THROUGH_ADMIN: ReadonlySet<ReportableEntityType> = new Set(['comment', 'post']);
 
 /** Why an outcome is not offered: the type has no such action, the item is not there, or the admin's role. */
-export type ReportOutcomeReason = 'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission';
+export type ReportOutcomeReason = 'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission' | 'taken_down';
 
 export interface ReportOutcomeOption {
   action: ModerationAction;
@@ -81,11 +81,14 @@ export function reportOutcomeOptions(input: {
   item: Pick<AdminLookupItem, 'found' | 'parentType'> | null;
   /** Who made it is known, from the item or from the copy on its reports: they can be banned though it is gone. */
   ownerKnown?: boolean;
+  /** Under a takedown, and the reader is not a super admin (they can only dismiss the report). */
+  takenDown?: boolean;
   may: (permission: 'users:manage' | 'content:delete') => boolean;
 }): ReportOutcomeOption[] {
-  const { type, item, may, ownerKnown = false } = input;
+  const { type, item, may, ownerKnown = false, takenDown = false } = input;
   const reasonFor = (action: ModerationAction): ReportOutcomeReason | null => {
     if (action === 'dismissed') return null;
+    if (takenDown) return 'taken_down';
     if (!(REPORT_OUTCOMES_BY_TYPE[type] ?? []).includes(action)) return 'not_for_type';
     if (type === 'comment' && action === 'deleted' && item?.parentType === 'post') return 'not_for_post_comment';
     if (item?.found === false && !(action === 'banned' && ownerKnown)) return 'item_gone';
@@ -147,8 +150,12 @@ export interface ReportQueueCounts {
   actionNeeded: number;
   /** Open reports (across those items). */
   openReports: number;
+  /** Open child safety reports among them. */
+  openChildSafety: number;
   /** Closed reports. */
   history: number;
+  /** Each is counted up to 1000; true: there are more than one of them says. */
+  capped?: boolean;
 }
 
 export interface ReportPerson {
@@ -161,6 +168,8 @@ export interface ReportPerson {
 export interface ReportedItemSummary {
   type: ReportableEntityType;
   id: string;
+  /** Under a takedown, and the reader is not a super admin: nothing else about it is shown. */
+  takenDown?: boolean;
   /** Title, or a text excerpt for comments and posts; null when unknown. */
   title: string | null;
   /** Video (or post) id of a reported comment, stream id of a reported chat message (for its link). */
@@ -300,6 +309,10 @@ export interface AdminLookupItem {
   parentId: string | null;
   /** comment: what `parentId` is. Absent for every other type. */
   parentType?: 'video' | 'post';
+  /** channel: the channel's id, when it was asked for by its @handle. */
+  canonicalId?: string;
+  /** live_chat: anyone may read the message now (a guest could have seen it). */
+  openToAnyone?: boolean;
   channelId: string | null;
   channelName: string | null;
   ownerId: string | null;

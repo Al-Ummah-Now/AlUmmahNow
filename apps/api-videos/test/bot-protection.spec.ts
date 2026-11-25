@@ -91,7 +91,7 @@ describe('requireHuman', () => {
 		assert.equal((await app({}).call('/api/moderation/reports', { method: 'POST' })).status, 201);
 	});
 
-	it('reports: always need a token', async () => {
+	it('always: every request needs a token', async () => {
 		const { call, points } = app(enforce);
 		const refused = await call('/api/moderation/reports', { method: 'POST' });
 		assert.equal(refused.status, 403);
@@ -101,6 +101,25 @@ describe('requireHuman', () => {
 		assert.equal((await call('/api/moderation/reports', { method: 'POST', headers: { 'X-Turnstile-Token': TEST_TOKEN } })).status, 201);
 		assert.equal((await call('/api/moderation/reports', { method: 'POST', headers: { 'X-Turnstile-Token': TEST_TOKEN } })).status, 201);
 		assert.deepEqual(points.map((p) => p[2]), ['turnstile_missing', 'turnstile_pass', 'turnstile_pass']);
+	});
+
+	it("a signed-in person's report is never checked; signed out it is", async () => {
+		const a = (userId: string | null) => {
+			const w = new Hono();
+			w.use('*', async (c, next) => {
+				if (userId) c.set('auth' as never, { userId } as never);
+				await next();
+			});
+			w.use('/r', requireHuman('videos.report', 'signed_out'));
+			w.post('/r', (c) => c.json({ success: true }, 201));
+			w.get('/check', (c) => humanCheckStatus(c));
+			return w;
+		};
+		assert.equal((await a('usr_1').request('/r', { method: 'POST' }, enforce as never)).status, 201);
+		assert.equal((await a(null).request('/r', { method: 'POST' }, enforce as never)).status, 403);
+		const required = async (kind: string) => ((await (await a('usr_1').request(`/check?kind=${kind}`, {}, enforce as never)).json()) as any).result.required;
+		assert.equal(await required('report'), false);
+		assert.equal(await required('tier_request'), true);
 	});
 
 	it('first comment: needs a token once, then the account is remembered', async () => {
@@ -172,7 +191,7 @@ describe('bot-guard core', () => {
 });
 
 describe('GET /api/me/human-check', () => {
-	it('required until the account is verified; reports always; off and native never', async () => {
+	it('required until the account is verified; tier requests always; reports, off and native never', async () => {
 		const HUMAN_VERIFIED = kv();
 		const { call } = app({ ...enforce, HUMAN_VERIFIED, NATIVE_CLIENT_IDS: 'native-1' });
 		const read = async (q: string, headers: Record<string, string> = {}) =>
@@ -180,7 +199,8 @@ describe('GET /api/me/human-check', () => {
 		assert.deepEqual(await read('kind=comment'), { required: true, siteKey: TEST_SITE_KEYS.pass });
 		HUMAN_VERIFIED.store.set('h:usr_1', '1');
 		assert.equal((await read('kind=comment')).required, false);
-		assert.equal((await read('kind=report')).required, true);
+		assert.equal((await read('kind=report')).required, false, 'the account is signed in');
+		assert.equal((await read('kind=tier_request')).required, true);
 		assert.equal((await read('kind=report', { Authorization: `Bearer ${jwt({ aud: 'native-1' })}` })).required, false);
 		assert.deepEqual((await (await app({}).call('/api/me/human-check?kind=report')).json() as { result: unknown }).result, { required: false, siteKey: null });
 	});

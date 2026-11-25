@@ -1,5 +1,5 @@
-import type { ErrorStatus, NeedsActionStatus } from '@al-ummah/shared-types';
-import { canManageErrors } from '@/lib/roles';
+import { isChildSafetyErrorKey, type ErrorStatus, type NeedsActionStatus } from '@al-ummah/shared-types';
+import { canManageErrors, isSuperAdmin } from '@/lib/roles';
 
 export type GroupAction = 'acknowledge' | 'resolve' | 'ignore' | 'reopen' | 'assignMe' | 'unassign' | 'note';
 export type ItemAction = 'retry' | 'dismiss';
@@ -19,9 +19,10 @@ export function groupActionsFor(role: string | undefined, group: { status: Error
   return actions;
 }
 
-/** Retry (only when admin-api has a retry for it) and Dismiss, for open items and errors:manage. */
-export function itemActionsFor(role: string | undefined, item: { status: NeedsActionStatus; can_retry: boolean }): ItemAction[] {
+/** Retry (only when admin-api has a retry for it) and Dismiss, for open items and errors:manage; child safety and CSAM case items for super admins. */
+export function itemActionsFor(role: string | undefined, item: { status: NeedsActionStatus; can_retry: boolean; item_key?: string }): ItemAction[] {
   if (!canManageErrors(role)) return [];
+  if (item.item_key && isChildSafetyErrorKey(item.item_key) && !isSuperAdmin(role)) return [];
   if (item.status !== 'open' && item.status !== 'retrying') return [];
   return item.can_retry ? ['retry', 'dismiss'] : ['dismiss'];
 }

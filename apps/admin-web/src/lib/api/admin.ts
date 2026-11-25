@@ -1,9 +1,9 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportOutcomeOption, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
-import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
+import type { ReportDetail, TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
 import type {
   ListReportsParams,
   ListReportsResponse,
@@ -52,6 +52,7 @@ export async function listReports(params?: ListReportsParams): Promise<ListRepor
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.set('status', params.status);
   if (params?.entity_type) searchParams.set('entity_type', params.entity_type);
+  if (params?.reason) searchParams.set('reason', params.reason);
   if (params?.entity_id) searchParams.set('entity_id', params.entity_id);
   if (params?.reporter_id) searchParams.set('reporter_id', params.reporter_id);
   if (params?.limit) searchParams.set('limit', String(params.limit));
@@ -61,8 +62,8 @@ export async function listReports(params?: ListReportsParams): Promise<ListRepor
   return fetchAdmin<ListReportsResponse>(`/api/moderation/reports${query ? `?${query}` : ''}`);
 }
 
-export async function getReport(reportId: string): Promise<{ report: Report; outcomes: ReportOutcomeOption[] }> {
-  return fetchAdmin<{ report: Report; outcomes: ReportOutcomeOption[] }>(`/api/moderation/reports/${encodeURIComponent(reportId)}`);
+export async function getReport(reportId: string): Promise<ReportDetail> {
+  return fetchAdmin<ReportDetail>(`/api/moderation/reports/${encodeURIComponent(reportId)}`);
 }
 
 /**

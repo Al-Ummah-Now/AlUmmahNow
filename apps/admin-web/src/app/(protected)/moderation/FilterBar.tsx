@@ -6,12 +6,13 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
-import { ENTITY_TYPES, REPORT_STATUSES, entitySuggestKind } from './filters';
+import { ENTITY_TYPES, REPORT_REASONS, REPORT_STATUSES, entitySuggestKind } from './filters';
 import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
 interface FilterBarProps {
   status?: string;
   entityType?: string;
+  reason?: string;
   entityId?: string;
   reporterId?: string;
 }
@@ -19,9 +20,9 @@ interface FilterBarProps {
 /**
  * GET form so filters live in the URL (shareable, back-button friendly).
  * Selects submit on change; the Apply button covers keyboard users who
- * prefer to set both filters first.
+ * prefer to set multiple filters first.
  */
-export function FilterBar({ status, entityType, entityId, reporterId }: FilterBarProps) {
+export function FilterBar({ status, entityType, reason, entityId, reporterId }: FilterBarProps) {
   const { t } = useLanguage();
 
   const submitOnChange = (e: SelectChangeEvent) => {
@@ -42,6 +43,26 @@ export function FilterBar({ status, entityType, entityId, reporterId }: FilterBa
       className="flex flex-wrap items-end gap-3"
       data-testid="moderation-filters"
     >
+      <div className="flex flex-col gap-1">
+        <label htmlFor="filter-reason" className="text-sm text-fg-muted">
+          {t('moderation.reasonFilter')}
+        </label>
+        <Select
+          id="filter-reason"
+          name="reason"
+          defaultValue={reason ?? ''}
+          onChange={submitOnChange}
+          className={fieldClass}
+          key={`reason-${reason ?? ''}`}
+        >
+          <option value="">{t('moderation.allReasons')}</option>
+          {REPORT_REASONS.map((value) => (
+            <option key={value} value={value}>
+              {translateDynamic(t, 'reason', value)}
+            </option>
+          ))}
+        </Select>
+      </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="filter-status" className="text-sm text-fg-muted">
           {t('moderation.statusFilter')}
@@ -114,7 +135,7 @@ export function FilterBar({ status, entityType, entityId, reporterId }: FilterBa
       >
         {t('moderation.applyFilters')}
       </button>
-      {(status || entityType || entityId || reporterId) && (
+      {(status || entityType || reason || entityId || reporterId) && (
         <Link href="/moderation" className={`${linkClass} py-2`}>
           {t('moderation.clearFilters')}
         </Link>

@@ -49,6 +49,7 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/csam/:id/retry', what: 'CSAM takedown retry' },
   { method: 'POST', path: '/api/csam/:id/reported', what: 'CSAM reported to NCMEC (starts the retention clock)' },
   { method: 'GET', path: '/api/csam/:id/files/:name', what: 'CSAM evidence download' },
+  { method: 'GET', path: '/api/csam/report-evidence/:type/:itemId', what: 'CSAM evidence download (a reported item)' },
   { method: 'POST', path: '/api/csam/:id/hold', what: 'CSAM legal hold' },
   { method: 'PUT', path: '/api/csam/settings', what: 'CSAM evidence retention' },
   { method: 'POST', path: '/api/csam/settings/webhook-secret', what: 'CSAM webhook secret' },

@@ -25232,7 +25232,8 @@
                       "comment",
                       "channel",
                       "livestream",
-                      "live_chat"
+                      "live_chat",
+                      "post"
                     ]
                   },
                   "entityId": {
@@ -25242,6 +25243,7 @@
                   "reason": {
                     "type": "string",
                     "enum": [
+                      "child_safety",
                       "inappropriate",
                       "spam",
                       "harassment",
@@ -25252,6 +25254,7 @@
                   },
                   "description": {
                     "type": "string",
+                    "maxLength": 5000,
                     "description": "Additional details about the report"
                   }
                 },
@@ -25291,7 +25294,8 @@
                                 "comment",
                                 "channel",
                                 "livestream",
-                                "live_chat"
+                                "live_chat",
+                                "post"
                               ]
                             },
                             "entityId": {
@@ -25306,6 +25310,7 @@
                             "reason": {
                               "type": "string",
                               "enum": [
+                                "child_safety",
                                 "inappropriate",
                                 "spam",
                                 "harassment",

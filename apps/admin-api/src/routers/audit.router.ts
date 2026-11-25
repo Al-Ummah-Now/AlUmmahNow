@@ -33,7 +33,7 @@ auditRouter.get('/', async (c) => {
   const query = cleanAuditQuery(c.req.query());
   try {
     const page = await readAuditFeed(c.env.REPORTS_DB, query);
-    const names = await resolveNames(c.env, cleanNamesRequest(idsOfFeed(page.items)), true);
+    const names = await resolveNames(c.env, cleanNamesRequest(idsOfFeed(page.items)), true, c.get('auth')?.roles);
     const body: AdminAuditFeedPage = { ...page, names };
     return c.json({ success: true, result: body });
   } catch (error) {
@@ -54,5 +54,5 @@ auditRouter.get('/actions', async (c) => {
 
 namesRouter.post('/', async (c) => {
   const body = await c.req.json().catch(() => null);
-  return c.json({ success: true, result: await resolveNames(c.env, cleanNamesRequest(body), canRead(c)) });
+  return c.json({ success: true, result: await resolveNames(c.env, cleanNamesRequest(body), canRead(c), c.get('auth')?.roles) });
 });

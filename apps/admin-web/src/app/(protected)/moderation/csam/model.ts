@@ -2,7 +2,7 @@
  * CSAM cases in the admin (docs/specs/CSAM-RESPONSE.md): the pure parts of the pages, kept apart
  * from React and Next.js so they are unit tested (test/csam-page.test.ts).
  */
-import { CSAM_CASE_STATUSES, NCMEC_CYBERTIPLINE_URL, type CsamCaseDetail, type CsamCaseStatus, type CsamReportFacts } from '@al-ummah/shared-types';
+import { CSAM_CASE_STATUSES, NCMEC_CYBERTIPLINE_URL, parseCsamUrl, type CsamCaseDetail, type CsamCaseStatus, type CsamReportFacts } from '@al-ummah/shared-types';
 import { passkeyRedirectFor } from '@/lib/passkeys';
 
 export { NCMEC_CYBERTIPLINE_URL };
@@ -170,4 +170,11 @@ export function caseActions(c: Pick<CsamCaseDetail, 'status' | 'evidenceDeletedA
 /** A report id as admin-api accepts it (CyberTipline report numbers). */
 export function validReportId(id: string): boolean {
   return /^[A-Za-z0-9-]{3,64}$/.test(id.trim());
+}
+
+/** The URL the intake starts with (`?prefill=`): one of ours that the intake's parser maps, or nothing. */
+export function prefillOf(value: string | string[] | undefined): string {
+  if (typeof value !== 'string' || value.length > 2000 || /\s/.test(value) || !/^https:\/\//.test(value)) return '';
+  const target = parseCsamUrl(value);
+  return target && target.kind !== 'other' ? value : '';
 }

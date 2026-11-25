@@ -10,6 +10,7 @@
  *   PUT  /settings            { retentionDays } (365–3650)
  *   POST /settings/webhook-secret   a new Cloudflare webhook secret, shown once
  *   GET  /log                 settings changes
+ *   GET  /report-evidence/:type/:id   the kept copy of a reported item's records (attachment)
  *   GET  /:id                 the case (job, evidence list, report facts, freeze)
  *   POST /:id/map             hand mapping of an unmapped case
  *   POST /:id/retry           the takedown (and freeze) again
@@ -29,6 +30,7 @@ import {
   caseDetail,
   CsamError,
   downloadEvidence,
+  downloadReportEvidence,
   generateWebhookSecret,
   listCases,
   mapCase,
@@ -95,6 +97,7 @@ app.get('/:id/log', async (c) => {
   await caseExists(c);
   return ok(c, { items: await accessLog(c.env.REPORTS_DB, c.req.param('id')) });
 });
+app.get('/report-evidence/:type/:itemId', async (c) => downloadReportEvidence(c.env, c.req.param('type'), c.req.param('itemId'), actorOf(c)));
 app.get('/:id/files/:name', async (c) => downloadEvidence(c.env, c.req.param('id'), c.req.param('name'), actorOf(c)));
 
 async function caseExists(c: C): Promise<void> {

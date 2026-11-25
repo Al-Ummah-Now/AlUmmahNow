@@ -17,6 +17,8 @@ import {
   TIER_REQUEST_ERRORS,
   TIER_REQUEST_LIMITS,
   ADMIN_DELETION_KINDS,
+  type AdminCommentRow,
+  type AdminPostRow,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
   FEATURE_REGISTRY,
@@ -78,6 +80,7 @@ import { apiError } from '../lib/api-error';
 import { proposeChange, ruleNeedsApproval, WorkflowError } from '../lib/workflows/engine';
 import { planBulk, readTierOp, runTierOp, tierScope, TierOpError, DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID } from '../lib/workflows/tier-actions';
 import { workflowCtx } from './workflows.router';
+import { hiddenFrom, isHiddenItem, withoutHidden } from '../lib/moderation/takedown';
 import { stepUpAnswer } from '../middleware/passkeys';
 import { logger } from '../lib/logger';
 import { inviteStatusByUser, pendingInvitesByTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
@@ -190,6 +193,23 @@ async function jobsFor(c: C, targetKind: AdminJob['targetKind'], targetId: strin
 // Who may do what (admin-web shows only the controls a role may use)
 // ---------------------------------------------------------------------------
 
+/** A list page without the items under a takedown (super admins see them). */
+async function visible<T extends { id: string }, P extends { items: T[] }>(c: C, type: ReportEntity, page: P & { items: T[] }): Promise<P> {
+  return Array.isArray(page?.items) ? { ...page, items: await withoutHidden(c.env.REPORTS_DB as never, auth(c)?.roles, type, page.items) } : page;
+}
+
+const UNDER_REVIEW = 'Under review by the child safety team; only super admins can open it';
+
+/** The page of one item under a takedown, and every change to it, are for super admins. */
+for (const [type, param, path] of [['channel', 'id', '/channels/:id'], ['channel', 'id', '/channels/:id/*'], ['livestream', 'id', '/live/streams/:id/*'], ['video', 'id', '/videos/:id'], ['video', 'id', '/videos/:id/*'], ['post', 'postId', '/posts/:channelId/:postId'], ['comment', 'commentId', '/videos/:videoId/comments/:commentId']] as const) {
+  app.use(path, async (c, next) => {
+    const id = c.req.param(param) ?? '';
+    if ((await hiddenFrom(c.env.REPORTS_DB as never, auth(c)?.roles, [{ type, id }])).size === 0) return next();
+    logger.warn('[Content] Item under a takedown refused', { userId: actorOf(c), type, id });
+    return apiError(c, 403, 'forbidden', { error: UNDER_REVIEW });
+  });
+}
+
 app.get('/permissions', (c) => ok(c, { permissions: contentPermissionsFor(auth(c)?.roles) }));
 
 app.get('/audit', async (c) => {
@@ -209,7 +229,7 @@ app.get('/analytics/visits', async (c) => ok(c, await videos(c, '/analytics/visi
 app.get('/channels', async (c) => {
   const query = await withReportedIds(c, 'channel', c.req.query());
   if (!query) return ok(c, emptyPage(c.req.query()));
-  return ok(c, await withReportCounts(c, 'channel', await videos<AdminPage<AdminChannelRow>>(c, '/channels', { query })));
+  return ok(c, await withReportCounts(c, 'channel', await visible(c, 'channel', await videos<AdminPage<AdminChannelRow>>(c, '/channels', { query }))));
 });
 
 app.get('/channels/:id', async (c) => {
@@ -217,7 +237,7 @@ app.get('/channels/:id', async (c) => {
   const channel = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
   const [counts, reports, audit, jobs] = await Promise.all([
     openReportCounts(c.env.REPORTS_DB, 'channel', [id]),
-    recentReports(c.env.REPORTS_DB, [{ type: 'channel', ids: [id] }]),
+    recentReports(c.env.REPORTS_DB, [{ type: 'channel', ids: [id] }], auth(c)?.roles),
     readAudit(c.env.REPORTS_DB, { kind: 'channel', id, limit: 20 }),
     jobsFor(c, 'channel', id),
   ]);
@@ -393,7 +413,7 @@ app.delete('/channels/:id', async (c) => {
 app.get('/videos', async (c) => {
   const query = await withReportedIds(c, 'video', c.req.query());
   if (!query) return ok(c, emptyPage(c.req.query()));
-  return ok(c, await withReportCounts(c, 'video', await videos<AdminPage<AdminVideoRow>>(c, '/videos', { query })));
+  return ok(c, await withReportCounts(c, 'video', await visible(c, 'video', await videos<AdminPage<AdminVideoRow>>(c, '/videos', { query }))));
 });
 
 app.get('/videos/:id', async (c) => {
@@ -401,7 +421,7 @@ app.get('/videos/:id', async (c) => {
   const video = await videos<AdminVideoDetail>(c, `/videos/${encodeURIComponent(id)}`);
   const [counts, reports, audit, jobs] = await Promise.all([
     openReportCounts(c.env.REPORTS_DB, 'video', [id]),
-    recentReports(c.env.REPORTS_DB, [{ type: 'video', ids: [id] }]),
+    recentReports(c.env.REPORTS_DB, [{ type: 'video', ids: [id] }], auth(c)?.roles),
     readAudit(c.env.REPORTS_DB, { kind: 'video', id, limit: 20 }),
     jobsFor(c, 'video', id),
   ]);
@@ -455,7 +475,7 @@ app.delete('/videos/:id', async (c) => {
 // Comments, playlists, community posts
 // ---------------------------------------------------------------------------
 
-app.get('/comments', async (c) => ok(c, await videos(c, '/comments', { query: c.req.query() })));
+app.get('/comments', async (c) => ok(c, await visible(c, 'comment', await videos<AdminPage<AdminCommentRow>>(c, '/comments', { query: c.req.query() }))));
 
 app.delete('/videos/:videoId/comments/:commentId', async (c) => {
   need(c, 'content:delete');
@@ -475,7 +495,7 @@ app.delete('/playlists/:id', async (c) => {
     videos(c, `/playlists/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
 });
 
-app.get('/posts', async (c) => ok(c, await videos(c, '/posts', { query: c.req.query() })));
+app.get('/posts', async (c) => ok(c, await visible(c, 'post', await videos<AdminPage<AdminPostRow>>(c, '/posts', { query: c.req.query() }))));
 
 app.delete('/posts/:channelId/:postId', async (c) => {
   need(c, 'content:delete');
@@ -539,7 +559,7 @@ app.get('/users/:id', async (c) => {
     recentReports(c.env.REPORTS_DB, [
       { type: 'channel', ids: user.channels.map((ch) => ch.id) },
       { type: 'video', ids: owned.items.map((v) => v.id) },
-    ]),
+    ], auth(c)?.roles),
     readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 20 }),
     jobsFor(c, 'user', id),
     savedEmailLanguage(c, id),
@@ -682,7 +702,19 @@ app.post('/users/:id/delete-data', async (c) => {
 // it. "Delete permanently now" only queues it for the next cleanup run.
 // ---------------------------------------------------------------------------
 
-app.get('/deletions', async (c) => ok(c, await videos<AdminDeletionPage>(c, '/deletions', { query: c.req.query() })));
+app.get('/deletions', async (c) => {
+  const page = await videos<AdminDeletionPage>(c, '/deletions', { query: c.req.query() });
+  const hidden = await hiddenFrom(c.env.REPORTS_DB as never, auth(c)?.roles, page.items.flatMap((d) => (d.kind === 'user' ? [] : [{ type: d.kind, id: d.id }])));
+  return ok(c, { ...page, items: page.items.filter((d) => !isHiddenItem(hidden, d.kind, d.id)) });
+});
+
+/** Restoring or purging an item under a takedown is for super admins. */
+app.use('/deletions/:kind/:id/*', async (c, next) => {
+  const { kind, id } = c.req.param();
+  if (!isDeletionKind(kind) || kind === 'user' || (await hiddenFrom(c.env.REPORTS_DB as never, auth(c)?.roles, [{ type: kind, id }])).size === 0) return next();
+  logger.warn('[Content] Item under a takedown refused', { userId: actorOf(c), type: kind, id });
+  return apiError(c, 403, 'forbidden', { error: UNDER_REVIEW });
+});
 
 /** The permission a restore needs on top of content:delete (a user's data also needs users:manage). */
 const restoreNeeds = (kind: string) => (kind === 'user' ? (['content:delete', 'users:manage'] as const) : (['content:delete'] as const));
@@ -1169,7 +1201,9 @@ app.get('/live/sessions', async (c) => {
   if (q.status === 'active' || q.status === 'recent') query.status = q.status;
   if (isLiveProvider(q.provider)) query.provider = q.provider;
   if (q.limit && /^\d{1,3}$/.test(q.limit)) query.limit = q.limit;
-  return ok(c, await videos(c, '/live/sessions', { query }));
+  const page = await videos<{ items?: { stream_id?: string | null }[] }>(c, '/live/sessions', { query });
+  const hidden = await hiddenFrom(c.env.REPORTS_DB as never, auth(c)?.roles, (page.items ?? []).flatMap((s) => (s.stream_id ? [{ type: 'livestream' as const, id: s.stream_id }] : [])));
+  return ok(c, hidden.size === 0 ? page : { ...page, items: page.items!.filter((s) => !s.stream_id || !isHiddenItem(hidden, 'livestream', s.stream_id)) });
 });
 
 app.get('/live/compare', async (c) => {

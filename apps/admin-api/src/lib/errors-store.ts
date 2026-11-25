@@ -11,6 +11,7 @@ import {
   fingerprint as fingerprintOf,
   hash64,
   idsFromRoute,
+  isChildSafetyErrorKey,
   normalizeRoute,
   workerNameFor,
   type ErrorContext,
@@ -143,6 +144,8 @@ export interface IngestOutcome {
   spiking: ErrorGroupRow[];
   /** Groups reopened because they recurred in a newer release */
   reopened: string[];
+  /** Child safety items that are new or came back (moderation/safetyMail.ts); their groups are in no other alert */
+  safety: { groupId: string; key: string; itemUrl: string | null }[];
 }
 
 const id = (prefix: string) => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
@@ -245,7 +248,7 @@ function anonymisedEvent(e: ErrorEventInput): ErrorEventInput {
 }
 
 export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[], ctx: IngestContext): Promise<IngestOutcome> {
-  const out: IngestOutcome = { accepted: 0, rateLimited: 0, created: [], spiking: [], reopened: [] };
+  const out: IngestOutcome = { accepted: 0, rateLimited: 0, created: [], spiking: [], reopened: [], safety: [] };
   const now = ctx.now;
   const nowIso = now.toISOString();
   const random = ctx.random ?? Math.random;
@@ -357,8 +360,10 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
     }
 
     // Needs-action item: one row per key; a repeat updates it and reopens it if it was closed
+    const childSafety = !!e.action && isChildSafetyErrorKey(e.action.key);
     if (e.action) {
       const reopenedItem = await upsertActionItem(db, gid, environment, e, nowIso, ctx.trustedRetry !== false);
+      if (reopenedItem && childSafety && !e.test) out.safety.push({ groupId: gid, key: e.action.key, itemUrl: e.action.itemUrl ?? null });
       if (reopenedItem && (group.status === 'resolved' || group.status === 'acknowledged') && !e.test) {
         await db.batch([
           db.prepare("UPDATE error_groups SET status = 'new', regressed_at = ?, updated_at = ? WHERE id = ?").bind(nowIso, nowIso, gid),
@@ -404,7 +409,7 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
     }
 
     if (isNew) out.created.push(group);
-    else if (!e.test && (await isSpiking(db, gid, hour))) out.spiking.push(group);
+    else if (!childSafety && !e.test && (await isSpiking(db, gid, hour))) out.spiking.push(group);
   }
   return out;
 }
@@ -494,8 +499,9 @@ export async function listGroupActions(db: D1Database, groupId: string, includeC
   return rows.results ?? [];
 }
 
-export async function getActionItem(db: D1Database, actionId: string): Promise<ErrorActionRow | null> {
-  return db.prepare('SELECT * FROM error_actions WHERE id = ?').bind(actionId).first<ErrorActionRow>();
+export async function getActionItem(db: D1Database, actionId: string, childSafety = true): Promise<ErrorActionRow | null> {
+  const item = await db.prepare('SELECT * FROM error_actions WHERE id = ?').bind(actionId).first<ErrorActionRow>();
+  return item && !childSafety && isChildSafetyErrorKey(item.item_key) ? null : item;
 }
 
 /** Records a retry attempt (or a dismissal) on an item and in the group's activity log. */
@@ -523,8 +529,8 @@ export async function recordActionAttempt(
 }
 
 /** Open needs-action items (nav badge). */
-export async function openActionCount(db: D1Database): Promise<number> {
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM error_actions a JOIN error_groups g ON g.id = a.group_id WHERE a.status IN ('open', 'retrying') AND g.test = 0").first<{ n: number }>();
+export async function openActionCount(db: D1Database, childSafety = true): Promise<number> {
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM error_actions a JOIN error_groups g ON g.id = a.group_id WHERE a.status IN ('open', 'retrying') AND g.test = 0${childSafety ? '' : ` AND ${NOT_CHILD_SAFETY}`}`).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
@@ -554,6 +560,9 @@ function formatSymbolicated(e: ErrorEventInput, frames: StackFrame[]): string {
 export const ERROR_SORTS = ['last_seen', 'count', 'users', 'first_seen'] as const;
 export type ErrorSort = (typeof ERROR_SORTS)[number];
 
+/** SQL: the group (alias g) is not one of the child safety and CSAM cases' groups, which only super admins see. */
+export const NOT_CHILD_SAFETY = "NOT EXISTS (SELECT 1 FROM error_actions cs WHERE cs.group_id = g.id AND (cs.item_key GLOB 'child-safety-*' OR cs.item_key GLOB 'csam[-:]*'))";
+
 export interface ErrorGroupFilters {
   app?: string;
   environment?: string;
@@ -569,6 +578,8 @@ export interface ErrorGroupFilters {
   sort?: ErrorSort;
   /** Only groups with open needs-action items */
   needsAction?: boolean;
+  /** Child safety groups too: super admins only */
+  childSafety?: boolean;
   /** Only groups with a sample from this client surface (request origin, migration 0040) */
   origin?: string;
   limit: number;
@@ -645,6 +656,7 @@ export async function listErrorGroups(db: D1Database, f: ErrorGroupFilters, now 
     args.push(f.viewerId);
   } else if (f.assignee === 'unassigned') where.push('g.assignee_id IS NULL');
   if (!f.includeTest) where.push('g.test = 0');
+  if (!f.childSafety) where.push(NOT_CHILD_SAFETY);
   if (f.needsAction) where.push("EXISTS (SELECT 1 FROM error_actions a WHERE a.group_id = g.id AND a.status IN ('open', 'retrying'))");
   if (f.origin) {
     // A group's samples are bounded (ERROR_SAMPLE_LIMITS.maxPerGroup) and read by idx_error_events_group
@@ -703,8 +715,9 @@ export async function hourlyCounts(db: D1Database, groupId: string, hours: numbe
   });
 }
 
-export async function getErrorGroup(db: D1Database, groupId: string): Promise<ErrorGroupRow | null> {
-  return db.prepare('SELECT * FROM error_groups WHERE id = ?').bind(groupId).first<ErrorGroupRow>();
+/** `childSafety` false: null for the child safety groups too. */
+export async function getErrorGroup(db: D1Database, groupId: string, childSafety = true): Promise<ErrorGroupRow | null> {
+  return db.prepare(`SELECT g.* FROM error_groups g WHERE g.id = ?${childSafety ? '' : ` AND ${NOT_CHILD_SAFETY}`}`).bind(groupId).first<ErrorGroupRow>();
 }
 
 /** Samples of a group per client surface (request origin): the detail page's "Where it came from". */
@@ -735,12 +748,13 @@ export async function listGroupActivity(db: D1Database, groupId: string): Promis
 }
 
 /** Group and event of a reference a user quoted. */
-export async function findByRef(db: D1Database, ref: string): Promise<{ group_id: string; event_id: string | null } | null> {
-  return db.prepare('SELECT group_id, event_id FROM error_refs WHERE ref = ?').bind(ref).first<{ group_id: string; event_id: string | null }>();
+export async function findByRef(db: D1Database, ref: string, childSafety = true): Promise<{ group_id: string; event_id: string | null } | null> {
+  const hit = await db.prepare('SELECT group_id, event_id FROM error_refs WHERE ref = ?').bind(ref).first<{ group_id: string; event_id: string | null }>();
+  return hit && !childSafety && !(await getErrorGroup(db, hit.group_id, false)) ? null : hit;
 }
 
-export async function errorCounts(db: D1Database): Promise<Record<ErrorStatus, number>> {
-  const rows = await db.prepare('SELECT status, COUNT(*) AS n FROM error_groups WHERE test = 0 GROUP BY status').all<{ status: ErrorStatus; n: number }>();
+export async function errorCounts(db: D1Database, childSafety = true): Promise<Record<ErrorStatus, number>> {
+  const rows = await db.prepare(`SELECT g.status, COUNT(*) AS n FROM error_groups g WHERE g.test = 0${childSafety ? '' : ` AND ${NOT_CHILD_SAFETY}`} GROUP BY g.status`).all<{ status: ErrorStatus; n: number }>();
   const counts: Record<ErrorStatus, number> = { new: 0, acknowledged: 0, resolved: 0, ignored: 0 };
   for (const r of rows.results ?? []) counts[r.status] = r.n;
   return counts;

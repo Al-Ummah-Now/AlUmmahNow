@@ -1,13 +1,17 @@
 import { notFound } from 'next/navigation';
 import Link from '@/components/AppLink';
-import type { Report, ReportOutcomeOption } from '@al-ummah/shared-types';
 import { getReport } from '@/lib/api/admin';
+import type { ReportDetail } from '@/lib/api/types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, StatusChip, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ReportActions } from './actions';
+import { ChildSafetyCard, ReportedItem } from './item';
+import { GUEST_REPORTER_ID } from './outcomes';
+import { getAdminSession } from '@/lib/auth';
+import { isSuperAdmin } from '@/lib/roles';
 
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -21,14 +25,11 @@ export default async function ReportDetailPage({ params }: PageProps) {
   const { id } = await params;
   const { t } = await getI18n();
 
-  let report: Report | null = null;
-  let outcomes: ReportOutcomeOption[] = [];
+  let data: ReportDetail | null = null;
   let failed = false;
 
   try {
-    const data = await getReport(id);
-    report = data.report;
-    outcomes = data.outcomes ?? [];
+    data = await getReport(id);
   } catch (e) {
     if (e instanceof AdminApiError && e.status === 404) {
       notFound();
@@ -37,9 +38,13 @@ export default async function ReportDetailPage({ params }: PageProps) {
     logger.error('[report] Failed to load report', { id, error: e instanceof Error ? e.message : String(e) });
   }
 
+  const report = data?.report ?? null;
   if (!report && !failed) {
     notFound();
   }
+  const open = report?.status === 'pending' || report?.status === 'reviewing';
+  const childSafety = report?.reason === 'child_safety';
+  const superAdmin = childSafety ? isSuperAdmin((await getAdminSession())?.user.role) : false;
 
   const statusLabel = report ? translateDynamic(t, 'status', report.status) : '';
 
@@ -65,7 +70,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.reportId')}</dt>
-                  <dd className="text-fg font-mono text-sm break-all" dir="ltr" data-testid="report-id">{report.id}</dd>
+                  <dd className="text-fg font-mono text-sm break-all"><bdi dir="ltr" data-testid="report-id">{report.id}</bdi></dd>
                 </div>
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.entityType')}</dt>
@@ -73,15 +78,19 @@ export default async function ReportDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.entityId')}</dt>
-                  <dd className="text-fg font-mono text-sm break-all" dir="ltr">{report.entity_id}</dd>
+                  <dd className="text-fg font-mono text-sm break-all"><bdi dir="ltr">{report.entity_id}</bdi></dd>
                 </div>
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.reason')}</dt>
-                  <dd className="text-fg">{translateDynamic(t, 'reason', report.reason)}</dd>
+                  <dd className={childSafety ? 'text-danger-fg font-semibold' : 'text-fg'} data-testid="report-reason">{translateDynamic(t, 'reason', report.reason)}</dd>
                 </div>
                 <div>
-                  <dt className="text-fg-muted text-sm">{t('report.reporterId')}</dt>
-                  <dd className="text-fg font-mono text-sm break-all" dir="ltr">{report.reporter_id || t('report.anonymous')}</dd>
+                  <dt className="text-fg-muted text-sm">{t(report.reporter_id === GUEST_REPORTER_ID ? 'moderation.reporterFilter' : 'report.reporterId')}</dt>
+                  {report.reporter_id === GUEST_REPORTER_ID ? (
+                    <dd className="text-fg" data-testid="report-guest">{t('report.guest')}</dd>
+                  ) : (
+                    <dd className="text-fg font-mono text-sm break-all"><bdi dir="ltr">{report.reporter_id || t('report.anonymous')}</bdi></dd>
+                  )}
                 </div>
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.created')}</dt>
@@ -90,6 +99,8 @@ export default async function ReportDetailPage({ params }: PageProps) {
                   </dd>
                 </div>
               </dl>
+
+              {data?.item && <ReportedItem item={data.item} t={t} />}
 
               {report.description && (
                 <div className="mt-6 pt-6 border-t border-border">
@@ -122,8 +133,10 @@ export default async function ReportDetailPage({ params }: PageProps) {
           </div>
 
           <div className="lg:col-span-1">
-            {report.status === 'pending' || report.status === 'reviewing' ? (
-              <ReportActions reportId={report.id} entityType={report.entity_type} outcomes={outcomes} />
+            {/* A case is open already when the item is under a takedown */}
+            {childSafety && !data?.item?.takenDown && <ChildSafetyCard report={report} intake={data?.intake ?? null} superAdmin={superAdmin} open={open} t={t} />}
+            {open ? (
+              <ReportActions reportId={report.id} entityType={report.entity_type} outcomes={data?.outcomes ?? []} />
             ) : (
               <div className={cardClass} data-testid="report-closed">
                 <h2 className="text-lg font-semibold text-fg mb-4">{t('report.closedTitle')}</h2>

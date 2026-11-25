@@ -11,6 +11,7 @@ import { getTranslations } from '@/lib/i18n';
 import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
+import ReportContentButton from '@/components/moderation/ReportContentButton';
 import { formatHandle } from '@/lib/channel-url';
 import { channelOwnName } from '@/lib/channel-name';
 import { avatarInitial } from '@/lib/avatar-initial';
@@ -171,8 +172,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               )}
             </div>
 
-            {/* Share: the short link (alummahnow.link/@handle, or /c/<id> without a handle) */}
-            <div className="mb-3">
+            {/* Share & Report: short link + signed-in channel reporting */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <ShareLinkButton
                 target={channel.handle ? { kind: 'handle', handle: channel.handle } : { kind: 'channel', id: channel.id }}
                 fallbackPath={`/${locale}/channels/${encodeURIComponent(channel.id)}`}
@@ -180,6 +181,13 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 className="px-3 py-1"
                 testId="channel-share"
               />
+              {user && !owner && (
+                <ReportContentButton
+                  contentType="channel"
+                  contentId={channel.id}
+                  contentTitle={displayName}
+                />
+              )}
             </div>
 
             {subscriptionError && (

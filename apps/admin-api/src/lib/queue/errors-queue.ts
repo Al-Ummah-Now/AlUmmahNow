@@ -9,7 +9,7 @@
  */
 import type { AdminQueuePage, ErrorQueueItem, ErrorQueueOutcome, ErrorStatus } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
-import { errorSearchCondition } from '../errors-store';
+import { NOT_CHILD_SAFETY, errorSearchCondition } from '../errors-store';
 import { add, pageAndCounts, personOf, where, type QueueFilters, type Where } from './common';
 import { resolveNames } from './names';
 
@@ -17,6 +17,8 @@ export interface ErrorQueueFilters extends QueueFilters {
   app?: string | undefined;
   environment?: string | undefined;
   includeTest?: boolean | undefined;
+  /** Child safety groups too: super admins only */
+  childSafety?: boolean | undefined;
 }
 
 const OPEN_ACTIONS = "EXISTS (SELECT 1 FROM error_actions a WHERE a.group_id = g.id AND a.status IN ('open', 'retrying'))";
@@ -27,6 +29,7 @@ export function errorQueueWhere(f: ErrorQueueFilters): { action: Where; history:
     if (f.app) add(w, 'g.app = ?', f.app);
     if (f.environment) add(w, 'g.environment = ?', f.environment);
     if (!f.includeTest) add(w, 'g.test = 0');
+    if (!f.childSafety) add(w, NOT_CHILD_SAFETY);
     if (f.assignee === 'unassigned') add(w, 'g.assignee_id IS NULL');
     else if (f.assignee) add(w, 'g.assignee_id = ?', f.assignee);
     if (f.q && f.q.trim()) {

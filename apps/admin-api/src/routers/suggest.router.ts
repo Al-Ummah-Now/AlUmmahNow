@@ -30,12 +30,14 @@ import {
   type AdminSuggestion,
   type AdminUserRow,
   type AdminVideoRow,
+  isSuperAdmin,
 } from '@al-ummah/shared-types';
 import { callVideos, VideosError, type VideosClientEnv } from '../lib/content/videosClient';
 import { getContactMessage, listContactMessages, type ContactMessageRow } from '../lib/contact-store';
 import { getErrorGroup, listErrorGroups, type ErrorGroupRow } from '../lib/errors-store';
 import { hasPermission, type Permission } from '../lib/roles';
 import { logger } from '../lib/logger';
+import { withoutHidden } from '../lib/moderation/takedown';
 import { parseItemKey, suggestItem, suggestItems, type ItemCopy } from '../lib/moderation/reportQueue';
 import { getInvite, inviteStatusByUser, listInvites, toView, type InviteView } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -173,13 +175,18 @@ const CONTENT_MAP: Record<ContentKind, (row: any) => AdminSuggestion> = {
   comment: fromComment,
 };
 
+/** Items under a takedown are suggested to super admins only. */
+async function visible(c: C, kind: ContentKind, items: AdminSuggestion[]): Promise<AdminSuggestion[]> {
+  return kind === 'video' || kind === 'post' || kind === 'comment' || kind === 'channel' ? withoutHidden(c.env.REPORTS_DB as never, c.get('auth')?.roles, kind, items) : items;
+}
+
 async function search(c: C, kind: AdminSuggestKind, q: string, limit: number): Promise<AdminSuggestion[]> {
   if (kind === 'contact') {
     const { messages } = await listContactMessages(c.env.REPORTS_DB, { q, limit, offset: 0 });
     return messages.map(fromContact);
   }
   if (kind === 'error') {
-    const { groups } = await listErrorGroups(c.env.REPORTS_DB, { q, limit, offset: 0 });
+    const { groups } = await listErrorGroups(c.env.REPORTS_DB, { q, limit, offset: 0, childSafety: isSuperAdmin(c.get('auth')?.roles) });
     return groups.map(fromError);
   }
   if (kind === 'invite') {
@@ -188,13 +195,13 @@ async function search(c: C, kind: AdminSuggestKind, q: string, limit: number): P
   }
   if (kind === 'report') {
     // Same fields as the queue search (item title, channel, uploader, reporter, reason, report text, moderator)
-    return (await suggestItems(c.env.REPORTS_DB, q, limit)).map(fromReportItem);
+    return (await suggestItems(c.env.REPORTS_DB, q, limit, c.get('auth')?.roles)).map(fromReportItem);
   }
   const page = await callVideos<AdminPage<unknown>>(c.env, CONTENT_PATH[kind], {
     query: { q, pageSize: limit },
     actorId: c.get('auth')?.userId,
   });
-  const suggestions = page.items.map(CONTENT_MAP[kind]);
+  const suggestions = await visible(c, kind, page.items.map(CONTENT_MAP[kind]));
   return kind === 'user' ? withInviteBadges(c, suggestions) : suggestions;
 }
 
@@ -214,7 +221,7 @@ async function initialPage(c: C, kind: AdminSuggestKind, cursor: string, limit: 
     return { items: messages.map(fromContact), next: nextPage(messages.length) };
   }
   if (kind === 'error') {
-    const { groups } = await listErrorGroups(c.env.REPORTS_DB, { limit, offset });
+    const { groups } = await listErrorGroups(c.env.REPORTS_DB, { limit, offset, childSafety: isSuperAdmin(c.get('auth')?.roles) });
     return { items: groups.map(fromError), next: nextPage(groups.length) };
   }
   if (kind === 'invite') {
@@ -223,20 +230,20 @@ async function initialPage(c: C, kind: AdminSuggestKind, cursor: string, limit: 
   }
   if (kind === 'report') {
     // Reported items, open ones first then the newest: one page, the queue itself is where to browse further
-    return { items: (await suggestItems(c.env.REPORTS_DB, '', limit)).map(fromReportItem), next: null };
+    return { items: (await suggestItems(c.env.REPORTS_DB, '', limit, c.get('auth')?.roles)).map(fromReportItem), next: null };
   }
   if (kind === 'playlist' || kind === 'post') {
     const result = await callVideos<{ items: unknown[]; nextCursor: string | null }>(c.env, CONTENT_PATH[kind], {
       query: { pageSize: limit, ...(cursor ? { cursor } : {}) },
       actorId: c.get('auth')?.userId,
     });
-    return { items: result.items.map(CONTENT_MAP[kind]), next: result.nextCursor ?? null };
+    return { items: await visible(c, kind, result.items.map(CONTENT_MAP[kind])), next: result.nextCursor ?? null };
   }
   const result = await callVideos<AdminPage<unknown>>(c.env, CONTENT_PATH[kind], {
     query: { pageSize: limit, page, sort: 'newest', noTotal: '1' },
     actorId: c.get('auth')?.userId,
   });
-  const suggestions = result.items.map(CONTENT_MAP[kind]);
+  const suggestions = await visible(c, kind, result.items.map(CONTENT_MAP[kind]));
   return { items: kind === 'user' ? await withInviteBadges(c, suggestions) : suggestions, next: nextPage(result.items.length) };
 }
 
@@ -255,7 +262,7 @@ async function byId(c: C, kind: AdminSuggestKind, id: string): Promise<AdminSugg
     return row ? fromContact(row) : null;
   }
   if (kind === 'error') {
-    const row = await getErrorGroup(c.env.REPORTS_DB, id);
+    const row = await getErrorGroup(c.env.REPORTS_DB, id, isSuperAdmin(c.get('auth')?.roles));
     return row ? fromError(row) : null;
   }
   if (kind === 'invite') {
@@ -264,7 +271,7 @@ async function byId(c: C, kind: AdminSuggestKind, id: string): Promise<AdminSugg
   }
   if (kind === 'report') {
     const key = parseItemKey(id);
-    const row = key ? await suggestItem(c.env.REPORTS_DB, key.type, key.id) : null;
+    const row = key ? await suggestItem(c.env.REPORTS_DB, key.type, key.id, c.get('auth')?.roles) : null;
     return row ? fromReportItem(row) : null;
   }
   // Every content list matches an exact id in q except comments, which have no page of their own

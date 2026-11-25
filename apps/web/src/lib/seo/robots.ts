@@ -27,7 +27,7 @@ const NOINDEX_NOFOLLOW = new RegExp(
   '^/[a-z]{2}/(' +
     [
       'history', 'library', 'settings', 'upload', 'studio', 'notifications', 'profile',
-      'subscriptions', 'feed', 'dashboard', 'analytics', 'scheduled-videos', 'auth', 'dev', 'upgrade',
+      'subscriptions', 'feed', 'dashboard', 'analytics', 'scheduled-videos', 'auth', 'dev', 'upgrade', 'report',
       'video/[^/]+/edit',
     ].join('|') +
     ')(/|$)',

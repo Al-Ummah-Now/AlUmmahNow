@@ -65,6 +65,10 @@ import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from '
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
+import { guestReportSubmit } from './endpoints/moderation/GuestReportSubmit';
+import { deliverChildSafety } from './lib/moderation/childSafety';
+import { runReportRetention } from './lib/moderation/retention';
+import { purgeGuestReportLimits } from './lib/guest-report-limits';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
 import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from './lib/authModerationQueue';
 import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoints/errors/ErrorsIngest';
@@ -208,6 +212,8 @@ app.get('/public/mobile-apps/short-links/:file{apple-app-site-association|assetl
 
 // Contact us messages from the videos site's server (X-API-Key; endpoints/contact/ContactSubmit.ts)
 app.post('/internal/contact', (c) => contactSubmit(c as never));
+// Reports of people who are not signed in, from /[locale]/report (X-API-Key; endpoints/moderation/GuestReportSubmit.ts)
+app.post('/internal/guest-reports', (c) => guestReportSubmit(c as never));
 // Newsletter sign-up, confirm and unsubscribe from www's server (X-API-Key; endpoints/newsletter/NewsletterInternal.ts)
 app.route('/internal/newsletter', newsletterInternal as never);
 
@@ -423,7 +429,16 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
         .catch((error) => logger.error('[CSAM] Retention sweep failed', { error: String(error) })),
     );
   }
-  ctx.waitUntil(scheduledReportMetaSync(env as never));
+  if (isCsamRetentionTick(controller.scheduledTime)) {
+    ctx.waitUntil(
+      runReportRetention(env as never)
+        .then((out) => { if (out.guestReports || out.deleted || out.failed) logger.info('[ReportRetention] Sweep', out); })
+        .catch((error) => logger.error('[ReportRetention] Sweep failed', { error: String(error) })),
+    );
+  }
+  // A channel reported by its @handle gets its id first, so its alert is the channel's
+  ctx.waitUntil(scheduledReportMetaSync(env as never).then(() => deliverChildSafety(env as never)));
+  ctx.waitUntil(purgeGuestReportLimits(env.REPORTS_DB as never).catch((error) => logger.warn('[GuestReport] Old limit counters not purged', { error: String(error) })));
   // Pre-publication review: the live queue time creators see when a video is held (VR6)
   if ((env as { VIDEO_REVIEW_ALLOWED?: string }).VIDEO_REVIEW_ALLOWED === 'true') ctx.waitUntil(
     reviewStats(env.REPORTS_DB as never)

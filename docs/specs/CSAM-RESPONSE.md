@@ -152,6 +152,19 @@ The case is flagged on the Errors page as `csam:<caseId>`, "Report to the NCMEC 
 - A case's evidence may be deleted at `reported_at + retention_days` (`csamRetainUntil`). That never happens before a report, and never while the case is under a **legal hold**, which any super admin can set or lift with a reason (audited).
 - A daily sweep in admin-api deletes due evidence through api-videos. It keeps the case row and its access log, marks the case `closed`, and records the deletion in the log.
 
+## 7a. Child safety reports
+
+Anyone can report an item for child safety: signed in from the report buttons and `/report`, signed out from `/report` (the apps link there).
+
+- **The queue.** Open child safety reports come first on the Moderation page and in the reports queue. A report alone hides, removes and freezes nothing.
+- **The alert.** The report and its row in `child_safety_alerts` (REPORTS_DB, migration 0053) are written in one transaction. `deliverChildSafety` (admin-api `lib/moderation/childSafety.ts`) raises an Errors page item right after a guest report and on the 5-minute cron until it is done. One per item while it is open; above five an hour, one item for the rest of that hour. It names the item and nothing else. These items and the cases' own (keys `child-safety-*`, `csam:*`, `csam-*`) are seen and acted on by super admins only, in every list, count, search, live notice and reference lookup of the Errors page and in the `prod-errors` report. Their emails go to each super admin of the staff list (`admin_staff`) in that person's email language, never to the error address or the support inbox: when an item is new or comes back, production only, with what kind of thing it is and a link to the admin and nothing else (`lib/moderation/safetyMail.ts`, on the contact mail queue). An item is resolved when its cause is: the last open report is decided, or the failing copy works. An alert filed under a channel's @handle moves to the channel's id and is raised again under it.
+- **The kept record.** The item's records (never its media) are sealed into the evidence store under `reports/<type>/<id>/`, so they stay if the item is deleted or the account is erased (api-videos `lib/csam/reportEvidence.ts`). A chat message is kept when a signed-in reporter could read it, or anyone can. Super admins download it from the report (step-up, logged).
+- **Opening a case.** The report page of a super admin fills in the intake with the item's page, and only when that page maps to exactly that item (`lib/moderation/intakeUrl.ts`). A person still sends it.
+- **Signed-out reports** store no name, email, address or identifier. Attempts are counted per network and per item under keyed hashes deleted within two days (`lib/guest-report-limits.ts`). Every well-formed report is answered the same way, and nothing is looked up for the answer.
+
+- **Retention** (admin-api `lib/moderation/retention.ts`, daily). Reports sent without an account are deleted a year after their decision. An item's kept record, with its signed-out child safety reports, is deleted at least a year after the last report about it was decided (the case evidence's setting when longer), and never while a case about the item is open. Kept records are exempt from account erasure (legal obligation, `docs/compliance/GDPR.md`). Media is not copied before a case opens.
+- **Items under a takedown** are shown to super admins only. A case stores its item (`item_type`, `item_id`); everyone else sees a row that says it is under review by the child safety team: no title, text, owner or channel, nothing its reports or moderators wrote, and only Dismiss (`lib/moderation/takedown.ts`). A video, post, comment or stream stays so after its case is closed; a channel (a case about one of its images) only while the case is open. They find it by its id only, never by those words. Its admin page and every change to it answer 403, and the admin lists (channels, videos, comments, posts, live sessions, Recently deleted), pickers, audit names and AI moderation flags (its own and those on it) leave it out.
+
 ## 8. Audit
 
 `csam_access_log` (REPORTS_DB) records every action on a case: actor, action, case, detail and time. The actions are opening the case, viewing the manifest, downloading a file (by name), mapping by hand, retrying, setting or lifting a hold, reporting and deleting evidence. Settings changes are logged too.
@@ -166,7 +179,7 @@ Webhook destination (once per account):
 2. **Webhooks → Create**.
 3. **Name**: `Al Ummah Now CSAM intake`. **URL**: `https://admin.api.alummahnow.net/webhooks/cloudflare/notifications`.
 4. **Secret**: on the videos admin go to **Moderation → CSAM → Settings → Generate webhook secret** (super admin, fresh sign-in). Copy the secret it shows once and paste it here. Cloudflare sends it in the `cf-webhook-auth` header.
-5. **Save and Test**. The test payload has no URL, so it shows up as a flag on the Errors page ("Cloudflare notification without a match"). That is the signal that the webhook works. Dismiss it.
+5. **Save and Test**. The test payload has no URL, so it shows up as a flag on the Errors page ("Cloudflare notification without a match"). That is the signal that the webhook works. Dismiss it (super admins see it).
 
 Notification (once per account):
 1. **Notifications → All Notifications → Add**.

@@ -15,7 +15,7 @@ This page covers AI moderation flags, contact messages and errors. Reports follo
 | --- | --- | --- | --- |
 | AI moderation flags | `GET /api/moderation/ai/queue` | any admin role (as `/ai/signals`) | `AiQueueItem` |
 | Contact messages | `GET /api/contact/queue` | `contact:read` | `ContactQueueItem` |
-| Errors | `GET /api/errors/queue` | `errors:read` | `ErrorQueueItem` |
+| Errors | `GET /api/errors/queue` | `errors:read` (child safety and CSAM case items: super admins) | `ErrorQueueItem` |
 
 All three answer `{ success: true, result: AdminQueuePage<Row> }`:
 

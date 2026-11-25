@@ -6,10 +6,10 @@ import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
 /** Entity types accepted by api-videos ReportInput */
-export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream' | 'live_chat';
+export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream' | 'live_chat' | 'post';
 
-/** Reasons accepted by api-videos ReportInput */
-export type ReportReason = 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';
+/** Reasons accepted by api-videos ReportInput (child_safety first for priority visibility) */
+export type ReportReason = 'child_safety' | 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';
 
 // Types for user-facing report creation
 export interface ReportCreateRequest {

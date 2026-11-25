@@ -14,6 +14,7 @@ import {
   type ReportableEntityType,
   auditRefKind,
 } from '@al-ummah/shared-types';
+import { hiddenFrom, isHiddenItem } from '../moderation/takedown';
 import { lookupMany, type MetaEnv } from '../moderation/reportMeta';
 
 const isReportable = (kind: string): kind is ReportableEntityType => (REPORTABLE_ENTITY_TYPES as readonly string[]).includes(kind);
@@ -39,9 +40,10 @@ export function cleanNamesRequest(body: unknown): { users: string[]; items: { ki
 
 /**
  * Names the users and items (an empty result when api-videos cannot be reached). Emails only
- * with `includeEmail` (roles with audit:read): moderators get names, not addresses.
+ * with `includeEmail` (roles with audit:read): moderators get names, not addresses. Items under a takedown have a
+ * name for super admins only.
  */
-export async function resolveNames(env: MetaEnv, req: { users: string[]; items: { kind: ReportableEntityType; id: string }[] }, includeEmail = false): Promise<AdminNames> {
+export async function resolveNames(env: MetaEnv, req: { users: string[]; items: { kind: ReportableEntityType; id: string }[] }, includeEmail = false, roles?: readonly unknown[]): Promise<AdminNames> {
   const names: AdminNames = { users: {}, items: {} };
   if (!req.users.length && !req.items.length) return names;
   const lookup = await lookupMany(env, req.items.map((i) => ({ type: i.kind, id: i.id })), req.users);
@@ -50,8 +52,9 @@ export async function resolveNames(env: MetaEnv, req: { users: string[]; items: 
     if (!req.users.includes(u.id)) continue;
     names.users[u.id] = { id: u.id, found: u.found, name: u.displayName, userName: u.userName, email: includeEmail ? (u.email ?? null) : null };
   }
+  const hidden = await hiddenFrom(env.REPORTS_DB, roles, req.items.map((i) => ({ type: i.kind, id: i.id })));
   for (const i of lookup.items.values()) {
-    names.items[`${i.type}:${i.id}`] = { kind: i.type, id: i.id, found: i.found, title: i.title };
+    names.items[`${i.type}:${i.id}`] = { kind: i.type, id: i.id, found: i.found, title: isHiddenItem(hidden, i.type, i.id) ? null : i.title };
   }
   return names;
 }

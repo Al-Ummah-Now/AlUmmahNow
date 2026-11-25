@@ -10,7 +10,7 @@
  */
 import {
 	DEFAULT_NOTIFICATION_EMAIL_LOCALE,
-	REPORT_REASONS,
+	WARNING_REASONS,
 	type AccountEmailContact,
 	type AccountEmailSettings,
 	type AccountNoticeRequest,
@@ -27,7 +27,7 @@ import { toUserRow, type AdminEnv } from './directory';
 export const AccountNoticeBody = z.object({
 	kind: z.literal('warning'),
 	noticeId: z.string().trim().min(1).max(200),
-	reasonCode: z.enum(REPORT_REASONS),
+	reasonCode: z.enum(WARNING_REASONS),
 	count: z.number().int().min(1).max(100000),
 });
 

@@ -124,3 +124,6 @@ export const ERROR_LIMITS = {
   extraKeys: 12,
   extraValueMax: 200,
 } as const;
+
+/** The needs-action items of child safety reports and CSAM cases (key): super admins alone see and act on them. */
+export const isChildSafetyErrorKey = (key: string): boolean => /^(?:child-safety-|csam[-:])/.test(key);

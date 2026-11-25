@@ -10,6 +10,7 @@ import {
   csamRetainUntil,
   csamUrlKey,
   csamUrlRefusal,
+  REPORT_ENTITY_TYPES,
   scanCsamUrls,
   newErrorRef,
   scrubEvent,
@@ -30,6 +31,7 @@ import {
   type CsamRefusedUrl,
   type CsamReportFacts,
   type CsamResolution,
+  type ReportableEntityType,
   type CsamSettings,
   type CsamTakedownJob,
 } from '@al-ummah/shared-types';
@@ -62,6 +64,9 @@ interface CaseRow {
   source: 'paste' | 'webhook';
   status: CsamCaseStatus;
   item_kind: string | null;
+  /** What the case is about, as reports name it (lib/moderation/takedown.ts) */
+  item_type: string | null;
+  item_id: string | null;
   resolution: string | null;
   uploader_id: string | null;
   job_id: string | null;
@@ -389,9 +394,64 @@ async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, ac
   return state;
 }
 
+export interface ItemRef {
+  type: ReportableEntityType;
+  id: string;
+}
+
+/** The item a case's resolution takes down, as reports name it (an account's own image is no reportable item). */
+export function itemOfCase(r: CsamResolution): ItemRef | null {
+  const of = (type: ReportableEntityType, id: string | null | undefined): ItemRef | null => (id ? { type, id } : null);
+  switch (r.kind) {
+    case 'video':
+    case 'video_thumbnail':
+      return of('video', r.videoId);
+    case 'post_image':
+      return of('post', r.postId);
+    case 'comment':
+      return of('comment', r.commentId);
+    case 'live_stream':
+      return of('livestream', r.streamId);
+    case 'channel_image':
+      return of('channel', r.channelId);
+    default:
+      return null;
+  }
+}
+
+/** SQL: the case (alias `c`) keeps its item from everyone else: what it removed for good, a channel (one of its images) while it is open. */
+const hides = (c: string) => `(${c}.item_type <> 'channel' OR ${c}.status <> 'closed')`;
+
+/**
+ * The given items that cases are about, as `type:id` (idx_csam_cases_item); `openOnly`: cases that are not closed.
+ * Nothing else about a case leaves this module for the reports.
+ */
+export async function casesAbout(db: Db, items: ItemRef[], openOnly = false): Promise<Set<string>> {
+  if (items.length === 0) return new Set();
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT c.item_type, c.item_id FROM json_each(?) j CROSS JOIN csam_cases c INDEXED BY idx_csam_cases_item
+       ON c.item_id IS NOT NULL AND c.item_type = json_extract(j.value, '$[0]') AND c.item_id = json_extract(j.value, '$[1]') WHERE ${openOnly ? "c.status <> 'closed'" : hides('c')}`,
+    )
+    .bind(JSON.stringify(items.map((i) => [i.type, i.id])))
+    .all<{ item_type: string; item_id: string }>();
+  return new Set((results ?? []).map((r) => `${r.item_type}:${r.item_id}`));
+}
+
+/** SQL: no case is about the item a reports row (alias `a`) names. */
+export const noCaseAboutSql = (a: string): string =>
+  `NOT EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_item WHERE tc.item_id IS NOT NULL AND tc.item_type = ${a}.entity_type AND tc.item_id = ${a}.entity_id AND ${hides('tc')})`;
+
+/** SQL: no case is about the item a moderation_signals row (alias `a`) is about, or about what that is on. */
+export const noCaseAboutSignalSql = (a: string): string =>
+  `NOT EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_item WHERE tc.item_id IS NOT NULL AND tc.item_type IN ('video', 'livestream', 'comment', 'post', 'live_chat') AND tc.item_id IN (${a}.subject_id, ${a}.parent_id))`;
+
 /** Starts the takedown of a mapped case and freezes its uploader. */
 async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolution, actorId: string): Promise<void> {
   const facts = await captureFacts(env, row.matched_url, row.detected_at, resolution);
+  // First: from here on only super admins see the item in the reports
+  const item = itemOfCase(resolution);
+  await updateCase(env.REPORTS_DB, row.id, { item_type: item?.type ?? null, item_id: item?.id ?? null });
   const out = await callVideos<{ job: { id: string }; account?: string }>(env, '/contain', { ...csam, method: 'POST', json: { caseId: row.id, matchedUrl: row.matched_url, resolution }, actorId });
   await updateCase(env.REPORTS_DB, row.id, {
     status: 'containing',
@@ -574,6 +634,27 @@ export async function downloadEvidence(env: CsamEnv, id: string, name: string, a
   headers.set('Cache-Control', 'no-store, private');
   headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
   return new Response(upstream.body, { status: 200, headers });
+}
+
+/**
+ * The sealed copy of a reported item's records (api-videos lib/csam/reportEvidence.ts), decrypted, as an
+ * attachment. Logged before it leaves, with the other actions that belong to no case.
+ */
+export async function downloadReportEvidence(env: CsamEnv, type: string, id: string, actorId: string): Promise<Response> {
+  if (!(REPORT_ENTITY_TYPES as readonly string[]).includes(type) || !/^[A-Za-z0-9_-]{1,200}$/.test(id)) throw new CsamError(404, 'not_found');
+  await logAccess(env.REPORTS_DB, { caseId: null, actorId, action: 'file.downloaded', detail: { reportedItem: `${type}:${id}` } });
+  const upstream = await fetchVideosRaw(env, `/report-evidence/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, { ...csam, actorId });
+  if (!upstream.ok) throw new CsamError(upstream.status === 404 ? 404 : 503, upstream.status === 404 ? 'not_found' : 'evidence_unavailable');
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="reported-${type}-${id}.json"`,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store, private',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+    },
+  });
 }
 
 export async function retryCase(env: CsamEnv, id: string, actorId: string): Promise<CsamCaseSummary> {

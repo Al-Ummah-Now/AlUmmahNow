@@ -6,6 +6,9 @@
 import type { ModerationAction, ReportableEntityType, ReportOutcomeReason } from '@al-ummah/shared-types';
 import type { MessageKey } from '@/i18n/translate';
 
+/** The reporter id of reports sent without signing in (admin-api lib/moderation/childSafety.ts). */
+export const GUEST_REPORTER_ID = 'guest';
+
 /** A type whose outcome does something other than the general description says. */
 export function actionDescription(type: ReportableEntityType, action: ModerationAction): MessageKey | null {
   if (type === 'comment' && action === 'removed') return 'actions.commentRemovedDescription';
@@ -20,6 +23,7 @@ export function outcomeReasonKey(reason: ReportOutcomeReason): MessageKey {
     not_for_post_comment: 'actions.reasonNotForPostComment',
     item_gone: 'actions.reasonItemGone',
     permission: 'actions.reasonPermission',
+    taken_down: 'actions.reasonTakenDown',
   };
   return keys[reason];
 }

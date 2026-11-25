@@ -9,7 +9,8 @@ the zone settings live there). Auth's side: AlUmmahNowAuth `docs/BOT_PROTECTION.
 | --- | --- | --- |
 | Sign-up, password reset / email code, sign-in after 3 failures (Auth) | always / from the 3rd failure | Auth's existing limiters |
 | Contact us (admin-api `/internal/contact`, via web `/api/contact`) | always | D1 per IP/account (existing) |
-| `POST /api/moderation/reports` | always | `REPORT_LIMITER` 10/min |
+| `POST /api/moderation/reports` (always an account's) | no | `REPORT_LIMITER` 10/min |
+| Reports without an account (admin-api `/internal/guest-reports`, via web `/api/report`) | when Turnstile is on | `GUEST_REPORT_LIMITER` per network, then D1 per IPv4 address or IPv6 /64 and /48, and per reported item (`lib/guest-report-limits.ts`; counters deleted within two days) |
 | `POST /api/videos/:id/comments`, post comments | an account's **first** comment | `COMMENT_LIMITER` 10/min |
 | `POST /api/community/channels/:channelId/posts` | an account's **first** post | `POST_LIMITER` 5/min |
 | likes, dislikes, votes, comment likes, subscriptions (POST/DELETE) | no | `REACTION_LIMITER` 60/min |

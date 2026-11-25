@@ -46,7 +46,8 @@ export function CopyButton({ value, fallbackId, testId, label }: { value: string
   );
 }
 
-export function IntakeForm() {
+/** `initialText`: a URL another page fills in (a report); a person still sends it. */
+export function IntakeForm({ initialText = '' }: { initialText?: string }) {
   const { t } = useLanguage();
   const id = useId();
   const { run, busy, error } = useContentAction();
@@ -72,7 +73,7 @@ export function IntakeForm() {
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label htmlFor={`${id}-text`} className={labelClass}>{t('csamPage.intake.label')}</label>
-          <textarea id={`${id}-text`} name="text" required rows={5} maxLength={256 * 1024} dir="ltr" className={`${fieldClass} w-full font-mono text-sm`} data-testid="csam-intake-text" />
+          <textarea id={`${id}-text`} name="text" defaultValue={initialText} required rows={5} maxLength={256 * 1024} dir="ltr" className={`${fieldClass} w-full font-mono text-sm`} data-testid="csam-intake-text" />
         </div>
         <ActionFeedback error={error} message={null} testId="csam-intake-feedback" />
         <button type="submit" className={primaryButtonClass} disabled={busy !== null} data-testid="csam-intake-submit">

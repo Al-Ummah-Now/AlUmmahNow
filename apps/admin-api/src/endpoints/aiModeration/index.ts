@@ -10,10 +10,12 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
 import { callVideos } from '../../lib/content/videosClient';
 import { itemKey, lookupMany } from '../../lib/moderation/reportMeta';
+import { apiError } from '../../lib/api-error';
 import {
   getSignal,
   getSubjectContent,
   listSignals,
+  maySeeSignal,
   readConfig,
   readUsage,
   reviewSignal,
@@ -23,12 +25,13 @@ import {
   type D1Like,
   type R2Like,
 } from '../../lib/aiModeration';
-import { AI_QUEUE_OUTCOMES, AI_QUEUE_SORTS, MODERATION_EXTENSION_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_SURFACES } from '@al-ummah/shared-types';
+import { isSuperAdmin, AI_QUEUE_OUTCOMES, AI_QUEUE_SORTS, MODERATION_EXTENSION_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_SURFACES } from '@al-ummah/shared-types';
 import { listAiQueue } from '../../lib/queue/ai-queue';
 import { queueQuery, toFilters } from '../../lib/queue/schema';
 
 const ok = (description: string) => ({ '200': { description } });
 const db = (c: AppContext) => c.env.REPORTS_DB as unknown as D1Like;
+const mayTouch = (c: AppContext, superAdmin: boolean, id: string) => maySeeSignal(db(c), id, superAdmin);
 /** The reviewer as the History tab names them: id, and email when there is no profile name. */
 const reviewerOf = (auth: { userId: string; email?: string }) => ({ id: auth.userId, email: auth.email || null });
 
@@ -52,7 +55,7 @@ export class AiSignalsList extends AdminRoute {
 
   async handle(c: AppContext) {
     const { query } = await this.getValidatedData<typeof this.schema>();
-    return { success: true, result: await listSignals(db(c), query) };
+    return { success: true, result: await listSignals(db(c), query, !isSuperAdmin(this.getRoles(c))) };
   }
 }
 
@@ -75,7 +78,7 @@ export class AiQueueList extends AdminRoute {
 
   async handle(c: AppContext) {
     const { query } = await this.getValidatedData<typeof this.schema>();
-    const result = await listAiQueue(c.env.REPORTS_DB, c.env.SEARCH_DB, toFilters(query, this.getUserId(c)));
+    const result = await listAiQueue(c.env.REPORTS_DB, c.env.SEARCH_DB, { ...toFilters(query, this.getUserId(c)), withheld: !isSuperAdmin(this.getRoles(c)) });
     logger.debug('[AiModeration] Queue listed', { tab: query.tab, total: result.total, searched: !!query.q });
     return { success: true, result };
   }
@@ -91,7 +94,7 @@ export class AiSignalGet extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params } = await this.getValidatedData<typeof this.schema>();
-    const found = await getSignal(db(c), params.id);
+    const found = (await mayTouch(c, isSuperAdmin(this.getRoles(c)), params.id)) ? await getSignal(db(c), params.id) : null;
     if (!found) return c.json({ success: false, error: 'not_found' }, 404);
     let content = null;
     try {
@@ -123,6 +126,7 @@ export class AiSignalReview extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
+    if (!(await mayTouch(c, isSuperAdmin(this.getRoles(c)), params.id))) return apiError(c, 404, 'not_found');
     const result = await reviewSignal(db(c), params.id, body.verdict, reviewerOf(this.getAuth(c)), body.note);
     if (!result) return c.json({ success: false, error: 'not_found' }, 404);
     logger.info('[AiModeration] Signal reviewed', { id: params.id, verdict: body.verdict, reviewerId: this.getUserId(c) });
@@ -143,6 +147,7 @@ export class AiSignalVisibility extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
+    if (!(await mayTouch(c, isSuperAdmin(this.getRoles(c)), params.id))) return apiError(c, 404, 'not_found');
     const result = await setCommentHidden(db(c), c.env.videos as unknown as R2Like, params.id, body.hidden, reviewerOf(this.getAuth(c)), body.reason, undefined, (id, action) =>
       callVideos(c.env as never, '/live-moderation', { method: 'POST', json: { entityType: 'live_chat', entityId: id, action }, actorId: this.getUserId(c) })
     );

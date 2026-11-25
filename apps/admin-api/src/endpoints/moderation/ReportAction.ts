@@ -4,6 +4,8 @@ import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError, ReportSchema, Report } from "../../lib/types";
+import type { ReportableEntityType } from '@al-ummah/shared-types';
+import { hiddenFrom, withoutCopies } from '../../lib/moderation/takedown';
 import { logger } from "../../lib/logger";
 
 const ActionInput = z.object({
@@ -135,12 +137,12 @@ export class ReportAction extends AdminRoute {
 
       const updatedReport = await db.prepare(
         'SELECT * FROM reports WHERE id = ?'
-      ).bind(reportId).first();
+      ).bind(reportId).first<Report>();
 
       return {
         success: true,
         result: {
-          report: updatedReport,
+          report: updatedReport && (await hiddenFrom(db as never, this.getRoles(c), [{ type: report.entity_type as ReportableEntityType, id: report.entity_id }])).size > 0 ? withoutCopies(updatedReport) : updatedReport,
           contentAction: outcome.contentAction,
         },
       };

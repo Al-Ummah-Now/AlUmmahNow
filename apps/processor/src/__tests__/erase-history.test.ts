@@ -179,6 +179,23 @@ describe('reports about the person (wiki E17 §5.2)', () => {
     expect(t.row('r2')).toMatchObject({ entity_title: null, owner_id: null });
   });
 
+  it('a child safety report is stored with its alert, once; a repeat leaves a closed alert closed', async () => {
+    const t = setup();
+    const file = (id: string, reason = 'child_safety') => t.deliver(MessageType.ReportCreate, { reportId: id, entityType: 'video', entityId: 'v1', reporterId: VIEWER, reason, timestamp: '2026-11-20T10:00:00Z' });
+    const alerts = () => (t.reports.raw.prepare('SELECT entity_type, entity_id, alerted_at, closed_at FROM child_safety_alerts').all() as object[]).map((r) => ({ ...r }));
+    await file('r0', 'spam');
+    expect(alerts()).toEqual([]);
+    await file('r1');
+    await file('r2');
+    expect(alerts()).toEqual([{ entity_type: 'video', entity_id: 'v1', alerted_at: null, closed_at: null }]);
+    t.reports.raw.prepare("UPDATE reports SET status = 'dismissed'").run();
+    t.reports.raw.prepare("UPDATE child_safety_alerts SET alerted_at = '2026-11-20', closed_at = '2026-11-21'").run();
+    await file('r2');
+    expect(alerts()).toEqual([{ entity_type: 'video', entity_id: 'v1', alerted_at: '2026-11-20', closed_at: '2026-11-21' }]);
+    await file('r3');
+    expect(alerts()).toEqual([{ entity_type: 'video', entity_id: 'v1', alerted_at: null, closed_at: null }]);
+  });
+
   it('erasing its author takes their id, name and words out, and leaves other reports', async () => {
     const t = setup();
     await t.report('r1');

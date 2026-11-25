@@ -1486,6 +1486,7 @@ export interface AppTranslations {
       video: string;
       comment: string;
       channel: string;
+      post: string;
       playlist: string;
       allTypes: string;
     };
@@ -2500,6 +2501,7 @@ export interface AppTranslations {
     failed: string;
     alreadyReported: string;
     reasons: {
+      child_safety: string;
       inappropriate: string;
       spam: string;
       harassment: string;

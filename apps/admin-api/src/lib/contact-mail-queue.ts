@@ -27,6 +27,7 @@ import { isCostAlertMailJob, processCostAlertMailJob, type CostAlertMailJob } fr
 import { isTierRequestMailJob, processTierRequestMailJob, type TierRequestMailJob } from './tier-request-mail';
 import { isWorkflowNotifyJob, processWorkflowNotifyJob, type WorkflowNotifyJob } from './workflows/notify';
 import { isChannelMoveMailJob, processChannelMoveMailJob } from './channel-move-mail';
+import { isSafetyMailJob, processSafetyMailJob, type SafetyMailJob } from './moderation/safetyMail';
 import { isTierChangeMailJob, processTierChangeMailJob, type TierChangeMailJob } from './tier-change-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
@@ -218,7 +219,8 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
  * emails (`kind: 'review_rejected'`, lib/review/rejection-mail.ts), the newsletter
  * (`kind: 'newsletter_*'`, lib/newsletter-mail.ts) and tier request decisions
  * (`kind: 'tier_request'`, lib/tier-request-mail.ts) and tier changes (`kind: 'tier_changed'`,
- * lib/tier-change-mail.ts) and channel moves (`kind: 'channel_move'`, lib/channel-move-mail.ts), which share the sender.
+ * lib/tier-change-mail.ts) and channel moves (`kind: 'channel_move'`, lib/channel-move-mail.ts) and
+ * child safety alerts to super admins (`kind: 'safety_alert'`, lib/moderation/safetyMail.ts), which share the sender.
  */
 export async function contactMailConsumer(
   batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob | ChannelMoveMailJob>[] },
@@ -241,6 +243,8 @@ export async function contactMailConsumer(
               ? await processWorkflowNotifyJob(env as never, msg as unknown as QueueMessageLike<WorkflowNotifyJob>)
             : isChannelMoveMailJob(msg.body)
               ? await processChannelMoveMailJob(env as never, msg as unknown as QueueMessageLike<ChannelMoveMailJob>)
+            : isSafetyMailJob(msg.body)
+              ? await processSafetyMailJob(env as never, msg as unknown as QueueMessageLike<SafetyMailJob>)
             : isTierChangeMailJob(msg.body)
               ? await processTierChangeMailJob(env as never, msg as QueueMessageLike<TierChangeMailJob>)
               : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);

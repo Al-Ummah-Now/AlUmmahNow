@@ -27,6 +27,8 @@ import { callVideos, VideosError, type VideosClientEnv } from '../content/videos
 import { dropAudit, writeAudit } from '../content/audit';
 import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany } from './reportMeta';
 import { erasedUserIds } from '../errors-store';
+import { closeChildSafety } from './childSafety';
+import { hiddenFrom } from './takedown';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import type { AdminBindings } from '../../base/types';
@@ -79,10 +81,11 @@ export async function decidableItem(env: DecisionEnv, type: string, id: string):
   return lookup?.items.get(itemKey(type, id)) ?? null;
 }
 
-const REFUSAL: Record<'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission', [status: 403 | 409, code: string, message: string]> = {
+const REFUSAL: Record<'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission' | 'taken_down', [status: 403 | 409, code: string, message: string]> = {
   not_for_type: [409, 'outcome_not_available', 'This kind of item has no such action'],
   not_for_post_comment: [409, 'outcome_not_available', 'Comments on posts can be hidden, not deleted'],
   item_gone: [409, 'item_gone', 'The item is not there any more; dismiss the report'],
+  taken_down: [403, 'forbidden', 'The item is under a takedown; only super admins act on it'],
   permission: [403, 'forbidden', 'You do not have the permission this action needs'],
 };
 const refusal = (reason: keyof typeof REFUSAL) => new DecisionError(...REFUSAL[reason]);
@@ -98,7 +101,7 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
   const db = env.REPORTS_DB;
   const item = await decidableItem(env, entityType, entityId);
   const ownerId = (item?.found ? item.ownerId : await knownOwner(env, entityType, entityId)) ?? null;
-  const option = reportOutcomeOptions({ type: entityType as ReportableEntityType, item, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, may: (p) => hasContentPermission(input.roles, p) }).find((o) => o.action === action);
+  const option = reportOutcomeOptions({ type: entityType as ReportableEntityType, item, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, takenDown: (await hiddenFrom(db as never, input.roles, [{ type: entityType as ReportableEntityType, id: entityId }])).size > 0, may: (p) => hasContentPermission(input.roles, p) }).find((o) => o.action === action);
   if (!option) throw refusal('not_for_type');
   if (option.reason) throw refusal(option.reason);
   if (!item && action !== 'dismissed' && (entityType === 'comment' || entityType === 'post')) {
@@ -166,6 +169,8 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
       timestamp: now,
     });
   }
+
+  await closeChildSafety(env, entityType, entityId);
 
   logger.info('[Moderation] Decision taken', { entityType, entityId, action, reports: claimed.length, actorId, banned: effect.bannedUserId ?? null });
   return { closed: claimed, contentAction: effect };

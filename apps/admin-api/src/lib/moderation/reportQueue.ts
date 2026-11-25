@@ -21,6 +21,7 @@ import {
   REPORT_QUEUE_SORTS,
   REPORT_REASONS,
   hasContentPermission,
+  isSuperAdmin,
   reportOutcomeOptions,
   type ModerationAction,
   type ReportableEntityType,
@@ -39,6 +40,9 @@ import {
 import type { D1Database } from '../types';
 import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany, type Lookup, type MetaEnv } from './reportMeta';
 import { knownOwner } from './reportDecision';
+import { COUNT_CAP } from './reportList';
+import { noCaseAboutSql } from '../csam';
+import { hiddenFrom, isHiddenItem, withheldExcerpt, withheldGroup, withheldHistory, withheldSummary, withoutCopies } from './takedown';
 import { logger } from '../logger';
 
 export const OPEN = "('pending', 'reviewing')";
@@ -101,6 +105,11 @@ export function parseHistoryQuery(query: Record<string, string | undefined>): Re
 // SQL building
 // ---------------------------------------------------------------------------
 
+/** `withheld`: what items under a takedown say is kept from the reader (everyone but super admins). */
+export interface Reader {
+  withheld?: boolean;
+}
+
 export interface Where {
   sql: string[];
   binds: unknown[];
@@ -126,8 +135,10 @@ const HISTORY_TEXT_COLUMNS = ['moderator_name', 'moderator_notes'];
 /**
  * The shared filters on alias `a` (q, entityType, reason, from, to); History
  * adds moderator name and notes to the text search.
+ * A reader who may not see items under a takedown finds them by their id only,
+ * never by what they or their reports say.
  */
-export function sharedWhere(f: ReportQueueFilters, a: string, opts: { history?: boolean } = {}): Where {
+export function sharedWhere(f: ReportQueueFilters & Reader, a: string, opts: { history?: boolean } = {}): Where {
   const sql: string[] = [];
   const binds: unknown[] = [];
   if (f.q) {
@@ -143,7 +154,10 @@ export function sharedWhere(f: ReportQueueFilters, a: string, opts: { history?: 
         return `${a}.${col} = ?`;
       }),
     ];
-    sql.push(`(${parts.join(' OR ')})`);
+    if (f.withheld) {
+      sql.push(`((${parts.join(' OR ')}) AND (${noCaseAboutSql(a)} OR ${a}.entity_id = ?))`);
+      binds.push(f.q.trim());
+    } else sql.push(`(${parts.join(' OR ')})`);
   }
   if (f.entityType) {
     sql.push(`${a}.entity_type = ?`);
@@ -165,9 +179,9 @@ export function sharedWhere(f: ReportQueueFilters, a: string, opts: { history?: 
 }
 
 const QUEUE_ORDER: Record<string, string> = {
-  oldest: 'first_reported_at ASC, entity_type, entity_id',
-  newest: 'last_reported_at DESC, entity_type, entity_id',
-  most_reports: 'report_count DESC, first_reported_at ASC, entity_type, entity_id',
+  oldest: 'has_child_safety DESC, first_reported_at ASC, entity_type, entity_id',
+  newest: 'has_child_safety DESC, last_reported_at DESC, entity_type, entity_id',
+  most_reports: 'has_child_safety DESC, report_count DESC, first_reported_at ASC, entity_type, entity_id',
 };
 
 const HISTORY_ORDER: Record<string, string> = {
@@ -176,7 +190,7 @@ const HISTORY_ORDER: Record<string, string> = {
 };
 
 /** Open groups matching the filters: the WHERE that selects their open reports. */
-export function groupWhere(f: ReportQueueFilters): Where {
+export function groupWhere(f: ReportQueueFilters & Reader): Where {
   const inner = sharedWhere(f, 'm');
   const sql = [`r.status IN ${OPEN}`];
   const binds: unknown[] = [];
@@ -192,11 +206,12 @@ export function groupWhere(f: ReportQueueFilters): Where {
 }
 
 /** Action needed: one page of groups. */
-export function buildQueueSql(query: ReportQueueQuery & { page: number; pageSize: number }) {
+export function buildQueueSql(query: ReportQueueQuery & Reader & { page: number; pageSize: number }) {
   const where = groupWhere(query);
   const whereSql = where.sql.join(' AND ');
   const grouped = `
     SELECT r.entity_type, r.entity_id, COUNT(*) AS report_count, MIN(r.created_at) AS first_reported_at, MAX(r.created_at) AS last_reported_at,
+           MAX(r.reason = 'child_safety') AS has_child_safety,
            MAX(r.entity_title) AS entity_title, MAX(r.entity_parent_id) AS entity_parent_id, MAX(r.channel_id) AS channel_id,
            MAX(r.channel_name) AS channel_name, MAX(r.owner_id) AS owner_id, MAX(r.owner_name) AS owner_name
     FROM reports r WHERE ${whereSql} GROUP BY r.entity_type, r.entity_id`;
@@ -205,15 +220,18 @@ export function buildQueueSql(query: ReportQueueQuery & { page: number; pageSize
       sql: `SELECT * FROM (${grouped}) ORDER BY ${QUEUE_ORDER[query.sort ?? 'oldest'] ?? QUEUE_ORDER.oldest} LIMIT ? OFFSET ?`,
       binds: [...where.binds, query.pageSize, (query.page - 1) * query.pageSize],
     },
+    // One past COUNT_CAP tells that there are more
     count: {
-      sql: `SELECT COUNT(*) AS groups, COALESCE(SUM(report_count), 0) AS reports FROM (${grouped})`,
-      binds: where.binds,
+      sql: `SELECT (SELECT COUNT(*) FROM (SELECT 1 FROM reports r WHERE ${whereSql} GROUP BY r.entity_type, r.entity_id LIMIT ${COUNT_CAP + 1})) AS groups,
+        (SELECT COUNT(*) FROM (SELECT 1 FROM reports r WHERE ${whereSql} LIMIT ${COUNT_CAP + 1})) AS reports,
+        (SELECT COUNT(*) FROM (SELECT 1 FROM reports r WHERE ${whereSql} AND r.reason = 'child_safety' LIMIT ${COUNT_CAP + 1})) AS child_safety`,
+      binds: [...where.binds, ...where.binds, ...where.binds],
     },
   };
 }
 
 /** History: one page of closed reports. */
-export function buildHistorySql(query: ReportHistoryQuery & { page: number; pageSize: number }) {
+export function buildHistorySql(query: ReportHistoryQuery & Reader & { page: number; pageSize: number }) {
   const shared = sharedWhere(query, 'r', { history: true });
   const sql = [`r.status IN ${CLOSED}`, ...shared.sql];
   const binds = [...shared.binds];
@@ -231,22 +249,24 @@ export function buildHistorySql(query: ReportHistoryQuery & { page: number; page
       sql: `SELECT r.* FROM reports r WHERE ${whereSql} ORDER BY ${HISTORY_ORDER[query.sort ?? 'newest'] ?? HISTORY_ORDER.newest} LIMIT ? OFFSET ?`,
       binds: [...binds, query.pageSize, (query.page - 1) * query.pageSize],
     },
-    count: { sql: `SELECT COUNT(*) AS n FROM reports r WHERE ${whereSql}`, binds },
+    count: { sql: `SELECT COUNT(*) AS n FROM (SELECT 1 FROM reports r WHERE ${whereSql} LIMIT ${COUNT_CAP + 1})`, binds },
   };
 }
 
 /** Tab badges under the shared filters. */
-export async function tabCounts(db: D1Database, f: ReportQueueFilters): Promise<ReportQueueCounts> {
+export async function tabCounts(db: D1Database, f: ReportQueueFilters & Reader): Promise<ReportQueueCounts> {
   const queue = buildQueueSql({ ...f, page: 1, pageSize: 1 }).count;
   const history = sharedWhere(f, 'r', { history: true });
   const [open, closed] = await Promise.all([
-    db.prepare(queue.sql).bind(...queue.binds).first<{ groups: number; reports: number }>(),
+    db.prepare(queue.sql).bind(...queue.binds).first<{ groups: number; reports: number; child_safety: number }>(),
     db
-      .prepare(`SELECT COUNT(*) AS n FROM reports r WHERE ${[`r.status IN ${CLOSED}`, ...history.sql].join(' AND ')}`)
+      .prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM reports r WHERE ${[`r.status IN ${CLOSED}`, ...history.sql].join(' AND ')} LIMIT ${COUNT_CAP + 1})`)
       .bind(...history.binds)
       .first<{ n: number }>(),
   ]);
-  return { actionNeeded: Number(open?.groups) || 0, openReports: Number(open?.reports) || 0, history: Number(closed?.n) || 0 };
+  const read = [open?.groups, open?.reports, open?.child_safety, closed?.n].map((n) => Number(n) || 0);
+  const [actionNeeded, openReports, openChildSafety, closedReports] = read.map((n) => Math.min(n, COUNT_CAP));
+  return { actionNeeded, openReports, openChildSafety, history: closedReports, capped: read.some((n) => n > COUNT_CAP) };
 }
 
 // ---------------------------------------------------------------------------
@@ -369,9 +389,9 @@ export async function groupDetails(db: D1Database, groups: ItemCopy[]) {
       .prepare(
         `SELECT * FROM (
            SELECT id, entity_type, entity_id, reporter_id, reporter_name, reason, description, created_at,
-                  ROW_NUMBER() OVER (PARTITION BY entity_type, entity_id ORDER BY created_at DESC, id) AS rn
+                  ROW_NUMBER() OVER (PARTITION BY entity_type, entity_id ORDER BY reason = 'child_safety' DESC, created_at DESC, id) AS rn
            FROM reports WHERE status IN ${OPEN} AND entity_id IN (SELECT value FROM json_each(?))
-         ) WHERE rn <= ? ORDER BY created_at DESC`,
+         ) WHERE rn <= ? ORDER BY reason = 'child_safety' DESC, created_at DESC`,
       )
       .bind(ids, REPORT_GROUP_LATEST)
       .all<ReportRow>(),
@@ -445,6 +465,8 @@ export async function buildGroups(env: MetaEnv, rows: GroupRow[]): Promise<{ gro
 /** Keeps the search copies of shown items current (renamed titles, channels, owners). */
 async function storeItemCopies(db: D1Database, rows: ItemCopy[], lookup: Lookup): Promise<void> {
   const statements = (await Promise.all(rows.map(async (row) => {
+    // What a chat message said is copied per report (reportMeta.ts): not every reporter could read it
+    if (row.entity_type === 'live_chat') return [];
     const live = lookup.items.get(itemKey(row.entity_type, row.entity_id));
     if (!live?.found) return [];
     const owner = live.ownerId ? lookup.users.get(live.ownerId) : undefined;
@@ -464,16 +486,20 @@ async function storeItemCopies(db: D1Database, rows: ItemCopy[], lookup: Lookup)
 // Reads
 // ---------------------------------------------------------------------------
 
-export async function listQueue(env: MetaEnv, query: ReturnType<typeof parseQueueQuery>) {
+export async function listQueue(env: MetaEnv, filters: ReturnType<typeof parseQueueQuery>, roles?: readonly unknown[]) {
   const db = env.REPORTS_DB;
+  const query = { ...filters, withheld: !isSuperAdmin(roles) };
   const sql = buildQueueSql(query);
   const [{ results = [] }, counts] = await Promise.all([db.prepare(sql.page.sql).bind(...sql.page.binds).all<GroupRow>(), tabCounts(db, query)]);
   const { groups } = await buildGroups(env, results);
-  return { items: groups, total: counts.actionNeeded, page: query.page, pageSize: query.pageSize, counts };
+  const hidden = await hiddenFrom(db, roles, groups.map((g) => ({ type: g.item.type, id: g.item.id })));
+  const items = groups.map((g) => (isHiddenItem(hidden, g.item.type, g.item.id) ? withheldGroup(g) : g));
+  return { items, total: counts.actionNeeded, page: query.page, pageSize: query.pageSize, counts };
 }
 
-export async function listHistory(env: MetaEnv, query: ReturnType<typeof parseHistoryQuery>) {
+export async function listHistory(env: MetaEnv, filters: ReturnType<typeof parseHistoryQuery>, roles?: readonly unknown[]) {
   const db = env.REPORTS_DB;
+  const query = { ...filters, withheld: !isSuperAdmin(roles) };
   const sql = buildHistorySql(query);
   const [{ results = [] }, total, counts] = await Promise.all([
     db.prepare(sql.page.sql).bind(...sql.page.binds).all<ReportRow>(),
@@ -483,7 +509,9 @@ export async function listHistory(env: MetaEnv, query: ReturnType<typeof parseHi
   const lookup = results.length
     ? await lookupMany(env, results.map((r) => ({ type: r.entity_type, id: r.entity_id })), results.flatMap((r) => [r.reporter_id, r.moderator_id ?? '', r.owner_id ?? '']))
     : null;
-  return { items: results.map((r) => historyRow(r, lookup)), total: Number(total?.n) || 0, page: query.page, pageSize: query.pageSize, counts };
+  const hidden = await hiddenFrom(db, roles, results.map((r) => ({ type: r.entity_type, id: r.entity_id })));
+  const rows = results.map((r) => historyRow(r, lookup)).map((h) => (isHiddenItem(hidden, h.item.type, h.item.id) ? withheldHistory(h) : h));
+  return { items: rows, total: Math.min(Number(total?.n) || 0, COUNT_CAP), page: query.page, pageSize: query.pageSize, counts };
 }
 
 /** One item: its open group (if any), every open report and its closed ones. */
@@ -509,12 +537,13 @@ export async function readItem(env: MetaEnv, type: ReportableEntityType, id: str
   const copy: ItemCopy = anyRow ?? { entity_type: type, entity_id: id, entity_title: null, entity_parent_id: null, channel_id: null, channel_name: null, owner_id: null, owner_name: null };
   const live = lookup?.items.get(itemKey(type, id)) ?? null;
   const ownerId = live?.found ? live.ownerId : await knownOwner(env as never, type, id);
+  const hidden = await hiddenFrom(db, roles, [{ type, id }]);
   return {
-    group: groups[0] ?? null,
-    item: itemSummary(copy, lookup),
-    open: open.map((r) => excerpt(r, lookup)),
-    history: closed.map((r) => historyRow(r, lookup)),
-    outcomes: reportOutcomeOptions({ type, item: live, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, may: (p) => hasContentPermission(roles, p) }),
+    group: groups[0] ? (hidden.size ? withheldGroup(groups[0]) : groups[0]) : null,
+    item: hidden.size ? withheldSummary(itemSummary(copy, lookup)) : itemSummary(copy, lookup),
+    open: open.map((r) => excerpt(r, lookup)).map((e) => (hidden.size ? withheldExcerpt(e) : e)),
+    history: closed.map((r) => historyRow(r, lookup)).map((h) => (hidden.size ? withheldHistory(h) : h)),
+    outcomes: reportOutcomeOptions({ type, item: live, takenDown: hidden.size > 0, ownerKnown: !!ownerId && ownerId !== DELETED_USER_ID, may: (p) => hasContentPermission(roles, p) }),
   };
 }
 
@@ -528,25 +557,29 @@ export async function openReportsOf(db: D1Database, type: ReportableEntityType, 
 }
 
 /** Autocomplete: items whose reports match (open items first, then closed ones), as `${type}:${id}` keys. */
-export async function suggestItems(db: D1Database, q: string, limit: number) {
-  const where = sharedWhere({ q }, 'r', { history: true });
+export async function suggestItems(db: D1Database, q: string, limit: number, roles?: readonly unknown[]) {
+  const withheld = !isSuperAdmin(roles);
+  const where = sharedWhere({ q, withheld }, 'r', { history: true });
+  // A picker opening has nothing to search for: the items of the newest reports
+  const matching = where.sql.length ? `SELECT DISTINCT m.entity_id FROM reports m WHERE ${where.sql.join(' AND ').replace(/\br\./g, 'm.')}` : 'SELECT entity_id FROM (SELECT entity_id FROM reports ORDER BY created_at DESC LIMIT 200)';
   const { results = [] } = await db
     .prepare(
       `SELECT r.entity_type, r.entity_id, MAX(r.entity_title) AS entity_title, MAX(r.entity_parent_id) AS entity_parent_id,
               MAX(r.channel_name) AS channel_name, MAX(r.owner_name) AS owner_name,
               SUM(CASE WHEN r.status IN ${OPEN} THEN 1 ELSE 0 END) AS open_count, MAX(r.created_at) AS last_reported_at
-       FROM reports r WHERE r.entity_id IN (SELECT DISTINCT m.entity_id FROM reports m WHERE ${where.sql.join(' AND ').replace(/\br\./g, 'm.')})
+       FROM reports r WHERE r.entity_id IN (${matching})
        GROUP BY r.entity_type, r.entity_id
        ORDER BY open_count > 0 DESC, last_reported_at DESC LIMIT ?`,
     )
     .bind(...where.binds, limit)
     .all<ItemCopy & { open_count: number }>();
-  return results;
+  const hidden = await hiddenFrom(db, roles, results.map((r) => ({ type: r.entity_type, id: r.entity_id })));
+  return results.map((r) => (isHiddenItem(hidden, r.entity_type, r.entity_id) ? withoutCopies(r) : r));
 }
 
 /** One item by key, for the suggestion chip. */
-export async function suggestItem(db: D1Database, type: ReportableEntityType, id: string) {
-  return db
+export async function suggestItem(db: D1Database, type: ReportableEntityType, id: string, roles?: readonly unknown[]) {
+  const row = await db
     .prepare(
       `SELECT r.entity_type, r.entity_id, MAX(r.entity_title) AS entity_title, MAX(r.entity_parent_id) AS entity_parent_id,
               MAX(r.channel_name) AS channel_name, MAX(r.owner_name) AS owner_name,
@@ -555,6 +588,7 @@ export async function suggestItem(db: D1Database, type: ReportableEntityType, id
     )
     .bind(type, id)
     .first<ItemCopy & { open_count: number }>();
+  return row && (await hiddenFrom(db, roles, [{ type, id }])).size > 0 ? withoutCopies(row) : row;
 }
 
 /** Parses a `${type}:${id}` group key. */

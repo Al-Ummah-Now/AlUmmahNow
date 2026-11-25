@@ -6,6 +6,7 @@
  * (marked `heldBy: 'moderation'` so restore only undoes moderation holds); every action is
  * written to moderation_actions with the reviewer's id.
  */
+import { noCaseAboutSignalSql } from './csam';
 import { updateJson } from './r2Cas';
 import {
   AI_HIDEABLE_CATEGORIES,
@@ -63,8 +64,9 @@ function toSignal(row: SignalRow): ModerationSignal {
   return { ...rest, categories };
 }
 
-export async function listSignals(db: D1Like, filters: SignalFilters) {
-  const where: string[] = [];
+export async function listSignals(db: D1Like, filters: SignalFilters, withheld = false) {
+  // Items under a takedown are for super admins
+  const where: string[] = withheld ? [noCaseAboutSignalSql('s')] : [];
   const params: unknown[] = [];
   const add = (column: string, value: string | undefined) => {
     if (value) {
@@ -82,11 +84,17 @@ export async function listSignals(db: D1Like, filters: SignalFilters) {
   const offset = Math.max(Number(filters.offset) || 0, 0);
 
   const rows = await db
-    .prepare(`SELECT * FROM moderation_signals${clause} ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`)
+    .prepare(`SELECT s.* FROM moderation_signals s${clause} ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`)
     .bind(...params, limit, offset)
     .all<SignalRow>();
-  const count = await db.prepare(`SELECT COUNT(*) AS count FROM moderation_signals${clause}`).bind(...params).first<{ count: number }>();
+  const count = await db.prepare(`SELECT COUNT(*) AS count FROM moderation_signals s${clause}`).bind(...params).first<{ count: number }>();
   return { signals: (rows.results ?? []).map(toSignal), total: Number(count?.count ?? 0), limit, offset };
+}
+
+/** The signal, unless what it is about (or on) is under a takedown and the reader is no super admin. */
+export async function maySeeSignal(db: D1Like, id: string, superAdmin: boolean): Promise<boolean> {
+  if (superAdmin) return true;
+  return !!(await db.prepare(`SELECT 1 AS x FROM moderation_signals s WHERE s.id = ? AND ${noCaseAboutSignalSql('s')}`).bind(id).first<{ x: number }>());
 }
 
 export async function getSignal(db: D1Like, id: string) {
