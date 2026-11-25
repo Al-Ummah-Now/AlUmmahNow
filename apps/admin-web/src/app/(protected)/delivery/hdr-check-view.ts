@@ -8,5 +8,8 @@ export const HDR_REENCODE_MAX = 50;
 export const HDR_KIND_LABEL: Record<HdrKind, MessageKey> = { hlg: 'hdrCheck.kindHlg', pq: 'hdrCheck.kindPq', bt2020: 'hdrCheck.kindBt2020' };
 export const HDR_NOW_LABEL: Record<Exclude<NonNullable<HdrCheckItem['now']>, 'same'>, MessageKey> = { encoding: 'hdrCheck.nowEncoding', replaced: 'hdrCheck.nowReplaced', gone: 'hdrCheck.nowGone' };
 
-/** Videos still showing the rendition that was found to be HDR. */
-export const hdrSelectable = (items: readonly HdrCheckItem[]): string[] => items.filter((i) => !i.now || i.now === 'same').map((i) => i.id);
+/** Videos known to still show the rendition that was found to be HDR (never one whose state was not read). */
+export const hdrSelectable = (items: readonly HdrCheckItem[]): string[] => items.filter((i) => i.now === 'same').map((i) => i.id);
+
+/** The ids /retry did not queue again. */
+export const notQueued = (results: readonly { videoId: string; queued: boolean }[] | undefined): string[] => (results ?? []).filter((r) => !r.queued).map((r) => r.videoId);

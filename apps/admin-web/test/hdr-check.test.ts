@@ -4,13 +4,15 @@ import assert from 'node:assert/strict';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
-import { HDR_KIND_LABEL, HDR_NOW_LABEL, HDR_REENCODE_MAX, hdrSelectable } from '../src/app/(protected)/delivery/hdr-check-view';
+import { HDR_KIND_LABEL, HDR_NOW_LABEL, HDR_REENCODE_MAX, hdrSelectable, notQueued } from '../src/app/(protected)/delivery/hdr-check-view';
 
 const item = (id: string, now?: 'same' | 'encoding' | 'replaced' | 'gone') => ({ id, title: null, kind: 'hlg' as const, rev: 'r', ...(now ? { now } : {}) });
 
 describe('HDR check', () => {
   it('offers only videos still showing the HDR rendition', () => {
-    assert.deepEqual(hdrSelectable([item('a', 'same'), item('b', 'encoding'), item('c', 'replaced'), item('d', 'gone'), item('e')]), ['a', 'e']);
+    assert.deepEqual(hdrSelectable([item('a', 'same'), item('b', 'encoding'), item('c', 'replaced'), item('d', 'gone'), item('e')]), ['a'], 'one whose state was not read is not offered');
+    assert.deepEqual(notQueued([{ videoId: 'a', queued: true }, { videoId: 'b', queued: false }]), ['b']);
+    assert.deepEqual(notQueued(undefined), []);
     assert.equal(HDR_REENCODE_MAX, 50);
   });
   it('has every string in both languages, with the same placeholders, and no «فيديو»', () => {
@@ -21,6 +23,7 @@ describe('HDR check', () => {
       assert.deepEqual(holes(arabic), holes(text), key);
       assert.ok(!arabic.includes('فيديو'), key);
     }
+    assert.notEqual(createTranslator('ar')('auditLog.actions.hdr_check' as never), 'auditLog.actions.hdr_check');
     for (const t of [createTranslator('en'), createTranslator('ar')]) {
       for (const key of [...Object.values(HDR_KIND_LABEL), ...Object.values(HDR_NOW_LABEL)]) assert.notEqual(t(key), key);
     }

@@ -92,7 +92,10 @@ describe('/api/media', () => {
     assert.equal(calls[0].path, '/internal/media/hdr-check');
     assert.equal((await req('/api/media/hdr-check', send('POST', {}))).status, 200);
     assert.deepEqual(calls[1].body, { actorId: 'admin-1' });
-    assert.deepEqual((await audit()).map((r) => [r.key, JSON.parse(r.new_value).action]), [['media:hdr-check', 'hdr_check']]);
+    assert.equal((await audit()).length, 0, 'a check that did not start is no change');
+    const started = setup(['admin'], () => ok({ started: true, run: null }));
+    await started.req('/api/media/hdr-check', send('POST', {}));
+    assert.deepEqual((await started.audit()).map((r) => [r.key, JSON.parse(r.new_value).action]), [['media:hdr-check', 'hdr_check']]);
     const moderator = setup(['moderator']);
     assert.equal((await moderator.req('/api/media/hdr-check')).status, 403);
     assert.equal((await moderator.req('/api/media/hdr-check', send('POST', {}))).status, 403);
@@ -120,6 +123,13 @@ describe('/api/media', () => {
     assert.deepEqual(rows.map((r) => r.key).sort(), [`${MEDIA_VIDEO_AUDIT_PREFIX}${ID}`, `${MEDIA_VIDEO_AUDIT_PREFIX}${other}`].sort());
     assert.equal(JSON.parse(rows[0].new_value).action, 'transcode_again');
     assert.equal(rows[0].actor_id, 'admin-1');
+  });
+
+  it('retry keeps the audit row only of the videos it queued', async () => {
+    const other = 'abcdef12-3456';
+    const { req, audit } = setup(['admin'], () => ok({ results: [{ videoId: ID, queued: true }, { videoId: other, queued: false, why: 'already queued' }] }));
+    assert.equal((await req('/api/media/retry', send('POST', { ids: [ID, other] }))).status, 200);
+    assert.deepEqual((await audit()).map((r) => r.key), [`${MEDIA_VIDEO_AUDIT_PREFIX}${ID}`]);
   });
 
   it('retry refuses bad ids; a failed retry leaves no audit row', async () => {

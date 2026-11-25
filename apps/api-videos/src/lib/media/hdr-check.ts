@@ -7,7 +7,7 @@
  * encode makes every rung, so one rung tells). One page per message on the processing-check queue
  * (index.ts queue()), like the MP4 backfill. The latest run is in global_settings `ops/hdr-check/latest.json`.
  */
-import { hdrKindOf, HDR_CHECK_MAX_ITEMS, initColors, mediaPrefix, type HdrCheckCounts, type HdrCheckItem, type HdrCheckRun, type VideoR2State } from '@al-ummah/shared-types';
+import { hdrKindOf, HDR_CHECK_MAX_ITEMS, initColors, mediaPrefix, underHold, type HdrCheckCounts, type HdrCheckItem, type HdrCheckRun, type VideoR2State } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import type { MediaEnv } from './r2-delivery';
@@ -20,8 +20,8 @@ const PAGE_DELAY_SECONDS = 2;
 export const HDR_CHECK_STALE_MS = 30 * 60_000;
 /** An init segment is 1–2 KB. */
 const INIT_BYTES = 64 * 1024;
-/** The longest list GET looks up (one record read each). */
-const NOW_LIMIT = 100;
+/** Records read at once when a GET says where each listed video is now. */
+const NOW_CONCURRENCY = 8;
 
 export interface HdrCheckMessage {
 	kind: typeof HDR_CHECK_KIND;
@@ -37,7 +37,12 @@ interface Video {
 	title?: string;
 	isDeleted?: boolean;
 	r2?: VideoR2State;
+	suspensionHolds?: unknown;
+	csamTakedown?: unknown;
 }
+
+/** Deleted, or under a hold or takedown (whose purge may still be running): never looked at, never listed. */
+const outOfReach = (video: Video | null): boolean => !video || !!video.isDeleted || underHold(video) || !!video.csamTakedown;
 
 /** Stored with the run: pages already done, so a redelivered page counts nothing twice. */
 type StoredRun = HdrCheckRun & { nextPage: number };
@@ -81,8 +86,11 @@ export async function startHdrCheck(env: Env, actorId: string, now = new Date())
 	if (!env.PROCESSING_CHECK_QUEUE) throw new Error('PROCESSING_CHECK_QUEUE is not bound');
 	const at = now.toISOString();
 	const run: StoredRun = { runId: crypto.randomUUID(), status: 'running', startedAt: at, updatedAt: at, startedBy: actorId, counts: { scanned: 0, checked: 0, hdr: 0, skipped: 0, unreadable: 0 }, items: [], nextPage: 0 };
-	await writeRun(env, run);
+	// Queued first: a send that fails leaves no run that says it is running. The first page waits for the
+	// record if it comes before it (handleHdrCheckMessage). Two starts at once: the later record wins, and
+	// the other run's pages find another run and stop
 	await env.PROCESSING_CHECK_QUEUE.send({ kind: HDR_CHECK_KIND, runId: run.runId, page: 0, cursor: null } satisfies HdrCheckMessage);
+	await writeRun(env, run);
 	logger.info('[HdrCheck] Started', { runId: run.runId, actorId });
 	return { started: true, run: publicRun(run) };
 }
@@ -91,19 +99,30 @@ function publicRun({ nextPage: _page, ...run }: StoredRun): HdrCheckRun {
 	return run;
 }
 
-/** The latest run, each listed video with where it is now. */
-export async function readHdrCheck(env: Env): Promise<HdrCheckRun | null> {
+/**
+ * The latest run. `live`: the figures alone, while it runs (the panel polls them). Otherwise every listed
+ * video with where it is now (one record read each, a few at a time); one that is gone or under a hold or
+ * takedown loses its title.
+ */
+export async function readHdrCheck(env: Env, opts: { live?: boolean } = {}): Promise<HdrCheckRun | null> {
 	const stored = await readRun(env);
 	if (!stored) return null;
+	if (opts.live) return publicRun({ ...stored, items: [] });
 	const repo = new R2Repository<Video>(env.videos);
-	const items: HdrCheckItem[] = [];
-	for (const item of stored.items.slice(0, NOW_LIMIT)) {
-		const video = await repo.getObject(item.id);
-		const r2 = video?.r2;
-		const now = !video || video.isDeleted ? 'gone' : r2?.status === 'queued' || r2?.status === 'transcoding' ? 'encoding' : r2?.status === 'ready' && r2.rev !== item.rev ? 'replaced' : 'same';
-		items.push({ ...item, now });
-	}
-	return publicRun({ ...stored, items: [...items, ...stored.items.slice(NOW_LIMIT)] });
+	const items: HdrCheckItem[] = new Array(stored.items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: Math.min(NOW_CONCURRENCY, stored.items.length) }, async () => {
+			for (let i = next++; i < stored.items.length; i = next++) {
+				const item = stored.items[i]!;
+				const video = await repo.getObject(item.id);
+				const r2 = video?.r2;
+				if (outOfReach(video)) items[i] = { ...item, title: null, now: 'gone' };
+				else items[i] = { ...item, now: r2?.status === 'queued' || r2?.status === 'transcoding' ? 'encoding' : r2?.status === 'ready' && r2.rev !== item.rev ? 'replaced' : 'same' };
+			}
+		}),
+	);
+	return publicRun({ ...stored, items });
 }
 
 /** One page of media_jobs. */
@@ -118,7 +137,7 @@ export async function checkHdrPage(env: Env, cursor: string | null): Promise<{ c
 	for (const id of ids) {
 		counts.scanned++;
 		const video = await repo.getObject(id);
-		const shown = video && !video.isDeleted ? shownRendition(video.r2) : null;
+		const shown = !outOfReach(video) ? shownRendition(video!.r2) : null;
 		if (!video || !shown) {
 			counts.skipped++;
 			continue;
@@ -148,6 +167,11 @@ export async function handleHdrCheckMessage(env: Env, msg: QueueMessageLike, now
 	const body = msg.body as HdrCheckMessage;
 	try {
 		const run = await readRun(env);
+		// The first page can come before its run is recorded (it is queued first): it waits a little
+		if ((!run || run.runId !== body.runId) && body.page === 0 && msg.attempts < 4) {
+			msg.retry({ delaySeconds: 5 });
+			return;
+		}
 		if (!run || run.runId !== body.runId || run.status === 'done' || body.page < run.nextPage) {
 			msg.ack();
 			return;

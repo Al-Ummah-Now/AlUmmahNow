@@ -378,14 +378,14 @@ export async function listMediaJobs(params: { status?: string; limit?: number } 
   return (await fetchAdmin<{ items: MediaJob[] }>(`/api/media/jobs${suffix}`)).items;
 }
 
-/** Transcode again (audited per video in admin-api). */
-export async function retryMediaJobs(ids: string[]): Promise<ActionResult<unknown>> {
+/** Transcode again (audited per video in admin-api): what happened to each. */
+export async function retryMediaJobs(ids: string[]): Promise<ActionResult<{ results?: { videoId: string; queued: boolean; why?: string }[] }>> {
   return mutate('/api/media/retry', 'POST', { ids });
 }
 
 /** The latest HDR check (which published renditions still carry HDR colors), or null. A result, not a throw. */
-export async function getHdrCheck(): Promise<ActionResult<HdrCheckRun | null>> {
-  const result = await readResult<{ run: HdrCheckRun | null }>('/api/media/hdr-check');
+export async function getHdrCheck(live = false): Promise<ActionResult<HdrCheckRun | null>> {
+  const result = await readResult<{ run: HdrCheckRun | null }>(`/api/media/hdr-check${live ? '?live=1' : ''}`);
   return result.ok ? { ok: true, data: result.data?.run ?? null } : result;
 }
 

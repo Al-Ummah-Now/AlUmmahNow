@@ -15,21 +15,54 @@ export interface InitColors {
 	full: boolean;
 }
 
+/** Boxes that hold boxes, on the way to a track's sample entry. */
+const CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl']);
+/** Visual sample entries: 8 bytes of header fields and 70 of picture fields, then their own boxes. */
+const SAMPLE_ENTRIES = new Set(['avc1', 'avc3', 'hvc1', 'hev1', 'av01', 'vp09', 'mp4v', 'encv', 'dvh1', 'dvhe']);
+
 /**
- * The `colr` box of an init segment, or null when it has none. Looks for an `nclx` (or QuickTime `nclc`)
- * box by its type and plausible size, so it needs no walk through every box kind.
+ * The `colr` box of an init segment, found by walking its boxes (moov, trak, mdia, minf, stbl, stsd, the
+ * sample entry), or null when it has none. A box that does not fit where it is ends the walk: a malformed
+ * segment says nothing rather than something read from the wrong bytes.
  */
 export function initColors(bytes: Uint8Array): InitColors | null {
-	const at = (i: number) => String.fromCharCode(bytes[i]!, bytes[i + 1]!, bytes[i + 2]!, bytes[i + 3]!);
-	const u16 = (i: number) => (bytes[i]! << 8) | bytes[i + 1]!;
-	for (let i = 4; i + 14 <= bytes.length; i++) {
-		if (bytes[i] !== 0x63 || at(i) !== 'colr') continue;
-		const size = ((bytes[i - 4]! << 24) | (bytes[i - 3]! << 16) | (bytes[i - 2]! << 8) | bytes[i - 1]!) >>> 0;
-		const kind = at(i + 4);
-		if (size < 18 || size > 64 || i - 4 + size > bytes.length || (kind !== 'nclx' && kind !== 'nclc')) continue;
-		return { primaries: u16(i + 8), transfer: u16(i + 10), matrix: u16(i + 12), full: kind === 'nclx' && (bytes[i + 14]! & 0x80) !== 0 };
-	}
-	return null;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const type = (at: number) => String.fromCharCode(bytes[at]!, bytes[at + 1]!, bytes[at + 2]!, bytes[at + 3]!);
+	// `entry`: inside a visual sample entry, the only place a picture's colr box belongs
+	const walk = (from: number, to: number, depth: number, entry: boolean): InitColors | null => {
+		let at = from;
+		while (at + 8 <= to) {
+			let size = view.getUint32(at);
+			let header = 8;
+			if (size === 1) {
+				if (at + 16 > to) return null;
+				const big = view.getBigUint64(at + 8);
+				if (big > BigInt(to - at)) return null;
+				size = Number(big);
+				header = 16;
+			} else if (size === 0) size = to - at;
+			if (size < header || at + size > to) return null;
+			const kind = type(at + 4);
+			const start = at + header;
+			const end = at + size;
+			if (kind === 'colr' && entry && end - start >= 4) {
+				const sub = type(start);
+				// nclx: 3 code points and the full-range byte (19 bytes in all); QuickTime's nclc has no range byte (18)
+				if ((sub === 'nclx' && size >= header + 11) || (sub === 'nclc' && size >= header + 10)) {
+					return { primaries: view.getUint16(start + 4), transfer: view.getUint16(start + 6), matrix: view.getUint16(start + 8), full: sub === 'nclx' && (bytes[start + 10]! & 0x80) !== 0 };
+				}
+			} else if (depth < 8) {
+				const inner = CONTAINERS.has(kind) ? start : kind === 'stsd' ? start + 8 : SAMPLE_ENTRIES.has(kind) ? start + 78 : -1;
+				if (inner >= 0 && inner <= end) {
+					const found = walk(inner, end, depth + 1, SAMPLE_ENTRIES.has(kind));
+					if (found) return found;
+				}
+			}
+			at = end;
+		}
+		return null;
+	};
+	return walk(0, bytes.length, 0, false);
 }
 
 /** HLG (18) or PQ (16) light, or BT.2020 colors (primaries 9, matrices 9, 10 and 14) without either; null for SDR. */
