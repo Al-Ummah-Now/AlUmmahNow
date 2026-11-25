@@ -30,6 +30,7 @@ import {
   type SearchDb,
 } from '@al-ummah/shared-types';
 import { updateJson, type CasBucket } from './r2Cas';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface D1StatementLike {
   bind(...values: unknown[]): D1StatementLike;
@@ -90,7 +91,7 @@ interface ListRow extends CategorySuggestionRow {
 async function videoSummary(videos: CasBucket | undefined, id: string, payload: string | null): Promise<SuggestionListItem['video']> {
   // The search row exists for public ready videos; others are read from R2
   let raw: Record<string, unknown> | null = null;
-  if (videos) {
+  if (videos && !isInternalVideoKey(id)) {
     const object = await videos.get(id).catch(() => null);
     if (object) raw = JSON.parse(await object.text()) as Record<string, unknown>;
   }
@@ -250,7 +251,7 @@ export async function applyAdminCategory(
       }
       const written = await updateJson<StoredVideo>(env.videos, videoId, (video) => {
         refusal = null;
-        if (!video || video.isDeleted) {
+        if (!video || video.isDeleted || isInternalVideoKey(videoId)) {
           refusal = 'video_missing';
           return undefined;
         }

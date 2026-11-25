@@ -14,6 +14,7 @@
  */
 import { canOnVideo, type AccessVideo } from './channelAccess';
 import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved, type VisibilityFields } from './visibility';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** 'anyone': open to everyone (publicly cacheable); 'viewer': only this signed-in viewer may read it. */
 export type VideoReadAccess = 'anyone' | 'viewer';
@@ -33,6 +34,7 @@ export const VIDEO_NOT_FOUND = { success: false, error: 'Object not found' } as 
 
 /** Reads the video record by id from the videos bucket; null when absent or unreadable. */
 export async function loadVideoRecord<T = Record<string, unknown>>(env: { videos?: R2Bucket }, videoId: string): Promise<T | null> {
+	if (isInternalVideoKey(videoId)) return null;
 	const obj = await env.videos?.get(videoId).catch(() => null);
 	if (!obj) return null;
 	return ((await obj.json().catch(() => null)) as T | null) ?? null;

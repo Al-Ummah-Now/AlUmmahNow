@@ -54,10 +54,10 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** R2 binding of each kind (live streams share the videos bucket under `livestream:`). */
 const BUCKET_FOR_KIND = Object.fromEntries(Object.entries(OWNERSHIP_SOURCES).map(([kind, source]) => [kind, source.bucket])) as Record<OwnershipKind, string>;
-const INTERNAL_VIDEO_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 export const OWNERSHIP_PAGE_SIZE = 100;
 /** Pages one self-heal advances (state persists, so a later heal continues). */
@@ -86,7 +86,7 @@ export function ownershipIdForKey(kind: OwnershipKind, key: string): string | nu
     key = key.slice(prefix.length);
   }
   if (!key || key.includes('/') || key.includes(':')) return null;
-  if (kind === 'video' && INTERNAL_VIDEO_PREFIXES.some(prefix => key.startsWith(prefix))) return null;
+  if (kind === 'video' && isInternalVideoKey(key)) return null;
   return key;
 }
 

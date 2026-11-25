@@ -27,7 +27,7 @@ import {
 	type VideoReviewShadowMarker,
 	type VideoReviewState,
 } from '@al-ummah/shared-types';
-import R2Repository from '../r2Repo';
+import { NonVideoRepository } from '../r2Repo';
 import { logger } from '../logger';
 import { enqueueNotification, type NotificationsEnv } from '../notifications';
 import { streamKey, type LiveStreamRecord } from '../live/streams';
@@ -51,7 +51,7 @@ export interface ReviewedStream extends LiveStreamRecord {
 
 export type LiveApplyResult = { applied: true; review: VideoReviewState } | { applied: false; status: 404 | 409 | 400; why: string };
 
-const repo = (env: Pick<ReviewScanEnv, 'videos'>) => new R2Repository<ReviewedStream>(env.videos);
+const repo = (env: Pick<ReviewScanEnv, 'videos'>) => new NonVideoRepository<ReviewedStream>(env.videos);
 
 const rev = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 

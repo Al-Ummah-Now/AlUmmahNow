@@ -18,6 +18,7 @@ import { logger } from '../../lib/logger';
 import { canOnVideo } from '../../lib/channelAccess';
 import { isVideoRemoved } from '../../lib/visibility';
 import { moderateVideoComment, moderationStatus } from '../../lib/channelComments/moderation';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 const params = z.object({ id: Str({ description: 'Video id' }), cid: Str({ description: 'Comment or reply id' }) });
 
@@ -30,7 +31,7 @@ const responses = {
 };
 
 async function runVideoAction(c: AppContext, userId: string, videoId: string, commentId: string, action: StudioCommentAction): Promise<Response> {
-	const object = await c.env.videos.get(videoId);
+	const object = isInternalVideoKey(videoId) ? null : await c.env.videos.get(videoId);
 	const video = object ? ((await object.json()) as { userId?: string | null; channelId?: string | null }) : null;
 	if (!video || isVideoRemoved(video as never)) return c.json({ success: false, error: 'Object not found' }, 404);
 	if (!(await canOnVideo(c.env as never, video, userId, 'comment.moderate'))) return c.json({ success: false, error: 'Forbidden' }, 403);

@@ -26,6 +26,7 @@ import {
   sumSeries,
   videoAnalytics,
 } from "../../lib/analytics";
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -274,7 +275,7 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
     const { params, query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const object = await c.env.videos.get(params.videoId);
+      const object = isInternalVideoKey(params.videoId) ? null : await c.env.videos.get(params.videoId);
       const video = object ? await object.json<AnalyticsVideo>() : null;
       if (!video || video.isDeleted) return c.json({ success: false, error: "Video not found" }, 404);
       if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {
@@ -321,7 +322,7 @@ export class AnalyticsRetentionGet extends AuthenticatedRoute {
     const { params, query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const object = await c.env.videos.get(params.videoId);
+      const object = isInternalVideoKey(params.videoId) ? null : await c.env.videos.get(params.videoId);
       const video = object ? await object.json<AnalyticsVideo>() : null;
       if (!video || video.isDeleted) return c.json({ success: false, error: "Video not found" }, 404);
       if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {

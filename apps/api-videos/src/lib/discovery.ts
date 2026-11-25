@@ -16,6 +16,7 @@ import { isVideoPubliclyVisible } from './visibility';
 import { detectTextLanguage } from '@al-ummah/shared-types';
 import { PUBLIC_DISLIKES_COUNT } from "./reactions";
 import { channelNameFields } from './channelName';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface DiscoveryVideo {
   id: string;
@@ -386,10 +387,8 @@ export function rankRecommendations(
  * (`share-cards/v3/...jpg`); a video is a top-level JSON object, so those are skipped by key
  * without being read (prod 2026-11-17: a share card JPEG was parsed as a video).
  */
-const NON_VIDEO_KEY_PREFIXES = ['index:', 'metadata:', 'livestream:'];
-
 export function isVideoObjectKey(key: string): boolean {
-  return !!key && !key.includes('/') && !NON_VIDEO_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
+  return !!key && !key.includes('/') && !isInternalVideoKey(key);
 }
 
 export async function loadDiscoverableVideos(bucket: R2Bucket, maxVideos = 500): Promise<DiscoveryVideo[]> {

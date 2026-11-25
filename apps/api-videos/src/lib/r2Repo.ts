@@ -1,3 +1,4 @@
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 
@@ -41,11 +42,26 @@ export function casBackoff(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * ceiling)));
 }
 
+/**
+ * JSON records of a bucket, by key. Keys of the videos bucket that are not videos (isInternalVideoKey)
+ * do not exist here: an id a caller sends never reads, changes or lists a live stream or an index as
+ * if it were a video. NonVideoRepository is for the code that means those records.
+ */
 class R2Repository<T> {
   private bucket: R2Bucket;
+  protected readonly nonVideos: boolean = false;
 
   constructor(bucket: R2Bucket) {
     this.bucket = bucket;
+  }
+
+  /** Not a record of this repository. */
+  private foreign(id: string): boolean {
+    return !this.nonVideos && isInternalVideoKey(id);
+  }
+
+  private refuseForeign(id: string): void {
+    if (this.foreign(id)) throw new Error('Not a key this repository writes');
   }
 
   async listObjects(limit: number, cursor?: string, prefix?: string): Promise<PaginationResponse<T>> {
@@ -74,6 +90,7 @@ class R2Repository<T> {
   }
 
   async getObject(id: string): Promise<T | null> {
+    if (this.foreign(id)) return null;
     try {
       const object = await this.bucket.get(id);
 
@@ -96,6 +113,7 @@ class R2Repository<T> {
   }
 
   async putObject(id: string, data: T): Promise<void> {
+    this.refuseForeign(id);
     const options: R2PutOptions = {
       httpMetadata: { contentType: 'application/json' },
     };
@@ -129,6 +147,7 @@ class R2Repository<T> {
     mutate: (data: T) => boolean | void,
     opts: { maxAttempts?: number; initial?: () => T } = {},
   ): Promise<T | null> {
+    if (this.foreign(id)) return null;
     const maxAttempts = opts.maxAttempts ?? DEFAULT_CAS_ATTEMPTS;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const object = await this.bucket.get(id);
@@ -176,6 +195,7 @@ class R2Repository<T> {
    * Resolves to true when this call created it, false when it already existed.
    */
   async createObject(id: string, data: T): Promise<boolean> {
+    this.refuseForeign(id);
     const written = await this.bucket.put(id, JSON.stringify(data), {
       httpMetadata: { contentType: 'application/json' },
       onlyIf: CREATE_ONLY,
@@ -184,8 +204,14 @@ class R2Repository<T> {
   }
 
   async deleteObject(id: string): Promise<void> {
+    this.refuseForeign(id);
     await this.bucket.delete(id);
   }
+}
+
+/** Every key of the bucket: live streams and section indexes in the videos bucket, and code that handles both kinds by key. */
+export class NonVideoRepository<T> extends R2Repository<T> {
+  protected override readonly nonVideos: boolean = true;
 }
 
 export default R2Repository;

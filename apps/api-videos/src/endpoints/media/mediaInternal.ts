@@ -45,6 +45,7 @@ import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 const MAX_IDS = 50;
 
@@ -124,7 +125,7 @@ export function createMediaInternalRouter() {
 
 	app.get('/source/:videoId', async (c) => {
 		const id = c.req.param('videoId');
-		if (!isMediaVideoId(id)) return c.json({ success: false, error: 'bad id' }, 400);
+		if (!isMediaVideoId(id) || isInternalVideoKey(id)) return c.json({ success: false, error: 'bad id' }, 400);
 		const video = await c.env.videos.get(id);
 		if (!video) return c.json({ success: false, error: 'video not found' }, 404);
 		// The source lives in the video's own Bunny library

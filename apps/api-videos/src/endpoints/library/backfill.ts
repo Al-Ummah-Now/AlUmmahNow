@@ -18,6 +18,7 @@ import { PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { importLegacySubscriptions } from "../../lib/subscription-store";
 import { isInternalRecord } from "../../lib/visibility";
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
@@ -91,6 +92,7 @@ export class LibraryBackfill extends PublicRoute {
 			const listing = await bucket.list({ limit: PAGE_SIZE, cursor });
 			const objects = await Promise.all(
 				listing.objects.map(async (o) => {
+					if (isInternalVideoKey(o.key)) return null;
 					try {
 						const obj = await bucket.get(o.key);
 						return obj ? await obj.json() : null;

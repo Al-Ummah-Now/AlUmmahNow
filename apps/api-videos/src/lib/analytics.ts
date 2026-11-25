@@ -21,6 +21,7 @@ import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
 import { subscriberDailyStats } from './subscription-store';
 import { localDayEnd, localDayKey, localDayStart, validTimeZone } from './local-day';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface AnalyticsVideo {
   id: string;
@@ -310,7 +311,6 @@ export function buildSummary(videos: AnalyticsVideo[], channels: AnalyticsChanne
 // R2 loaders
 // ---------------------------------------------------------------------------
 
-const SKIPPED_VIDEO_KEY_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
   try {
@@ -399,7 +399,7 @@ export async function loadOwnedVideos(
     const page = await bucket.list({ limit: 100, cursor });
     const keys = page.objects
       .map(o => o.key)
-      .filter(key => !SKIPPED_VIDEO_KEY_PREFIXES.some(prefix => key.startsWith(prefix)));
+      .filter(key => !isInternalVideoKey(key));
     scanned += keys.length;
     const items = await Promise.all(keys.map(key => readJson<AnalyticsVideo>(bucket, key)));
     videos.push(...items.filter(isOwned));

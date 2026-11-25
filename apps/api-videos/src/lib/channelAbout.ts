@@ -6,6 +6,7 @@ import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { logger } from './logger';
 import { isVideoPubliclyVisible } from './visibility';
 import { countSubscribers } from './subscriptions';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface VisibleChannelFields {
 	userId?: string;
@@ -54,7 +55,7 @@ export async function computeChannelTotals(videosBucket: R2Bucket, channelId: st
 		const page = await videosBucket.list({ limit: 100, cursor });
 		const objects = page.objects.slice(0, Math.max(0, maxObjects - scanned));
 		scanned += objects.length;
-		const videos = await Promise.all(objects.map(async (o) => {
+		const videos = await Promise.all(objects.filter((o) => !isInternalVideoKey(o.key)).map(async (o) => {
 			try {
 				const obj = await videosBucket.get(o.key);
 				return obj ? await obj.json<ScannedVideo>() : null;

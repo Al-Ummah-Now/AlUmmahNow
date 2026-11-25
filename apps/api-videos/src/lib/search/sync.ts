@@ -59,6 +59,7 @@ import { deleteEdgeCache } from '../edge-cache';
 import { chatCacheUrl } from '../live/chat';
 import { accessChangedFor, broadcast } from '../websocket-notify';
 import { onHeldVideoRemoved } from '../live/premieres';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -67,8 +68,6 @@ export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
   playlists: 'playlist',
   community_posts: 'post',
 };
-
-const VIDEO_INTERNAL_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 /**
  * Map an R2 key to the entity id it stores, or null when the key does not hold
@@ -81,7 +80,7 @@ export function searchIdForKey(type: SearchEntityType, key: string): string | nu
     return match && match[2] !== 'index' ? match[2] : null;
   }
   if (key.includes('/')) return null;
-  if (type === 'video' && VIDEO_INTERNAL_PREFIXES.some(prefix => key.startsWith(prefix))) return null;
+  if (type === 'video' && isInternalVideoKey(key)) return null;
   if (key.includes(':')) return null;
   return key;
 }
