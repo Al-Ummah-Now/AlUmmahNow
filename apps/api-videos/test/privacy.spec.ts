@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { PrivacyConsentGet, PrivacyConsentPut, PrivacyErase, PrivacyExport, appendConsentRecord, CONSENT_HISTORY_LIMIT } from '../src/endpoints/privacy/privacy';
+import { ReportCreate } from '../src/endpoints/moderation/reportCreate';
 import { collectUserData, eraseUserData, DELETED_USER_ID, EXPORT_LIST_FIELDS } from '../src/lib/privacy/user-data';
 import { backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
 import { createSqliteD1 } from './sqlite-d1';
@@ -110,6 +111,23 @@ describe('collectUserData (export)', () => {
 	let env: Env;
 	beforeEach(() => {
 		env = seed();
+	});
+
+	it('has every report the person filed, from the dialog or /report, once and as they filed it (#1940)', async () => {
+		const queue = new MemoryQueue();
+		const reports = new MemoryBucket({});
+		const file = (userId: string, body: Record<string, unknown>) =>
+			buildApp((r: any) => r.post('/api/reports', ReportCreate), { userId }).request('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json', channelId: 'ch' }, body: JSON.stringify(body) }, { ...env, reports, queue });
+		// Both places send a signed-in person's report here; one may be raised to child safety
+		assert.equal((await file(ME, { entityType: 'video', entityId: 'v-other', reason: 'spam', description: 'my words' })).status, 200);
+		assert.equal((await file(ME, { entityType: 'video', entityId: 'v-other', reason: 'child_safety' })).status, 200);
+		assert.equal((await file(ME, { entityType: 'channel', entityId: 'ch-other', reason: 'other' })).status, 200);
+		assert.equal((await file('someone-else', { entityType: 'video', entityId: 'v-other', reason: 'spam' })).status, 200);
+		const { reportsFiled } = await collectUserData({ ...env, reports } as never, ME, new OperationBudget(10_000));
+		assert.deepEqual(reportsFiled.map((r) => [r.entityId, r.reason, r.description ?? null]).sort(), [['ch-other', 'other', null], ['v-other', 'child_safety', null], ['v-other', 'spam', 'my words']]);
+		assert.equal(new Set(reportsFiled.map((r) => r.id)).size, 3);
+		const own = ['id', 'entityType', 'entityId', 'reason', 'description', 'reporterId', 'reporterChannelId', 'status', 'dateCreated'];
+		for (const r of reportsFiled) assert.deepEqual(Object.keys(r).filter((k) => !own.includes(k)), []);
 	});
 
 	it('gathers everything stored about the user across buckets', async () => {

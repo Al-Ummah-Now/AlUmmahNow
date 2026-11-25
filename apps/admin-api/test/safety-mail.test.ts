@@ -108,7 +108,10 @@ describe('child safety alerts by email', () => {
     }
     assert.deepEqual(sent.map((m) => m.to), [['errors@example.org']]);
     const out = await ingestErrorEvents(t.db as never, [ev('csam:case-2', { title: 'Another kind' })], { now: new Date(), environment: 'production' });
-    assert.equal(out.created.length, 1);
+    assert.deepEqual([out.accepted, out.created.length, out.safety.length], [1, 0, 1]);
+    // An open item under another title starts a group: that is no news to anyone
+    const again = await ingestErrorEvents(t.db as never, [ev('csam:case-2', { title: 'Retitled kind' })], { now: new Date(), environment: 'production' });
+    assert.deepEqual([again.accepted, again.created.length, again.spiking.length, again.safety.length], [1, 0, 0, 0]);
     assert.deepEqual(errorLiveEvents(out, 0), [{ kind: 'changed', key: 'changed' }]);
   });
 
@@ -161,7 +164,7 @@ describe('child safety alerts by email', () => {
   it('goes through the mail queue’s consumer', async () => {
     const t = setup();
     let acked = 0;
-    await contactMailConsumer({ messages: [{ id: 'm', body: { v: 1, kind: 'safety_alert', id: 'a', groupId: 'eg_0000000000000000', topic: 'case', path: '/x' } as never, attempts: 1, ack: () => void acked++, retry: () => assert.fail('retried') }] }, t.env as never);
+    await contactMailConsumer({ messages: [{ id: 'm', body: { v: 1, kind: 'safety_alert', id: 'a', groupId: 'eg_0000000000000000', topic: 'case', path: '/x' }, attempts: 1, ack: () => void acked++, retry: () => assert.fail('retried') }] }, t.env as never);
     assert.equal(acked, 1);
   });
 

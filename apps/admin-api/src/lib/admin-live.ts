@@ -22,10 +22,9 @@ export function publishAdminLiveInBackground(c: ContextLike, topic: AdminLiveTop
 }
 
 /** admin:errors events of an ingest: one per new (non-test) group, then a refresh hint. */
-export function errorLiveEvents(outcome: Pick<IngestOutcome, 'accepted' | 'created' | 'reopened'> & Partial<Pick<IngestOutcome, 'safety'>>, resolved: number): AdminLiveEvent[] {
+export function errorLiveEvents(outcome: Pick<IngestOutcome, 'accepted' | 'created' | 'reopened'>, resolved: number): AdminLiveEvent[] {
   const events: AdminLiveEvent[] = outcome.created
-    // Every admin with the Errors page open hears this: not of the super admins' items
-    .filter((g) => !g.test && !outcome.safety?.some((s) => s.groupId === g.id))
+    .filter((g) => !g.test)
     .map((g) => ({ kind: 'error', key: `group:${g.id}`, groupId: g.id, isNew: true, errorKind: g.kind, app: g.app, environment: g.environment }));
   if (outcome.accepted > 0 || outcome.reopened.length > 0 || resolved > 0) events.push({ kind: 'changed', key: 'changed' });
   return events;
