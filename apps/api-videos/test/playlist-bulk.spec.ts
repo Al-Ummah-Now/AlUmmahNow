@@ -10,6 +10,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { ADMIN_JOB_MAX_RETRIES, PLAYLIST_BULK_SYNC_MAX, mergePlaylistOrder, playlistSortOf, sortPlaylistVideoIds, uniqueVideoIds, type PlaylistSort } from '@al-ummah/shared-types';
 import { MemoryBucket, MemoryQueue, SlowBucket, buildApp, videoFixture } from './helpers';
+import { runOwnershipPass } from '../src/lib/search/ownership';
 import { SqliteD1 } from './search-sqlite-d1';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
@@ -371,6 +372,7 @@ describe('existing playlist routes follow playlist.manage', () => {
 
 	it('managers see the channel\'s private playlists in the list and by id; others do not', async () => {
 		const env = setup({ playlists: { pl: playlist('pl', { isPublic: false }), pub: playlist('pub') } });
+		await runOwnershipPass(env as never, 'playlist', { maxPages: 10 });
 		const listFor = async (userId: string) => (await call(env, userId, 'GET', '/api/playlists?channelId=ch&limit=50')).body.data.map((p: any) => p.id).sort();
 		assert.deepEqual(await listFor('ed'), ['pl', 'pub']);
 		assert.deepEqual(await listFor('mod'), ['pub']);
@@ -467,6 +469,7 @@ describe('GET /api/videos: the picker filters', () => {
 				d: videoFixture({ id: 'd', title: 'Tafsir elsewhere', userId: 'someone', channelId: 'other' }),
 			},
 		});
+		await runOwnershipPass(env as never, 'video', { maxPages: 10 });
 		const list = async (query: string) => (await call(env, OWNER, 'GET', `/api/videos?channelId=ch&limit=50&${query}`)).body.data.map((v: any) => v.id).sort();
 		assert.deepEqual(await list('format=short'), ['b']);
 		assert.deepEqual(await list('format=video'), ['a', 'c']);

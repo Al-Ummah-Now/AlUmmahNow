@@ -131,14 +131,13 @@ export class PlaylistsList extends OptionalAuthRoute {
                     isListed: listedForChannel,
                 });
                 if (indexed) {
+                    if (indexed.incomplete && !cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
                     logger.debug('[PlaylistsList] Channel playlists listed', { channelId: channelFilter, count: indexed.items.length, source: 'index' });
                     return { cursor: indexed.cursor, limit, data: await withPlaylistCovers(c.env, indexed.items.map(toPlaylistResponse), userId) };
                 }
-                // Index unavailable: the scan below answers and the rebuild is queued (never run here)
-                if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
             }
-            // R2 has no secondary index, so scan pages and filter by channel (title searches,
-            // and while the index is unavailable).
+            // R2 has no secondary index, so scan pages and filter by channel (title searches, and a
+            // local run without an index).
             const matches: PlaylistType[] = [];
             let scanCursor: string | undefined;
             for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
@@ -188,15 +187,14 @@ export class PlaylistsList extends OptionalAuthRoute {
             isListed: listed,
         });
         if (indexed) {
+            if (indexed.incomplete && !cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
             return { cursor: indexed.cursor, limit, data: await withPlaylistCovers(c.env, indexed.items.map(toPlaylistResponse), userId) };
         }
-        if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
 
-        // Index unavailable: fill the page from the bucket. Filtering a cut R2 page returned
+        // Without an index (a local run): fill the page from the bucket. Filtering a cut R2 page returned
         // empty pages with a cursor when the first keys were private or system playlists (lib/listFill.ts).
         const scan = await scanFill<PlaylistType>({
             bucket: c.env.playlists,
-            // An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
             cursor: isIndexPageCursor(cursor) ? null : cursor,
             limit,
             load,

@@ -7,6 +7,7 @@
  * - POST /internal/channels/backfill-handles          (X-API-Key) default handles for old channels
  */
 
+import { IndexUnavailableError } from '../../lib/search/index-unavailable';
 import { Bool, Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -154,14 +155,12 @@ export class ChannelAbout extends OptionalAuthRoute {
 		if (!channel) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		// Ownership index: one aggregate query. Until the index is complete,
-		// scan the videos bucket as before and rebuild the index in the background.
+		// Ownership index: one aggregate query; partial while it waits for a repair. The bucket only without an index (a local run)
 		let totals = await channelTotalsFromIndex(c.env as never, id);
+		if (!totals && (c.env as { SEARCH_DB?: unknown }).SEARCH_DB) throw new IndexUnavailableError();
 		const source = totals ? "index" : "scan";
-		if (!totals) {
-			totals = await computeChannelTotals(c.env.videos, id);
-			scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
-		}
+		if (totals?.partial) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
+		totals ??= await computeChannelTotals(c.env.videos, id);
 		logger.debug('[ChannelAbout] Totals', { channelId: id, source, ...totals });
 		return { success: true, result: buildChannelAbout(channel, totals) };
 	}

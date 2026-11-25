@@ -42,11 +42,13 @@ describe('pageFromIndex (playlists, live streams)', () => {
 		assert.ok(isIndexPageCursor('ks:x') && isIndexPageCursor('12') && !isIndexPageCursor('sa:abc') && !isIndexPageCursor(''));
 	});
 
-	it('leaves a bucket-scan cursor to the caller and reports the end of the list', async () => {
+	it('a bucket-scan cursor ends the list (null only without an index); the end of the list is reported', async () => {
 		const calls: Array<{ after: KeysetPosition | null; limit: number; offset: number }> = [];
 		const opts = { sort: 'latest' as const, limit: 50, fetch: fakeFetch(calls), load: async (id: string) => ({ id }), isListed: (p: { id: string } | null): p is { id: string } => !!p };
-		assert.equal(await pageFromIndex({ ...opts, cursor: 'sa:abc' }), null);
-		assert.equal(calls.length, 0);
+		assert.deepEqual(await pageFromIndex({ ...opts, cursor: 'sa:abc' }), { items: [], cursor: '', examined: 0 });
+		assert.equal(await pageFromIndex({ ...opts, fetch: async () => null, cursor: 'sa:abc' }), null);
+		assert.equal(calls.length, 1, 'only whether there is an index');
+		calls.length = 0;
 		const first = await pageFromIndex({ ...opts, cursor: null });
 		const last = await pageFromIndex({ ...opts, cursor: first!.cursor });
 		assert.equal(last!.items.length, 50);

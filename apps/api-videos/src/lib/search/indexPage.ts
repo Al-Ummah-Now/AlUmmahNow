@@ -9,7 +9,7 @@
  * Cursors: `ks:…` keyset positions. Offset cursors issued before keyset
  * paging (a bare number, or `idx:<n>`) are still accepted for the first read
  * and capped at MAX_LEGACY_OFFSET; the next cursor is a keyset one. Anything
- * else belongs to the caller's bucket scan (lib/listFill.ts).
+ * else ends the list.
  */
 
 import { decodeKeysetCursor, encodeKeysetCursor, KEYSET_CURSOR_PREFIX, type KeysetPage, type KeysetPosition, type OwnershipSort } from './ownership';
@@ -48,13 +48,13 @@ export function isIndexPageCursor(cursor: string | undefined | null): boolean {
 }
 
 /**
- * The page, or null when the index cannot answer or the cursor is not one it
- * reads (the caller's bucket scan continues it).
+ * The page, also while the index is incomplete (`incomplete`: the caller queues its repair). Null only
+ * without an index (a local run). A cursor it does not read ends the list.
  *
  * Cost: at most MAX_FILL_PAGES index queries and as many object loads as rows
  * consumed (normally `limit`, the index already filters visibility).
  */
-export async function pageFromIndex<T>(options: IndexPageOptions<T>): Promise<{ items: T[]; cursor: string; examined: number } | null> {
+export async function pageFromIndex<T>(options: IndexPageOptions<T>): Promise<{ items: T[]; cursor: string; examined: number; incomplete?: true } | null> {
 	const limit = Math.max(1, Math.floor(options.limit) || 1);
 	const pageSize = Math.min(MAX_INDEX_PAGE, Math.max(limit, MIN_INDEX_PAGE));
 	let position: KeysetPosition | null = null;
@@ -63,16 +63,17 @@ export async function pageFromIndex<T>(options: IndexPageOptions<T>): Promise<{ 
 		const legacy = legacyOffset(options.cursor);
 		if (legacy !== null) offset = legacy;
 		else {
-			if (!options.cursor.startsWith(KEYSET_CURSOR_PREFIX)) return null;
-			position = decodeKeysetCursor(options.cursor, options.sort);
-			if (!position) return null;
+			position = options.cursor.startsWith(KEYSET_CURSOR_PREFIX) ? decodeKeysetCursor(options.cursor, options.sort) : null;
+			if (!position) return (await options.fetch(null, 1, 0)) ? { items: [], cursor: '', examined: 0 } : null;
 		}
 	}
 	const items: T[] = [];
 	let examined = 0;
+	let incomplete: { incomplete?: true } = {};
 	for (let page = 0; page < MAX_FILL_PAGES; page++) {
 		const found = await options.fetch(position, pageSize, position ? 0 : offset);
 		if (!found) return null;
+		if (found.incomplete) incomplete = { incomplete: true };
 		let consumed = 0;
 		while (consumed < found.ids.length && items.length < limit) {
 			const batch = found.ids.slice(consumed, consumed + Math.min(LOAD_CONCURRENCY, Math.max(limit - items.length, 4)));
@@ -85,8 +86,8 @@ export async function pageFromIndex<T>(options: IndexPageOptions<T>): Promise<{ 
 			}
 		}
 		if (consumed) position = found.positions[consumed - 1];
-		if (consumed >= found.ids.length && !found.hasMore) return { items, cursor: '', examined };
+		if (consumed >= found.ids.length && !found.hasMore) return { items, cursor: '', examined, ...incomplete };
 		if (items.length >= limit) break;
 	}
-	return { items, cursor: position ? encodeKeysetCursor(position) : '', examined };
+	return { items, cursor: position ? encodeKeysetCursor(position) : '', examined, ...incomplete };
 }

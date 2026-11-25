@@ -263,13 +263,13 @@ export async function populateSectionContent(
 /** Long-form only, Shorts only, or every upload (never live streams) */
 type UploadForm = 'long' | 'shorts' | 'all';
 
-/** Parallel reads per batch when the index cannot answer and the bucket is scanned */
+/** Parallel reads per batch when there is no index and the bucket is scanned */
 const SCAN_CONCURRENCY = 25;
 
 /**
  * A channel's public uploads (long-form or Shorts), newest first or most
- * viewed first. Answered from the ownership index (D1); falls back to a
- * bounded bucket scan while the index is unavailable.
+ * viewed first. Answered from the ownership index (D1); a bounded bucket scan
+ * without one (a local run).
  */
 async function getChannelUploads(
   channelId: string,
@@ -413,8 +413,8 @@ async function getPlaylistsByIds(playlistIds: string[], channelId: string, env: 
 /**
  * The channel's public playlists, newest first: one page of the ownership
  * index (kind 'playlist'), so a channel's playlists are found however many
- * playlists the bucket holds. A bounded bucket slice while the index is
- * unavailable (its rebuild is queued).
+ * playlists the bucket holds. A bounded bucket slice without an index (a
+ * local run).
  */
 async function getChannelPlaylists(channelId: string, limit: number, env: any): Promise<Record<string, unknown>[]> {
   const repo = new R2Repository<StoredPlaylist>(env.playlists);
@@ -423,9 +423,9 @@ async function getChannelPlaylists(channelId: string, limit: number, env: any): 
   const indexed = await playlistListIds(env, { channelId, sort: 'latest', limit, privateFor: null });
   let own: StoredPlaylist[];
   if (indexed) {
+    if (indexed.incomplete) scheduleOwnershipHeal(env, null, 'playlist');
     own = (await Promise.all(indexed.ids.map((id) => repo.getObject(id).catch(() => null)))).filter(listable);
   } else {
-    scheduleOwnershipHeal(env, null, 'playlist');
     const page = await repo.listObjects(FALLBACK_SCAN_OBJECTS);
     own = (page.items || [])
       .filter(listable)
@@ -457,10 +457,10 @@ async function getLiveStreams(channelId: string, limit: number, env: any, filter
   const pages = await Promise.all(statuses.map((status) => streamListIds(env, { channelId, status, limit: STREAM_SHELF_CANDIDATES, viewerId: null })));
   let streams: StoredLiveStream[];
   if (pages.every(Boolean)) {
+    if (pages.some((page) => page!.incomplete)) scheduleOwnershipHeal(env, null, 'stream');
     const ids = pages.flatMap((page) => page!.ids);
     streams = (await Promise.all(ids.map((id) => repo.getObject(`livestream:${id}`).catch(() => null)))).filter(shown);
   } else {
-    scheduleOwnershipHeal(env, null, 'stream');
     const listed = await env.videos.list({ prefix: 'livestream:', limit: FALLBACK_SCAN_OBJECTS });
     streams = (await Promise.all((listed.objects || []).map((o: { key: string }) => repo.getObject(o.key)))).filter(shown);
   }

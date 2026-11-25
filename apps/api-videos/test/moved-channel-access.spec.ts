@@ -498,20 +498,20 @@ describe('what hangs on a private video follows its channel of now, a move finis
 		}
 	});
 
-	it('while the channel index is rebuilt the lists scan instead', async () => {
+	it('while the channel index is rebuilt the lists read the rows there are, and say so', async () => {
 		const { env } = await open(true);
 		(env as any).SEARCH_DB.db.prepare(`DELETE FROM search_meta WHERE key = ?`).run(ownershipCompleteKey('channel'));
 		assert.equal(await ownVideoIds(env as never, NOW), null);
 		const mine = { sort: 'latest' as const, limit: 10, privateFor: NOW };
 		for (const channelId of [null, 'ch1']) {
-			assert.equal(await channelVideoIds(env as never, channelId, mine), null);
-			assert.ok(await channelVideoIds(env as never, channelId, { ...mine, privateFor: null }), 'public lists do not need it');
+			assert.equal((await channelVideoIds(env as never, channelId, mine))!.incomplete, true);
+			assert.equal((await channelVideoIds(env as never, channelId, { ...mine, privateFor: null }))!.incomplete, undefined, 'public lists do not need it');
 		}
-		assert.equal(await videoListIds(env as never, 'ch1', mine), null);
-		assert.ok(await videoListIds(env as never, 'ch1', { ...mine, privateFor: null }));
+		assert.equal((await videoListIds(env as never, 'ch1', mine))!.incomplete, true);
+		assert.equal((await videoListIds(env as never, 'ch1', { ...mine, privateFor: null }))!.incomplete, undefined);
 	});
 
-	it('a list or search that scans asks for the channel index too', async () => {
+	it('a list on an incomplete index, or a search that scans, asks for the channel index too', async () => {
 		for (const path of ['/api/videos?limit=50', '/api/videos/search?isOwner=true']) {
 			const { env, call } = await open(true);
 			env.ADMIN_JOBS_QUEUE = new MemoryQueue();
