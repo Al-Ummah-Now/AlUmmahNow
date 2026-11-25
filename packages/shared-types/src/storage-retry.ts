@@ -58,7 +58,9 @@ export async function withStorageRetry<T>(op: string, fn: () => Promise<T>, opts
       return await fn();
     } catch (error) {
       if (!isTransientStorageError(error)) throw error;
-      if (attempt >= retries) throw error instanceof TransientStorageError ? error : new TransientStorageError(op, error, attempt + 1);
+      // Already retried by a layer below: not again
+      if (error instanceof TransientStorageError) throw error;
+      if (attempt >= retries) throw new TransientStorageError(op, error, attempt + 1);
       const delay = baseDelayMs * 2 ** attempt * (0.5 + Math.random());
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

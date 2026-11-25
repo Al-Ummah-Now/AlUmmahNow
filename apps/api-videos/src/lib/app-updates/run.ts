@@ -8,7 +8,7 @@ import { indexReleases, type IndexResult, type ReleasesEnv } from './releases';
 
 export async function runReleaseIndex(env: ReleasesEnv & ErrorReporterEnv & AttestationEnv, ctx: ExecutionContext | undefined, opts: { force?: boolean; fetchImpl?: typeof fetch } = {}): Promise<IndexResult> {
 	// No Team ID in Settings → Mobile apps: no app is in the App Store yet
-	const { apple } = await loadMobileAppsSettings(env);
+	const { apple } = await loadMobileAppsSettings(env, opts.fetchImpl as never);
 	return indexReleases(env, {
 		...opts,
 		appStoreBundles: apple.teamId ? apple.apps.map((a) => a.bundleId) : [],

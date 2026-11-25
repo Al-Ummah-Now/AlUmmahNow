@@ -130,12 +130,12 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
       // Generate entry ID
       const entryId = `${userId}:${videoId}`;
 
-      // Read together: this runs every 10 s of playback. Each read is retried (R2 10001 and the like)
+      // Read together: this runs every 10 s of playback. R2Repository retries each read (R2 10001 and the like)
       const [paused, existingEntry, kids] = await Promise.all([
-        withStorageRetry("get", () => isWatchHistoryPaused(c.env.profiles, userId), RETRY),
-        withStorageRetry("get", () => watchHistoryRepo.getObject(entryId), RETRY),
+        isWatchHistoryPaused(c.env.profiles, userId),
+        watchHistoryRepo.getObject(entryId),
         // Made for kids: an entry from before it was marked stays as it is (wiki E20 §5.5)
-        withStorageRetry("get", () => kidsVideo(c.env, videoId), RETRY),
+        kidsVideo(c.env, videoId),
       ]);
       if (paused) return c.json({ paused: true, videoId }, 200);
       // Nothing to update yet: the client records the first watch instead
