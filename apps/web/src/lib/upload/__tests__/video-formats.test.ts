@@ -8,6 +8,7 @@ import { AR_TRANSLATIONS, EN_TRANSLATIONS, fillTemplate } from '@al-ummah/shared
 import {
   VIDEO_FORMATS,
   VIDEO_PICKER_ACCEPT,
+  bidiIsolate,
   isAcceptedVideoFile,
   videoFormatOf,
   videoFormatsText,
@@ -102,7 +103,11 @@ describe('video file check', () => {
     expect(labels).toEqual(['MP4', 'M4V', 'MOV', 'WebM', 'MKV', 'AVI', 'WMV', 'FLV']);
     expect(VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES).toEqual(VIDEO_FORMATS.map((f) => f.mimeType));
     expect(videoFormatsText('en')).toBe('MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV');
-    expect(videoFormatsText('ar')).toBe('MP4، M4V، MOV، WebM، MKV، AVI، WMV، FLV');
+    const FSI = '\u2068';
+    const PDI = '\u2069';
+    // Every name isolated, so the list reads in Arabic order: MP4 first, next to the text before it
+    expect(videoFormatsText('ar')).toBe(['MP4', 'M4V', 'MOV', 'WebM', 'MKV', 'AVI', 'WMV', 'FLV'].map((n) => `${FSI}${n}${PDI}`).join('، '));
+    expect(videoFormatsText('ar').replace(/[\u2068\u2069]/g, '')).toBe('MP4، M4V، MOV، WebM، MKV، AVI، WMV، FLV');
     expect(VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY).toBe(videoFormatsText('en'));
   });
 
@@ -133,6 +138,14 @@ describe('upload copy', () => {
         expect(text).not.toMatch(/\b(MP4|MOV|AVI|WebM|MKV)\b/);
       }
     }
+  });
+
+  it('isolates a Latin name in Arabic text (a file name, a format) and leaves English alone', () => {
+    expect(bidiIsolate('ar', 'notes.txt')).toBe('\u2068notes.txt\u2069');
+    expect(bidiIsolate('en', 'notes.txt')).toBe('notes.txt');
+    const refusal = fillTemplate('ar', AR_TRANSLATIONS.batch.errors.invalidFileType, { filename: bidiIsolate('ar', 'notes.txt'), formats: videoFormatsText('ar') });
+    expect(refusal).toContain('\u2068notes.txt\u2069');
+    expect(refusal).toContain('\u2068MP4\u2069، \u2068M4V\u2069');
   });
 
   it('writes the Arabic copy with «مرئي», never «فيديو»', () => {

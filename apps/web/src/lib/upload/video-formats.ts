@@ -82,8 +82,21 @@ export const VIDEO_PICKER_ACCEPT: string = [
   ...VIDEO_FORMATS.flatMap((f) => [f.mimeType, ...f.aliases]),
 ].join(',');
 
-/** «MP4, M4V, …» for help text; Arabic copy takes the Arabic comma «،» */
+const FIRST_STRONG_ISOLATE = '\u2068';
+const POP_DIRECTIONAL_ISOLATE = '\u2069';
+
+/**
+ * A Latin name (a format, a file name) inside Arabic text, isolated from the text around it. The Arabic
+ * comma is neutral between two Latin names, so without this the whole list is one left-to-right run:
+ * «يدعم» then MP4 at the far left, the list reading backwards and breaking oddly across lines. Each
+ * name isolated, the commas and spaces follow the Arabic direction: MP4 comes first, next to «يدعم».
+ * English text is returned as it is.
+ */
+export function bidiIsolate(lang: string, text: string): string {
+  return isArabicLocale(lang) ? `${FIRST_STRONG_ISOLATE}${text}${POP_DIRECTIONAL_ISOLATE}` : text;
+}
+
+/** «MP4, M4V, …» for help text; Arabic copy takes the Arabic comma «،» and isolates each name (bidiIsolate) */
 export function videoFormatsText(lang: string): string {
-  const labels = VIDEO_FORMATS.map((f) => f.label);
-  return labels.join(isArabicLocale(lang) ? '، ' : ', ');
+  return VIDEO_FORMATS.map((f) => bidiIsolate(lang, f.label)).join(isArabicLocale(lang) ? '، ' : ', ');
 }

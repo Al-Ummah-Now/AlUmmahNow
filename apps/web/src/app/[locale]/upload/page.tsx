@@ -12,7 +12,7 @@ import NotFoundPage from "@/components/NotFoundPage";
 import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
-import { VIDEO_PICKER_ACCEPT, isAcceptedVideoFile, videoFormatsText } from "@/lib/upload/video-formats";
+import { VIDEO_PICKER_ACCEPT, bidiIsolate, isAcceptedVideoFile, videoFormatsText } from "@/lib/upload/video-formats";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
@@ -406,7 +406,7 @@ const UploadPage: React.FC = () => {
     const invalidFiles = selectedFiles.filter(file => !isAcceptedVideoFile(file));
     if (invalidFiles.length > 0) {
       setUploadError(
-        fillTemplate(lang, t.batch.errors.invalidFileType, { filename: invalidFiles[0].name, formats: videoFormatsText(lang) })
+        fillTemplate(lang, t.batch.errors.invalidFileType, { filename: bidiIsolate(lang, invalidFiles[0].name), formats: videoFormatsText(lang) })
       );
       return;
     }
