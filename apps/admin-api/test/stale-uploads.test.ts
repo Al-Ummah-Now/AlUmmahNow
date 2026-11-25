@@ -35,7 +35,7 @@ function setup(roles: string[], answer: (path: string, body: any) => { status: n
   app.route('/api/uploads/stale', staleUploadsRouter);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
   const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, new_value, actor_id FROM site_settings_log').all<any>()).results ?? [];
-  return { req, calls, audit };
+  return { req, calls, audit, db: env.REPORTS_DB };
 }
 
 const post = (json: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } });
@@ -49,6 +49,21 @@ describe('/api/uploads/stale', () => {
     assert.ok(permissionsFor(['Admin']).includes('videos:uploads'));
     assert.ok(permissionsFor(['Super Admin']).includes('videos:uploads'));
     assert.ok(!permissionsFor(['Moderator']).includes('videos:uploads'));
+  });
+
+  it('lists only the videos the reader\'s lists show', async () => {
+    const OTHER = '00000000-0000-4000-8000-000000000002';
+    const stale = { items: [{ videoId: ID }, { videoId: OTHER }], audit: [{ videoId: ID }, { videoId: OTHER }], deadLetters: [{ videoId: ID }, { videoId: OTHER }, {}], counts: {} };
+    for (const [roles, shown] of [[['Admin'], [OTHER]], [['super_admin'], [ID, OTHER]]] as const) {
+      const { req, db, audit } = setup([...roles], () => ({ status: 200, json: { success: true, result: stale } }));
+      await db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)").bind(ID).run();
+      const r = ((await (await req('/api/uploads/stale')).json()) as any).result;
+      assert.deepEqual([r.items.map((i: any) => i.videoId), r.audit.map((i: any) => i.videoId), r.deadLetters.map((i: any) => i.videoId ?? null)], [shown, shown, [...shown, null]], roles.join());
+      for (const id of [ID, OTHER]) await req('/api/uploads/stale/keep', post({ ids: [id] }));
+      const entries = ((await (await req('/api/uploads/stale/audit')).json()) as any).result.entries;
+      assert.deepEqual(entries.map((e: any) => e.videoId).sort(), [...shown].sort(), `audit ${roles.join()}`);
+      assert.equal((await audit()).length, 2);
+    }
   });
 
   it('lists through the VIDEOS binding with the internal key', async () => {
