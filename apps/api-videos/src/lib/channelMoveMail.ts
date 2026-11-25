@@ -65,12 +65,13 @@ const MAIL_STATE: Record<ChannelMoveMailEvent, { table: string; column: string; 
 /** Outcomes after which nothing is sent again, whenever it is asked for (Resend forgets its key after a day). */
 const MAIL_DONE = new Set(['sent', 'sunk', 'disabled', 'no_address']);
 
-/** Keeps how an email ended. */
+/** Keeps how an email ended. One that ended for good stays so: a late or overlapping failure never reopens it. */
 export async function recordMoveMail(env: Env, event: string, id: string, status: string): Promise<void> {
 	if (!(CHANNEL_MOVE_MAIL_EVENTS as readonly string[]).includes(event)) throw gone();
 	const { table, column, path } = MAIL_STATE[event as ChannelMoveMailEvent];
 	await (env.SEARCH_DB as D1Database)
-		.prepare(`UPDATE ${table} SET ${column} = json_set(COALESCE(${column}, '{}'), ?2, ?3) WHERE id = ?1${table === 'admin_jobs' ? " AND kind = 'channel.transfer'" : ''}`)
+		.prepare(`UPDATE ${table} SET ${column} = json_set(COALESCE(${column}, '{}'), ?2, ?3) WHERE id = ?1${table === 'admin_jobs' ? " AND kind = 'channel.transfer'" : ''}
+			 AND COALESCE(json_extract(${column}, ?2), '') NOT IN (${[...MAIL_DONE].map((done) => `'${done}'`).join(', ')})`)
 		.bind(id, path, status)
 		.run();
 }
