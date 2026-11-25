@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, triggerLines, type PromoteDeps, type ReleaseApp } from '../promote.ts';
+import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, addressLine, type PromoteDeps, type ReleaseApp } from '../promote.ts';
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
 import { runSmoke, VERSION_PAUSE_MS, VERSION_WAIT_MS, type CheckResult } from '../smoke.ts';
 import { seoHostResponse } from './seo-host-fixture.ts';
@@ -520,11 +520,25 @@ it('wranglerFailureDetail keeps the [ERROR] block that warnings would push out o
 	assert.match(detail, /Duplicate key/);
 });
 
-describe('triggers in the release log', () => {
-	it('says whether the workers.dev address is on, and never an account address', () => {
-		const on = triggerLines('demo', '\u001b[32mDeployed demo triggers (1.2 sec)\u001b[0m\n  https://demo.some-account.workers.dev\n  schedule: */5 * * * *\n  Consumer for q\n  Consumer for q2');
-		assert.deepEqual(on, ['demo: triggers deployed; workers.dev address ON, 1 schedules, 2 consumers']);
-		assert.deepEqual(triggerLines('demo', 'Deployed demo triggers\n  videos.alummahnow.net (custom domain - zone id: 0123)\n  https://secret.example/x?token=1'), ['demo: triggers deployed; workers.dev address off, 0 schedules, 0 consumers, videos.alummahnow.net']);
-		assert.deepEqual(triggerLines('demo', ''), ['demo: triggers deployed; workers.dev address off, 0 schedules, 0 consumers']);
+describe('where a Worker answers, in the release log', () => {
+	it('is the setting, unknown when it could not be read', () => {
+		assert.equal(addressLine('demo', { enabled: true, previews_enabled: false }), 'demo: triggers deployed; workers.dev ON, preview URLs off');
+		assert.equal(addressLine('demo', { enabled: false, previews_enabled: true }), 'demo: triggers deployed; workers.dev off, preview URLs ON');
+		for (const s of [null, {}, { enabled: 'x' }]) assert.equal(addressLine('demo', s), 'demo: triggers deployed; workers.dev unknown, preview URLs unknown');
+	});
+
+	it('is logged per Worker after its triggers, and a failed read does not fail the release', async () => {
+		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const lines: string[] = [];
+		await promote(twoApps('production'), 'production', 'r', {
+			...deps(run),
+			log: (l) => lines.push(l),
+			addressSetting: async (worker) => {
+				if (worker === 'videos') throw new Error('403');
+				return { enabled: false, previews_enabled: true };
+			},
+		});
+		assert.ok(lines.includes('videos: triggers deployed; workers.dev unknown, preview URLs unknown'));
+		assert.ok(lines.includes('al-ummah-now-production: triggers deployed; workers.dev off, preview URLs ON'));
 	});
 });
