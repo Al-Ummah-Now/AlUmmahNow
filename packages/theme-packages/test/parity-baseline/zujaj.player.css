@@ -13,7 +13,7 @@
   --fanous-player-track-edge: inset 0 1px 2px rgb(3 30 36/.3),0 0 0 1px rgb(3 30 36/.4);
   --fanous-player-buffered: rgb(230 250 252/.5);
   --fanous-player-played: linear-gradient(90deg,#1696b0,#5cc4d4 55%,#c9eef1);
-  --fanous-player-glow: 0 0 10px rgb(92 196 212/.8);
+  --fanous-player-glow: none;
   --fanous-player-handle: linear-gradient(145deg,#fff,#c9eef1);
   --fanous-player-handle-edge: 0 0 0 1px rgb(8 58 69/.7),0 2px 6px rgb(3 30 36/.5);
   --fanous-player-hover: rgb(226 248 251/.24);

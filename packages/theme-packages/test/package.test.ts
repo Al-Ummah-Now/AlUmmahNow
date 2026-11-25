@@ -200,7 +200,7 @@ test('player chrome: bar-pad-compact is optional, so packages made before it sti
   // Left out rather than written as "undefined": the skin falls back to bar-pad
   assert.ok(!css.includes('bar-pad-compact'), css);
   assert.ok(!css.includes('undefined'), css);
-  assert.ok(css.includes('--fanous-player-bar-pad: 44px 12px 6px;'), css);
+  assert.ok(css.includes('--fanous-player-bar-pad: 20px 12px 6px;'), css);
 });
 
 test('lightStyle: light-only styles compile to a :not(.dark) block after the shared one; dark keeps style', () => {
