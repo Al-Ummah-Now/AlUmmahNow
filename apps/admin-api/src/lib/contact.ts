@@ -54,6 +54,10 @@ export type ValidationResult =
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]{2,}$/;
 
+/** No direction marks, joiners or other unseen characters either: an address has none. */
+// eslint-disable-next-line no-control-regex
+const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/;
+
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 /** Collapses runs of spaces and drops control characters, keeping line breaks in the message. */
 // One line (a name, an address): no direction controls either, they would reorder the text around it
@@ -62,7 +66,7 @@ const clean = (v: string, multiline = false) =>
   (multiline ? v.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '') : v.replace(/[\u202A-\u202E\u2066-\u2069]/g, '').replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ')).trim();
 
 export function isValidEmail(email: string): boolean {
-  return email.length <= CONTACT_LIMITS.emailMax && EMAIL.test(email);
+  return email.length <= CONTACT_LIMITS.emailMax && EMAIL.test(email) && !UNSEEN.test(email);
 }
 
 /**

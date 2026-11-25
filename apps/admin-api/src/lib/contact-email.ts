@@ -6,7 +6,7 @@
  */
 import { isSinkAddress, type ContactLocale, type ContactTopic } from './contact';
 import { escapeHtml, formatEmailDate, renderEmail, type EmailDoc } from './email/layout';
-import { emailRow, isolate, stripBidiControls } from './email/direction';
+import { emailRow, isolate, isolateLtr, stripBidiControls } from './email/direction';
 
 export const DEFAULT_CONTACT_FROM = 'Al Ummah Now <support@alummahnow.net>';
 
@@ -80,7 +80,7 @@ export function renderInboxNotification(m: MessageForEmail, opts: { to: string; 
         {
           kind: 'facts',
           rows: [
-            ['From', emailRow('en', `${isolate(m.name)} <${isolate(m.email)}>`)],
+            ['From', emailRow('en', `${isolate(m.name)} <${isolateLtr(m.email)}>`)],
             ['Account', m.user_id ? `Signed in (user ${m.user_id})` : 'Signed out'],
             ['Language', m.locale === 'ar' ? 'Arabic' : 'English'],
             ...(m.page_url ? ([['Page', m.page_url]] as [string, string][]) : []),
