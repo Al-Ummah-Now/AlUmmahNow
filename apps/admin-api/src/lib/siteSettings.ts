@@ -1,5 +1,8 @@
 import type { AppContext } from '../base';
 import { DEFAULT_SITE_THEME, SITE_THEME_SETTING_KEY, parseSiteThemeValue, siteThemeValue, type PublicSiteTheme, type SiteThemeRef } from '@al-ummah/shared-types';
+import type { Context } from 'hono';
+import { apiError } from './api-error';
+import { logger } from './logger';
 import { auditOriginJson } from './request-origin';
 
 type Db = AppContext['env']['REPORTS_DB'];
@@ -57,7 +60,8 @@ export async function readSiteThemeHistory(db: Db, limit: number): Promise<Theme
 
 /**
  * What the sites render. A custom package whose published version is gone (or never existed) falls
- * back to the default built-in, so a bad setting can never leave the site unstyled.
+ * back to the default built-in, so a bad setting can never leave the site unstyled. Throws when the
+ * database cannot be read: that is not the default, and a site would keep it as its theme.
  */
 export async function publicSiteTheme(db: Db, adminApiOrigin: string): Promise<PublicSiteTheme> {
   const { theme, version } = await readSiteTheme(db);
@@ -65,8 +69,17 @@ export async function publicSiteTheme(db: Db, adminApiOrigin: string): Promise<P
   const published = await db
     .prepare('SELECT v.version FROM theme_package_versions v JOIN theme_packages t ON t.id = v.theme_id AND t.deleted_at IS NULL WHERE v.theme_id = ? AND v.version = ?')
     .bind(theme, version)
-    .first<{ version: string }>()
-    .catch(() => null);
+    .first<{ version: string }>();
   if (!published) return { theme: DEFAULT_SITE_THEME };
   return { theme, package: { id: theme, version, css: `${adminApiOrigin}/public/themes/${theme}/${version}/theme.css` } };
+}
+
+/** GET /public/site-theme (src/index.ts): a failed read is 503, and every site keeps its last or built-in theme. */
+export async function publicSiteThemeRoute(c: Context<{ Bindings: { REPORTS_DB: Db } }>): Promise<Response> {
+  try {
+    return c.json(await publicSiteTheme(c.env.REPORTS_DB, new URL(c.req.url).origin), 200, { 'Cache-Control': 'public, max-age=30' });
+  } catch (error) {
+    logger.warn('[SiteTheme] Could not read the site theme', { error: error instanceof Error ? error.message : String(error) });
+    return apiError(c, 503, 'service_unavailable', undefined, { 'Retry-After': '5', 'Cache-Control': 'no-store' });
+  }
 }

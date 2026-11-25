@@ -14,7 +14,7 @@ import { duplicatePackage, packageToZip, zipToPackage, type ThemePackage } from 
 import themesRouter, { publicThemes } from '../src/routers/themes.router';
 import { themeIdBase } from '../src/lib/themePackages';
 import siteSettingsRouter from '../src/routers/siteSettings.router';
-import { publicSiteTheme } from '../src/lib/siteSettings';
+import { publicSiteTheme, publicSiteThemeRoute } from '../src/lib/siteSettings';
 import { loadPackageDir } from '../../../packages/theme-packages/scripts/load.ts';
 
 /** D1's API over node:sqlite, with the admin API's migrations applied. */
@@ -191,6 +191,29 @@ describe('theme builder API', () => {
     assert.equal((await call('/api/themes/fawanees', { method: 'DELETE' })).status, 403);
     sqlite.prepare("INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES ('site.theme', 'gone@1.0.0', 'a', 'now')").run();
     assert.deepEqual(await publicSiteTheme(db, 'https://admin.test'), { theme: 'fawanees' });
+  });
+
+  it('a site theme that cannot be read is 503, never the default; no published version is still the default', async () => {
+    const { db, sqlite } = setup();
+    let failing = /nothing/;
+    const flaky = { prepare: (sql: string) => {
+      if (!failing.test(sql)) return db.prepare(sql);
+      const down: any = { bind: () => down, first: async () => { throw new Error('Network connection lost.'); } };
+      return down;
+    } };
+    const app = new Hono().get('/public/site-theme', (c) => publicSiteThemeRoute(c as never));
+    const read = async () => {
+      const res = await app.request('https://admin.test/public/site-theme', {}, { REPORTS_DB: flaky });
+      return { status: res.status, cache: res.headers.get('cache-control'), body: (await res.json()) as any };
+    };
+    assert.deepEqual(await read(), { status: 200, cache: 'public, max-age=30', body: { theme: 'fawanees' } });
+    sqlite.prepare("INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES ('site.theme', 'gone@1.0.0', 'a', 'now')").run();
+    assert.deepEqual((await read()).body, { theme: 'fawanees' });
+    for (const part of [/FROM site_settings/, /theme_package_versions/]) {
+      failing = part;
+      const res = await read();
+      assert.deepEqual([res.status, res.cache, res.body.code, res.body.theme], [503, 'no-store', 'service_unavailable', undefined]);
+    }
   });
 
   it('exports a version as a zip that imports back', async () => {

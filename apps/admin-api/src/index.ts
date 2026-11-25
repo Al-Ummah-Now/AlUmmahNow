@@ -12,7 +12,7 @@ import { withLogging } from "@al-ummah/logger";
 import { robotsTxtResponse, withNoIndex } from "./lib/crawlers";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
-import { publicSiteTheme } from './lib/siteSettings';
+import { publicSiteThemeRoute } from './lib/siteSettings';
 import { mobileAppsEnvironment, readMobileApps } from './lib/mobileApps';
 import { appleAppSiteAssociation, assetLinks, shortLinksAppleAppSiteAssociation, shortLinksAssetLinks } from '@al-ummah/shared-types';
 import themesRouter, { publicThemes } from './routers/themes.router';
@@ -177,10 +177,7 @@ app.use('/api/*', loggingMiddleware);
 // ==========================================
 
 // The site theme is public and read by the web apps on every page, so it is short-lived at the edge
-app.get('/public/site-theme', async (c) => {
-  const answer = await publicSiteTheme((c.env as AdminBindings).REPORTS_DB, new URL(c.req.url).origin);
-  return c.json(answer, 200, { 'Cache-Control': 'public, max-age=30' });
-});
+app.get('/public/site-theme', (c) => publicSiteThemeRoute(c as never));
 
 // Which optional public-site features can work (booleans only): www leaves out what can't (lib/public-features.ts)
 app.get('/public/features', (c) => publicFeaturesRoute(c as never));
