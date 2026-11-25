@@ -334,11 +334,38 @@ jobs:
           E2E_RUN_USER_PASSWORD="Adm-$(openssl rand -base64 18 | tr '+/' '-_' | tr -d '=')-1!"
           echo "::add-mask::$E2E_RUN_USER_PASSWORD"
           export E2E_RUN_USER_PASSWORD
+          if [ "${{ matrix.project }}" = "webkit" ]; then
+            # WebKit runs from a standalone, newer Playwright (the release suite's split, above): 1.56.1's
+            # WebKit build (webkit-2215) lost its browser mid-run on this stack while it kept answering
+            # (`page.goto: Connection terminated unexpectedly`, run 45553082083 A11Y-01), and aborted
+            # its web process in the Studio Comments flow (#1382); 1.65.1's (webkit-2388) does neither.
+            # Only the files the suite reads are copied, in the same layout: the specs, the config, the
+            # run-account and placement modules of apps/web, the processor's wrangler config. Chromium
+            # (the global setup) comes from the same install. apps/admin-web's own pinned Playwright
+            # stays for every other project, its type check and apps/web's axe types (two Playwright
+            # versions in one hoisted install break `AxeBuilder({ page })`).
+            SUITE="$RUNNER_TEMP/admin-webkit-suite"
+            mkdir -p "$SUITE/apps/admin-web/src/i18n" "$SUITE/apps/web/e2e/test-utils" "$SUITE/apps/processor"
+            cp -R e2e playwright.config.ts "$SUITE/apps/admin-web/"
+            cp src/i18n/config.ts "$SUITE/apps/admin-web/src/i18n/"
+            cp ../web/e2e/test-utils/run-users.ts ../web/e2e/test-utils/placement.ts "$SUITE/apps/web/e2e/test-utils/"
+            cp ../processor/wrangler.jsonc "$SUITE/apps/processor/"
+            AXE_VERSION=$(node -p "require('../../node_modules/@axe-core/playwright/package.json').version")
+            (cd "$SUITE" && npm init -y > /dev/null && npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_WEBKIT_VERSION" "@axe-core/playwright@$AXE_VERSION" && npx playwright install --with-deps chromium webkit)
+            code=0
+            (cd "$SUITE/apps/admin-web" && npx playwright test --project=webkit --shard="${{ matrix.shard }}") || code=$?
+            rm -rf playwright-report test-results
+            cp -R "$SUITE/apps/admin-web/playwright-report" playwright-report 2>/dev/null || true
+            cp -R "$SUITE/apps/admin-web/test-results" test-results 2>/dev/null || true
+            exit $code
+          fi
           pnpm exec playwright test --project="${{ matrix.project }}" --shard="${{ matrix.shard }}"
         env:
           CI: 'true'
           E2E_ENV: local
           E2E_ADMIN_PROJECT: ${{ matrix.project }}
+          # The WebKit project's Playwright (see Run); every other project stays on apps/admin-web's
+          PLAYWRIGHT_WEBKIT_VERSION: 1.65.1
           NODE_OPTIONS: --dns-result-order=ipv4first
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret

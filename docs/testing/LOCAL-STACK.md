@@ -253,3 +253,15 @@ follow for specs and for the stack:
   fake CDN, browser proxy) keep idle connections for 65 s (`IDLE_CONNECTION_MS` in `stack.ts`), and
   the admin suite's `fetch` keeps its own for 1 s (`e2e/support/keep-alive.ts`), so it closes them
   before workerd can.
+
+### The admin suite's WebKit project (#1941)
+
+The admin WebKit job runs from a standalone Playwright 1.65.1 (webkit-2388), the way the release
+suite's does (`PLAYWRIGHT_WEBKIT_VERSION` in `local-e2e.yml`): with 1.56.1's WebKit (webkit-2215) the job
+lost its browser mid-run (`page.goto: Connection terminated unexpectedly`, run 45553082083, A11Y-01)
+while the stack kept answering. The job copies what the suite reads (`e2e/`, the config, `apps/web`'s
+run-account and placement modules, the processor's wrangler config) into a temporary directory with the
+same layout and installs Playwright and axe there. Every other admin project, the type check and
+`apps/web` stay on the pinned 1.56.1: two Playwright versions in one hoisted install break
+`AxeBuilder({ page })` in `apps/web`'s specs, so `apps/admin-web`'s `package.json` is not bumped. A
+file the suite starts to read must be added to that copy.
