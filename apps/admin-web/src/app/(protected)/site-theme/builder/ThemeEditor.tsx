@@ -16,6 +16,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { ThemeApiError, deleteAsset, draftAssetUrl, exportUrl, publish, saveDraft, uploadAsset } from './api';
 import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
+import { blockedText, issueText, issueWhere } from './issues';
 import { Preview } from './Preview';
 import { formatUnit } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
@@ -96,7 +97,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
     const walk = (v: unknown, path: string) => {
       if (typeof v === 'string') {
         const files = v.startsWith('assets/') ? [v] : [...v.matchAll(/\{asset:(assets\/[^}]+)\}/g)].map((m) => m[1]);
-        for (const f of files) if (!assetPaths.has(f)) out.push({ path, message: `names ${f}, which is not in the package` });
+        for (const f of files) if (!assetPaths.has(f)) out.push({ path, message: `names ${f}, which is not in the package`, code: 'fileMissing', params: { file: f } });
       } else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);
     };
     walk(theme, '');
@@ -107,9 +108,9 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
     return [...live.errors, ...fileIssues, ...serverIssues.filter((i) => i.path.startsWith('assets/'))].filter((i) => (seen.has(`${i.path}${i.message}`) ? false : (seen.add(`${i.path}${i.message}`), true)));
   }, [live, fileIssues, serverIssues]);
   // A failing pair is also shown at the role or brand colour it comes from
-  const traced = useMemo(() => traceIssues(theme, issues), [theme, issues]);
+  const traced = useMemo(() => traceIssues(theme, issues.map((i) => ({ ...i, message: issueText(t, locale, i) }))), [theme, issues, t, locale]);
   const errorsAt = (path: string) => traced.get(path) ?? [];
-  // The name and description errors in the admin's words (the validator's are English, for the list above)
+  // The name and description errors, as the form words them everywhere
   const textErrors = (path: 'name' | 'description') => {
     const one = (lang: 'en' | 'ar') =>
       errorsAt(`${path}.${lang}`).length === 0
@@ -210,19 +211,26 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
         </div>
         <div className="flex flex-wrap gap-2">
           <a href={exportUrl(theme.id)} className={secondaryButtonClass} data-testid="theme-export">{t('themeBuilder.export')}</a>
-          {canEdit && <button type="button" className={secondaryButtonClass} disabled={pending || !dirty} onClick={save} data-testid="theme-save">{busy === 'save' ? t('themeBuilder.saving') : t('themeBuilder.save')}</button>}
-          {canEdit && <button type="button" className={primaryButtonClass} disabled={pending || issues.length > 0} onClick={doPublish} data-testid="theme-publish">{busy === 'publish' ? t('themeBuilder.publishing') : t('themeBuilder.publish')}</button>}
+          {canEdit && <button type="button" className={`${secondaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`} disabled={pending || !dirty} onClick={save} data-testid="theme-save">{busy === 'save' ? t('themeBuilder.saving') : t('themeBuilder.save')}</button>}
+          {canEdit && <button type="button" className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-60`} disabled={pending || issues.length > 0} onClick={doPublish} data-testid="theme-publish">{busy === 'publish' ? t('themeBuilder.publishing') : t('themeBuilder.publish')}</button>}
           {canEdit && latest && active !== latest && <button type="button" className={secondaryButtonClass} disabled={pending || dirty} onClick={activate} data-testid="theme-activate">{t('themeBuilder.useAsSite')} ({latest})</button>}
         </div>
       </div>
       {!canEdit && <p className="text-fg-muted mb-3">{t('themeBuilder.adminOnly')}</p>}
       {failure && <ErrorAlert testId="theme-editor-failed">{failure}</ErrorAlert>}
-      {canEdit && issues.length > 0 && <p className="mb-3 text-sm text-danger-fg" data-testid="theme-publish-blocked">{t('themeBuilder.publishBlocked')}</p>}
+      {canEdit && issues.length > 0 && <p className="mb-3 text-sm text-danger-fg" data-testid="theme-publish-blocked">{blockedText(t, locale, issues)}</p>}
       {notice && <p role="status" className="mb-3 text-sm font-medium text-fg" data-testid="theme-editor-notice">{notice}</p>}
       <details className={`${cardClass} !p-3 mb-4`} open={issues.length > 0 && issues.length < 12} data-testid="theme-issues" data-count={issues.length}>
         <summary className={`text-sm font-medium ${issues.length ? 'text-danger-fg' : 'text-fg'}`}>{issues.length ? t('themeBuilder.errors', { count: issues.length }) : t('themeBuilder.noErrors')}{live.warnings.length ? `${t('common.sep')}${t('themeBuilder.warnings', { count: live.warnings.length })}` : ''}</summary>
-        <ul className="mt-2 space-y-1 text-xs" dir="ltr">
-          {issues.slice(0, 60).map((i, n) => <li key={n} className="text-danger-fg"><code>{i.path}</code>: {i.message}</li>)}
+        <ul className="mt-2 space-y-1 text-sm">
+          {issues.slice(0, 60).map((i, n) => {
+            const at = issueWhere(t, i.path);
+            return (
+              <li key={n} className="text-danger-fg" data-path={i.path}>
+                <span className="font-medium">{at.label}</span>{at.name && <> <code dir="ltr" className="text-xs">{at.name}</code></>}{': '}{issueText(t, locale, i)}
+              </li>
+            );
+          })}
         </ul>
       </details>
 
@@ -257,7 +265,13 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                 label={t('themeBuilder.description')}
                 field="themes.description"
                 value={{ en: theme.description?.en ?? '', ar: theme.description?.ar ?? '' }}
-                onChange={(next) => update(['description'], next.en || next.ar ? next : undefined)}
+                onChange={(next) => {
+                  // One line of text: the box only wraps it
+                  const one = { en: next.en.replace(/\s*\n\s*/g, ' '), ar: next.ar.replace(/\s*\n\s*/g, ' ') };
+                  update(['description'], one.en || one.ar ? one : undefined);
+                }}
+                multiline
+                rows={3}
                 errors={textErrors('description')}
                 maxLength={THEME_TEXT_MAX}
                 required={false}

@@ -169,6 +169,14 @@ describe('bilingual admin forms in a DOM', () => {
     assert.ok(m.q('channel-edit-name-translate-en'), 'has EN→AR translate button for name');
     assert.ok(m.q('channel-edit-description-translate-en'), 'has EN→AR translate button for description');
 
+    // The site's own file button: the native one speaks the browser's language
+    for (const kind of ['avatar', 'cover']) {
+      const file = m.q(`channel-${kind}-input`) as HTMLInputElement;
+      assert.equal(file.type, 'file');
+      assert.match(file.className, /sr-only/);
+      assert.deepEqual([...m.container.querySelectorAll(`label[for="${file.id}"]`)].map((l) => l.textContent), [kind === 'avatar' ? 'Avatar' : 'Cover', 'Choose an image']);
+    }
+
     const form = m.container.querySelector('[data-testid="channel-edit"] form');
 
     // Blank Arabic name → blocked client-side
@@ -210,6 +218,10 @@ describe('bilingual admin forms in a DOM', () => {
       assert.equal(error(), null);
       await type(ar(), '');
       assert.equal(error(), words);
+      assert.equal(m.q('general-description-ar')?.tagName, 'TEXTAREA', 'the whole description can be read');
+      const listed = m.container.querySelector('[data-path="description.ar"]')?.textContent ?? '';
+      assert.ok(listed.includes(locale === 'ar' ? 'املأ هذا الحقل.' : 'Fill this in.') && !listed.includes('must not be empty'), listed);
+      assert.equal(m.q('theme-publish-blocked')?.textContent?.includes('WCAG'), false, 'contrast is not the reason');
       await type(m.q('general-description-en'), '');
       assert.equal(error(), null, 'an optional description may go as a whole');
       await m.unmount();

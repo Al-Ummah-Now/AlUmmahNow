@@ -1,7 +1,7 @@
 export * from './types.ts';
 export { SCHEMA } from './schema.generated.ts';
 export { BASE } from './base.generated.ts';
-export { checkSchema, type SchemaError } from './json-schema.ts';
+export { checkSchema, type IssueCode, type SchemaError } from './json-schema.ts';
 export { kebab, parseRefs, refVar, toCss, type Ref, type RefKind } from './refs.ts';
 export { BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_NAMES, MATERIAL_VARS, OPTIONAL_MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, get } from './components.ts';
 export { contrastRatio, luminance } from './contrast.ts';

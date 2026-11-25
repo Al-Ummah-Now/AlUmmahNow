@@ -6,6 +6,7 @@ import { BASE, BRAND_NAMES, resolveColor, type Mode, type ThemePackage } from '@
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 import type { ContrastCheck } from './contrast';
+import { isolate } from './issues';
 import { formatFixed } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 
@@ -27,10 +28,10 @@ function ContrastBadge({ checks }: { checks: ContrastCheck[] }) {
   const worst = checks[0];
   const pass = worst.ratio >= worst.min;
   const label = pass
-    ? t('themeBuilder.contrastOk', { ratio: formatFixed(locale, worst.ratio, 2), against: worst.against })
-    : t('themeBuilder.contrastFail', { ratio: formatFixed(locale, worst.ratio, 2), against: worst.against, min: worst.min });
+    ? t('themeBuilder.contrastOk', { ratio: formatFixed(locale, worst.ratio, 2), against: isolate(worst.against) })
+    : t('themeBuilder.contrastFail', { ratio: formatFixed(locale, worst.ratio, 2), against: isolate(worst.against), min: worst.min });
   return (
-    <span data-testid="contrast-badge" data-pass={pass} className={`text-[11px] px-1.5 py-0.5 rounded ${pass ? 'bg-chip-resolved-bg text-chip-resolved-fg' : 'bg-danger-bg text-danger-fg'}`} dir="ltr">
+    <span data-testid="contrast-badge" data-pass={pass} className={`text-[11px] px-1.5 py-0.5 rounded ${pass ? 'bg-chip-resolved-bg text-chip-resolved-fg' : 'bg-danger-bg text-danger-fg'}`}>
       {pass ? 'AA ✓ ' : 'AA ✗ '}{label}
     </span>
   );

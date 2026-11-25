@@ -185,7 +185,9 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
             onClick={() => void run(lang)}
             data-testid={`${tid}-translate-${lang}`}
           >
-            <span aria-hidden="true">{lang === 'en' ? '→' : '←'}</span>
+            {/* Towards the field it fills: beside it, or above or below it on a phone */}
+            <span aria-hidden="true" className="sm:hidden">{lang === 'en' ? '↓' : '↑'}</span>
+            <span aria-hidden="true" className="hidden sm:inline">{(lang === 'en') === (locale !== 'ar') ? '→' : '←'}</span>
             {t(lang === 'en' ? 'localized.translateToAr' : 'localized.translateToEn')}
             {/* The field's name for screen readers; the visible words stay first in the name (WCAG 2.5.3) */}
             <span className="sr-only"> ({label})</span>

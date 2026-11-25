@@ -14,6 +14,7 @@ import { hasBoth, hasLanguages, samePair, userTextEdit, userTextErrors, userText
 import { VideoActionsSlot } from '../extensions';
 import { ThumbnailCropDialog, loadImageFile } from '@/components/content/ThumbnailCropDialog';
 import { shapesMatch, type ThumbnailCropSize } from '@al-ummah/shared-types';
+import { FileButton } from '@/components/FileButton';
 
 interface Props {
   video: {
@@ -164,12 +165,10 @@ export function VideoActions({ video, permissions }: Props) {
           </form>
           <div className="mt-6 flex flex-col gap-1">
             <label htmlFor={`${ids}-thumb`} className="text-sm text-fg-muted">{t('videos.thumbnail')}</label>
-            <input
+            <FileButton
               id={`${ids}-thumb`}
-              type="file"
               accept="image/jpeg,image/png,image/webp"
               disabled={!!busy}
-              className="text-sm text-fg file:me-3 file:rounded file:border file:border-border file:bg-surface-2 file:px-3 file:py-2 file:text-fg"
               data-testid="video-thumbnail-input"
               onChange={async (e) => {
                 const file = e.currentTarget.files?.[0];
@@ -186,7 +185,9 @@ export function VideoActions({ video, permissions }: Props) {
                 }
                 await uploadThumbnail(file);
               }}
-            />
+            >
+              {t('content.chooseImage')}
+            </FileButton>
             {crop && videoSize && (
               <ThumbnailCropDialog
                 src={crop.url}
