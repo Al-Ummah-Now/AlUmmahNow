@@ -60,7 +60,7 @@ export const QA_TARGET = {
 
 const TEMP_TITLE = /^(E2E Temp|Release E2E)\b/;
 const E2E_SEED_TITLE = /^E2E Seed /;
-const JUNK_COMMENT = /^(ws probe \d+|release live comment \d+|E2E Temp\b.*)$/s;
+export const JUNK_COMMENT = /^(ws probe \d+|release live comment \d+|E2E Temp\b.*)$/s;
 /** Channel names the E2E and release suites give the channels of their throwaway accounts. */
 const TEST_CHANNEL_NAME = /^(E2E |Release |Probe ch$|#\d+ chunks |Mobile Edit \d+$)/;
 /** Throwaway channel prefixes the specs themselves create (apps/web/e2e/seed/seed-users.ts). */
