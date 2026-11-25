@@ -1,5 +1,6 @@
 import { bunnyLibraryForVideo, type LibraryHints } from '../../lib/bunny/libraries';
-import { can } from '@al-ummah/shared-types';
+import { can, underHold } from '@al-ummah/shared-types';
+import { isSourceChanged } from '../../lib/media/source-changed';
 import { apiError } from '../../lib/api-error';
 import { roleOnRecord } from "../../lib/channelAccess";
 import { OpenAPIRoute } from "chanfana";
@@ -12,7 +13,7 @@ import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { bunnyRef } from "../../lib/media/providers";
 import { generateTUSConfig, createTusProxySession, deleteTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
-import { isStoppedUpload, reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
+import { dropBunnyCopy, isStoppedUpload, reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
 
 /**
@@ -187,17 +188,21 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
 			const resumedAt = new Date().toISOString();
 			let stopped = false;
+			let droppedGuid: string | undefined;
 			try {
 				// A re-upload of a flagged video reopens it (back to uploading,
 				// needs_reupload cleared); it is flagged again if this attempt fails.
 				const saved = await repository.updateObject(videoId, (fresh) => {
-					stopped = isStoppedUpload(fresh);
+					// Under a hold a copy of wrong bytes is kept as it is: no new upload
+					stopped = isStoppedUpload(fresh) || (isSourceChanged(fresh as never) && underHold(fresh as never));
+					droppedGuid = undefined;
 					if (stopped || fresh.userId !== video.userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
-					reopenForReupload(fresh as UploadVideo);
+					droppedGuid = reopenForReupload(fresh as UploadVideo).bunnyGuid;
 					Object.assign(fresh, { dateModified: resumedAt, lastResumeAt: resumedAt });
 					return true;
 				});
 				if (!saved) stopped = true;
+				else if (droppedGuid) await dropBunnyCopy(c.env as never, videoId, droppedGuid);
 			} catch (error) {
 				logger.warn('[UploadResume] Could not record the resume attempt', { videoId, error: error instanceof Error ? error.message : String(error) });
 			}

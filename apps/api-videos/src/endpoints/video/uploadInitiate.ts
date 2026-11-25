@@ -16,6 +16,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
+import { dropBunnyCopy } from "../../lib/uploads/lifecycle";
+import { withoutBunnyCopy } from "../../lib/media/source-changed";
 import { patchVideo } from "../../lib/videoWrites";
 import { markUploadCreated } from "../../lib/uploads/reaper";
 import { thumbnailProcessor } from "../../lib/thumbnail";
@@ -182,6 +184,8 @@ export interface UploadWho {
 	adminImport?: boolean;
 	/** The whole file's SHA-256 as the importer read it (TranscodeJobMessage.sha256) */
 	sourceSha256?: string;
+	/** The import item's video: goes on with it (any admin, any fingerprint of the file) while it can */
+	continueVideoId?: string;
 }
 
 export async function initiateUpload(c: AppContext, who: UploadWho, input: InitiateBody): Promise<Response> {
@@ -397,7 +401,15 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
 			}
 		}
-		if (claimKey) {
+		// An import item's unfinished video takes its file again, whichever admin sends it
+		const continues = who.continueVideoId ? await checkReusable(c.env as never, who.continueVideoId, { ownerId, uploadedBy, channelId, anyUploader: true }) : null;
+		if (continues?.kind === 'replace' && continues.why === 'held') {
+			return c.json({ success: false, code: 'video_held', error: 'This video is under a hold and takes no new upload' }, 409);
+		}
+		if (who.continueVideoId && continues?.kind === 'reuse') {
+			videoId = who.continueVideoId;
+			reused = true;
+		} else if (claimKey) {
 			const outcome = await initiateOnce(claimKey, {
 				store: c.env.global_settings as never,
 				userId,
@@ -423,6 +435,8 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 		let stored: PlaceholderRecord | null = null;
 		let thumbnailUrl: string | undefined;
 		let thumbnailSizes: Record<string, string> | undefined;
+		// Another admin's upload of the file cannot be resumed (its session is theirs): from byte 0
+		let sameUploader = true;
 		if (reused) {
 			// Same video again: latest metadata (and thumbnail, when one was sent)
 			const thumb = thumbnail?.data ? await processThumbnail(c, videoId, thumbnail) : null;
@@ -430,7 +444,8 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			const result = await patchVideo(repository, videoId, (fresh) => {
 				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
 				if (!fields) return false;
-				if (who.sourceSha256) Object.assign(fields, { sourceSha256: who.sourceSha256 });
+				// Who sends the file now: the session restored from the record is theirs (tusProxy.ts)
+				Object.assign(fields, { sourceSha256: who.sourceSha256, ...(who.continueVideoId === videoId ? { uploadedBy } : {}) });
 				if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
 				return fields as Partial<VideoType>;
 			}, { ownerId });
@@ -439,6 +454,11 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				return c.json({ success: false, error: 'Upload could not be started, retry' }, 503);
 			}
 			stored = result.video as unknown as PlaceholderRecord;
+			const before = result.previous as unknown as PlaceholderRecord;
+			sameUploader = (before.uploadedBy ?? before.userId) === userId;
+			// Its copy of other bytes left the record (reuseFields): it goes at Bunny too
+			const dropped = result.changed ? withoutBunnyCopy(result.previous as never, nowIso) : null;
+			if (dropped) await dropBunnyCopy(c.env as never, videoId, dropped.guid);
 			// The earlier initiate may have left its Bunny video outside its collection
 			const reusedGuid = bunnyRef(stored as never);
 			if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId);
@@ -463,7 +483,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			userId,
 			channelId,
 			videoId,
-			video: reused ? stored : null,
+			video: reused && sameUploader ? stored : null,
 			...(who.adminImport ? { adminImport: true } : {}),
 		});
 

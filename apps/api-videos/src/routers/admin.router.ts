@@ -454,6 +454,8 @@ const AdminImportInitiate = InitiateBodySchema.omit({ youtubeImport: true }).ext
 	channelId: z.string().min(1).max(200),
 	/** The whole file's SHA-256 as the importer read it: the transcode refuses other bytes (media container) */
 	sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+	/** The import item's video, when it has one: the file goes on with it while it can */
+	videoId: z.string().min(1).max(128).optional(),
 });
 const importingAdmin = (c: Context<Env>) => {
 	const adminId = c.req.header('X-Admin-Actor') ?? '';
@@ -471,14 +473,14 @@ const captionLanguage = (language: string) => {
 };
 app.post('/import/initiate', async (c) => {
 	const adminId = importingAdmin(c);
-	const { channelId, sha256, ...input } = parse(AdminImportInitiate, await body(c));
+	const { channelId, sha256, videoId, ...input } = parse(AdminImportInitiate, await body(c));
 	const channel = await loadChannelRecord(c.env as never, channelId);
 	if (!channel?.userId || channel.isDeleted) throw new admin.AdminError(404, 'channel_not_found', 'No such channel');
 	if (channel.isSuspended) throw new admin.AdminError(409, 'channel_suspended', 'The channel is suspended');
 	const ownerId = channel.userId;
 	return initiateUpload(
 		c as never,
-		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true, ...(sha256 ? { sourceSha256: sha256 } : {}) },
+		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true, ...(sha256 ? { sourceSha256: sha256 } : {}), ...(videoId ? { continueVideoId: videoId } : {}) },
 		input as InitiateBody,
 	);
 });

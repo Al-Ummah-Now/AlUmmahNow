@@ -29,6 +29,8 @@ import { enqueueTranscode, type MediaEnv } from '../media/r2-delivery';
 import { completeOriginal } from '../media/originals';
 import { reviewGateFor, type ReviewGateEnv } from '../review/gate';
 import { queueReviewScan } from '../review/scan';
+import { isSourceChanged, withoutBunnyCopy } from '../media/source-changed';
+import { enqueueBunnyDelete } from './bunnyDelete';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -107,6 +109,8 @@ export async function markUploadComplete(
       changed = false;
       // Late bytes do not bring it back
       if (isStoppedUpload(video)) return false;
+      // The finished upload's bytes were not the file: only a new upload (which reopens it first) counts
+      if (isSourceChanged(video)) return false;
       if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') {
         if (!video.tusUpload && !video.uploadWatch) return false;
         delete video.tusUpload;
@@ -245,12 +249,25 @@ async function uploadSubjectOf(env: UploadLifecycleEnv, video: UploadVideo): Pro
   }
 }
 
-/** A re-upload of the same video starts: back to `uploading`, flag cleared. */
-export function reopenForReupload(video: UploadVideo): boolean {
-  if (video.uploadStatus !== 'failed' || video.processingIssue?.kind !== 'needs_reupload') return false;
+/**
+ * A re-upload of the same video starts: back to `uploading`, flag cleared. The file is the one its
+ * uploader picks now, so an earlier importer's hash no longer speaks for it; a Bunny copy of wrong
+ * bytes leaves the record (then delete it at Bunny: dropBunnyCopy).
+ */
+export function reopenForReupload(video: UploadVideo, now = new Date()): { reopened: boolean; bunnyGuid?: string } {
+  if (video.uploadStatus !== 'failed' || video.processingIssue?.kind !== 'needs_reupload') return { reopened: false };
+  const copy = withoutBunnyCopy(video as never, now.toISOString());
+  if (copy) Object.assign(video, copy.fields);
+  delete (video as { sourceSha256?: unknown }).sourceSha256;
   video.uploadStatus = 'uploading';
   clearUploadFlags(video);
-  return true;
+  return { reopened: true, ...(copy ? { bunnyGuid: copy.guid } : {}) };
+}
+
+/** The copy a re-upload took off the record goes at Bunny too (queued, retried; never throws). */
+export async function dropBunnyCopy(env: { PROCESSING_CHECK_QUEUE?: unknown }, videoId: string, guid: string): Promise<void> {
+  logger.info('[Uploads] Other bytes arrived than were sent; their copy at Bunny goes', { videoId, guid });
+  await enqueueBunnyDelete(env.PROCESSING_CHECK_QUEUE as Parameters<typeof enqueueBunnyDelete>[0], guid, 'source-changed-reupload');
 }
 
 /** No bytes moved at Bunny for this long: the upload has stopped. */

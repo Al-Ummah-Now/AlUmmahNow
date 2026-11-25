@@ -13,6 +13,7 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { startProcessingLoop } from '../../lib/processing/loop';
+import { isSourceChanged } from '../../lib/media/source-changed';
 
 export class UploadCompleteEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -134,7 +135,8 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 			// fresh video (SCALABILITY-AUDIT AV-3). A video that processing already
 			// marked ready keeps that status (it never goes back to processing).
 			const saved = await patchVideo(repository, videoId, (fresh) => ({
-				...(fresh.uploadStatus === 'ready' ? {} : { uploadStatus: 'processing' as const }),
+				// A re-upload reopens a video whose bytes were not the file; finishing the old one does not
+				...(fresh.uploadStatus === 'ready' || isSourceChanged(fresh as never) ? {} : { uploadStatus: 'processing' as const }),
 				dateModified: new Date().toISOString(),
 				...(fileSize && { fileSize }),
 				...(duration && { duration }),
@@ -142,7 +144,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				// not needed once uploaded (lib/uploads/lifecycle.ts)
 				tusUpload: undefined,
 				uploadWatch: undefined,
-				...(fresh.processingIssue?.kind === 'needs_reupload' ? { processingIssue: undefined } : {}),
+				...(fresh.processingIssue?.kind === 'needs_reupload' && !isSourceChanged(fresh as never) ? { processingIssue: undefined } : {}),
 			} as Partial<VideoType>), { ownerId: video.userId, gone: isStoppedUpload });
 			if (saved.status === 'missing') {
 				return c.json({ success: false, error: "Video not found" }, 404);

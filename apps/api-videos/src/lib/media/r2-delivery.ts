@@ -56,6 +56,7 @@ import { queueReviewScan, reviewExtractionFor } from '../review/scan';
 import { getSecret } from '../env-helpers';
 import { markPublished } from '../published';
 import { bunnyRef } from './providers';
+import { isSourceChanged, isSourceChangedError, SOURCE_CHANGED, SOURCE_CHANGED_REASON } from './source-changed';
 import { fetchBunnyVideo } from '../processing/loop';
 import { closeOriginal, deleteOriginal } from './originals';
 import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
@@ -412,7 +413,7 @@ type SoleCopyVideo = MediaVideo & {
 	thumbnailType?: string;
 	thumbnailSizes?: Record<string, string>;
 	thumbnailPending?: boolean;
-	processingIssue?: { kind: string; reason?: string; at: string };
+	processingIssue?: { kind: string; reason?: string; at: string; code?: string };
 	availableResolutions?: string[];
 	width?: number;
 	height?: number;
@@ -446,7 +447,8 @@ function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
  * sync makes it ready (lib/processing/sync.ts). Mutates; true when it turned ready now.
  */
 function readyFromR2(v: SoleCopyVideo, at: string, host: string | undefined): boolean {
-	if (!r2DecidesState(v) || v.r2?.status !== 'ready' || !v.r2.result) return false;
+	// A source_changed video whose bytes proved right after all is R2's to make ready, Bunny's copy or not
+	if (!(r2DecidesState(v) || isSourceChanged(v)) || v.r2?.status !== 'ready' || !v.r2.result) return false;
 	refreshR2Frame(v, host);
 	if (v.uploadStatus === 'ready') return false;
 	const result = v.r2.result;
@@ -558,12 +560,17 @@ export async function applyJobEvent(
 				r2.failedAt = ev.at;
 				// The only copy failed: the video failed (the uploader is told; Errors page has Retry)
 				const v = video as SoleCopyVideo;
-				if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
+				if (isSourceChangedError(r2.error)) {
+					// The bytes that arrived are not the file, and Bunny got the same ones: never published
+					// (a ready video with an earlier rendition was made of other bytes and stays)
+					if (!isSourceChanged(v) && !(v.uploadStatus === 'ready' && r2.previous)) {
+						if (v.uploadStatus !== 'failed') transition = 'failed';
+						v.uploadStatus = 'failed';
+						v.processingIssue = { kind: 'needs_reupload', reason: SOURCE_CHANGED_REASON, at: ev.at, code: SOURCE_CHANGED };
+					}
+				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
 					v.uploadStatus = 'failed';
-					// The bytes that arrived are not the file: sending it again is what helps
-					v.processingIssue = /^source_changed\b/.test(r2.error ?? '')
-						? { kind: 'needs_reupload', reason: 'The uploaded file is not the file that was sent', at: ev.at }
-						: { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
+					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
 					transition = 'failed';
 				}
 			}
@@ -621,18 +628,21 @@ export async function applyJobEvent(
 	if (ev.type === 'failed' && ev.final) {
 		const failure = ev.failure ? sanitizeFailure(ev.failure) : undefined;
 		const details = failureDetails(ev, failure);
+		const changed = isSourceChangedError(saved.r2?.error);
 		reportNeedsAction('api-videos', env, ctx, {
 			key: needsActionKey(ev.videoId),
 			source: 'processing',
-			title: r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
+			title: changed ? `${SOURCE_CHANGED_REASON}: upload it again` : r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
 			message: details.summary,
 			// The Errors page shows this as the item's details (expandable)
 			error: details.error,
 			itemType: 'video',
 			itemId: ev.videoId,
 			itemUrl: `/videos/${ev.videoId}`,
-			retry: { kind: 'service', service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } },
-			retryLabel: 'Transcode again',
+			// The same bytes fail the same way: only a new upload helps
+			...(changed
+				? {}
+				: { retry: { kind: 'service' as const, service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } }, retryLabel: 'Transcode again' }),
 			extra: details.extra,
 		});
 	}
@@ -1133,6 +1143,7 @@ export async function requeueAfterBunnyReady(env: MediaEnv, videoId: string): Pr
 		const r2 = video?.r2;
 		if (!video || !r2 || video.isDeleted) return { queued: false, why: 'no R2 job' };
 		if (r2.status !== 'failed') return { queued: false, why: `R2 ${r2.status}` };
+		if (isSourceChangedError(r2.error)) return { queued: false, why: 'other bytes arrived than were sent' };
 		return await enqueueTranscode(env, videoId, 'retry', { force: true });
 	} catch (error) {
 		logger.warn('[Media] Re-queue after Bunny ready failed', { videoId, error: error instanceof Error ? error.message : String(error) });
