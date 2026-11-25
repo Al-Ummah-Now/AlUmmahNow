@@ -2718,6 +2718,147 @@ describe('channel actions', () => {
 		assert.deepEqual(await read(), []);
 	});
 
+	it('move emails: queued for an offer and for both owners of a finished move, and say what is true when sent (CC-7c)', async () => {
+		const { raw, env, db, jobs, call, jobOf } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'], displayName: 'Bilal', displayNameLocalized: { ar: 'بلال' } }), [OTHER]: profile(OTHER, { displayName: 'Amina' }), usr_third: profile('usr_third') },
+			channels: { ch1: channel('ch1', { nameLocalized: { ar: 'الصباح' }, members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		db.db.prepare(`INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('channelMove', 1, 1, 'usr_super', 'now')`).run();
+		const mails: any[] = [];
+		const queue = { send: async (body: unknown) => void mails.push(body) };
+		Object.assign(env as object, { CONTACT_MAIL_QUEUE: queue });
+		const read = async (event: string, id: string) => call('GET', `/channel-move-mails/${event}/${id}`);
+		const says = async (event: string, id: string) => (await read(event, id)).body.result;
+		const nothing = async (event: string, id: string) => {
+			const res = await read(event, id);
+			assert.deepEqual([res.status, res.body.code], [404, 'nothing_to_send'], `${event} ${id}`);
+		};
+		const make = (keep = false) => createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000), keepContactEmail: keep });
+		const channelSays = { id: 'ch1', name: 'Channel ch1', nameLocalized: { ar: 'الصباح' } };
+		const bilal = { name: 'Bilal', nameLocalized: { en: 'Bilal', ar: 'بلال' } };
+
+		const offer = await make(true);
+		assert.deepEqual(mails.splice(0), [{ v: 1, kind: 'channel_move', event: 'offered', id: offer.id }], 'ids only');
+		assert.deepEqual(await says('offered', offer.id), { event: 'offered', recipientId: OTHER, channel: channelSays, other: bilal, reason: null, keptAsAdmin: false, offer: { id: offer.id, expiresAt: offer.expires_at, keepContactEmail: true } });
+		// No longer open, the pages off, or the owner changed: not sent
+		const set = (sql: string, ...args: string[]) => db.db.prepare(`UPDATE channel_move_offers SET ${sql} WHERE id = ?`).run(...args, offer.id);
+		for (const status of ['accepting', 'declined', 'cancelled', 'stopped', 'expired', 'moved']) {
+			set('status = ?', status);
+			await nothing('offered', offer.id);
+		}
+		set(`status = 'offered', expires_at = '2026'`);
+		await nothing('offered', offer.id);
+		set('expires_at = ?', offer.expires_at);
+		Object.assign(env as object, { FEATURES_FORCE_OFF: 'channelMove' });
+		await nothing('offered', offer.id);
+		Object.assign(env as object, { FEATURES_FORCE_OFF: '' });
+		const stored = raw.channels.store.get('ch1')!;
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(stored), userId: 'usr_third' }));
+		await nothing('offered', offer.id);
+		raw.channels.store.set('ch1', stored);
+		assert.equal((await says('offered', offer.id)).recipientId, OTHER);
+		// The receiver is banned, or their account here is deleted or being deleted
+		const ban = (userId: string) => db.db.prepare(`INSERT INTO videos_bans (user_id, reason, banned_by, banned_at) VALUES (?, 'x', 'usr_super', 'now')`).run(userId);
+		const unban = (userId: string) => db.db.prepare('DELETE FROM videos_bans WHERE user_id = ?').run(userId);
+		const goneAs = async (userId: string, check: () => Promise<void>) => {
+			const kept = raw.profiles.store.get(userId)!;
+			for (const over of [{ isDeleted: true }, { adminDeletion: { at: '2026', by: 'x' } }]) {
+				raw.profiles.store.set(userId, JSON.stringify({ ...JSON.parse(kept), ...over }));
+				await check();
+			}
+			raw.profiles.store.delete(userId);
+			await check();
+			raw.profiles.store.set(userId, kept);
+		};
+		ban(OTHER);
+		await nothing('offered', offer.id);
+		unban(OTHER);
+		await goneAs(OTHER, () => nothing('offered', offer.id));
+		// Sent once, however late it is asked for; a failure can be sent again
+		const ended = async (event: string, id: string, status: string) => assert.equal((await call('POST', `/channel-move-mails/${event}/${id}/delivery`, { status })).status, 200);
+		await ended('offered', offer.id, 'failed');
+		assert.equal((await says('offered', offer.id)).offer.keepContactEmail, true, 'the offer keeps its options');
+		for (const status of ['sent', 'sunk', 'disabled', 'no_address']) {
+			await ended('offered', offer.id, status);
+			await nothing('offered', offer.id);
+		}
+		assert.equal((await call('POST', `/channel-move-mails/offered/${offer.id}/delivery`, { status: 'x' })).status, 400);
+		assert.equal((await call('POST', `/channel-move-mails/elsewhere/${offer.id}/delivery`, { status: 'sent' })).status, 404);
+		await nothing('offered', 'nope');
+		await nothing('elsewhere', offer.id);
+		// Only a finished move emails the owners: the owner who gave it too
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		assert.deepEqual(mails, []);
+		await jobs.drain(env);
+		const job = db.db.prepare(`SELECT id FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { id: string };
+		assert.deepEqual(mails.splice(0), [{ v: 1, kind: 'channel_move', event: 'moved_in', id: job.id }, { v: 1, kind: 'channel_move', event: 'moved_out', id: job.id }]);
+		assert.deepEqual(await says('moved_in', job.id), { event: 'moved_in', recipientId: OTHER, channel: channelSays, other: bilal, reason: null, keptAsAdmin: false, offer: null });
+		// A banned person is told of a move (CC-D11); one whose account here is gone is not written to
+		for (const [event, userId] of [['moved_in', OTHER], ['moved_out', OWNER]] as const) {
+			ban(userId);
+			assert.equal((await says(event, job.id)).recipientId, userId);
+			unban(userId);
+			await goneAs(userId, () => nothing(event, job.id));
+		}
+		const out = await says('moved_out', job.id);
+		assert.deepEqual([out.recipientId, out.other.name, out.reason], [OWNER, 'Amina', null]);
+		await nothing('moved_in', offer.id);
+		// One whose record says it did not change hands moved nothing
+		const done = (db.db.prepare('SELECT result FROM admin_jobs WHERE id = ?').get(job.id) as { result: string }).result;
+		const setResult = (result: string) => db.db.prepare('UPDATE admin_jobs SET result = ? WHERE id = ?').run(result, job.id);
+		setResult('{"changedHands":false}');
+		for (const event of ['moved_in', 'moved_out']) await nothing(event, job.id);
+		setResult(done);
+		assert.equal((await says('moved_in', job.id)).recipientId, OTHER);
+
+		// The team moves it on: the reason goes to the previous owner only, and nobody is named
+		const moved = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third', reason: 'Asked by email', keepPreviousOwnerAsAdmin: true }));
+		assert.equal(moved.status, 'succeeded');
+		assert.equal(mails.splice(0).length, 2);
+		const [teamIn, teamOut] = [await says('moved_in', moved.id), await says('moved_out', moved.id)];
+		assert.deepEqual([teamIn.recipientId, teamIn.other, teamIn.reason], ['usr_third', null, null]);
+		assert.deepEqual([teamOut.recipientId, teamOut.other, teamOut.reason, teamOut.keptAsAdmin], [OTHER, null, 'Asked by email', true]);
+		// The earlier move: not the receiver's any more, and the first owner still hears it left them
+		await nothing('moved_in', job.id);
+		assert.equal((await says('moved_out', job.id)).recipientId, OWNER);
+		// Each email of a move ends on its own, and the job keeps its other params
+		await ended('moved_in', moved.id, 'sent');
+		await nothing('moved_in', moved.id);
+		assert.deepEqual([(await says('moved_out', moved.id)).reason, (await says('moved_out', moved.id)).keptAsAdmin], ['Asked by email', true]);
+		await ended('moved_out', moved.id, 'sent');
+		await nothing('moved_out', moved.id);
+		assert.deepEqual(JSON.parse((db.db.prepare('SELECT params FROM admin_jobs WHERE id = ?').get(moved.id) as { params: string }).params).emails, { moved_in: 'sent', moved_out: 'sent' });
+		// A person who is gone has no name; a deleted channel emails nobody
+		raw.profiles.store.set(OTHER, JSON.stringify(profile(OTHER, { adminDeletion: { at: '2026', by: 'x' } })));
+		assert.deepEqual((await says('moved_out', job.id)).other, { name: null });
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), isDeleted: true }));
+		for (const event of ['moved_in', 'moved_out']) await nothing(event, moved.id);
+	});
+
+	it('a move email that can’t be queued never fails the offer or the move, and is on the Errors page (CC-7c)', async (t) => {
+		const { raw, env, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const reported: any[] = [];
+		const realFetch = globalThis.fetch;
+		t.after(() => void (globalThis.fetch = realFetch));
+		globalThis.fetch = (async (url: string, init: RequestInit) => {
+			if (url !== 'https://errors.test') return realFetch(url, init);
+			await new Promise((done) => setTimeout(done, 5));
+			reported.push(...JSON.parse(String(init.body)).events);
+			return new Response('{}');
+		}) as unknown as typeof fetch;
+		Object.assign(env as object, { ERRORS_INGEST_URL: 'https://errors.test', INTERNAL_API_KEY: 'k', CONTACT_MAIL_QUEUE: { send: async () => { throw new Error('queue down'); } } });
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		assert.deepEqual([reported[0].action.key, reported[0].action.retry], [`channel-move-mail:offered:${offer.id}`, { kind: 'builtin', handler: 'channel-move-mail', args: { event: 'offered', id: offer.id } }]);
+		Object.assign(env as object, { CONTACT_MAIL_QUEUE: undefined });
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		await jobs.drain(env);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		assert.deepEqual(reported.map((e) => e.action.retry.args.event), ['offered', 'moved_in', 'moved_out'], 'each on the Errors page, with Retry');
+	});
+
 	it('a person without a name is never shown by id, handle or email; receivers are found by name in any language (CC-7)', async () => {
 		const { raw, env } = await setup({
 			profiles: {

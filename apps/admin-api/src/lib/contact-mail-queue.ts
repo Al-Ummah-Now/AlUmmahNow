@@ -15,7 +15,7 @@
  *   and Resend gets an Idempotency-Key per email.
  */
 import type { AdminBindings } from '../base/types';
-import { newErrorRef, scrubEvent } from '@al-ummah/shared-types';
+import { newErrorRef, scrubEvent, type ChannelMoveMailJob } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isSinkAddress } from './contact';
 import { getContactMessage, deliveryStatus, recordDelivery, type MailKind } from './contact-store';
@@ -26,6 +26,7 @@ import { isNewsletterMailJob, processNewsletterMailJob, type NewsletterMailJob }
 import { isCostAlertMailJob, processCostAlertMailJob, type CostAlertMailJob } from './cost-alert-mail';
 import { isTierRequestMailJob, processTierRequestMailJob, type TierRequestMailJob } from './tier-request-mail';
 import { isWorkflowNotifyJob, processWorkflowNotifyJob, type WorkflowNotifyJob } from './workflows/notify';
+import { isChannelMoveMailJob, processChannelMoveMailJob } from './channel-move-mail';
 import { isTierChangeMailJob, processTierChangeMailJob, type TierChangeMailJob } from './tier-change-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
@@ -217,10 +218,10 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
  * emails (`kind: 'review_rejected'`, lib/review/rejection-mail.ts), the newsletter
  * (`kind: 'newsletter_*'`, lib/newsletter-mail.ts) and tier request decisions
  * (`kind: 'tier_request'`, lib/tier-request-mail.ts) and tier changes (`kind: 'tier_changed'`,
- * lib/tier-change-mail.ts), which share the sender.
+ * lib/tier-change-mail.ts) and channel moves (`kind: 'channel_move'`, lib/channel-move-mail.ts), which share the sender.
  */
 export async function contactMailConsumer(
-  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob>[] },
+  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob | ChannelMoveMailJob>[] },
   env: AdminBindings,
 ): Promise<void> {
   const startedAt = Date.now();
@@ -238,6 +239,8 @@ export async function contactMailConsumer(
             ? await processTierRequestMailJob(env as never, msg as QueueMessageLike<TierRequestMailJob>)
             : isWorkflowNotifyJob(msg.body)
               ? await processWorkflowNotifyJob(env as never, msg as unknown as QueueMessageLike<WorkflowNotifyJob>)
+            : isChannelMoveMailJob(msg.body)
+              ? await processChannelMoveMailJob(env as never, msg as unknown as QueueMessageLike<ChannelMoveMailJob>)
             : isTierChangeMailJob(msg.body)
               ? await processTierChangeMailJob(env as never, msg as QueueMessageLike<TierChangeMailJob>)
               : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);

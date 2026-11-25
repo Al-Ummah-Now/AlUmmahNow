@@ -8,6 +8,7 @@
  */
 import { MoveError, stopMoveOffer } from '../lib/channelMoves';
 import { channelMoveOffers } from '../lib/admin/moveOffers';
+import { readMoveMail, recordMoveMail } from '../lib/channelMoveMail';
 import { DEFAULT_TIER_ID } from '@al-ummah/shared-types';
 import { readTierChange, recordTierChange, recordTierChangeEmail } from '../lib/tierChanges';
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upgradeMode';
@@ -806,6 +807,15 @@ app.post('/tier-requests/:id/decide', async (c) => {
 	}
 	return ok(c, result);
 });
+// Channel move emails (lib/channelMoveMail.ts): what one says now, read by the email job
+app.get('/channel-move-mails/:event/:id', async (c) => ok(c, await readMoveMail(c.env as never, c.req.param('event'), c.req.param('id'))));
+const MoveMailDelivery = z.object({ status: z.enum(['sent', 'sunk', 'disabled', 'no_address', 'failed']) }).strict();
+app.post('/channel-move-mails/:event/:id/delivery', async (c) => {
+	const { status } = parse(MoveMailDelivery, await body(c));
+	await recordMoveMail(c.env as never, c.req.param('event'), c.req.param('id'), status);
+	return ok(c, { recorded: true });
+});
+
 // Tier changes (lib/tierChanges.ts): the email job reads one and records what it did
 app.get('/tier-changes/:id', async (c) => {
 	const change = await readTierChange(searchDb(c), c.req.param('id'));

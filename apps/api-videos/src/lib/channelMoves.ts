@@ -15,6 +15,7 @@ import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { channelParams } from './channelName';
 import { enqueueNotification } from './notifications';
+import { queueMoveMail } from './channelMoveMail';
 import { readBan } from './admin/bans';
 import { channelReportUnderReview, type ReportStatusEnv } from './channelReportStatus';
 import { AdminError, channelHasSupport, channelIsLive, hasChannelRoom, openTransferJob, transferChannel, type AdminServiceEnv } from './admin/service';
@@ -178,6 +179,7 @@ export async function createMoveOffer(
 	if (Number(inserted.meta?.changes ?? 0) !== 1) throw new MoveError(409, 'offer_open', 'This channel already has an open offer');
 	const owner = await profileOf(env, input.ownerId);
 	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), ...personParams('owner', owner) }, channel.id, offer.id, `move-offer:${offer.id}`);
+	await queueMoveMail(env, 'offered', offer.id);
 	logger.info('[ChannelMoves] Offer made', { channelId: channel.id, offerId: offer.id });
 	return offer;
 }
