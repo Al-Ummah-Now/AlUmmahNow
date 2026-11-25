@@ -72,6 +72,8 @@ interface PriorityTabsProps {
 /** How many leading tabs fit, and where the current one goes (the videos site's fitItems) */
 export function fitItems(widths: number[], gap: number, available: number, moreWidth: number, current: number): number[] {
   const n = widths.length;
+  // Widths of other tabs (not measured yet) never decide: nothing fits until they are
+  if (widths.some((w) => !Number.isFinite(w)) || current >= n) return [];
   const span = (ids: number[]) => ids.reduce((sum, i) => sum + widths[i], 0) + Math.max(0, ids.length - 1) * gap;
   const all = widths.map((_, i) => i);
   if (span(all) <= available + 0.5) return all;
@@ -98,13 +100,19 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   const signature = tabs.map((tab) => `${tab.id}\u0000${tab.label}\u0000${tab.extraKey ?? ''}`).join('\u0001');
   const current = tabs.findIndex((tab) => tab.current);
 
-  // New labels or counts: measured again, but not under an open menu (its focus would be lost): once it closes
+  // New labels or counts: measured again, but not under an open menu (its focus would be lost): once it closes.
+  // Other tabs (added, removed): the menu closes and the row is measured again at once (old widths never apply)
+  const ids = tabs.map((tab) => tab.id).join('\u0001');
   const measured = useRef(signature);
+  const measuredIds = useRef(ids);
   useLayoutEffect(() => {
-    if (open || measured.current === signature) return;
+    if (measured.current === signature) return;
+    if (open && measuredIds.current === ids) return;
+    if (open) setOpen(false);
     measured.current = signature;
+    measuredIds.current = ids;
     setWidths(null);
-  }, [signature, open]);
+  }, [signature, ids, open]);
 
   useLayoutEffect(() => {
     if (widths || !rowRef.current || !moreRef.current) return;
@@ -145,8 +153,8 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   // The row is worked out on every render from the current tab, so a navigation (a transition)
   // always shows the new tab in the row; no state can hold an older choice
   const visible = useMemo(
-    () => (widths && available !== null ? fitItems(widths.items, widths.gap, available, widths.more, current) : null),
-    [widths, available, current],
+    () => (widths && widths.items.length === tabs.length && available !== null ? fitItems(widths.items, widths.gap, available, widths.more, current) : null),
+    [widths, available, current, tabs.length],
   );
 
   const measuring = visible === null;
@@ -154,6 +162,11 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   const rowTabs = measuring ? tabs : tabs.filter((_, i) => shown!.has(i));
   const menuTabs = measuring ? [] : tabs.filter((_, i) => !shown!.has(i));
   const hasMenu = measuring || menuTabs.length > 0;
+
+  // Everything fits again (a wider screen, fewer tabs): the menu has nothing to show, so it is closed, not left open unseen
+  useEffect(() => {
+    if (open && !measuring && menuTabs.length === 0) setOpen(false);
+  }, [open, measuring, menuTabs.length]);
 
   const close = useCallback((focusButton: boolean) => {
     setOpen(false);
@@ -281,6 +294,7 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                       type="button"
                       role="menuitem"
                       tabIndex={-1}
+                      {...(currentButtons && tab.current ? { 'aria-current': 'page' as const } : {})}
                       onClick={(event) => {
                         // The chosen tab takes a slot in the row and the focus
                         focusChosen.current = tab.id;

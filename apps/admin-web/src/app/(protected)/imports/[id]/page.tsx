@@ -1,3 +1,4 @@
+import { shownViews } from '@/lib/list/shown-views';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
@@ -57,10 +58,11 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
   const all = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0);
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const base = `/imports/${encodeURIComponent(batch.id)}`;
-  const filters: { state?: ImportItemState; label: string; count: number }[] = [
-    { label: t('imports.filterAll'), count: all },
-    ...IMPORT_ITEM_STATES.filter((s) => (counts[s] ?? 0) > 0).map((s) => ({ state: s, label: t(`imports.states.${s}` as MessageKey), count: counts[s] ?? 0 })),
-  ];
+  // A state with no files is left out, except the one shown (shownViews)
+  const filters: { state?: ImportItemState; label: string; count: number }[] = shownViews(
+    [{ label: t('imports.filterAll'), count: all } as { state?: ImportItemState; label: string; count: number }, ...IMPORT_ITEM_STATES.map((s) => ({ state: s, label: t(`imports.states.${s}` as MessageKey), count: counts[s] ?? 0 }))],
+    (f) => f.state === state,
+  );
 
   return (
     <div>
@@ -100,6 +102,7 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
           href: hrefWith(base, { state: f.state }),
           current: f.state === state,
           extra: <span className="tabular-nums">{formatNumber(f.count, locale)}</span>,
+          extraKey: String(f.count),
         }))}
       />
       {data.statuses === null && <ErrorAlert testId="import-status-unknown">{t('imports.statusUnknown')}</ErrorAlert>}

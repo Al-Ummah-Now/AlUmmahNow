@@ -64,12 +64,14 @@ export function createUploadsInternalRouter() {
 	const stale = async (c: { env: Env; json: (b: unknown, s?: number) => Response }, q: { status?: string; limit?: string }, hide: ReadonlySet<string>) => {
 		const status = q.status;
 		const limit = Math.min(Math.max(parseInt(q.limit || '200', 10) || 200, 1), 500);
-		let items = (await listItems(c.env, 2000)).filter((i) => !hide.has(i.videoId));
+		const listed = (await listItems(c.env, 2000)).filter((i) => !hide.has(i.videoId));
+		// Every status over all items the reader may see, whatever is shown (the tabs; a status without items is missing)
+		const counts: Record<string, number> = {};
+		for (const item of listed) counts[item.status] = (counts[item.status] ?? 0) + 1;
+		let items = listed;
 		if (status && STATUSES.has(status)) items = items.filter((i) => i.status === status);
 		else if (status === 'open') items = items.filter((i) => i.status !== 'deleted' && i.status !== 'skipped');
 		items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-		const counts: Record<string, number> = {};
-		for (const item of items) counts[item.status] = (counts[item.status] ?? 0) + 1;
 
 		let deadLetters: unknown[] = [];
 		if (c.env.NOTIFICATIONS_DB) {

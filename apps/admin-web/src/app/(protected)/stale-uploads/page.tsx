@@ -70,12 +70,14 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
             currentClassName="border-accent text-fg"
             idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
             tabTestIdPrefix="stale-filter-"
-            tabs={shownViews(STALE_FILTERS.map((f) => ({ id: f, count: f === 'open' || f === 'all' ? undefined : data!.counts[f as keyof typeof data.counts] })), (f) => f.id === filter).map((f) => ({
+            // Every status is counted over all items (a missing one has none)
+            tabs={shownViews(STALE_FILTERS.map((f) => ({ id: f, count: f === 'open' || f === 'all' ? undefined : (data!.counts[f as keyof typeof data.counts] ?? 0) })), (f) => f.id === filter).map((f) => ({
               id: f.id,
               label: t(FILTER_LABEL[f.id]),
               href: f.id === 'open' ? '/stale-uploads' : `/stale-uploads?status=${f.id}`,
               current: f.id === filter,
               extra: f.count === undefined ? undefined : <span className="tabular-nums opacity-80">{formatNumber(f.count, locale)}</span>,
+              extraKey: String(f.count ?? ''),
             }))}
           />
           <StaleUploadsTable items={data.items} locale={locale} now={now} />
