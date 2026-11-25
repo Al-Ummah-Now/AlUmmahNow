@@ -445,6 +445,46 @@ describe('smoke', () => {
 			assert.match(stage.detail, /not answered by candidate/);
 		});
 
+		it('production robots.txt: a lost proof never fails, whatever is left of the 90 s; a wrong content and a stall do', async () => {
+			const GOOD = 'User-agent: *\nAllow: /\nSitemap: https://videos.alummahnow.net/sitemap.xml\n';
+			/** Earlier checks use up `used` ms of the wait, then robots.txt answers in turn (null: it stalls, 'broken': no connection). */
+			const run = async (used: number, ...robots: (string | null)[]) => {
+				const c = clock();
+				let asked = 0;
+				const fetchImpl = (async (input: string | URL | Request) => {
+					const url = new URL(String(input));
+					if (url.pathname === '/robots.txt') {
+						const body = robots[Math.min(asked++, robots.length - 1)];
+						if (body === 'broken') throw new TypeError('fetch failed');
+						if (body === null) throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+						return new Response(body);
+					}
+					// The home page (the first web check) is the old version's until then
+					const candidate = !(url.hostname === 'videos.alummahnow.net' && url.pathname === '/en') || c.now() >= used;
+					const headers: Record<string, string> = { 'content-type': 'application/json', ...(candidate ? { 'X-Release-Check': 'ok' } : {}) };
+					return url.pathname === '/en' ? new Response('<html></html>', { headers }) : new Response(JSON.stringify({ status: 'healthy', now: 1 }), { headers });
+				}) as typeof fetch;
+				const results = await runSmoke({ env: 'production', overrides: { 'al-ummah-now-production': V(2) }, fetchImpl, ...c });
+				assert.equal(result(results, 'web: home page renders').ok, true, `home within ${used} ms`);
+				return { robots: result(results, 'web: robots.txt'), asked, end: c.now() };
+			};
+			for (const used of [0, 75_000, 80_000, 85_000, VERSION_WAIT_MS]) {
+				const { robots, end } = await run(used, GOOD);
+				assert.deepEqual([robots.ok, /WARNING: no proof/.test(robots.detail)], [true, true], `${used} ms used: ${robots.detail}`);
+				assert.ok(end <= VERSION_WAIT_MS, `${used}: ${end}`);
+				const wrong = await run(used, 'User-agent: *\nDisallow: /\n');
+				assert.deepEqual([wrong.robots.ok, /disallows everything/.test(wrong.robots.detail)], [false, true], `${used} ms used`);
+				// Stalls in the tries after a good answer are lost proof too; only stalls are a failure
+				assert.equal((await run(used, GOOD, null)).robots.ok, true, `${used} ms used, then stalls`);
+				const stalls = await run(used, null);
+				assert.deepEqual([stalls.robots.ok, /no answer in time/.test(stalls.robots.detail)], [false, true], `${used} ms used`);
+			}
+			assert.equal((await run(0, GOOD, 'broken')).robots.ok, true);
+			assert.deepEqual([(await run(0, 'broken')).robots.ok, (await run(0, 'broken')).robots.detail], [false, 'fetch failed']);
+			assert.equal((await run(0, GOOD)).asked, 3);
+			assert.equal((await run(VERSION_WAIT_MS, GOOD)).asked, 1);
+		});
+
 		it('promote moves no traffic when an old version answered a page check', async () => {
 			const c = clock();
 			const base = fakeFetch();

@@ -150,11 +150,13 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 	 * A check of `app`'s Worker. With a candidate of it, the verdict counts only when the candidate answered every
 	 * request of the check; otherwise (an older version, an edge error page, a stalled request) the whole check runs
 	 * again until the deadline. A verdict of the candidate, pass or fail, and a failed connection end it at once.
-	 * `proofMayBeLost`: something in front may rewrite the answer and drop the header; then it is a printed warning.
+	 * `proofMayBeLost`: something in front may rewrite the answer and drop the header; then it is a printed warning,
+	 * however little of the deadline is left. The answer's content still decides.
 	 */
 	const check = async (name: string, app: string, fn: (get: Get) => Promise<string>, proofMayBeLost = false) => {
 		const worker = workerName(opts.env, app);
 		const wanted = worker ? opts.overrides?.[worker] : undefined;
+		let unproven: CheckResult | null = null;
 		for (let tries = 1; ; tries++) {
 			const proven: boolean[] = [];
 			let broken = false;
@@ -177,16 +179,20 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 				result = { name, ok: false, detail: (error as Error).message };
 			}
 			const answeredByCandidate = proven.length > 0 && proven.every(Boolean) && !stalled;
-			if (!wanted || broken || answeredByCandidate) {
+			// A try that breaks after an answer without the proof was only there to look for the proof
+			const lostOnly = proofMayBeLost && broken && unproven !== null;
+			if (!lostOnly && (!wanted || broken || answeredByCandidate)) {
 				if (wanted && tries > 1 && result.ok) result.detail += ` (after ${waited()} s)`;
 				results.push(result);
 				return;
 			}
-			if (proofMayBeLost && tries >= ROBOTS_TRIES && !stalled) {
-				results.push({ ...result, detail: `${result.detail} (WARNING: no proof that candidate ${wanted} answered; not required yet)` });
+			if (!stalled && !broken) unproven = result;
+			const timeUp = now() + VERSION_PAUSE_MS > deadline;
+			if (proofMayBeLost && unproven && (tries >= ROBOTS_TRIES || timeUp || broken)) {
+				results.push({ ...unproven, detail: `${unproven.detail} (WARNING: no proof that candidate ${wanted} answered; not required yet)` });
 				return;
 			}
-			if (now() + VERSION_PAUSE_MS > deadline) {
+			if (timeUp) {
 				const last = stalled ? 'no answer in time' : `last answer, of another version: ${result.detail}`;
 				results.push({ name, ok: false, detail: `not answered by candidate ${wanted} of ${worker} (after ${waited()} s; ${last})` });
 				return;

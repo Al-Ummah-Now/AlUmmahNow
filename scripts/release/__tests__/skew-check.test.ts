@@ -85,6 +85,12 @@ describe('skew check', () => {
 		assert.equal(never.ok, false);
 		assert.match(never.detail, /answered 200, not from the candidate \(after 3 tries\)/);
 		assert.match((await run([{ status: 404, ok: true }, { status: 200, ok: true }])).detail, /answered 404:/);
+		// The plain chunk is only counted when the candidate says it lacks it
+		for (const [ok, counted] of [[true, 1], [false, 0]] as const) {
+			const f = (async (url: string | URL) =>
+				new Response('x', String(url).includes('dpl=') ? { headers: { 'X-Release-Check': 'ok' } } : { status: 404, headers: ok ? { 'X-Release-Check': 'ok' } : {} })) as unknown as typeof fetch;
+			assert.match((await checkOldBuildServed(before, f, 1, noWait, headers)).detail, new RegExp(`${counted} of them only through`));
+		}
 		// After the promote nobody is asked to prove anything
 		assert.equal((await checkOldBuildServed(before, fakeFetch(() => 200), 1, noWait)).ok, true);
 	});

@@ -49,6 +49,10 @@ export interface RetryOptions {
  */
 export const OLD_BUILD_RETRY: RetryOptions = { attempts: 7, delayMs: 10_000, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 
+/** At 0%: whether another version than the candidate answered. */
+const notTheCandidate = (headers: Record<string, string>, res: Response): boolean =>
+	headers[RELEASE_CHECK_HEADER] !== undefined && res.headers.get(RELEASE_CHECK_HEADER) !== RELEASE_CHECK_OK;
+
 async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions, headers: Record<string, string>): Promise<number | string> {
 	let last: number | string = 0;
 	for (let attempt = 1; attempt <= retry.attempts; attempt++) {
@@ -56,7 +60,7 @@ async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions,
 			const res = await fetchImpl(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(20_000) });
 			await res.body?.cancel();
 			// At 0% the status counts only when the candidate answered (X-Release-Check); an older version is asked again
-			const other = headers[RELEASE_CHECK_HEADER] !== undefined && res.headers.get(RELEASE_CHECK_HEADER) !== RELEASE_CHECK_OK;
+			const other = notTheCandidate(headers, res);
 			if (res.status < 500 && !other) return res.status;
 			last = other ? `${res.status}, not from the candidate` : res.status;
 		} catch (error) {
@@ -96,7 +100,8 @@ export async function checkOldBuildServed(
 		}
 		const plain = await fetchImpl(`${origin}${chunk}`, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(20_000) });
 		await plain.body?.cancel();
-		if (plain.status === 404) onlyOld++;
+		// Only printed, so asked once: what another version answers is not counted
+		if (plain.status === 404 && !notTheCandidate(headers, plain)) onlyOld++;
 	}
 	return {
 		name,
