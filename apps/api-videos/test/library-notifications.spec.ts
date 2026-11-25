@@ -467,6 +467,22 @@ describe('notification producers', () => {
 		assert.equal(msg.payload.realtimeSent, false);
 	});
 
+	it('notifyUser sends names on one line without direction controls, in realtime and to the queue, for any kind', async (t) => {
+		const realFetch = globalThis.fetch;
+		const pushed: any[] = [];
+		t.after(() => void (globalThis.fetch = realFetch));
+		globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+			pushed.push(JSON.parse(String(init.body)).message.data.params);
+			return new Response('{}');
+		}) as unknown as typeof fetch;
+		const e = { ...env(), WEBSOCKET_URL: 'https://ws.test', INTERNAL_API_KEY: 'k' };
+		await notifyUser(e, 'owner', { notificationType: 'subscription', notificationKey: 'newSubscriber', params: { channelName: '\u202eCorner\u2069\nx' } });
+		await notifyUser(e, 'owner', { notificationType: 'comment', notificationKey: 'commentReply', params: { actorName: 'Amina\u2067', videoTitle: 'A\u2029B' } });
+		const said = [{ channelName: 'Corner x' }, { actorName: 'Amina', videoTitle: 'A B' }];
+		assert.deepEqual(pushed, said);
+		assert.deepEqual(e.queue.messages.map((m: any) => m.payload.params), said);
+	});
+
 	it('notifyUser skips a disabled category entirely', async () => {
 		const e = env();
 		e.NOTIFICATIONS_DB.raw.prepare("INSERT INTO notification_settings VALUES ('owner', 'subscribers', 0, 0)").run();

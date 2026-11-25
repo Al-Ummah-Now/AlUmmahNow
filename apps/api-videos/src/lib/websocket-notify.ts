@@ -16,7 +16,7 @@
  * fails the API response.
  */
 
-import { ACCESS_CHANGED_EVENT } from '@al-ummah/shared-types';
+import { ACCESS_CHANGED_EVENT, lineParams } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { categoryOf, enqueueNotification, isCategoryEnabled, isNotificationKey, NotificationsEnv } from './notifications';
 
@@ -166,12 +166,13 @@ export async function notifyUser(env: unknown, userId: string, notification: Use
 
   const notificationId = crypto.randomUUID();
   const { actorUserId, entityId, dedupeKey, ...visible } = notification;
+  const params = lineParams(notification.params);
   const sent = await broadcast(env as RealtimeEnv, `user:${userId}`, 'notification', {
     notificationId,
     userId,
     ...visible,
     ...(persistable ? { category: categoryOf(key), persisted: !!store?.queue } : {}),
-    params: notification.params || {},
+    params,
   });
 
   if (persistable) {
@@ -179,7 +180,7 @@ export async function notifyUser(env: unknown, userId: string, notification: Use
       notificationId,
       recipientUserId: userId,
       notificationKey: key,
-      params: notification.params || {},
+      params,
       actionUrl: notification.actionUrl,
       actorUserId,
       entityId,
