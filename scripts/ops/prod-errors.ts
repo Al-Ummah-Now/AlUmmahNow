@@ -20,12 +20,13 @@
  * D1 is read through the Cloudflare API with SELECT-only statements on indexed columns
  * (error_groups.last_seen, error_events (group_id, occurred_at), error_actions (status, updated_at)),
  * each bounded by LIMIT. No app endpoint is called and nothing is changed. The token is never printed;
- * emails, URL query strings and credential-looking values are scrubbed from every printed line.
- * User ids are printed at most as a count.
+ * every printed line goes through scrub.ts (the log is public): no emails, user ids, handles, addresses, URL
+ * query strings or credentials, and ids only by their first 8 characters.
  */
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { clip, scrub } from './scrub.ts';
 
 const API = 'https://api.cloudflare.com/client/v4';
 
@@ -105,17 +106,7 @@ async function post(path: string, payload: unknown): Promise<{ ok: boolean; stat
 
 function errs(r: { status: number; body: any }): string {
 	const b = r.body ?? {};
-	return `HTTP ${r.status} ${JSON.stringify(b.errors?.length ? b.errors : b).slice(0, 600)}`;
-}
-
-/** Drops URL query strings, credentials, JWTs and email addresses from printed text. */
-export function scrub(text: string): string {
-	return text
-		.replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']*/g, '$1?…')
-		.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer …')
-		.replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '…jwt…')
-		.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '…@…')
-		.replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|cookie|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
+	return `HTTP ${r.status} ${clip(JSON.stringify(b.errors?.length ? b.errors : b), 600)}`;
 }
 
 /** "android 1.4.0 · phone · EG · search:google (www.google.com) · /:locale/video/:id" from context.origin JSON. */
@@ -155,7 +146,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 	p(`${g.rows.length} groups (test = only release-E2E controlled errors)`);
 	p();
 	for (const row of g.rows) {
-		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${String(row.message).slice(0, 300)}`);
+		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${clip(row.message, 300)}`);
 		p(`- group ${row.id}, status ${row.status}${row.test ? ', test' : ''}, ×${row.occurrences}, users ${row.users}`);
 		p(`- route ${row.route ?? '–'}, culprit ${row.culprit ?? '–'}`);
 		p(`- first ${row.first_seen} (${row.first_release ?? '–'}), last ${row.last_seen} (${row.last_release ?? '–'})`);
@@ -163,10 +154,10 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 		const ev = e.rows[0];
 		if (ev) {
 			p(`- latest: ${ev.occurred_at} ${ev.method ?? ''} ${ev.route ?? ''} → ${ev.status ?? '–'}, release ${ev.release ?? '–'}, version ${ev.worker_version ?? '–'}, request ${ev.request_id ?? '–'}`);
-			if (ev.message && ev.message !== row.message) p(`- latest message: ${String(ev.message).slice(0, 400)}`);
+			if (ev.message && ev.message !== row.message) p(`- latest message: ${clip(ev.message, 400)}`);
 			if (ev.origin) p(`- origin: ${originLine(ev.origin)}`);
-			for (const f of topFrames(ev.stack)) p(`  - ${f.slice(0, 240)}`);
-			if (ev.extra) p(`- extra: ${String(ev.extra).replace(/"user_?id"\s*:\s*"[^"]*"/gi, '"userId":"…"')}`);
+			for (const f of topFrames(ev.stack)) p(`  - ${clip(f, 240)}`);
+			if (ev.extra) p(`- extra: ${ev.extra}`);
 		} else if (!e.ok) p(`- latest sample not readable: ${e.error}`);
 		p();
 	}
@@ -177,7 +168,7 @@ async function actions(env: EnvName, since: Date): Promise<void> {
 	const a = await d1(env, ACTIONS_SQL, [since.toISOString(), env]);
 	if (!a.ok) return p(`- not readable: ${a.error}`), p();
 	p(`${a.rows.length} open`);
-	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${String(r.detail ?? '').slice(0, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
+	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${clip(r.detail, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
 	p();
 }
 
@@ -248,7 +239,7 @@ async function pathTrace(app: string, script: string, needles: string[], since: 
 		const req = e.$workers?.event?.request;
 		const status = e.$workers?.event?.response?.status ?? '';
 		const level = e.$metadata?.level ?? e.source?.level ?? '';
-		const msg = String(e.$metadata?.message ?? e.source?.message ?? '').slice(0, 300);
+		const msg = clip(e.$metadata?.message ?? e.source?.message, 300);
 		const ua = uaFamily(req?.headers?.['user-agent'] ?? req?.headers?.['User-Agent']);
 		p(`- ${t} ${req?.method ?? ''} ${pathOf(req?.url ?? req?.path)} ${status ? `→ ${status}` : ''} ${e.$workers?.outcome ?? ''} ${ua} ${level ? `[${level}] ` : ''}${msg}`.replace(/\s+/g, ' ').trim());
 	}
@@ -273,11 +264,11 @@ async function logs(app: string, script: string, since: Date, until: Date): Prom
 	for (const e of events) {
 		const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
 		const level = e.$metadata?.level ?? e.source?.level ?? e.$workers?.outcome ?? '';
-		const msg = String(e.$metadata?.message ?? e.source?.message ?? e.$metadata?.error ?? '').slice(0, 300);
+		const msg = clip(e.$metadata?.message ?? e.source?.message ?? e.$metadata?.error, 300);
 		const req = e.$workers?.event?.request;
 		const where = req ? `${req.method ?? ''} ${String(req.url ?? req.path ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]}` : e.$workers?.eventType ?? '';
 		const key = `${level}|${msg.replace(/[0-9a-f]{8,}|\d+/g, '#')}`;
-		const sample = typeof e.source === 'object' ? JSON.stringify(e.source).slice(0, 600) : String(e.source ?? '').slice(0, 600);
+		const sample = clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 600);
 		const cur = seen.get(key);
 		if (cur) {
 			cur.n++;
@@ -310,7 +301,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
-		process.stderr.write(`prod-errors failed: ${error instanceof Error ? error.message : String(error)}\n`);
+		process.stderr.write(`prod-errors failed: ${scrub(error instanceof Error ? error.message : String(error))}\n`);
 		process.exit(1);
 	});
 }

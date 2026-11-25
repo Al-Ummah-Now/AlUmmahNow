@@ -14,17 +14,18 @@
  *    collector's daily cost metrics per provider, viewer-hours per provider (read-only aggregates)
  *  - transcode start times over the last 30 days: queued → the container running FFmpeg, p50/p95
  *    (a read-only SELECT of api-videos' own media_jobs timestamps in the search D1), then the three
- *    slowest starts with their video and job ids, times, attempts and error, and the media Worker's
+ *    slowest starts with the first 8 characters of their video and job ids, times, attempts and error, and the media Worker's
  *    warn/error lines around each (to tell a backlog, a retry, a source wait or an image pull apart).
- *    Video and job ids are opaque; no titles or user data are printed.
+ *    No titles or user data are printed.
  *
  * Only al-ummah resources are named and read. Calls are GET lists/reads, the GraphQL Analytics
  * read and the Observability telemetry query (a POST that only reads). The token is never printed;
- * log lines are printed as the Workers wrote them (the logger redacts secrets, tokens and emails).
+ * every printed line goes through scrub.ts (the log is public): ids only by their first 8 characters.
  */
 
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { clip, scrub } from './scrub.ts';
 
 const API = 'https://api.cloudflare.com/client/v4';
 
@@ -75,20 +76,8 @@ async function post(path: string, payload: unknown): Promise<{ ok: boolean; stat
 function errs(r: { status: number; body: any }): string {
 	const b = r.body ?? {};
 	const detail = b.errors?.length ? b.errors : b.messages?.length ? b.messages : b.error ?? b.message ?? b;
-	const text = JSON.stringify(detail);
+	const text = scrub(JSON.stringify(detail));
 	return `HTTP ${r.status} ${text.length > 900 ? text.slice(-900) : text}`;
-}
-
-/**
- * Printed text loses URL query strings (signed Bunny/R2 URLs carry tokens there) and anything that
- * looks like a credential: bearer tokens, JWTs, key/token/secret/signature/password fields.
- */
-export function scrub(text: string): string {
-	return text
-		.replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']*/g, '$1?…')
-		.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer …')
-		.replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '…jwt…')
-		.replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
 }
 
 const out: string[] = [];
@@ -123,7 +112,7 @@ async function queues(names: Names, since: Date, until: Date): Promise<void> {
 		});
 		const acc = gql.body?.data?.viewer?.accounts?.[0];
 		if (!acc) {
-			p(`- analytics unavailable: ${JSON.stringify(gql.body?.errors ?? null).slice(0, 300)}`);
+			p(`- analytics unavailable: ${clip(JSON.stringify(gql.body?.errors ?? null), 300)}`);
 			continue;
 		}
 		const backlog = acc.queueBacklogAdaptiveGroups ?? [];
@@ -155,7 +144,7 @@ async function containers(names: Names): Promise<void> {
 		p(`- rollout: ${JSON.stringify(a.active_rollout_id ?? a.rollout ?? null)}`);
 		for (const path of [`/accounts/${account}/containers/applications/${a.id}/instances`, `/accounts/${account}/containers/applications/${a.id}/rollouts`]) {
 			const x = await get(path);
-			p(`- GET …${path.split(a.id)[1]}: ${x.ok ? JSON.stringify(x.body.result ?? null).slice(0, 4000) : errs(x)}`);
+			p(`- GET …${path.split(a.id)[1]}: ${x.ok ? clip(JSON.stringify(x.body.result ?? null), 4000) : errs(x)}`);
 		}
 	}
 	if (!apps.length) p(`(no application named ${names.media}*)`);
@@ -172,7 +161,7 @@ async function containerQuota(all: any[]): Promise<void> {
 	p('## Container quota (account)');
 	for (const path of [`/accounts/${account}/cloudchamber/me`, `/accounts/${account}/containers/me`]) {
 		const x = await get(path);
-		p(`- GET ${path.replace(account, '…')}: ${x.ok ? JSON.stringify(x.body.result ?? null).slice(0, 3000) : errs(x)}`);
+		p(`- GET ${path.replace(account, '…')}: ${x.ok ? clip(JSON.stringify(x.body.result ?? null), 3000) : errs(x)}`);
 	}
 	let reserved = 0;
 	for (const a of all) {
@@ -208,7 +197,7 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 			const msg = e.$metadata?.message ?? e.source?.message ?? '';
 			const trigger = e.$workers?.event?.queue ? 'queue' : e.$workers?.eventType ?? '';
 			const c = e.$container ? ` {placement:${e.$container.placementId ?? ''},host:${e.$container.hostname ?? ''},v:${e.$container.version ?? ''}}` : '';
-			const src = (typeof e.source === 'object' ? JSON.stringify(e.source).slice(0, 700) : String(e.source ?? '').slice(0, 700)) + c;
+			const src = (clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 700)) + c;
 			return `- ${t} [${level}] ${trigger} ${msg} ${src}`;
 		})
 		.sort();
@@ -222,11 +211,11 @@ async function discover(names: Names, since: Date, until: Date): Promise<void> {
 	for (const key of ['$metadata.service', '$workers.scriptName', '$metadata.type', 'dataset']) {
 		const r = await post(`/accounts/${account}/workers/observability/telemetry/values`, { key, type: 'string', timeframe, limit: 200, datasets: [] });
 		const vals = (r.body?.result ?? []).map((v: any) => String(v.value)).filter((v: string) => key !== '$metadata.service' && key !== '$workers.scriptName' ? true : v.includes(names.media.replace(/-(stage|qa)$/, '')));
-		p(`- ${key}: ${r.ok ? JSON.stringify(vals).slice(0, 1500) : errs(r)}`);
+		p(`- ${key}: ${r.ok ? clip(JSON.stringify(vals), 1500) : errs(r)}`);
 	}
 	const k = await post(`/accounts/${account}/workers/observability/telemetry/keys`, { timeframe, limit: 1000, datasets: [] });
 	const keys = (k.body?.result ?? []).map((x: any) => String(x.key)).filter((x: string) => /contain|instance|exit|stream|service|dataset|app/i.test(x));
-	p(`- keys: ${k.ok ? JSON.stringify(keys).slice(0, 2000) : errs(k)}`);
+	p(`- keys: ${k.ok ? clip(JSON.stringify(keys), 2000) : errs(k)}`);
 	// Container output, wherever it is: every event whose service names the transcoder application
 	// By application id (from the Containers API), so only our own application is read
 	const apps = await get(`/accounts/${account}/containers/applications`);
@@ -342,7 +331,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
-		process.stderr.write(`media-diagnostics failed: ${error instanceof Error ? error.message : String(error)}\n`);
+		process.stderr.write(`media-diagnostics failed: ${scrub(error instanceof Error ? error.message : String(error))}\n`);
 		process.exit(1);
 	});
 }

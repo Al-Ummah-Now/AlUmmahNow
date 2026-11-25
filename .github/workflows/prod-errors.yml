@@ -4,8 +4,9 @@ name: Prod errors
 # groups and their latest sample, open needs-action items, and warn/error lines from Workers
 # Observability for web, admin-web, api-videos, admin-api, media, processor, websocket, scheduler and
 # Auth. D1 is read with bounded SELECTs on indexed columns through the Cloudflare API; the
-# Observability query only reads. No app endpoint is called and nothing is changed. Prints no
-# secrets, emails or user ids.
+# Observability query only reads. No app endpoint is called and nothing is changed. The log, the
+# summary and the artifact are public: scripts/ops/scrub.ts drops secrets, emails, user ids and handles and
+# shortens every other id.
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +26,7 @@ on:
   pull_request:
     paths:
       - scripts/ops/prod-errors.ts
+      - scripts/ops/scrub.ts
       - .github/workflows/prod-errors.yml
 
 permissions:
@@ -45,7 +47,7 @@ jobs:
         with:
           node-version: '22'
       - name: Tests
-        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts
+        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts scripts/ops/__tests__/scrub.test.ts
       - name: Report
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
