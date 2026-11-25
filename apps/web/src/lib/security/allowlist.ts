@@ -110,6 +110,8 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   // Page lifecycle: analytics flush, web-vitals, TanStack Query focus refetch
   'visibilitychange',
   'prerenderingchange',
+  // video.js listens for its own 'dispose' on every element it watches, the document included
+  'dispose',
   'pagehide',
   'pageshow',
   // No 'beforeunload': the app never shows browser prompts; flushes use pagehide
