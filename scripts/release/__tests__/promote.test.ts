@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, addressLine, type PromoteDeps, type ReleaseApp } from '../promote.ts';
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
-import { runSmoke, VERSION_PAUSE_MS, VERSION_WAIT_MS, type CheckResult } from '../smoke.ts';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { REQUEST_TIMEOUT_MS, runSmoke, VERSION_PAUSE_MS, VERSION_WAIT_MS, type CheckResult } from '../smoke.ts';
 import { seoHostResponse } from './seo-host-fixture.ts';
 import { attachWhenMissing, ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
 import { CfApiError } from '../cf-api.ts';
@@ -297,6 +299,89 @@ describe('smoke', () => {
 			const h = adminHealth(says(V(1)));
 			const results = await runSmoke({ env: 'stage', fetchImpl: h.fetchImpl, ...c });
 			assert.deepEqual([health(results).detail, h.asked(), c.now()], [`version ${V(1)}`, 1, 0]);
+		});
+	});
+	describe('a request that stalls', () => {
+		const overrides = { 'al-ummah-admin-api-stage': V(6) };
+		const isAdminHealth = (input: unknown) => {
+			const url = new URL(String(input));
+			return url.hostname === 'admin.api.stage.alummahnow.net' && url.pathname === '/health';
+		};
+		const health = (results: CheckResult[]) => results.find((r) => r.name === 'admin-api: health')!;
+
+		it('is a failure in any other check, and every request has a timeout', async () => {
+			const signals: unknown[] = [];
+			const results = await runSmoke({
+				env: 'stage',
+				requestTimeoutMs: 30,
+				fetchImpl: ((_input: unknown, init?: RequestInit) => {
+					signals.push(init?.signal);
+					return new Promise((_, reject) => init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason as Error)));
+				}) as unknown as typeof fetch,
+			});
+			assert.ok(signals.length > 5);
+			assert.ok(signals.every((s) => s instanceof AbortSignal));
+			assert.ok(results.length > 5);
+			// The live edge host included: it passes only when it refuses the connection
+			for (const r of results) {
+				assert.equal(r.ok, false, r.name);
+				assert.match(r.detail, /timeout/i, r.name);
+			}
+		});
+
+		for (const path of ['/headers', '/body']) {
+			it(`is not yet while the candidate is waited for, and a failure otherwise (${path})`, async () => {
+				// A real server: no headers, or headers and half a body, then nothing
+				const server = createServer((req, res) => {
+					if (req.url === '/body') res.writeHead(200, { 'Content-Type': 'application/json' }).write('{"status":');
+				});
+				await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+				try {
+					const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`;
+					const run = async (o?: Record<string, string>) => {
+						let n = 0;
+						const base = fakeFetch({ health: V(6) });
+						const results = await runSmoke({
+							env: 'stage',
+							overrides: o,
+							requestTimeoutMs: 50,
+							sleep: async () => {},
+							fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => (isAdminHealth(input) && n++ === 0 ? fetch(url, init) : base(input, init))) as typeof fetch,
+						});
+						return { health: health(results), asked: n };
+					};
+					const waited = await run(overrides);
+					assert.deepEqual([waited.health.ok, waited.asked], [true, 2], waited.health.detail);
+					const once = await run();
+					assert.deepEqual([once.health.ok, once.asked], [false, 1]);
+					assert.match(once.health.detail, /timeout/i);
+				} finally {
+					server.closeAllConnections();
+					server.close();
+				}
+			});
+		}
+
+		it('never makes the wait longer than its deadline', async (t) => {
+			const c = clock();
+			let stalled = 0;
+			const timeouts: number[] = [];
+			t.mock.method(AbortSignal, 'timeout', (ms: number) => (timeouts.push(ms), new AbortController().signal));
+			const base = fakeFetch();
+			const results = await runSmoke({
+				env: 'stage',
+				overrides,
+				now: () => c.now() + stalled,
+				sleep: c.sleep,
+				fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
+					if (!isAdminHealth(input)) return base(input, init);
+					stalled += timeouts.at(-1)!;
+					throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+				}) as typeof fetch,
+			});
+			assert.equal(health(results).detail, `no answer in time, expected candidate ${V(6)} (after 90 s)`);
+			assert.equal(c.now() + stalled, VERSION_WAIT_MS);
+			assert.equal(Math.max(...timeouts), REQUEST_TIMEOUT_MS);
 		});
 	});
 	it('fails when the callback error leaks off the error page (R4)', async () => {

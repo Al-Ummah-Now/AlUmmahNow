@@ -26,7 +26,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCfClient } from './cf-api.ts';
 import { attachWhenMissing, ensureCustomDomains, expectedDomains } from './custom-domains.ts';
-import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
+import { REQUEST_TIMEOUT_MS, runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
 import { computeMapping, mappingVarArgs, readDeploymentId, SKEW_APPS } from './skew-mapping.ts';
 import { captureBuild, checkOldBuildServed, OLD_BUILD_RETRY, type BuildSnapshot } from './skew-check.ts';
 
@@ -311,7 +311,7 @@ export async function waitForVersions(env: ReleaseEnv, wanted: Record<string, st
 		let last = 'no response';
 		for (;;) {
 			try {
-				const res = await fetch(`${HOSTS[env][host]}/health`, { headers });
+				const res = await fetch(`${HOSTS[env][host]}/health`, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 				const body = (await res.json()) as { deployment?: string };
 				if (body.deployment === version) break;
 				last = `HTTP ${res.status}, version ${body.deployment}`;
