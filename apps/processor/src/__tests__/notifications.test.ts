@@ -120,10 +120,6 @@ describe('notification center (processor)', () => {
       message(MessageType.NotificationCreate, { notificationId: 'n1', recipientUserId: 'owner', notificationKey: 'channelMovedIn', params: { channel: bad('Corner'), channel_ar: bad('الركن'), count: 2 } }),
       env(),
     );
-    await processor().processMessage(
-      message(MessageType.NotificationFanout, { kind: 'new_video', channelId: 'ch1', entityId: 'v1', isHighlight: true, actorUserId: 'up', params: { channelName: bad('C') }, actionUrl: '/video/v1' }),
-      env(),
-    );
     await processor().processMessage(message(MessageType.VideoProcessingCompleted, { videoId: 'v2', userId: 'up', title: bad('T') }), env());
     const texts = [
       ...rows('SELECT params_json FROM notifications').map((r) => JSON.parse(r.params_json as string)),
@@ -210,6 +206,20 @@ describe('notification center (processor)', () => {
       const users = rows("SELECT user_id FROM notifications WHERE notification_key = 'newVideo' ORDER BY user_id").map((r) => r.user_id);
       expect(users).toEqual(['all-user', 'hl-user']);
       expect(pushedTo().sort()).toEqual(['user:all-user', 'user:hl-user']);
+    });
+
+    it('names and titles are one line without direction controls, stored and in realtime', async () => {
+      await processor().processMessage(
+        message(MessageType.NotificationFanout, { kind: 'new_video', channelId: 'ch1', entityId: 'v1', isHighlight: true, actorUserId: 'owner', params: { channelName: '\u202eC\u2069\nx', videoTitle: 'V' }, actionUrl: '/video/v1' }),
+        env(),
+      );
+      const stored = rows('SELECT params_json FROM notifications').map((r) => JSON.parse(r.params_json as string));
+      const pushed = fetchMock.mock.calls
+        .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+        .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
+        .filter((b) => b.message.type === 'notification')
+        .map((b) => b.message.data.params);
+      expect([...stored, ...pushed]).toEqual(Array(4).fill({ channelName: 'C x', videoTitle: 'V' }));
     });
 
     it('delivers shorts only to bell = all, once per video', async () => {
