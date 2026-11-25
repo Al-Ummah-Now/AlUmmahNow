@@ -2,31 +2,31 @@
  * Read-only report of the errors one environment recorded (production or stage).
  *
  *   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node --experimental-strip-types scripts/ops/prod-errors.ts \
- *     --env production [--hours 72] [--paths /passkeys/,/account/passkeys]
+ *     --env production [--hours 72] [--paths /passkeys/,/account/passkeys] [--sealed report.sealed.json]
  *
  * --paths: also list every request whose path contains one of the
  * comma-separated substrings (time, method, path without query, status,
- * outcome, browser family) with the log lines of those requests. No query
- * strings, headers, bodies or ids are printed.
+ * outcome, browser family) with the log lines of those requests (sealed report
+ * only). The workflow input itself is public: never put an id or a name in it.
  *
- * Prints, as markdown (stdout, also the job summary):
- *  - the error groups (admin Errors page) seen in the window: app, kind, route/culprit, message, status,
- *    occurrences, first/last seen, first/last release, and the latest sample's method, status, release,
- *    worker version, request id and top stack frames
- *  - the open "needs action" items (failed jobs, dead letters) updated in the window
- *  - warn/error log lines from Workers Observability for web, api-videos, admin-api, media, processor,
- *    websocket and Auth (auth, auth admin, profile)
+ * Two outputs:
+ *  - stdout (the workflow log and summary, which are public): the allow list of public-report.ts only, i.e. app,
+ *    group id, kind, error class, route template, status, counts and times;
+ *  - --sealed <file>: the full report, encrypted (seal.ts; open-report.ts opens it). Without --sealed it is
+ *    dropped. It holds the error groups with their latest sample, the open "needs action" items, failed cost
+ *    runs, and warn/error lines from Workers Observability; credentials, emails and addresses are scrubbed.
  *
  * D1 is read through the Cloudflare API with SELECT-only statements on indexed columns
  * (error_groups.last_seen, error_events (group_id, occurred_at), error_actions (status, updated_at)),
- * each bounded by LIMIT. No app endpoint is called and nothing is changed. The token is never printed;
- * every printed line goes through scrub.ts (the log is public): no emails, user ids, handles, addresses, URL
- * query strings or credentials, and ids only by their first 8 characters.
+ * each bounded by LIMIT. No app endpoint is called and nothing is changed.
  */
 
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { publicErrors, type ErrorsData } from './public-report.ts';
 import { clip, scrub } from './scrub.ts';
+import { seal } from './seal.ts';
 
 const API = 'https://api.cloudflare.com/client/v4';
 
@@ -130,6 +130,8 @@ export function topFrames(stack: string | null | undefined, n = 4): string[] {
 }
 
 const out: string[] = [];
+/** What the public part is made of */
+const data: Pick<ErrorsData, 'groups' | 'actions' | 'collectorFailures' | 'logs'> = { groups: null, actions: null, collectorFailures: null, logs: [] };
 const p = (s = '') => out.push(scrub(s));
 
 async function d1(env: EnvName, sql: string, params: unknown[], db = REPORTS_D1[env]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
@@ -144,6 +146,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 	const g = await d1(env, GROUPS_SQL, [since.toISOString(), env]);
 	if (!g.ok) return p(`- not readable: ${g.error}`), p();
 	p(`${g.rows.length} groups (test = only release-E2E controlled errors)`);
+	data.groups = g.rows;
 	p();
 	for (const row of g.rows) {
 		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${clip(row.message, 300)}`);
@@ -153,6 +156,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 		const e = await d1(env, LATEST_EVENT_SQL, [row.id]);
 		const ev = e.rows[0];
 		if (ev) {
+			row.http_status = ev.status;
 			p(`- latest: ${ev.occurred_at} ${ev.method ?? ''} ${ev.route ?? ''} → ${ev.status ?? '–'}, release ${ev.release ?? '–'}, version ${ev.worker_version ?? '–'}, request ${ev.request_id ?? '–'}`);
 			if (ev.message && ev.message !== row.message) p(`- latest message: ${clip(ev.message, 400)}`);
 			if (ev.origin) p(`- origin: ${originLine(ev.origin)}`);
@@ -168,6 +172,7 @@ async function actions(env: EnvName, since: Date): Promise<void> {
 	const a = await d1(env, ACTIONS_SQL, [since.toISOString(), env]);
 	if (!a.ok) return p(`- not readable: ${a.error}`), p();
 	p(`${a.rows.length} open`);
+	data.actions = a.rows;
 	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${clip(r.detail, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
 	p();
 }
@@ -182,6 +187,7 @@ async function costRuns(env: EnvName, since: Date): Promise<void> {
 			continue;
 		}
 		p(`${r.rows.length} rows`);
+		data.collectorFailures = (data.collectorFailures ?? 0) + r.rows.length;
 		for (const row of r.rows) p(`- ${JSON.stringify(row)}`);
 	}
 	p();
@@ -255,10 +261,15 @@ async function logs(app: string, script: string, since: Date, until: Date): Prom
 		limit: 1000,
 		parameters: { datasets: ['cloudflare-workers'], filters: [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }], filterCombination: 'and' },
 	});
-	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+	if (!r.ok) {
+		data.logs.push({ app, warn: 0, error: 0, readable: false });
+		return p(`unavailable: ${errs(r)}`), p();
+	}
 	const all = r.body.result?.events?.events ?? [];
 	const events = all.filter((e: any) => /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')) || e.$workers?.outcome === 'exception');
 	p(`${events.length} warn/error events (of ${all.length} read)`);
+	const warn = events.filter((e: any) => /warn/i.test(String(e.$metadata?.level ?? e.source?.level ?? ''))).length;
+	data.logs.push({ app, warn, error: events.length - warn, readable: true });
 	// Collapse repeats: same level + message → one line with a count and the latest time
 	const seen = new Map<string, { n: number; last: string; sample: string }>();
 	for (const e of events) {
@@ -296,12 +307,17 @@ async function main(): Promise<void> {
 	for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await logs(app, s, logSince, until);
 	const needles = arg('paths', '').split(',').map((n) => n.trim()).filter((n) => n.startsWith('/')).slice(0, 10);
 	if (needles.length) for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await pathTrace(app, s, needles, logSince, until);
-	process.stdout.write(out.join('\n') + '\n');
+	const sealedPath = arg('sealed', '');
+	if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(out.join('\n') + '\n')));
+	process.stdout.write(publicErrors({ env, since, until, ...data }).join('\n') + '\n');
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
-		process.stderr.write(`prod-errors failed: ${scrub(error instanceof Error ? error.message : String(error))}\n`);
+		// The log is public: the reason goes into the sealed report only
+		const sealedPath = arg('sealed', '');
+		if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(scrub(`${out.join('\n')}\nfailed: ${error instanceof Error ? error.stack : String(error)}\n`))));
+		process.stderr.write('prod-errors failed; the reason is in the sealed report\n');
 		process.exit(1);
 	});
 }
