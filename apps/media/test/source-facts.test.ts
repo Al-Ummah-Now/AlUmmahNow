@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { containerKind, SourceFacts, streamFacts } from '../container/source-facts.mjs';
+import { containerKind, sourceChanged, SourceFacts, streamFacts } from '../container/source-facts.mjs';
 
 const head = (s: string) => Buffer.from(s.padEnd(16, '.'), 'latin1');
 
@@ -34,6 +34,16 @@ test('SourceFacts hashes the whole file and measures zeros at both ends, whateve
 		for (let i = 0; i < file.length; i += size) f.update(file.subarray(i, i + size));
 		assert.deepEqual(f.finish(file.length), { bytes: file.length, container: 'unknown', zeroStartPercent: 0, zeroEndPercent: 50, sha256 }, `chunks of ${size}`);
 	}
+});
+
+test('only our kept original is compared with the importer\'s hash', () => {
+	assert.equal(sourceChanged('a', 'original', 'a'), false);
+	assert.equal(sourceChanged('a', 'original', 'b'), true);
+	assert.equal(sourceChanged(undefined, 'original', 'b'), false);
+	assert.equal(sourceChanged('a', 'play_720p.mp4', 'b'), false);
+	assert.equal(sourceChanged('a', undefined, 'b'), false);
+	const server = readFileSync(new URL('../container/server.mjs', import.meta.url), 'utf8');
+	assert.match(server, /if \(sourceChanged\(job\.sha256, sourceFile, sourceFacts\.sha256\)\) throw Object\.assign\(new Error\('source_changed'\), \{ fatal: true \}\);\s*const tDownload/);
 });
 
 test('a failed job reports what the probe saw', () => {

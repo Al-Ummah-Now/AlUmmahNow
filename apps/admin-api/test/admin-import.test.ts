@@ -208,7 +208,7 @@ describe('/api/admin/import batches and items (TA-5)', () => {
   const SHA = 'f'.repeat(64);
   const FILE = { sha256: SHA, fileName: 'lesson-01.mp4', fileSize: 4096, mimeType: 'video/mp4', title: 'Lesson 1', fingerprint: { name: 'lesson-01.mp4', size: 4096, lastModified: 1, hash: 'c'.repeat(64) } };
 
-  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean; statusDown?: boolean } = {}) {
+  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean; statusDown?: boolean; reupload?: boolean } = {}) {
     const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
     let n = 0;
     const videos = new Map<string, string>();
@@ -227,7 +227,7 @@ describe('/api/admin/import batches and items (TA-5)', () => {
           }
           if (url.pathname === '/internal/admin/import/status') {
             if (opts.statusDown) return json(500, { success: false, code: 'internal_error', error: 'down' });
-            return json(200, { success: true, result: { items: body.items.map((i: any) => ({ videoId: i.videoId, video: { title: `T ${i.videoId}`, processingStatus: 'completed', isDeleted: false }, attach: null, captions: [] })) } });
+            return json(200, { success: true, result: { items: body.items.map((i: any) => ({ videoId: i.videoId, video: { title: `T ${i.videoId}`, processingStatus: 'completed', isDeleted: false, ...(opts.reupload ? { needsReupload: true } : {}) }, attach: null, captions: [] })) } });
           }
           if (url.pathname === '/internal/admin/import/initiate') {
             if (opts.refuseInitiate) return json(409, { success: false, code: 'channel_suspended', error: 'The channel is suspended' });
@@ -265,7 +265,7 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     assert.equal(res.body.result.upload.tusSessionId.startsWith('sess-'), true);
     const initiate = h.calls.find((x) => x.path === '/internal/admin/import/initiate')!;
     assert.equal(initiate.actor, ADMIN);
-    assert.deepEqual(Object.keys(initiate.body).sort(), ['channelId', 'description', 'fileSize', 'fingerprint', 'mimeType', 'title']);
+    assert.deepEqual(Object.keys(initiate.body).sort(), ['channelId', 'description', 'fileSize', 'fingerprint', 'mimeType', 'sha256', 'title']);
     assert.equal(initiate.body.channelId, 'ch1');
     const keys = (await h.audit()).map((r: any) => r.key).sort();
     assert.deepEqual(keys, [`content:import:batch:${batchId}`, 'content:import:vid-1'].sort());
@@ -334,6 +334,21 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     assert.equal((await h.req(`/api/admin/import/items/${first.body.result.item.id}/failed`, post({ error: 'x' }))).status, 409);
     const list = await h.req('/api/admin/import/batches?channelId=ch1');
     assert.deepEqual(list.body.result.batches.map((b: any) => b.counts), [{}, { uploaded: 1 }]);
+  });
+
+  it('a file whose bytes did not arrive as sent may come again; the server gets its SHA-256', async () => {
+    const opts = { reupload: false };
+    const h = importSetup(opts);
+    const batch = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    const first = await h.req(`/api/admin/import/batches/${batch}/items`, post(FILE));
+    await h.req(`/api/admin/import/items/${first.body.result.item.id}/uploaded`, post({}));
+    assert.equal((await h.req(`/api/admin/import/batches/${batch}/items`, post(FILE))).status, 409);
+    opts.reupload = true;
+    const again = await h.req(`/api/admin/import/batches/${batch}/items`, post(FILE));
+    assert.equal(again.status, 200);
+    assert.deepEqual([again.body.result.item.id, again.body.result.item.state], [first.body.result.item.id, 'initiated']);
+    const sent = h.calls.filter((x) => x.path === '/internal/admin/import/initiate');
+    assert.deepEqual(sent.map((x) => x.body.sha256), [SHA, SHA]);
   });
 
   it('a refused initiate leaves the item failed with the reason and no audit row for it', async () => {

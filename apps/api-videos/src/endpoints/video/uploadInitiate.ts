@@ -180,6 +180,8 @@ export interface UploadWho {
 	/** Set when someone other than the owner uploads (a channel member, or an importing admin) */
 	uploadedBy?: string;
 	adminImport?: boolean;
+	/** The whole file's SHA-256 as the importer read it (TranscodeJobMessage.sha256) */
+	sourceSha256?: string;
 }
 
 export async function initiateUpload(c: AppContext, who: UploadWho, input: InitiateBody): Promise<Response> {
@@ -347,6 +349,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 					now: new Date(now),
 				}),
 				...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
+				...(who.sourceSha256 ? { sourceSha256: who.sourceSha256 } : {}),
 				...(isDraft ? { isDraft: true } : {}),
 				...importFields,
 			};
@@ -427,6 +430,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			const result = await patchVideo(repository, videoId, (fresh) => {
 				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
 				if (!fields) return false;
+				if (who.sourceSha256) Object.assign(fields, { sourceSha256: who.sourceSha256 });
 				if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
 				return fields as Partial<VideoType>;
 			}, { ownerId });

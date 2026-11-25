@@ -4272,6 +4272,7 @@ const en = {
       attempt_timeout: 'The attempt took too long and was stopped.',
       container_silent: 'The container stopped reporting progress.',
       no_video_stream: 'The file has no video in it.',
+      source_changed: 'The uploaded file is not the file the importer read. It needs to be uploaded again.',
       encode_failed: 'The file could not be encoded.',
       upload_failed: 'The renditions could not be saved to R2.',
       cancelled: 'Canceled by an admin.',

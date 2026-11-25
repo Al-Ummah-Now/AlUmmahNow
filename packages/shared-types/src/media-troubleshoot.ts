@@ -23,6 +23,7 @@ export const TRANSCODE_REASONS = [
   'attempt_timeout',
   'container_silent',
   'no_video_stream',
+  'source_changed',
   'encode_failed',
   'upload_failed',
   'cancelled',
@@ -63,6 +64,7 @@ export function transcodeErrorReason(raw: string | null | undefined): TranscodeR
     source_unavailable: 'source_not_ready',
     source_missing: 'source_missing',
     no_video_stream: 'no_video_stream',
+    source_changed: 'source_changed',
     cancelled: 'cancelled',
   };
   if (exact[head]) return exact[head]!;

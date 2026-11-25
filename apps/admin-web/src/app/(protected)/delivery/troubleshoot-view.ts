@@ -39,6 +39,7 @@ export const REASON_LABEL: Record<TranscodeReason, MessageKey> = {
   attempt_timeout: 'transcodeTroubleshoot.reasons.attempt_timeout',
   container_silent: 'transcodeTroubleshoot.reasons.container_silent',
   no_video_stream: 'transcodeTroubleshoot.reasons.no_video_stream',
+  source_changed: 'transcodeTroubleshoot.reasons.source_changed',
   encode_failed: 'transcodeTroubleshoot.reasons.encode_failed',
   upload_failed: 'transcodeTroubleshoot.reasons.upload_failed',
   cancelled: 'transcodeTroubleshoot.reasons.cancelled',

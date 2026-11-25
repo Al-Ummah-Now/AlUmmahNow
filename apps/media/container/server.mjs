@@ -23,7 +23,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs, stillWithFallbacks } from './ladder.mjs';
-import { SourceFacts, streamFacts } from './source-facts.mjs';
+import { SourceFacts, sourceChanged, streamFacts } from './source-facts.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
@@ -504,6 +504,7 @@ async function runJob(job) {
 	const reader = new SourceFacts();
 	const sourceBytes = await download(src, undefined, reader);
 	sourceFacts = reader.finish(sourceBytes);
+	if (sourceChanged(job.sha256, sourceFile, sourceFacts.sha256)) throw Object.assign(new Error('source_changed'), { fatal: true });
 	const tDownload = Date.now();
 	setStage('probe');
 	const info = await probe(src);

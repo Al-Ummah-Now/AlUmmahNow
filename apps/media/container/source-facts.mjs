@@ -40,6 +40,9 @@ const zeroPercent = (buf) => {
 	return buf.length ? Math.round((1000 * zeros) / buf.length) / 10 : 0;
 };
 
+/** Our kept original is not the file the importer read. Bunny's copies are other files: never compared. */
+export const sourceChanged = (expected, sourceFile, actual) => !!expected && sourceFile === 'original' && expected !== actual;
+
 /** Reads the file's chunks in order as they are downloaded. */
 export class SourceFacts {
 	#hash = createHash('sha256');

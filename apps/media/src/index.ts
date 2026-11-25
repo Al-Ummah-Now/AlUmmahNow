@@ -10,7 +10,7 @@
  *          and the admin's Cancel / Retry now (handleInternalJob)
  */
 import type { AudioPackageJobMessage, AudioProbeJobMessage, AudioTrackJobMessage, CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessage, isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
+import { isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessage, isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, SOURCE_SHA256, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
 import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { audioQueueAction } from './audio';
@@ -36,7 +36,8 @@ function isJob(body: unknown): body is TranscodeJobMessage {
 		isMediaRev(b.rev) &&
 		typeof b.jobId === 'string' &&
 		(b.access === 'pub' || b.access === 'priv') &&
-		(b.prebuilt === undefined || isPrebuiltRef(b.prebuilt))
+		(b.prebuilt === undefined || isPrebuiltRef(b.prebuilt)) &&
+		(b.sha256 === undefined || (typeof b.sha256 === 'string' && SOURCE_SHA256.test(b.sha256)))
 	);
 }
 

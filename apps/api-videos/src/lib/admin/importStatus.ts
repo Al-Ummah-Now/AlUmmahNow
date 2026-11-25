@@ -48,6 +48,11 @@ const PARTS = new Set<string>(IMPORT_SIDECAR_PARTS);
 const parts = (value: unknown): ImportSidecarPart[] => (Array.isArray(value) ? value.filter((p): p is ImportSidecarPart => typeof p === 'string' && PARTS.has(p)) : []);
 const marks = (n: number) => Array.from({ length: n }, () => '?').join(',');
 
+const needsReupload = (video: object) => {
+	const v = video as { uploadStatus?: string; processingIssue?: { kind?: string } };
+	return v.uploadStatus === 'failed' && v.processingIssue?.kind === 'needs_reupload';
+};
+
 interface CaptionRow { video_id: string; language: string; kind: string; status: CaptionJobStatus; error: string | null; created_at: string }
 
 /** The languages a video has drafts in (keys only: `<videoId>/drafts/<lang>.json`). */
@@ -126,7 +131,7 @@ export async function importStatus(env: ImportStatusEnv, queries: ImportStatusQu
 		const result = (job?.result ?? {}) as { done?: unknown; warnings?: unknown };
 		return {
 			videoId: q.videoId,
-			video: video ? { title: String(video.title ?? ''), processingStatus: video.processingStatus ?? null, isDeleted: !!video.isDeleted } : null,
+			video: video ? { title: String(video.title ?? ''), processingStatus: video.processingStatus ?? null, isDeleted: !!video.isDeleted, ...(needsReupload(video) ? { needsReupload: true } : {}) } : null,
 			attach: job
 				? {
 						jobId: job.id,

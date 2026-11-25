@@ -450,7 +450,11 @@ app.post('/users/:id/channels', async (c) => {
 // or edge limiter (admin-api checked imports:manage and audits every call). Processing, review,
 // captions and categories are the same as any upload. The TUS session belongs to the admin, whose
 // Admin Tools token then uploads to /api/videos/tus.
-const AdminImportInitiate = InitiateBodySchema.omit({ youtubeImport: true }).extend({ channelId: z.string().min(1).max(200) });
+const AdminImportInitiate = InitiateBodySchema.omit({ youtubeImport: true }).extend({
+	channelId: z.string().min(1).max(200),
+	/** The whole file's SHA-256 as the importer read it: the transcode refuses other bytes (media container) */
+	sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+});
 const importingAdmin = (c: Context<Env>) => {
 	const adminId = c.req.header('X-Admin-Actor') ?? '';
 	if (!/^usr_[A-Za-z0-9]{8,64}$/.test(adminId)) throw new admin.AdminError(400, 'invalid_request', 'X-Admin-Actor must be the importing admin\'s user id');
@@ -467,14 +471,14 @@ const captionLanguage = (language: string) => {
 };
 app.post('/import/initiate', async (c) => {
 	const adminId = importingAdmin(c);
-	const { channelId, ...input } = parse(AdminImportInitiate, await body(c));
+	const { channelId, sha256, ...input } = parse(AdminImportInitiate, await body(c));
 	const channel = await loadChannelRecord(c.env as never, channelId);
 	if (!channel?.userId || channel.isDeleted) throw new admin.AdminError(404, 'channel_not_found', 'No such channel');
 	if (channel.isSuspended) throw new admin.AdminError(409, 'channel_suspended', 'The channel is suspended');
 	const ownerId = channel.userId;
 	return initiateUpload(
 		c as never,
-		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true },
+		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true, ...(sha256 ? { sourceSha256: sha256 } : {}) },
 		input as InitiateBody,
 	);
 });

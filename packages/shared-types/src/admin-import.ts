@@ -67,7 +67,7 @@ export interface ImportCaptionStatus {
 export interface AdminImportItemStatus {
   videoId: string;
   /** null: the video is gone */
-  video: { title: string; processingStatus: VideoProcessingStatus | null; isDeleted: boolean } | null;
+  video: { title: string; processingStatus: VideoProcessingStatus | null; isDeleted: boolean; needsReupload?: boolean } | null;
   /** The sidecars' attach job; null when the file came without sidecars */
   attach: {
     jobId: string;

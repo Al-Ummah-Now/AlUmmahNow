@@ -320,7 +320,11 @@ export interface TranscodeJobMessage {
 	review?: import('./video-review').ReviewExtractionOptions;
 	/** D11: renditions the creator pre-encoded, staged in MEDIA_PRIVATE (prebuiltStagingPrefix); verified before use */
 	prebuilt?: { stagingId: string; rungs: string[] };
+	/** The file's SHA-256 as the importer read it: a kept original that is not this file is not transcoded (source_changed) */
+	sha256?: string;
 }
+
+export const SOURCE_SHA256 = /^[0-9a-f]{64}$/;
 
 /** Event the media worker posts back to api-videos (service binding). */
 export interface TranscodeJobEvent {

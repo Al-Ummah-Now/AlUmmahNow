@@ -259,7 +259,7 @@ export class Transcoder extends Container<Env> {
 		const res = await this.containerFetch('http://container/jobs', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}), ...(job.prebuilt ? { prebuilt: { rungs: job.prebuilt.rungs } } : {}) }),
+			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.sha256 ? { sha256: job.sha256 } : {}), ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}), ...(job.prebuilt ? { prebuilt: { rungs: job.prebuilt.rungs } } : {}) }),
 		});
 		if (res.status !== 202 && res.status !== 200) throw new Error(`container refused the job: HTTP ${res.status} ${await res.text()}`);
 		job.launchedAt = Date.now();
