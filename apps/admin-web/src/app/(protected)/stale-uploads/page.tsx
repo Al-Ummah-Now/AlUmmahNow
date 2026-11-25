@@ -1,4 +1,5 @@
-import Link from '@/components/AppLink';
+import { PriorityTabs } from '@/components/PriorityTabs';
+import { shownViews } from '@/lib/list/shown-views';
 import { getStaleUploads } from '@/lib/api/admin';
 import type { StaleUploadsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
@@ -60,29 +61,23 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
       {data && (
         <section aria-labelledby="stale-items">
           <h2 id="stale-items" className="sr-only">{t('staleUploads.tableCaption')}</h2>
-          <nav aria-label={t('staleUploads.filterLabel')} className="mb-4">
-            <ul className="flex flex-wrap gap-2">
-              {STALE_FILTERS.map((f) => {
-                const active = f === filter;
-                const count = f === 'open' || f === 'all' ? undefined : data!.counts[f as keyof typeof data.counts];
-                return (
-                  <li key={f}>
-                    <Link
-                      href={f === 'open' ? '/stale-uploads' : `/stale-uploads?status=${f}`}
-                      aria-current={active ? 'page' : undefined}
-                      data-testid={`stale-filter-${f}`}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-                        active ? 'bg-accent text-on-accent border-accent' : 'bg-surface text-fg border-border hover:bg-surface-hover'
-                      }`}
-                    >
-                      {t(FILTER_LABEL[f])}
-                      {count !== undefined && <span className="tabular-nums opacity-80">{formatNumber(count, locale)}</span>}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          <PriorityTabs
+            label={t('staleUploads.filterLabel')}
+            testId="stale-filters"
+            className="mb-4 border-b border-border"
+            rowClassName="gap-1"
+            tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            currentClassName="border-accent text-fg"
+            idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+            tabTestIdPrefix="stale-filter-"
+            tabs={shownViews(STALE_FILTERS.map((f) => ({ id: f, count: f === 'open' || f === 'all' ? undefined : data!.counts[f as keyof typeof data.counts] })), (f) => f.id === filter).map((f) => ({
+              id: f.id,
+              label: t(FILTER_LABEL[f.id]),
+              href: f.id === 'open' ? '/stale-uploads' : `/stale-uploads?status=${f.id}`,
+              current: f.id === filter,
+              extra: f.count === undefined ? undefined : <span className="tabular-nums opacity-80">{formatNumber(f.count, locale)}</span>,
+            }))}
+          />
           <StaleUploadsTable items={data.items} locale={locale} now={now} />
         </section>
       )}

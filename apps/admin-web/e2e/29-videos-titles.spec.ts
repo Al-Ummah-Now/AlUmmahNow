@@ -93,14 +93,16 @@ test.describe('videos list titles', () => {
         expect(box!.height, `row height (${v.id})`).toBeLessThanOrEqual(phone ? 320 : 160);
       }
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
-      // Every saved-view tab is whole and on screen (they wrap; none cut at the edge), also in RTL
+      // The saved views are one row: each tab in it whole and on screen, the rest under More, also in RTL
+      await expect(page.locator('[data-testid="video-status-summary"]:not([data-measuring])')).toBeVisible();
       const tabs = await page.locator('[data-testid^="saved-view-"]').evaluateAll((els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect();
-          return { id: el.getAttribute('data-view'), left: r.left, right: r.right, clipped: el.scrollWidth > el.clientWidth + 1 };
+          return { id: el.getAttribute('data-testid'), top: Math.round(r.top), left: r.left, right: r.right, clipped: el.scrollWidth > el.clientWidth + 1 };
         }),
       );
       expect(tabs.length).toBeGreaterThan(0);
+      expect(new Set(tabs.map((tab) => tab.top)).size, 'one row').toBe(1);
       const vw = page.viewportSize()!.width;
       for (const tab of tabs) {
         expect(tab.left, `tab ${tab.id} starts on screen`).toBeGreaterThanOrEqual(0);

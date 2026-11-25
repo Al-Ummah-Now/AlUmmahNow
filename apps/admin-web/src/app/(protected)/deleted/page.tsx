@@ -1,3 +1,4 @@
+import { PriorityTabs } from '@/components/PriorityTabs';
 import Link from '@/components/AppLink';
 import { ADMIN_DELETION_KINDS, TRASH_KINDS, deletionDaysLeft } from '@al-ummah/shared-types';
 import { trashHref } from '@/lib/trash';
@@ -59,22 +60,17 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader locale={locale} title={t('deleted.title')} subtitle={t('deleted.subtitle')} t={t} />
-      <nav aria-label={t('deleted.kindsLabel')} className="flex flex-wrap gap-2 mb-4" data-testid="deleted-kinds">
-        {[undefined, ...ADMIN_DELETION_KINDS].map((k) => {
-          const active = k === kind;
-          return (
-            <Link
-              key={k ?? 'all'}
-              href={hrefWith('/deleted', k ? { kind: k } : {})}
-              aria-current={active ? 'page' : undefined}
-              className={`px-3 py-1.5 rounded-full border text-sm ${active ? 'border-focus bg-surface-2 text-fg font-medium' : 'border-border text-fg-muted hover:bg-surface-hover'}`}
-              data-testid={`deleted-kind-${k ?? 'all'}`}
-            >
-              {k ? t(KIND_LABEL[k]) : t('deleted.kinds.all')}
-            </Link>
-          );
-        })}
-      </nav>
+      <PriorityTabs
+        label={t('deleted.kindsLabel')}
+        testId="deleted-kinds"
+        className="mb-4 border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        currentClassName="border-accent text-fg"
+        idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+        tabTestIdPrefix="deleted-kind-"
+        tabs={[undefined, ...ADMIN_DELETION_KINDS].map((k) => ({ id: k ?? 'all', label: k ? t(KIND_LABEL[k]) : t('deleted.kinds.all'), href: hrefWith('/deleted', k ? { kind: k } : {}), current: k === kind }))}
+      />
       <p className="text-sm text-fg-muted mb-4" data-testid="deleted-other-areas">
         {t('deleted.otherAreas')}{' '}
         {TRASH_KINDS.map((k, i) => (

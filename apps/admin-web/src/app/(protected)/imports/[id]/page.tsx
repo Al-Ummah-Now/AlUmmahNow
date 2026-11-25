@@ -1,3 +1,4 @@
+import { PriorityTabs } from '@/components/PriorityTabs';
 import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
 import { IMPORT_ITEM_STATES, type AdminContentPermission, type ImportItemState } from '@al-ummah/shared-types';
@@ -84,23 +85,23 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
           })}
         </p>
       </div>
-      <nav aria-label={t('imports.stateFilter')} className="mb-4 flex flex-wrap gap-2" data-testid="import-state-filters">
-        {filters.map((f) => {
-          const active = f.state === state;
-          return (
-            <Link
-              key={f.state ?? 'all'}
-              href={hrefWith(base, { state: f.state })}
-              aria-current={active ? 'page' : undefined}
-              className={`px-3 py-1.5 rounded border text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${active ? 'bg-surface-hover border-border text-fg font-medium' : 'border-border text-fg-muted hover:text-fg hover:bg-surface-hover'}`}
-              data-testid={`import-filter-${f.state ?? 'all'}`}
-            >
-              {f.label}
-              <span className="ms-2 tabular-nums">{formatNumber(f.count, locale)}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <PriorityTabs
+        label={t('imports.stateFilter')}
+        testId="import-state-filters"
+        className="mb-4 border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        currentClassName="border-accent text-fg"
+        idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+        tabTestIdPrefix="import-filter-"
+        tabs={filters.map((f) => ({
+          id: f.state ?? 'all',
+          label: f.label,
+          href: hrefWith(base, { state: f.state }),
+          current: f.state === state,
+          extra: <span className="tabular-nums">{formatNumber(f.count, locale)}</span>,
+        }))}
+      />
       {data.statuses === null && <ErrorAlert testId="import-status-unknown">{t('imports.statusUnknown')}</ErrorAlert>}
       {data.items.length === 0 ? (
         <EmptyState>{t('imports.empty')}</EmptyState>

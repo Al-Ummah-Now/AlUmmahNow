@@ -7,11 +7,13 @@
  * URL matches. Counts load on their own; a count that matters (failures) can
  * take the "bad" tone.
  *
- * The tabs wrap onto a second row on a narrow screen: never a sideways scroll that cuts a label
- * at the edge (owner rule: nothing cut off or off-screen), and a label never breaks mid-word.
+ * One row: the views that fit, the rest under "More" (PriorityTabs; owner rule: a strip never wraps
+ * or cuts a label). A view with nothing in it is left out, except the first and the current one.
  */
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/translate';
+import { PriorityTabs } from '@/components/PriorityTabs';
+import { shownViews } from '@/lib/list/shown-views';
 
 export interface SavedViewTab {
   id: string;
@@ -26,37 +28,33 @@ export interface SavedViewTab {
 export function SavedViews({ views, active, onSelect, label, testId }: { views: SavedViewTab[]; active: string | null; onSelect: (id: string) => void; label: string; testId: string }) {
   const { locale } = useLanguage();
   return (
-    <nav aria-label={label} className="mb-4" data-testid={testId}>
-      <ul className="flex flex-wrap gap-x-1 gap-y-1 border-b border-border">
-        {views.map((view) => {
-          const current = view.id === active;
-          const alert = view.alertWhenNonZero && !!view.count;
-          return (
-            <li key={view.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(view.id)}
-                aria-current={current ? 'page' : undefined}
-                className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-                  current ? 'border-accent text-fg' : 'border-transparent text-fg-muted hover:text-fg hover:border-border'
-                }`}
-                data-testid={`saved-view-${view.id}`}
-                data-view={view.id}
-              >
-                {view.label}
-                <span
-                  className={`min-w-6 rounded-full px-2 py-0.5 text-xs tabular-nums text-center ${alert ? 'bg-danger-bg text-danger-fg' : 'bg-surface-2 text-fg-muted'}`}
-                  data-testid={view.countTestId}
-                  data-count={typeof view.count === 'number' ? view.count : undefined}
-                  aria-busy={view.count === undefined ? true : undefined}
-                >
-                  {typeof view.count === 'number' ? formatNumber(view.count, locale) : view.count === null ? '–' : <span className="inline-block h-3 w-4 animate-pulse rounded bg-border align-middle" aria-hidden="true" />}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <PriorityTabs
+      label={label}
+      testId={testId}
+      className="mb-4 border-b border-border"
+      rowClassName="gap-1"
+      tabClassName="inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 -mb-px border-b-2 text-sm font-medium rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      currentClassName="border-accent text-fg"
+      idleClassName="border-transparent text-fg-muted hover:text-fg hover:border-border"
+      tabTestIdPrefix="saved-view-"
+      currentButtons
+      onSelect={onSelect}
+      tabs={shownViews(views, (view) => view.id === active).map((view) => ({
+        id: view.id,
+        label: view.label,
+        current: view.id === active,
+        extraKey: String(view.count),
+        extra: (
+          <span
+            className={`min-w-6 rounded-full px-2 py-0.5 text-xs tabular-nums text-center ${view.alertWhenNonZero && !!view.count ? 'bg-danger-bg text-danger-fg' : 'bg-surface-2 text-fg-muted'}`}
+            data-testid={view.countTestId}
+            data-count={typeof view.count === 'number' ? view.count : undefined}
+            aria-busy={view.count === undefined ? true : undefined}
+          >
+            {typeof view.count === 'number' ? formatNumber(view.count, locale) : view.count === null ? '–' : <span className="inline-block h-3 w-4 animate-pulse rounded bg-border align-middle" aria-hidden="true" />}
+          </span>
+        ),
+      }))}
+    />
   );
 }
