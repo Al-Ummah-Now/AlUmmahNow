@@ -11,6 +11,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { clickAccountMenuItem, submitNewChannelInMenu } from './account-menu';
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -37,9 +38,8 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
 async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void> {
   const header = page.locator('header.ah');
   await expect(header.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
-  // The app mounts the header anew after a channel is made in the account menu (the whole element is
-  // replaced, complete: #1058). So wait until its parts are shown, then find the header and measure
-  // them inside the page in one step: an element found beforehand may already be gone, with 0x0 boxes
+  // Wait until the header's parts are shown, then find the header and measure them inside the page in
+  // one step, so nothing can change between finding it and reading it
   await expect(header.locator('.aun-brand')).toBeVisible();
   await expect(header.getByTestId('header-upload')).toBeVisible();
   await expect(header.locator('.ah-search-wrap .ah-search').or(header.getByTestId('header-search-open')).first()).toBeVisible();
@@ -245,6 +245,50 @@ test.describe('Release: page frame', () => {
         }
       });
     }
+  }
+
+  for (const locale of ['en', 'ar'] as const) {
+    // #1058: the whole header was thrown away and built again after a Server Action or router.refresh(),
+    // losing focus, a typed search and the open menu
+    test(`the header stays the same element through a new channel and switching who you act as (${locale})`, async ({ page, context }) => {
+      await answerConsent(context);
+      await page.setViewportSize(DESKTOP);
+      const user = await signUpOnWeb(page, 'rel-frame-header');
+      await createProfile(user);
+      await grantCreatorTier(user);
+      await page.goto(`${target().web}/${locale}`);
+      await expect(page.getByTestId('header-upload')).toHaveAttribute('data-state', 'ready');
+      // Typed and not sent: it must still be there at the end
+      const search = page.getByTestId('header-search-input');
+      await expect(search).toHaveAttribute('data-ready', 'true');
+      await search.fill('kept draft');
+      // A mark on this very node: a header built again does not carry it
+      await page.locator('header.ah').evaluate((el) => { (el as { frameSpecMark?: boolean }).frameSpecMark = true; });
+      const sameHeader = () => page.evaluate(() => (document.querySelector('header.ah') as { frameSpecMark?: boolean } | null)?.frameSpecMark === true);
+      const identity = page.getByTestId('nav-trigger-name');
+      const menu = page.getByTestId('nav-menu');
+
+      await submitNewChannelInMenu(page, `Release E2E header ${locale} ${Date.now().toString(36)}`);
+      await expect(identity).toHaveAttribute('data-identity', 'channel', { timeout: 30000 });
+      await expect(menu).toBeHidden({ timeout: 30000 });
+      expect(await sameHeader(), 'after making a channel').toBe(true);
+
+      const actAs = async (option: string, expected: 'personal' | 'channel') => {
+        await clickAccountMenuItem(page, 'nav-switch-channel');
+        await page.locator(`[data-testid="${option}"]:visible`).first().click();
+        await expect(identity).toHaveAttribute('data-identity', expected, { timeout: 30000 });
+        await expect(menu).toBeHidden({ timeout: 30000 });
+        expect(await sameHeader(), `after switching to ${expected}`).toBe(true);
+      };
+      await actAs('nav-channel-option-none', 'personal');
+      await actAs('nav-channel-option', 'channel');
+
+      // The last switch's router.refresh() is applied after the identity shows: an observation window in
+      // which nothing may rebuild the header
+      await page.waitForTimeout(3000);
+      expect(await sameHeader(), 'after the page refreshed').toBe(true);
+      await expect(search).toHaveValue('kept draft');
+    });
   }
 
   test('Upload stays a working Upload without a channel (the form offers Create a channel) and opens the upload form with one', async ({ page, context }) => {

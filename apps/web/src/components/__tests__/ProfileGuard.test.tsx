@@ -42,7 +42,7 @@ interface MultiAccountContextValue {
   addAccount: () => Promise<void>;
   switchAccount: (userId: string) => Promise<void>;
   removeAccount: (userId: string) => Promise<void>;
-  switchToChannel: (channelId: string | null) => Promise<void>;
+  switchToChannel: (channelId: string | null) => Promise<boolean>;
   createChannel: (data: ChannelCreateRequest) => Promise<Channel | null>;
   creatingChannel: boolean;
   reloadChannels: () => Promise<void>;

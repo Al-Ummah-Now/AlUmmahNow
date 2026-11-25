@@ -110,7 +110,8 @@ interface MultiAccountContextValue {
   addAccount: () => Promise<void>;
   switchAccount: (userId: string) => Promise<void>;
   removeAccount: (userId: string) => Promise<void>;
-  switchToChannel: (channelId: string | null) => Promise<void>;
+  /** False when the switch failed (the error is set) */
+  switchToChannel: (channelId: string | null) => Promise<boolean>;
   createChannel: (data: ChannelCreateRequest, options?: { onTermsRequired?: () => void }) => Promise<Channel | null>;
   /** True while a channel creation request is in flight */
   creatingChannel: boolean;
@@ -570,9 +571,11 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       // Refresh the page to update server components
       router.refresh();
+      return true;
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to switch channel:', err);
       setError(t.errors.failedToSwitch);
+      return false;
     } finally {
       setLoading(false);
     }
