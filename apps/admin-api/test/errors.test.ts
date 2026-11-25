@@ -609,8 +609,13 @@ describe('reporters', () => {
       const five = withErrorReporting('websocket', async () => new Response('x', { status: 502 }));
       const r2 = await five(new Request('https://realtime/health'), env, c);
       assert.match(r2.headers.get('X-Error-Ref') ?? '', /^ERR-/);
+      // An expected busy answer is not an error group; the mark does not hide a real 500
+      const busy = withErrorReporting('api-videos', async () => new Response('x', { status: 503, headers: { 'X-Error-Expected': 'busy' } }));
+      assert.equal((await busy(new Request('https://api/x'), env, c)).headers.has('X-Error-Ref'), false);
+      const hidden = withErrorReporting('api-videos', async () => new Response('x', { status: 500, headers: { 'X-Error-Expected': 'busy' } }));
+      assert.equal((await hidden(new Request('https://api/x'), env, c)).headers.has('X-Error-Ref'), true);
       await Promise.all(waits);
-      assert.equal(bodies.length, 2);
+      assert.equal(bodies.length, 3);
       assert.doesNotMatch(bodies[0], /abc in/);
     } finally {
       globalThis.fetch = orig;

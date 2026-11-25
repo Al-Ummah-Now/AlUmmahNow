@@ -68,6 +68,81 @@ describe('watch history queue events', () => {
 	});
 });
 
+describe('progress while storage is busy', () => {
+	const save = (e: ReturnType<typeof env>, progress = 50) => buildApp(routes, { userId: 'me' }).request('/api/watch-history/v1/progress', { method: 'POST', headers: json, body: JSON.stringify({ progress, duration: 100 }) }, e);
+	const started = async () => {
+		const e = env();
+		await buildApp(routes, { userId: 'me' }).request('/api/watch-history', { method: 'POST', headers: json, body: JSON.stringify({ videoId: 'v1', progress: 10, duration: 100 }) }, e);
+		return e;
+	};
+	/** The next `times` gets of a bucket fail the way R2 does. */
+	const failGets = (bucket: MemoryBucket, times: number, message = 'get: We encountered an internal error. Please try again. (10001)') => {
+		const get = bucket.get.bind(bucket);
+		let left = times;
+		bucket.get = (async (key: string) => {
+			if (left-- > 0) throw new Error(message);
+			return get(key);
+		}) as never;
+	};
+
+	it('retries a transient R2 error and saves', async () => {
+		for (const bucket of ['watch_history', 'profiles'] as const) {
+			const e = await started();
+			failGets(e[bucket], 2);
+			const res = await save(e);
+			assert.equal(res.status, 200, bucket);
+			assert.equal(e.watch_history.read('me:v1').progress, 50);
+		}
+	});
+
+	const busy = async (res: Response) => {
+		assert.equal(res.status, 503);
+		assert.equal(res.headers.get('Retry-After'), '5');
+		assert.equal(res.headers.get('X-Error-Expected'), 'busy');
+		assert.equal(((await res.json()) as { code: string }).code, 'busy');
+	};
+
+	it('answers 503 busy, never 500, when storage stays down; an unreadable pause setting records nothing', async () => {
+		for (const bucket of ['watch_history', 'profiles'] as const) {
+			const e = await started();
+			failGets(e[bucket], 20);
+			await busy(await save(e));
+			assert.equal(e.watch_history.read('me:v1').progress, 10);
+		}
+	});
+
+	it('a transient error while writing is retried, then busy; a write other tabs keep winning is busy', async () => {
+		const e = await started();
+		const put = e.watch_history.put.bind(e.watch_history);
+		let left = 2;
+		e.watch_history.put = (async (...args: Parameters<typeof put>) => {
+			if (left-- > 0) throw new Error('put: We encountered an internal error. Please try again. (10001)');
+			return put(...args);
+		}) as never;
+		assert.equal((await save(e)).status, 200);
+		assert.equal(e.watch_history.read('me:v1').progress, 50);
+		left = 20;
+		await busy(await save(e, 60));
+		e.watch_history.put = (async () => null) as never;
+		await busy(await save(e, 70));
+		assert.equal(e.watch_history.read('me:v1').progress, 50);
+	});
+
+	it('a removed entry is still a 404', async () => {
+		const e = await started();
+		const get = e.watch_history.get.bind(e.watch_history);
+		let reads = 0;
+		e.watch_history.get = (async (key: string) => (reads++ === 0 ? get(key) : null)) as never;
+		assert.equal((await save(e)).status, 404);
+	});
+
+	it('a bug is still a 500', async () => {
+		const e = await started();
+		failGets(e.watch_history, 20, 'boom');
+		assert.equal((await save(e)).status, 500);
+	});
+});
+
 describe('legacy videos', () => {
 	it('uses the legacy `channel` name when channelName/channelId are missing', async () => {
 		const e = env({ v1: videoFixture({ channelId: null, channel: 'Mostafa Elbadry' }) });

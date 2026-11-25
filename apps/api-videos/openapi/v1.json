@@ -64326,6 +64326,28 @@
           },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "Not saved: storage is briefly busy (code `busy`). Retry after Retry-After seconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code"
+                  ]
+                }
+              }
+            }
           }
         }
       }

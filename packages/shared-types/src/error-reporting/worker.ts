@@ -289,7 +289,8 @@ export function withErrorReporting<E extends ErrorReporterEnv, C extends Executi
     const base = { route: url.pathname, method: req.method, requestId: requestIdOf(req), context: { origin: requestOriginFor(app, req, env) } };
     try {
       const res = await handler(req, env, ctx);
-      if (res.status >= 500 && !res.headers.has('X-Error-Ref')) {
+      // An expected, transient answer (a busy store: 503 with Retry-After) is not an error group
+      if (res.status >= 500 && !res.headers.has('X-Error-Ref') && !(res.status === 503 && res.headers.has('X-Error-Expected'))) {
         const ref = reportServerError(app, env, ctx, null, { ...base, kind: 'http', status: res.status });
         try {
           const copy = new Response(res.body, res);
