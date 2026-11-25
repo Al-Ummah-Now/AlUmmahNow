@@ -10,7 +10,9 @@
  *    play button, releases of 2026-11-24 and 2026-11-25). Elsewhere Video.js queues it for the next
  *    `loadstart`, which never comes when the element's own was first. The media element's
  *    networkState does not tell: it is LOADING before Video.js is ready. So a start waits for the
- *    player's `loadstart`, or `loadedmetadata` where that has passed.
+ *    player's `loadstart`, or `loadedmetadata` where that has passed, and then for a timer: Video.js
+ *    clears its "changing source" flag in a 1 ms timer it sets just before the player's own ready
+ *    callbacks, so one set after them runs later.
  * 2. A play() can still be aborted by a real source change (the delivery fallback). The next try
  *    cannot wait for `canplay`: WebKit with Media Source decodes nothing while paused, so the
  *    element stays at HAVE_METADATA and `canplay` never comes. `loadedmetadata` always does.
@@ -30,13 +32,15 @@ export interface StartablePlayer {
 }
 
 const HAVE_METADATA = 1;
+/** Video.js's own delay for the timer that clears its flag; equal timers run in the order they were set */
+const SOURCE_FLAG_TIMER_MS = 1;
 
 /** One start of a player: alive until it played, was paused, or was cancelled. */
 export interface PlaybackStart {
   /** Nothing more starts (the host paused before there was anything to pause) */
   cancel(): void;
   cancelled(): boolean;
-  /** Runs `fn` once, when the source is attached: now if it has metadata, else at `loadstart` or `loadedmetadata` */
+  /** Runs `fn` once, once the source is attached and Video.js counts it as ready */
   whenSourceAttached(fn: () => void): void;
   /** After an aborted play(): runs `fn` at the new source's `loadedmetadata`; never after a pause */
   afterReload(fn: () => void): void;
@@ -62,13 +66,13 @@ export function beginStart(player: StartablePlayer): PlaybackStart {
     cancel,
     cancelled: () => over,
     whenSourceAttached(fn) {
-      if (hasMetadata()) return run(fn)();
       let done = false;
-      const once = run(() => {
+      const once = () => {
         if (done) return;
         done = true;
-        fn();
-      });
+        setTimeout(run(fn), SOURCE_FLAG_TIMER_MS);
+      };
+      if (hasMetadata()) return once();
       player.one('loadstart', once);
       player.one('loadedmetadata', once);
     },

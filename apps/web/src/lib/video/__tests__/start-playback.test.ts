@@ -22,20 +22,39 @@ function player({ readyState = 0, paused = true } = {}) {
 }
 
 describe('whenSourceAttached', () => {
-  it('runs now when the source has metadata', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('runs without waiting for an event when the source has metadata, after a timer', () => {
     const fn = jest.fn();
     beginStart(player({ readyState: 1 })).whenSourceAttached(fn);
+    expect(fn).not.toHaveBeenCalled();
+    jest.runAllTimers();
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('runs once, at loadstart', () => {
+  it('runs once, after loadstart and the timer that Video.js clears its flag in', () => {
     const p = player();
-    const fn = jest.fn();
-    beginStart(p).whenSourceAttached(fn);
-    expect(fn).not.toHaveBeenCalled();
+    const order: string[] = [];
+    // Video.js's, set just before the ready callbacks
+    setTimeout(() => order.push('flag cleared'), 1);
+    beginStart(p).whenSourceAttached(() => order.push('start'));
+    jest.runAllTimers();
+    expect(order).toEqual(['flag cleared']);
     p.fire('loadstart');
     p.fire('loadedmetadata');
-    expect(fn).toHaveBeenCalledTimes(1);
+    jest.runAllTimers();
+    expect(order).toEqual(['flag cleared', 'start']);
+  });
+
+  it('a loadstart before that timer does not start before it', () => {
+    const p = player();
+    const order: string[] = [];
+    setTimeout(() => order.push('flag cleared'), 1);
+    beginStart(p).whenSourceAttached(() => order.push('start'));
+    p.fire('loadstart');
+    jest.runAllTimers();
+    expect(order).toEqual(['flag cleared', 'start']);
   });
 
   it('runs at loadedmetadata when loadstart came before the player was ready', () => {
@@ -43,18 +62,19 @@ describe('whenSourceAttached', () => {
     const fn = jest.fn();
     beginStart(p).whenSourceAttached(fn);
     p.fire('loadedmetadata');
+    jest.runAllTimers();
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['cancelled', 'disposed'])('does nothing when %s meanwhile', (how) => {
+  it.each(['cancelled', 'disposed'])('does nothing when %s meanwhile, also after loadstart', (how) => {
     const p = player();
     const fn = jest.fn();
     const start = beginStart(p);
     start.whenSourceAttached(fn);
+    p.fire('loadstart');
     if (how === 'cancelled') start.cancel();
     else p.state.disposed = true;
-    p.fire('loadstart');
-    p.fire('loadedmetadata');
+    jest.runAllTimers();
     expect(fn).not.toHaveBeenCalled();
   });
 });
