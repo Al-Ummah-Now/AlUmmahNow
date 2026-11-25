@@ -4,7 +4,7 @@
  * internal API key. The entry moves from failed/ back onto the schedule,
  * due now, with a fresh retry count; the next cron run publishes it.
  */
-import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { constantTimeEqual, type ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env } from './types';
 import { buildScheduleKey, FAILED_PREFIX } from './publisher';
 import { logger } from './lib/logger';
@@ -54,10 +54,7 @@ function json(body: unknown, status = 200): Response {
 export async function handleSchedulerRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const expected = await resolveKey(env.INTERNAL_API_KEY);
-  const given = request.headers.get('X-API-Key') ?? '';
-  let diff = expected.length === given.length && expected ? 0 : 1;
-  for (let i = 0; i < Math.min(expected.length, given.length); i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
-  if (diff !== 0) return json({ error: 'Unauthorized' }, 401);
+  if (!constantTimeEqual(request.headers.get('X-API-Key'), expected)) return json({ error: 'Unauthorized' }, 401);
   if (url.pathname !== '/failed/retry') return json({ error: 'Not found' }, 404);
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 

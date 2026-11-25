@@ -9,6 +9,7 @@
 	"compatibility_date": "2025-10-01",
 	"compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
 	"workers_dev": false,
+	"preview_urls": false,
 	// Logging policy (docs/operations/logging.md): this worker logs warn/error only
 	"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 	// Only private renditions run this Worker; /pub/* is the R2 custom domain + Cache Rule
@@ -84,6 +85,7 @@
 		"stage": {
 			"name": "al-ummah-now-media-stage",
 			"workers_dev": false,
+			"preview_urls": false,
 			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"routes": [{ "pattern": "media.stage.alummahnow.net/priv/*", "zone_name": "alummahnow.net" }],
 			"containers": [

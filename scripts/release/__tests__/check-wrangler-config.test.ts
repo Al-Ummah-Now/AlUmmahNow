@@ -6,7 +6,7 @@ import { APPS } from '../apps.ts';
 import { runCheck } from '../check-wrangler-config.ts';
 import { checkDeployCommands, scanPackageScripts, scanWorkflow } from '../deploy-commands.ts';
 import { parseJsonc } from '../jsonc.ts';
-import { applyAccepted, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from '../wrangler-config.ts';
+import { applyAccepted, checkAddresses, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from '../wrangler-config.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const rule = (app: string) => APPS.find((a) => a.app === app)!;
@@ -136,21 +136,25 @@ describe('web production config', () => {
 	});
 });
 
-describe('workers without a public route', () => {
-	for (const app of ['processor', 'scheduler', 'cost-monitor']) {
-		it(`${app}: has no public address, in production, stage and QA`, () => {
-			const config = load(app);
-			assert.ok(!has(checkApp(rule(app), config), 'no public route, so'));
-			for (const key of ['workers_dev', 'preview_urls']) {
-				for (const value of [true, undefined]) {
-					const open = { ...load(app), [key]: value } as WranglerConfig;
-					assert.ok(has(checkApp(rule(app), open), `no public route, so ${key} must be false`), `${key}: ${String(value)}`);
+describe('where a Worker answers', () => {
+	for (const app of APPS) {
+		const { addresses } = app.production;
+		it(`${app.app}: ${addresses}, the same in production, stage and QA`, () => {
+			assert.equal(app.stage?.addresses, addresses);
+			const previews = addresses === 'own-hosts-and-versions';
+			for (const [key, wanted] of [['workers_dev', false], ['preview_urls', previews]] as const) {
+				for (const value of [!wanted, undefined]) {
+					assert.ok(has(checkApp(app, { ...load(app.app), [key]: value } as WranglerConfig), `${app.app} (top level): ${key} must be ${wanted}`), `${key}: ${String(value)}`);
 				}
-				const qa = parseJsonc(readFileSync(join(ROOT, rule(app).qaConfigPath!), 'utf8')) as WranglerConfig;
-				assert.equal(qa[key], false, `${app} QA ${key}`);
 			}
 		});
 	}
+
+	it('a QA config that opens an address fails the check', () => {
+		const qa = { name: 'x-qa', workers_dev: true } as WranglerConfig;
+		assert.deepEqual(checkAddresses('x (qa)', resolveEnv(qa, null), 'own-hosts'), ['x (qa): workers_dev must be false', 'x (qa): preview_urls must be false']);
+		assert.deepEqual(checkAddresses('x (qa)', resolveEnv({ ...qa, workers_dev: false, preview_urls: true } as WranglerConfig, null), 'own-hosts-and-versions'), []);
+	});
 });
 
 describe('worker production configs', () => {
@@ -188,7 +192,7 @@ describe('accepted findings', () => {
 		configPath: 'x',
 		dir: 'apps/demo',
 		deployFlags: 'any',
-		production: { env: null, allowedHosts: [] },
+		production: { env: null, allowedHosts: [], addresses: 'own-hosts' },
 		accepted: [{ match: 'known problem', issue: '#1' }],
 	};
 

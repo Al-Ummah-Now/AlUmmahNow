@@ -138,8 +138,13 @@ export interface EnvRule {
 	 * attached as custom domains in the Cloudflare dashboard rather than in config.
 	 */
 	requireRoutes?: boolean;
-	/** Reached through service bindings, queues and crons only: no route, no workers.dev address, no preview URLs. */
-	noPublicAddress?: boolean;
+	/**
+	 * Where the Worker answers; nothing else may reach it:
+	 * - none: service bindings, queues and crons only
+	 * - own-hosts: its own hostnames (routes in the config, or custom domains attached to it)
+	 * - own-hosts-and-versions: the same, and its versions' preview URLs (skew protection)
+	 */
+	addresses: 'none' | 'own-hosts' | 'own-hosts-and-versions';
 	/** Binding or var names that must NOT appear (test-only material). */
 	forbiddenNames?: (string | RegExp)[];
 	/** Values that must not appear anywhere in the deployed config (e.g. QA hosts). */
@@ -198,6 +203,16 @@ function walkStrings(value: unknown, path: string, visit: (path: string, s: stri
 	}
 }
 
+/** workers.dev is always off; preview URLs only for skew protection. wrangler's defaults would turn them on. */
+export function checkAddresses(where: string, resolved: ResolvedEnv, addresses: EnvRule['addresses']): string[] {
+	const errors: string[] = [];
+	const previews = addresses === 'own-hosts-and-versions';
+	if (addresses === 'none' && resolved.hosts.length) errors.push(`${where}: must have no routes`);
+	if (resolved.config.workers_dev !== false) errors.push(`${where}: workers_dev must be false`);
+	if (resolved.config.preview_urls !== previews) errors.push(`${where}: preview_urls must be ${previews}`);
+	return errors;
+}
+
 export function checkEnv(app: string, resolved: ResolvedEnv, rule: EnvRule): string[] {
 	const where = `${app} (${resolved.envName === null ? 'top level' : `env.${resolved.envName}`})`;
 	const errors: string[] = [];
@@ -222,12 +237,7 @@ export function checkEnv(app: string, resolved: ResolvedEnv, rule: EnvRule): str
 	if (rule.requireRoutes && resolved.hosts.length === 0) {
 		errors.push(`${where}: no routes; a deployed env must declare its hostnames`);
 	}
-	if (rule.noPublicAddress) {
-		if (resolved.hosts.length) errors.push(`${where}: must have no routes`);
-		for (const key of ['workers_dev', 'preview_urls'] as const) {
-			if (resolved.config[key] !== false) errors.push(`${where}: no public route, so ${key} must be false`);
-		}
-	}
+	errors.push(...checkAddresses(where, resolved, rule.addresses));
 	for (const host of resolved.hosts) {
 		if (!hostAllowed(host, rule.allowedHosts)) {
 			errors.push(`${where}: route ${host} is not an allowed host (${rule.allowedHosts.join(', ') || 'none'})`);

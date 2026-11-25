@@ -5,6 +5,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "al-ummah-now-comms",
+	// Served on its own hostnames only (custom domains)
+	"workers_dev": false,
+	"preview_urls": false,
 	"main": "src/index.ts",
 	"compatibility_date": "2025-04-12",
 	"compatibility_flags": [
@@ -102,6 +105,9 @@
 			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
 			"name": "al-ummah-now-comms-stage",
+			// Served on its own hostnames only (custom domains)
+			"workers_dev": false,
+			"preview_urls": false,
 			"routes": [
 				{
 					"pattern": "realtime.stage.alummahnow.net",
