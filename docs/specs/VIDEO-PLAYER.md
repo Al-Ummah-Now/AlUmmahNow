@@ -152,7 +152,7 @@ The chrome sections of `video-player.css` that it replaces are deleted, so there
 | State | Shows |
 |---|---|
 | Not started | Poster, big play, bar |
-| Playing, active | Bar fades in; hides after 4s of inactivity, never while a menu is open or the pointer is on the bar. It fades out over 1s and takes taps for the first half of it, while it can be seen; after that a tap only shows it (#2024) |
+| Playing, active | Bar fades in; hides after 4s of inactivity, never while a menu is open or the pointer is on the bar. It fades out over 1s and takes taps for the first 350ms, while its opacity is 0.4 or more; after that a tap only shows it. With reduced motion it goes at once and takes none (#2024) |
 | Buffering | Spinner; big play hidden |
 | Paused | Bar stays |
 | Ended | End screen (below) with up next, or a Watch again button alone; bar hidden |

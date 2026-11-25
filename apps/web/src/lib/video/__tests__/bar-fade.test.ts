@@ -24,7 +24,7 @@ describe('keepBarTappableWhileItFades', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('marks the first half of the fade, and no longer', () => {
+  it('marks the start of the fade, and no longer', () => {
     const p = fakePlayer();
     keepBarTappableWhileItFades(p);
     expect(p.fading()).toBe(false);
@@ -36,7 +36,7 @@ describe('keepBarTappableWhileItFades', () => {
     expect(p.fading()).toBe(false);
   });
 
-  it('ends at once when the viewer is active again, and a new fade gets its full half', () => {
+  it('ends at once when the viewer is active again, and a new fade gets its full time', () => {
     const p = fakePlayer();
     keepBarTappableWhileItFades(p);
     p.emit('userinactive');
@@ -46,6 +46,19 @@ describe('keepBarTappableWhileItFades', () => {
     p.emit('userinactive');
     jest.advanceTimersByTime(200); // past the first fade's timer
     expect(p.fading()).toBe(true);
+  });
+
+  it('with reduced motion the bar is gone at once: nothing is marked', () => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn((query: string) => ({ matches: /prefers-reduced-motion: reduce/.test(query) })) as unknown as typeof window.matchMedia;
+    try {
+      const p = fakePlayer();
+      keepBarTappableWhileItFades(p);
+      p.emit('userinactive');
+      expect(p.fading()).toBe(false);
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it('a finger put down on the bar is activity', () => {
