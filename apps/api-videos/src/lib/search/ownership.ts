@@ -54,7 +54,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
-import { buildFtsQuery, isInternalVideoKey } from '@al-ummah/shared-types';
+import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 /** R2 binding of each kind (live streams share the videos bucket under `livestream:`). */
 const BUCKET_FOR_KIND = Object.fromEntries(Object.entries(OWNERSHIP_SOURCES).map(([kind, source]) => [kind, source.bucket])) as Record<OwnershipKind, string>;
@@ -482,20 +482,7 @@ export interface ChannelVideoQuery {
   notLive?: boolean;
   /** Only this category. */
   category?: string;
-  /** Catalogue-wide list only: words of the title (titleFilter). */
-  title?: TitleFilter;
 }
-
-/** A title filter the indexes can answer. */
-export interface TitleFilter {
-  /** FTS5 expression over the title words of public videos; null when the text has no words. */
-  match: string | null;
-  /** The text itself, for the caller's own videos that are not public (their rows only, by index). */
-  text: string;
-}
-
-/** The title filter of `text`; the caller still compares the loaded title with the text. */
-export const titleFilter = (text: string): TitleFilter => ({ match: buildFtsQuery(text, { column: 'title' }), text });
 
 /**
  * The index form of lib/visibility.ts isVideoReady: no upload status (older
@@ -592,35 +579,6 @@ export function channelVideoIds(
     // Videos still uploading/processing (or failed) are listed only to their
     // owner: the playlist does not exist yet (2026-11-10 incident)
     const PUBLIC = `(is_public = 1 AND ${READY_SQL})`;
-    if (channelId === null && query.title) {
-      // A title: the public matches by the full-text index, then the caller's own rest by their rows
-      const end = query.limit + 1 + (query.offset ?? 0);
-      const base = where.join(' AND ');
-      const arms: string[] = [];
-      const binds: unknown[] = [];
-      if (query.title.match && query.isPublic !== false) {
-        arms.push(
-          `SELECT * FROM (SELECT o.id AS id, o.created_at AS created_at, o.views AS views FROM search_videos_fts f
-             CROSS JOIN search_videos d ON d.rowid = f.rowid
-             CROSS JOIN ${OWNERSHIP_TABLE} o ON o.kind = 'video' AND o.id = d.id
-           WHERE search_videos_fts MATCH ? AND d.visible = 1 AND ${where.slice(1).map(w => `o.${w}`).join(' AND ')} AND (o.is_public = 1 AND (o.upload_status IS NULL OR o.upload_status = 'ready'))
-           ORDER BY ${order.replace(/^(\w+)/, 'o.$1').replace(/, id$/, ', o.id')} LIMIT ?)`,
-        );
-        binds.push(query.title.match, ...params, end);
-      }
-      if (typeof query.privateFor === 'string') {
-        const mine = (condition: string, index: string) =>
-          `SELECT * FROM (SELECT id, created_at, views FROM ${OWNERSHIP_TABLE} INDEXED BY ${index} WHERE ${base} AND ${condition} AND NOT ${PUBLIC} AND instr(lower(admin_title), ?) > 0 ORDER BY ${order} LIMIT ?)`;
-        arms.push(mine(OWN_CHANNELS, 'idx_content_ownership_channel'), mine(`owner_id = ? AND ${NO_CHANNEL}`, 'idx_content_ownership_owner'));
-        for (let i = 0; i < 2; i++) binds.push(...params, query.privateFor, query.title.text, end);
-      }
-      if (!arms.length) return { ids: [], hasMore: false };
-      const { results } = await db.prepare(
-        `SELECT id FROM (${arms.join(' UNION ALL ')}) ORDER BY ${order} LIMIT ? OFFSET ?`,
-      ).bind(...binds, query.limit + 1, query.offset ?? 0).all<{ id: string }>();
-      const ids = (results ?? []).map(r => r.id);
-      return { ids: ids.slice(0, query.limit), hasMore: ids.length > query.limit };
-    }
     if (typeof query.privateFor === 'string' && channelId === null) {
       // Every channel's: what is public in list order, and only then the caller's own rest by their
       // channels, and by their rows where there is no channel (never the whole index, row by row)

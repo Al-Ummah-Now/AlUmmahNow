@@ -36,6 +36,7 @@ import { hasValidSectionConsent } from './channelSectionAccess';
 import { clampItemCount, isListableChannel, isListablePlaylist, isListableVideo } from './channelSectionRules';
 import { channelNameFields } from './channelName';
 import { toPublicChannels } from './public-views';
+import { isVideoObjectKey } from './discovery';
 
 /**
  * Public-safe channel summary returned in populated section content.
@@ -300,7 +301,7 @@ async function getChannelUploads(
 
   logger.info('[SectionPopulator] Ownership index unavailable; scanning bucket', { channelId, sort, form });
   const listResult = await env.videos.list({ limit: FALLBACK_SCAN_OBJECTS });
-  const keys: string[] = (listResult.objects || []).map((obj: { key: string }) => obj.key);
+  const keys: string[] = (listResult.objects || []).map((obj: { key: string }) => obj.key).filter(isVideoObjectKey);
   const videos: StoredVideo[] = [];
   for (let i = 0; i < keys.length; i += SCAN_CONCURRENCY) {
     const batch = await Promise.all(keys.slice(i, i + SCAN_CONCURRENCY).map((key) => videoRepo.getObject(key)));

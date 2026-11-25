@@ -318,6 +318,11 @@ for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/ini
 for (const path of ['/api/search', '/api/videos/search']) {
 	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.search', ['GET']));
 }
+// A title filter without a channel is a search of every video (VideosList): the same budget
+const searchLimit = edgeRateLimit('SEARCH_LIMITER', 'videos.search', ['GET']);
+for (const path of ['/api/videos', '/api/videos/']) {
+	app.use(path, (c, next) => (c.req.query('q')?.trim() && !c.req.query('channelId') && !c.req.header('channelId') ? searchLimit(c, next) : next()));
+}
 // Channel move offers: each read names people and channels from their records
 for (const path of ['/api/move-offers', '/api/move-offers/:id', '/api/channels/:id/move-offers', '/api/channels/:id/move-receivers']) {
 	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.move_offers', ['GET']));
