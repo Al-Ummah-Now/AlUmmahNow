@@ -70,14 +70,17 @@ test.describe('live admin pages (admin)', () => {
     const { frames } = await openLive(page, '/jobs');
     await expect.poll(() => received(frames, (m) => m.type === 'subscribed' && m.channel === 'admin:jobs'), { timeout: 15_000 }).toBe(true);
 
-    let navigations = 0;
-    page.on('framenavigated', (f) => { if (f === page.mainFrame()) navigations++; });
+    // A mark on this document: a full reload loses it. Not a count of 'framenavigated', which also
+    // fires for the router's own history.replaceState after router.refresh()
+    await page.evaluate(() => { (window as { liveSpecDocument?: boolean }).liveSpecDocument = true; });
     const refresh = page.waitForRequest((r) => new URL(r.url()).pathname === '/jobs' && !!r.headers()['rsc'], { timeout: 10_000 });
     await publish('jobs', [{ kind: 'job', key: 'job:e2e-live', id: 'e2e-live', status: 'running' }]);
     await refresh;
     // The refresh and the frame event arrive in either order (the poll fallback may refresh first)
-    await expect.poll(() => received(frames, (m) => m.type === 'admin.update' && m.data?.events?.[0]?.key === 'job:e2e-live'), { timeout: 10_000 }).toBe(true);
-    expect(navigations, 'no full reload').toBe(0);
+    // Anywhere in the update: the topic's coalescer merges what arrives within a second (other specs'
+    // jobs publish here too), earlier events first
+    await expect.poll(() => received(frames, (m) => m.type === 'admin.update' && !!m.data?.events?.some((e) => e.key === 'job:e2e-live')), { timeout: 10_000 }).toBe(true);
+    expect(await page.evaluate(() => (window as { liveSpecDocument?: boolean }).liveSpecDocument), 'no full reload').toBe(true);
     // One ticket per socket and re-authentication: a loop (a 30-day token's re-auth timer overflowing,
     // v2026.11.19.3) asked hundreds of times a second
     expect(tickets, 'realtime ticket requests (a re-authentication loop asks hundreds of times)').toBeLessThanOrEqual(5);
