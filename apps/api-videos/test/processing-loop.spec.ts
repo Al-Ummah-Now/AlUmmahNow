@@ -259,6 +259,25 @@ describe('processing-check loop', () => {
 		);
 	});
 
+	it('says nothing on admin:uploads about a video under a takedown', async () => {
+		const env = Object.assign(makeEnv(), { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
+		await env.videos.put(ID, JSON.stringify({ ...stuck(), csamTakedown: { caseId: 'case-1', at: NOW.toISOString() } }));
+		bunnyResponses[ID] = { status: 200, body: { guid: ID, status: 3, encodeProgress: 50 } };
+		let published = 0;
+		const bunnyFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === 'https://realtime.test/broadcast') {
+				published++;
+				return new Response('{}', { status: 200 });
+			}
+			return bunnyFetch(input, init);
+		}) as typeof fetch;
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		const msg = env.PROCESSING_CHECK_QUEUE.sent.shift();
+		await handleProcessingCheckBatch({ messages: [{ body: msg.body, attempts: 1, ack() {}, retry() {} }] }, env);
+		assert.equal(published, 0);
+	});
+
 	it('drops messages of a superseded loop', async () => {
 		const env = makeEnv();
 		await env.videos.put(ID, JSON.stringify(stuck()));

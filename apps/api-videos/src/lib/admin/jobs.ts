@@ -196,9 +196,12 @@ export async function countJobs(env: JobEnv, status: AdminJobStatus): Promise<nu
 
 type JobRef = Pick<AdminJob, 'id' | 'kind' | 'targetKind' | 'targetId'>;
 
-/** The admin:jobs live event of a status change (docs/admin/LIVE_OPS.md): a hint, pages refetch the job. */
+/**
+ * The admin:jobs live event of a status change (docs/admin/LIVE_OPS.md): a hint, pages refetch the job. Not what it
+ * is about: every admin gets it, and some targets are for super admins only (a takedown's).
+ */
 export function jobLiveEvent(job: JobRef, status: AdminJobStatus, attempts?: number) {
-	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, targetType: job.targetKind, targetId: job.targetId, ...(attempts !== undefined ? { attempts } : {}) };
+	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, ...(attempts !== undefined ? { attempts } : {}) };
 }
 
 type StatusFields = Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null; target_id: string; next_run_at: string | null; run_id: string }>;

@@ -692,6 +692,8 @@ describe('live admin updates (admin:media)', () => {
 		assert.deepEqual(ev.failure, { stage: 'encode', error: 'ffmpeg exited 137', attempt: 3 });
 		assert.ok(JSON.stringify(ev).length < 2048, 'under the channel limit');
 		assert.equal(mediaJobEvent({ id: ID }), null);
+		// Every admin gets it: nothing about a video under a takedown
+		assert.equal(mediaJobEvent({ id: ID, csamTakedown: { caseId: 'c', at: 'x' }, r2: { status: 'failed', jobId: 'j', rev: 'r', access: 'pub', attempts: 3, queuedAt: 'q' } } as never), null);
 	});
 
 	it('posts the job and the live figures to the realtime broadcast, once per 5 s for the figures', async () => {

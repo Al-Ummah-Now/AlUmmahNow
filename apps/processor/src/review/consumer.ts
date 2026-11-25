@@ -92,7 +92,7 @@ async function sendOutcome(env: ReviewConsumerEnv, p: VideoReviewScanPayload, ro
 
 /** Alerts on a hold: the live admin queue at once, and an in-app + push notice per subscriber (VR6). */
 async function alertReviewers(env: ReviewConsumerEnv, p: VideoReviewScanPayload, routing: ReviewRouting, title: string, logger: Logger): Promise<void> {
-  await publishAdminLive(env as never, 'moderation', { kind: 'review_needed', key: `review:${p.reviewId}`, reviewId: p.reviewId, videoId: p.videoId, escalated: routing.escalate, holdCause: routing.holdCause ?? null }).catch(() => false);
+  await publishAdminLive(env as never, 'moderation', { kind: 'review_needed', key: `review:${p.reviewId}`, reviewId: p.reviewId, escalated: routing.escalate, holdCause: routing.holdCause ?? null }).catch(() => false);
   if (!env.MESSAGE_QUEUE) return;
   const recipients = await alertRecipients(env.REPORTS_DB, routing.escalate);
   for (const userId of recipients) {
@@ -231,7 +231,7 @@ export async function handleVideoReviewScan(
 
 export async function handleVideoReviewAppeal(a: VideoReviewAppealPayload, env: ReviewConsumerEnv, logger: Logger): Promise<void> {
   await openAppealRow(env.REPORTS_DB, a);
-  await publishAdminLive(env as never, 'moderation', { kind: 'review_needed', key: `review:${a.appealReviewId}`, reviewId: a.appealReviewId, videoId: a.videoId, appeal: true }).catch(() => false);
+  await publishAdminLive(env as never, 'moderation', { kind: 'review_needed', key: `review:${a.appealReviewId}`, reviewId: a.appealReviewId, appeal: true }).catch(() => false);
   logger.info('[Review] Appeal opened', { videoId: a.videoId, reviewId: a.reviewId, appealReviewId: a.appealReviewId });
 }
 
