@@ -27,7 +27,7 @@ async function answerConsent(context: BrowserContext): Promise<void> {
 
 /** MEASURE ONLY: logs every change of the header parts */
 async function probeHeader(page: Page): Promise<void> {
-  page.on('console', (m) => { if (m.text().startsWith('HDR ')) process.stdout.write(`${m.text()}\n`); });
+  page.on('console', (m) => { if (m.text().startsWith('HDR ')) process.stdout.write(`${m.text()}\n`); else if (m.type() === 'error') process.stdout.write(`HDR ${Date.now()} console-error ${m.text().slice(0, 160).replace(/https?:\S+/g, 'url')}\n`); });
   page.on('framenavigated', (f) => { if (f === page.mainFrame()) process.stdout.write(`HDR ${Date.now()} framenavigated ${new URL(f.url()).pathname}\n`); });
   page.on('request', (r) => { if (r.isNavigationRequest() || r.method() === 'POST' && r.url().startsWith(target().web)) process.stdout.write(`HDR ${Date.now()} request ${r.method()} ${new URL(r.url()).pathname} nav=${r.isNavigationRequest()}\n`); });
   await page.addInitScript(() => {
@@ -38,7 +38,18 @@ async function probeHeader(page: Page): Promise<void> {
     const size = (n: Element | null) => { if (!n) return 'absent'; const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : `0x0(display=${getComputedStyle(n).display};style=${n.getAttribute('style') ?? ''})`; };
     const sample = (why: string) => {
       const h = document.querySelector('header.ah');
-      if (h !== headerRef) { headerRef = h; headerNo++; }
+      if (h !== headerRef) {
+        // Which ancestors are new with this header: tells where the remount starts
+        const chain: Element[] = [];
+        for (let n: Element | null = h; n; n = n.parentElement) chain.push(n);
+        const w = window as { hdrSeen?: WeakSet<Element> };
+        const seen = (w.hdrSeen ??= new WeakSet<Element>());
+        if (h) console.log(`HDR ${Date.now()} ${doc} chain ${location.pathname}${location.search ? '?q' : ''} ${chain.map((n) => `${seen.has(n) ? 'same' : 'NEW'}:${n.tagName.toLowerCase()}.${String(n.className).split(' ')[0]}`).join(' < ')} oldConnected=${headerRef?.isConnected ?? null} oldParent=${headerRef?.parentElement?.isConnected ?? null} content=${seen.has(document.getElementById('page-content')!) ? 'same' : 'NEW'}`);
+        chain.forEach((n) => seen.add(n));
+        const content = document.getElementById('page-content');
+        if (content) seen.add(content);
+        headerRef = h; headerNo++;
+      }
       const input = h?.querySelector('[data-testid="header-search-input"]') as HTMLElement | null;
       const now = JSON.stringify({ headers: document.querySelectorAll('header.ah').length, headerNo, brand: size(h?.querySelector('.aun-brand') ?? null), upload: size(h?.querySelector('[data-testid="header-upload"]') ?? null), uploads: document.querySelectorAll('[data-testid="header-upload"]').length, search: size(h?.querySelector('.ah-search-wrap .ah-search') ?? null), input: input ? (input.offsetParent !== null ? 'offsetParent' : 'no-offsetParent') : 'absent', open: size(h?.querySelector('[data-testid="header-search-open"]') ?? null), w: innerWidth });
       if (now !== last) { last = now; console.log(`HDR ${Date.now()} ${doc} ${why} ${now}`); }
