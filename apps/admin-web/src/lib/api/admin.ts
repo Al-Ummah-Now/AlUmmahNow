@@ -86,6 +86,11 @@ export async function takeAction(reportId: string, params: TakeActionParams): Pr
   }
 }
 
+/** Marks an open report as under review, or puts it back to pending (#2015). */
+export async function setReportReview(reportId: string, reviewing: boolean): Promise<ActionResult<{ report: Report }>> {
+  return mutate(`/api/moderation/reports/${encodeURIComponent(reportId)}/review`, 'POST', { reviewing });
+}
+
 export async function getStats(): Promise<ReportStats> {
   return fetchAdmin<ReportStats>('/api/moderation/reports/stats');
 }
@@ -127,7 +132,7 @@ async function mutate<T>(endpoint: string, method: string, body: unknown): Promi
     return { ok: true, data };
   } catch (error) {
     await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.problems ? { problems: error.problems } : {}) };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.problems ? { problems: error.problems } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

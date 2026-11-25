@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from '@/components/AppLink';
-import { getReport } from '@/lib/api/admin';
+import { getReport, setReportReview } from '@/lib/api/admin';
 import type { ReportDetail } from '@/lib/api/types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
@@ -12,6 +12,7 @@ import { ChildSafetyCard, ReportedItem } from './item';
 import { GUEST_REPORTER_ID } from './outcomes';
 import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/roles';
+import { ReportReview } from './ReportReview';
 
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -136,7 +137,10 @@ export default async function ReportDetailPage({ params }: PageProps) {
             {/* A case is open already when the item is under a takedown */}
             {childSafety && !data?.item?.takenDown && <ChildSafetyCard report={report} intake={data?.intake ?? null} superAdmin={superAdmin} open={open} t={t} />}
             {open ? (
-              <ReportActions reportId={report.id} entityType={report.entity_type} outcomes={data?.outcomes ?? []} />
+              <>
+                {!data?.item?.takenDown && <ReportReview reportId={report.id} entityType={report.entity_type} status={report.status === 'reviewing' ? 'reviewing' : 'pending'} setReview={setReportReview} />}
+                <ReportActions reportId={report.id} entityType={report.entity_type} outcomes={data?.outcomes ?? []} />
+              </>
             ) : (
               <div className={cardClass} data-testid="report-closed">
                 <h2 className="text-lg font-semibold text-fg mb-4">{t('report.closedTitle')}</h2>
