@@ -13,7 +13,6 @@ import { reportChannelListFailure } from './report';
 export type MoveOfferStatus = 'offered' | 'accepting' | 'moved' | 'declined' | 'cancelled' | 'expired' | 'stopped' | 'refused';
 
 export interface MovePerson {
-  userId: string | null;
   name: string | null;
   nameLocalized?: Record<string, string>;
   avatarUrl: string | null;
@@ -34,8 +33,8 @@ export interface MoveOffer {
 
 export interface MoveReceiver {
   userId: string;
-  name: string;
-  userName: string | null;
+  name: string | null;
+  nameLocalized?: Record<string, string>;
   avatarUrl: string | null;
 }
 
@@ -108,7 +107,18 @@ export async function makeMoveOffer(channelId: string, input: { toUserId: string
 }
 
 export const loadMoveOffer = (id: string) => moveRequest<MoveOffer>('move-offer-load', offerPath(id));
-export const loadMyMoveOffers = () => moveRequest<{ received: MoveOffer[]; sent: MoveOffer[] }>('move-offers-load', '/api/move-offers');
+
+export type MoveSide = 'received' | 'sent';
+export interface MyMoveOffers {
+  received: MoveOffer[];
+  sent: MoveOffer[];
+  /** Next page of each side; null: no more */
+  receivedCursor: string | null;
+  sentCursor: string | null;
+}
+/** The first page of both sides, or one side's page after its cursor. */
+export const loadMyMoveOffers = (more?: { side: MoveSide; cursor: string }) =>
+  moveRequest<MyMoveOffers>('move-offers-load', `/api/move-offers${more ? `?${new URLSearchParams(more)}` : ''}`);
 
 export async function acceptMove(id: string): Promise<void> {
   await moveRequest<unknown>('move-accept', `${offerPath(id)}/accept`, { method: 'POST' });

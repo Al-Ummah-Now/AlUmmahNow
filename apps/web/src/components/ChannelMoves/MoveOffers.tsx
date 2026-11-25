@@ -5,10 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import NotFoundPage from '@/components/NotFoundPage';
 import { useLanguage } from '@/hooks/useLanguage';
-import { isMoveError, isolate, loadMyMoveOffers, moveName, type MoveOffer } from '@/lib/channels/moves';
-import { CARD, Expires, LoadFailed, Loading, OfferChannel, SECONDARY, SOFT, TEXT } from './parts';
+import { isMoveError, isolate, loadMyMoveOffers, moveErrorMessage, moveName, type MoveOffer, type MoveSide, type MyMoveOffers } from '@/lib/channels/moves';
+import { CARD, Expires, LoadFailed, Loading, Message, OfferChannel, SECONDARY, SOFT, TEXT } from './parts';
 
-function Section({ title, offers, testId }: { title: string; offers: MoveOffer[]; testId: string }) {
+function Section({ title, offers, testId, more }: { title: string; offers: MoveOffer[]; testId: string; more: { on: boolean; busy: boolean; load: () => void } }) {
   const { t, lang } = useLanguage();
   const m = t.channelMoves;
   if (!offers.length) return null;
@@ -25,7 +25,7 @@ function Section({ title, offers, testId }: { title: string; offers: MoveOffer[]
                 : m.sentText.replace('{person}', isolate(moveName(offer.to, lang, m.offers.someone)))}
             </p>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Expires at={offer.expiresAt} />
+              {offer.status === 'accepting' ? <p className={`text-sm ${SOFT}`} data-testid="move-offer-starting">{m.closed.accepting[offer.viewerRole === 'to' ? 'to' : 'from']}</p> : <Expires at={offer.expiresAt} />}
               <Link href={`/${lang}/channel-moves/${offer.id}`} className={SECONDARY} data-testid="move-offer-view">
                 {m.offers.view}
                 <span className="sr-only"> {isolate(moveName(offer.channel, lang, m.offers.channel))}</span>
@@ -34,14 +34,21 @@ function Section({ title, offers, testId }: { title: string; offers: MoveOffer[]
           </li>
         ))}
       </ul>
+      {more.on && (
+        <button type="button" className={SECONDARY} onClick={more.load} disabled={more.busy} aria-busy={more.busy} data-testid={`${testId}-more`}>
+          {m.offers.more}
+        </button>
+      )}
     </section>
   );
 }
 
 export default function MoveOffers() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const m = t.channelMoves;
-  const [offers, setOffers] = useState<{ received: MoveOffer[]; sent: MoveOffer[] } | null>(null);
+  const [offers, setOffers] = useState<MyMoveOffers | null>(null);
+  const [busy, setBusy] = useState<MoveSide | null>(null);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [problem, setProblem] = useState<'off' | 'failed' | null>(null);
 
   const refresh = useCallback(async () => {
@@ -57,6 +64,26 @@ export default function MoveOffers() {
     void refresh();
   }, [refresh]);
 
+  const loadMore = async (side: MoveSide) => {
+    const cursor = offers?.[`${side}Cursor`];
+    if (!cursor || busy) return;
+    setBusy(side);
+    setMoreError(null);
+    try {
+      const next = await loadMyMoveOffers({ side, cursor });
+      setOffers((now) => {
+        if (!now) return now;
+        const known = new Set(now[side].map((o) => o.id));
+        return { ...now, [side]: [...now[side], ...next[side].filter((o) => !known.has(o.id))], [`${side}Cursor`]: next[`${side}Cursor`] };
+      });
+    } catch (error) {
+      setMoreError(moveErrorMessage(error, lang as 'en' | 'ar'));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const more = (side: MoveSide) => ({ on: !!offers?.[`${side}Cursor`], busy: busy === side, load: () => void loadMore(side) });
+
   if (problem === 'off') return <NotFoundPage />;
   return (
     <main className="min-h-screen">
@@ -68,8 +95,9 @@ export default function MoveOffers() {
         {problem === 'failed' && <LoadFailed onRetry={() => void refresh()} />}
         {!offers && !problem && <Loading />}
         {offers && !offers.received.length && !offers.sent.length && <p className={`${CARD} text-sm ${SOFT}`} data-testid="move-offers-empty">{m.offers.none}</p>}
-        {offers && <Section title={m.offers.received} offers={offers.received} testId="move-offers-received" />}
-        {offers && <Section title={m.offers.sent} offers={offers.sent} testId="move-offers-sent" />}
+        {offers && <Section title={m.offers.received} offers={offers.received} testId="move-offers-received" more={more('received')} />}
+        {offers && <Section title={m.offers.sent} offers={offers.sent} testId="move-offers-sent" more={more('sent')} />}
+        <Message message={moreError ? { kind: 'error', text: moreError } : null} />
       </div>
     </main>
   );
