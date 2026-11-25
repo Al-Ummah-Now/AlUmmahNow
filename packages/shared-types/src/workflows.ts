@@ -296,9 +296,9 @@ export const FINANCE_PERMISSION_LABELS: Readonly<Record<string, WorkflowLocalize
 export const WORKFLOW_SET_LABELS: Readonly<Record<string, WorkflowLocalized>> = Object.freeze({
   'role:super_admin': { en: 'Super admins', ar: 'كبار المشرفين' },
   'role:admin': { en: 'Admins and super admins', ar: 'المشرفون وكبار المشرفين' },
-  finance: { en: 'The finance list', ar: 'قائمة المالية' },
+  finance: { en: 'Finance list', ar: 'قائمة المالية' },
   ...Object.fromEntries(
-    Object.entries(FINANCE_PERMISSION_LABELS).map(([p, l]) => [`finance:${p}`, { en: `The finance list with ${l.en}`, ar: `قائمة المالية بصلاحية ${l.ar}` }]),
+    Object.entries(FINANCE_PERMISSION_LABELS).map(([p, l]) => [`finance:${p}`, { en: `Finance list (${l.en})`, ar: `قائمة المالية (${l.ar})` }]),
   ),
 });
 

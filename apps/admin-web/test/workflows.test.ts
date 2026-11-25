@@ -53,14 +53,14 @@ describe('rules in one line', () => {
     assert.match(line, /7 days/);
     const arLine = ruleSummary(rule, ar, 'ar', permissionLabel(ar));
     assert.doesNotMatch(arLine, /[0-9]/);
-    assert.match(arLine, /قائمة المالية بصلاحية المزوّدون والرسوم/);
+    assert.match(arLine, /قائمة المالية \(المزوّدون والرسوم\)/);
   });
 
   it('names who else is told, only while emails are on', () => {
     const base = WORKFLOW_ACTIONS['features.set'].defaultRule;
     const extra = [{ kind: 'finance' as const }, { kind: 'people' as const, userIds: ['a', 'b'] }];
     assert.match(ruleSummary({ ...base, notify: { email: true, extra } }, en, 'en', permissionLabel(en)), /also tells the finance list, 2 named people/);
-    assert.match(ruleSummary({ ...base, notify: { email: true, extra } }, ar, 'ar', permissionLabel(ar)), /ويُبلَّغ أيضًا قائمة المالية، شخصان محدّدان|ويُبلَّغ أيضًا قائمة المالية، /);
+    assert.match(ruleSummary({ ...base, notify: { email: true, extra } }, ar, 'ar', permissionLabel(ar)), /البريد أيضًا إلى \(قائمة المالية، شخصان محدّدان\)/);
     assert.doesNotMatch(ruleSummary({ ...base, notify: { email: false, extra } }, en, 'en', permissionLabel(en)), /also tells/);
   });
 

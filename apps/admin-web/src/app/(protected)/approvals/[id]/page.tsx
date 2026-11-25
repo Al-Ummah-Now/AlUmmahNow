@@ -167,7 +167,7 @@ function DiffValue({ field, value, t, locale, names }: { field: WorkflowField; v
   // One person per line: a list of Latin names with commas reads wrongly inside Arabic
   if (field.kind === 'person' && Array.isArray(value)) {
     return (
-      <ul className="min-w-32 list-disc space-y-0.5 ps-4">
+      <ul className="list-disc sm:min-w-32 space-y-0.5 ps-4">
         {workflowPeople(value, t, names).map((name, i) => (
           <li key={String(value[i])}>
             <bdi>{name}</bdi>
@@ -181,25 +181,27 @@ function DiffValue({ field, value, t, locale, names }: { field: WorkflowField; v
 
 function DiffTable({ fields, t, locale, names }: { fields: WorkflowField[]; t: Parameters<typeof workflowValue>[3]; locale: Parameters<typeof workflowValue>[2]; names: Record<string, string> }) {
   return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-sm" data-testid="approval-diff">
-        <thead>
-          <tr className="border-b border-border text-start text-fg-muted">
-            <th scope="col" className="py-2 pe-3 text-start font-medium" />
-            <th scope="col" className="py-2 pe-3 text-start font-medium">{t('workflows.before')}</th>
-            <th scope="col" className="py-2 text-start font-medium">{t('workflows.after')}</th>
+    // A phone has no room for three columns: each field's name is a line of its own, over now and after.
+    // The roles keep it a table there (display: grid drops them).
+    <div className="mt-3">
+      <table role="table" className="w-full text-sm max-sm:block" data-testid="approval-diff">
+        <thead role="rowgroup" className="max-sm:block">
+          <tr role="row" className="border-b border-border text-start text-fg-muted max-sm:grid max-sm:grid-cols-2">
+            <th role="columnheader" scope="col" className="py-2 pe-3 text-start font-medium max-sm:sr-only" />
+            <th role="columnheader" scope="col" className="py-2 pe-3 text-start font-medium">{t('workflows.before')}</th>
+            <th role="columnheader" scope="col" className="py-2 text-start font-medium">{t('workflows.after')}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup" className="max-sm:block">
           {fields.map((f) => {
             const changes = fieldChanges(f);
             return (
-              <tr key={f.key} className="border-b border-border last:border-b-0 align-top" data-field={f.key} data-changed={changes ? '1' : '0'}>
-                <th scope="row" className="py-2 pe-3 text-start font-medium text-fg">{locale === 'ar' ? f.label.ar : f.label.en}</th>
-                <td className={`py-2 pe-3 ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`}>
+              <tr role="row" key={f.key} className="border-b border-border last:border-b-0 align-top max-sm:grid max-sm:grid-cols-2" data-field={f.key} data-changed={changes ? '1' : '0'}>
+                <th role="rowheader" scope="row" className="py-2 pe-3 text-start font-medium text-fg max-sm:col-span-2 max-sm:pb-0">{locale === 'ar' ? f.label.ar : f.label.en}</th>
+                <td role="cell" className={`min-w-0 py-2 pe-3 [overflow-wrap:anywhere] ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`}>
                   <DiffValue field={f} value={f.before} t={t} locale={locale} names={names} />
                 </td>
-                <td className={`py-2 ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
+                <td role="cell" className={`min-w-0 py-2 [overflow-wrap:anywhere] ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
                   <DiffValue field={f} value={f.after} t={t} locale={locale} names={names} />
                 </td>
               </tr>
