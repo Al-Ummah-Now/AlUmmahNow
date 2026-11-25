@@ -30,6 +30,7 @@
  * "Noor Recitations") is reported as unsure instead.
  */
 
+import { createHash } from 'node:crypto';
 import { SEED_ACCOUNTS, SEED_CHANNELS, VIEWER_CHANNEL } from '../../apps/web/e2e/seed/seed-config.ts';
 import { THEME_DEMO, THEME_DEMO_ACCOUNT_KEYS } from './theme-demo-keep.ts';
 
@@ -60,7 +61,7 @@ export const QA_TARGET = {
 
 const TEMP_TITLE = /^(E2E Temp|Release E2E)\b/;
 const E2E_SEED_TITLE = /^E2E Seed /;
-export const JUNK_COMMENT = /^(ws probe \d+|release live comment \d+|E2E Temp\b.*)$/s;
+const JUNK_COMMENT = /^(ws probe \d+|release live comment \d+|E2E Temp\b.*)$/s;
 /** Channel names the E2E and release suites give the channels of their throwaway accounts. */
 const TEST_CHANNEL_NAME = /^(E2E |Release |Probe ch$|#\d+ chunks |Mobile Edit \d+$)/;
 /** Throwaway channel prefixes the specs themselves create (apps/web/e2e/seed/seed-users.ts). */
@@ -119,23 +120,32 @@ export interface ChannelLike {
 /** userId → account email (channel records carry the owner's email). */
 export type OwnerLookup = (userId: string | undefined) => string | undefined;
 
+/** What a title says: all the rules need of it, so a title itself is never stored. */
+export type TitleMarker = 'temp' | 'e2e-seed' | 'seed';
+export function videoMarker(title: string | undefined): TitleMarker | undefined {
+	const t = title ?? '';
+	return TEMP_TITLE.test(t) ? 'temp' : E2E_SEED_TITLE.test(t) ? 'e2e-seed' : SEED_VIDEO_TITLES.has(t) ? 'seed' : undefined;
+}
+
 export function classifyVideo(video: VideoLike, ownerEmail: OwnerLookup): Verdict {
-	const title = video.title ?? '';
-	const kind = accountKind(ownerEmail(video.userId));
+	return videoVerdict({ id: video.id, channelId: video.channelId, marker: videoMarker(video.title) }, accountKind(ownerEmail(video.userId)));
+}
+
+export function videoVerdict(video: { id: string; channelId?: string; marker?: TitleMarker }, kind: AccountKind): Verdict {
 	if (KEEP_VIDEO_IDS.has(video.id)) return { action: 'keep', reason: 'on the keep list (owner request)' };
 	if (THEME_DEMO.videoIds.has(video.id) || kind === 'demo' || isThemeDemoChannel(video.channelId)) return { action: 'keep', reason: 'theme-demo content' };
 	if (kind === 'seed') {
-		if (SEED_VIDEO_TITLES.has(title)) return { action: 'keep', reason: 'QA seed fixture' };
-		if (TEMP_TITLE.test(title)) return { action: 'delete', reason: 'temp E2E title on a seed account' };
+		if (video.marker === 'seed') return { action: 'keep', reason: 'QA seed fixture' };
+		if (video.marker === 'temp') return { action: 'delete', reason: 'temp E2E title on a seed account' };
 		return { action: 'keep', reason: 'owned by a QA seed account' };
 	}
 	if (kind === 'other') {
-		return TEMP_TITLE.test(title)
+		return video.marker === 'temp'
 			? { action: 'unsure', reason: 'temp E2E title, but owned by a non-test account' }
 			: { action: 'keep', reason: 'owned by a non-test account' };
 	}
-	if (TEMP_TITLE.test(title)) return { action: 'delete', reason: 'temp E2E content left by a crashed or cancelled run' };
-	if (E2E_SEED_TITLE.test(title)) {
+	if (video.marker === 'temp') return { action: 'delete', reason: 'temp E2E content left by a crashed or cancelled run' };
+	if (video.marker === 'e2e-seed') {
 		return kind === 'pinned-e2e'
 			? { action: 'keep', reason: 'E2E seed fixture of a pinned CI user' }
 			: { action: 'delete', reason: `E2E seed copy of a retired test account (${kind})` };
@@ -157,17 +167,31 @@ export function junkCommentIds(video: VideoLike): string[] {
 	return ids;
 }
 
+/** What a channel name says. */
+export type NameMarker = 'seed' | 'disposable' | 'test';
+export function channelMarkers(name: string | undefined): NameMarker[] {
+	const n = name ?? '';
+	return [
+		...(SEED_CHANNEL_NAMES.has(n) ? ['seed' as const] : []),
+		...(DISPOSABLE_CHANNEL_PREFIXES.some((p) => n.startsWith(p)) ? ['disposable' as const] : []),
+		...(TEST_CHANNEL_NAME.test(n) ? ['test' as const] : []),
+	];
+}
+
 export function classifyChannel(channel: ChannelLike): Verdict {
-	const name = channel.name ?? '';
-	const kind = accountKind(channel.email);
+	return channelVerdict({ id: channel.id, isMain: channel.isMain, markers: channelMarkers(channel.name) }, accountKind(channel.email));
+}
+
+export function channelVerdict(channel: { id: string; isMain?: boolean; markers: readonly NameMarker[] }, kind: AccountKind): Verdict {
+	const is = (marker: NameMarker) => channel.markers.includes(marker);
 	if (THEME_DEMO.channelIds.has(channel.id) || kind === 'demo') return { action: 'keep', reason: 'theme-demo channel' };
-	if (kind === 'seed') return { action: 'keep', reason: SEED_CHANNEL_NAMES.has(name) ? 'QA seed fixture' : 'owned by a QA seed account' };
+	if (kind === 'seed') return { action: 'keep', reason: is('seed') ? 'QA seed fixture' : 'owned by a QA seed account' };
 	if (kind === 'other' || kind === 'unknown') return { action: 'keep', reason: `owned by a ${kind === 'other' ? 'non-test' : 'unidentified'} account` };
-	if (DISPOSABLE_CHANNEL_PREFIXES.some((p) => name.startsWith(p)) && !channel.isMain) {
+	if (is('disposable') && !channel.isMain) {
 		return { action: 'delete', reason: 'throwaway channel a spec created and did not remove' };
 	}
 	if (kind === 'pinned-e2e') return { action: 'keep', reason: 'channel of a pinned CI user' };
-	return TEST_CHANNEL_NAME.test(name)
+	return is('test')
 		? { action: 'delete', reason: 'channel of a retired throwaway test account' }
 		: { action: 'unsure', reason: 'throwaway test account, but the channel name is not a test marker' };
 }
@@ -176,27 +200,46 @@ export function isThemeDemoChannel(channelId: string | undefined): boolean {
 	return !!channelId && THEME_DEMO.channelIds.has(channelId);
 }
 
+export function playlistMarker(title: string | undefined): TitleMarker | undefined {
+	const t = title ?? '';
+	return SEED_PLAYLIST_TITLES.has(t) ? 'seed' : TEMP_TITLE.test(t) ? 'temp' : undefined;
+}
+
 export function classifyPlaylist(p: { id?: string; title?: string; channelId?: string }, channelVerdict: Action | undefined): Verdict {
-	const title = p.title ?? '';
+	return playlistVerdict({ id: p.id, channelId: p.channelId, marker: playlistMarker(p.title) }, channelVerdict);
+}
+
+export function playlistVerdict(p: { id?: string; channelId?: string; marker?: TitleMarker }, channelVerdict: Action | undefined): Verdict {
 	if ((p.id && THEME_DEMO.playlistIds.has(p.id)) || isThemeDemoChannel(p.channelId)) return { action: 'keep', reason: 'theme-demo playlist' };
-	if (SEED_PLAYLIST_TITLES.has(title)) return { action: 'keep', reason: 'QA seed fixture' };
-	if (TEMP_TITLE.test(title)) return { action: 'delete', reason: 'temp E2E playlist' };
+	if (p.marker === 'seed') return { action: 'keep', reason: 'QA seed fixture' };
+	if (p.marker === 'temp') return { action: 'delete', reason: 'temp E2E playlist' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'playlist of a channel being deleted' };
 	return { action: 'keep', reason: 'not a test playlist' };
 }
 
+/** Whether a post's text or a section's title marks it as a test's. */
+export const isTempText = (text: string | undefined): boolean => TEMP_TITLE.test((text ?? '').trim());
+
 /** Community posts are judged by their text; posts of deleted channels go with the channel. */
 export function classifyPost(text: string | undefined, channelVerdict: Action | undefined, channelId?: string): Verdict {
+	return postVerdict(isTempText(text), channelVerdict, channelId);
+}
+
+export function postVerdict(temp: boolean, channelVerdict: Action | undefined, channelId?: string): Verdict {
 	if (isThemeDemoChannel(channelId)) return { action: 'keep', reason: 'post of a theme-demo channel' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'post of a channel being deleted' };
-	if (TEMP_TITLE.test((text ?? '').trim())) return { action: 'delete', reason: 'temp E2E post' };
+	if (temp) return { action: 'delete', reason: 'temp E2E post' };
 	return { action: 'keep', reason: 'not a test post' };
 }
 
 export function classifySection(title: string | undefined, channelVerdict: Action | undefined, channelId?: string): Verdict {
+	return sectionVerdict(TEMP_TITLE.test(title ?? ''), channelVerdict, channelId);
+}
+
+export function sectionVerdict(temp: boolean, channelVerdict: Action | undefined, channelId?: string): Verdict {
 	if (isThemeDemoChannel(channelId)) return { action: 'keep', reason: 'section of a theme-demo channel' };
 	if (channelVerdict === 'delete') return { action: 'delete', reason: 'section of a channel being deleted' };
-	if (TEMP_TITLE.test(title ?? '')) return { action: 'delete', reason: 'temp E2E channel section' };
+	if (temp) return { action: 'delete', reason: 'temp E2E channel section' };
 	return { action: 'keep', reason: 'not a test section' };
 }
 
@@ -222,9 +265,12 @@ export function staleProfileChannels(
 	existing: ReadonlySet<string>,
 	deleting: ReadonlySet<string>,
 ): string[] {
-	const kind = accountKind(profile.email);
+	return staleChannels(accountKind(profile.email), profile.channels, existing, deleting);
+}
+
+export function staleChannels(kind: AccountKind, channels: readonly string[] | undefined, existing: ReadonlySet<string>, deleting: ReadonlySet<string>): string[] {
 	if (kind !== 'throwaway' && kind !== 'pinned-e2e') return [];
-	return (profile.channels ?? []).filter((id) => !existing.has(id) || deleting.has(id));
+	return (channels ?? []).filter((id) => !existing.has(id) || deleting.has(id));
 }
 
 /**
@@ -239,10 +285,13 @@ export function classifyHandleEntry(
 	existing: ReadonlySet<string>,
 	deleting: ReadonlySet<string>,
 ): Verdict {
+	return handleVerdict(entry, accountKind(ownerEmail), existing, deleting);
+}
+
+export function handleVerdict(entry: { channelId?: string } | null, kind: AccountKind, existing: ReadonlySet<string>, deleting: ReadonlySet<string>): Verdict {
 	if (!entry?.channelId) return { action: 'keep', reason: 'unreadable handle entry' };
 	if (existing.has(entry.channelId) && !deleting.has(entry.channelId)) return { action: 'keep', reason: 'channel exists' };
 	if (isThemeDemoChannel(entry.channelId)) return { action: 'keep', reason: 'handle of a theme-demo channel' };
-	const kind = accountKind(ownerEmail);
 	if (kind === 'throwaway' || kind === 'pinned-e2e') return { action: 'delete', reason: 'handle of a deleted test channel' };
 	return { action: 'unsure', reason: `handle of a missing channel, owner is ${kind === 'unknown' ? 'unidentified' : 'not a test account'}` };
 }
@@ -255,23 +304,17 @@ export function classifyTabsConfig(key: string, existing: ReadonlySet<string>, d
 	return { action: 'delete', reason: 'tab config of a deleted channel' };
 }
 
-/**
- * An inventory item as it may be published: this repo is public, so the inventory artifact and the run
- * log are too. Only what is marked as test data (action 'delete') keeps its title, name, handle or text;
- * anything else is its kind, id and verdict, and an account that is not a test account is only that.
- */
-export function publicItem<T extends { kind: string; id: string; action: Action; reason: string; title?: string; owner?: string; parent?: string; detail?: Record<string, unknown> }>(
-	item: T,
-): T {
-	if (item.action === 'delete') return item;
-	const { title: _title, detail: _detail, owner, ...rest } = item;
-	return {
-		...rest,
-		// A handle's key is the handle itself
-		...(item.kind === 'handle' ? { id: 'channel-handles/(not listed)' } : {}),
-		...(owner ? { owner: owner.startsWith('non-test account') ? 'non-test account' : owner.startsWith('unknown') ? 'unknown' : owner } : {}),
-	} as T;
-}
+/** Changes with any rule that reads a title, a name, a text or an address: what was read under other rules is read again. */
+export const RULES_FINGERPRINT = createHash('sha256')
+	.update(
+		JSON.stringify([
+			[TEMP_TITLE, E2E_SEED_TITLE, JUNK_COMMENT, TEST_CHANNEL_NAME, PINNED_E2E_EMAIL, THEME_DEMO_EMAIL, THROWAWAY_EMAIL].map(String),
+			DISPOSABLE_CHANNEL_PREFIXES,
+			[SEED_EMAILS, SEED_VIDEO_TITLES, SEED_CHANNEL_NAMES, SEED_PLAYLIST_TITLES].map((set) => [...set].sort()),
+		]),
+	)
+	.digest('hex')
+	.slice(0, 16);
 
 /** Default for --min-age-hours: E2E jobs run up to ~110 minutes. */
 export const DEFAULT_MIN_AGE_MS = 2 * 60 * 60 * 1000;
