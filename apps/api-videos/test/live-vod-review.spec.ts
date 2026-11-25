@@ -152,6 +152,17 @@ describe('the media worker, the processor and a reviewer', () => {
 		assert.equal((await applyLiveReviewOutcome(esc as never, SID, { ...outcome('approve'), reviewId: 'old' })).applied, false);
 	});
 
+	it('a stream under a takedown refuses every decision and result, and nobody is told', async () => {
+		const e = env({ ...held('in_review'), csamTakedown: { caseId: 'c1', at: 'x' } });
+		const was = record(e);
+		for (const body of [{ decision: 'approve' }, { decision: 'reject', reasonCode: 'hate' }, { decision: 'undo' }]) {
+			assert.equal((await post(e, `/livestream/${SID}/decision`, { reviewId: 'r1', reviewerId: 'rev1', ...body })).status, 409);
+		}
+		assert.equal((await post(e, `/livestream/${SID}/outcome`, outcome('hold', { nsfw: true }))).status, 409);
+		assert.deepEqual(record(e), was);
+		assert.equal(e.queue.messages.length, 0);
+	});
+
 	it('a reviewer rejects with a reason (the owner is told), can undo, and approves', async () => {
 		const e = env(held('in_review'));
 		assert.equal((await applyLiveReviewDecision(e as never, SID, { reviewId: 'r1', reviewerId: 'rev1', decision: 'reject' } as never)).applied, false, 'a reason is required');

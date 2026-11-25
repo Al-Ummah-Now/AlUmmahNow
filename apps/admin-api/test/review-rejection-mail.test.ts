@@ -162,6 +162,14 @@ describe('video not approved: email', () => {
     assert.equal(sent.length, 0);
   });
 
+  it('sends nothing once the item is under a takedown', async () => {
+    const t = setup();
+    await t.decide({ decision: 'reject', reasonCode: 'hate' });
+    await t.db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('c1', 'u', 'k', 'paste', 'containing', 'x', 'a', 'x', 'x', 'video', 'v1')").bind().run();
+    assert.equal(await processRejectionMailJob(t.env as never, msg(t.queued[0].body)), 'done');
+    assert.equal(sent.length, 0);
+  });
+
   it('retries a passing failure, then flags it on the Errors page; Retry queues it again', async () => {
     const t = setup();
     await t.decide({ decision: 'reject', reasonCode: 'hate', locale: 'ar' });

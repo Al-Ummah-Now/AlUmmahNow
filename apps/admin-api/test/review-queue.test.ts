@@ -398,11 +398,127 @@ describe('an item under a takedown', () => {
     assert.deepEqual(await ids(t, 'admin'), [...left, 'avatar', 'banner', 'cover', 'picture'].sort());
   });
 
+  it('is out of every number of the stats too', async () => {
+    const t = setup();
+    for (const [id, subject_id] of [['a', 'v1'], ['b', 'v2']]) {
+      t.insert(`shadow_${id}`, { subject_id, status: 'shadow', mode: 'shadow', route: 'hold', nsfw: 1 });
+      t.insert(`done_${id}`, { subject_id, status: 'approved', decided_at: '2026-11-20T11:00:00.000Z', sla_due_at: id === 'a' ? '2026-11-20T01:00:00.000Z' : '2026-11-20T10:00:00.000Z' });
+      t.insert(`late_${id}`, { subject_id, status: 'in_review', sla_due_at: id === 'a' ? '2026-11-01T10:00:00.000Z' : '2026-11-02T10:00:00.000Z' });
+    }
+    await taken(t, 'c1', 'reported', ['video', 'v1']);
+    const stats = async (roles: string) => (await t.call('GET', '/api/review/stats', { roles })).body.result;
+    const seen = await stats('admin');
+    assert.deepEqual([seen.open, seen.oldestWaitingSince, seen.queueMinutes, seen.shadow14d], [{ in_review: 1 }, '2026-11-02T10:00:00.000Z', 60, { checked: 1, wouldHold: 1, nsfw: 1 }]);
+    const all = await stats('super_admin');
+    assert.deepEqual([all.open, all.oldestWaitingSince, all.queueMinutes, all.shadow14d], [{ in_review: 2 }, '2026-11-01T10:00:00.000Z', 600, { checked: 2, wouldHold: 2, nsfw: 2 }]);
+  });
+
+  describe('one that starts while a reviewer decides', () => {
+    const row = (t: ReturnType<typeof setup>) => t.db.prepare("SELECT * FROM content_reviews WHERE id = 'r1'").bind().first<Record<string, unknown>>();
+    const actions = async (t: ReturnType<typeof setup>) => (await t.db.prepare('SELECT COUNT(*) AS n FROM moderation_actions').bind().first<{ n: number }>())!.n;
+    const GONE = { success: false, code: 'not_found', error: 'Review not found' };
+    const mails: unknown[] = [];
+    const open = (extra: Record<string, unknown> = {}) => {
+      const t = setup();
+      mails.length = 0;
+      (t.env as Record<string, unknown>).CONTACT_MAIL_QUEUE = { send: async (m: unknown) => void mails.push(m) };
+      t.insert('r1', extra);
+      return t;
+    };
+    /** Runs `then` right before the nth statement that reads a review. */
+    const before = (t: ReturnType<typeof setup>, n: number, then: () => Promise<unknown>) => {
+      const prepare = t.db.prepare.bind(t.db);
+      let reads = 0;
+      (t.env as Record<string, unknown>).REPORTS_DB = new Proxy(t.db, {
+        get: (db, key) =>
+          key !== 'prepare'
+            ? Reflect.get(db, key)
+            : (sql: string) => {
+                const stmt = prepare(sql);
+                if (!/^SELECT \* FROM content_reviews r WHERE id/.test(sql) || ++reads !== n) return stmt;
+                return { bind: (...p: unknown[]) => ({ first: async () => (await then(), stmt.bind(...p).first()) }) };
+              },
+      });
+    };
+    const CASE = (t: ReturnType<typeof setup>) => taken(t, 'c1', 'containing', ['video', 'v1']);
+    const DECISIONS = [['approve', {}], ['reject', { reasonCode: 'hate' }], ['undo', {}]] as const;
+    const UNDOABLE = { status: 'rejected', decision: 'reject', decided_at: NOW, decided_by: 'rev1', undo_until: '2999-01-01' };
+
+    for (const [decision, extra] of DECISIONS) {
+      it(`${decision}: before it is applied, nothing is`, async () => {
+        const t = open(decision === 'undo' ? UNDOABLE : {});
+        const was = await row(t);
+        before(t, 2, () => CASE(t));
+        const r = await t.call('POST', '/api/review/r1/decision', { body: { decision, ...extra } });
+        assert.deepEqual([r.status, r.body], [404, GONE]);
+        assert.deepEqual([t.decisions.length, await actions(t), mails.length], [0, 0, 0]);
+        assert.deepEqual(await row(t), was);
+      });
+
+      it(`${decision}: refused by api-videos, it is told as a review that is not there`, async () => {
+        const t = open(decision === 'undo' ? UNDOABLE : {});
+        const was = await row(t);
+        t.env.VIDEOS.fetch = async () => (await CASE(t), Response.json({ success: false, error: 'not the current review' }, { status: 409 }));
+        const r = await t.call('POST', '/api/review/r1/decision', { body: { decision, ...extra } });
+        assert.deepEqual([r.status, r.body], [404, GONE]);
+        assert.deepEqual([await actions(t), mails.length], [0, 0]);
+        assert.deepEqual(await row(t), was);
+      });
+
+      it(`${decision}: before the row is written, the row, the audit log and the mail stay as they are`, async () => {
+        const t = open(decision === 'undo' ? UNDOABLE : {});
+        const was = await row(t);
+        t.env.VIDEOS.fetch = async () => (await CASE(t), Response.json({ success: true }));
+        const r = await t.call('POST', '/api/review/r1/decision', { body: { decision, ...extra } });
+        assert.deepEqual([r.status, r.body], [404, GONE]);
+        assert.deepEqual([await actions(t), mails.length], [0, 0]);
+        assert.deepEqual(await row(t), was);
+      });
+    }
+
+    it('escalate, claim and reveal write nothing', async () => {
+      for (const [path, body] of [['decision', { decision: 'escalate' }], ['claim', {}], ['reveal', { target: 'item' }]] as const) {
+        const t = open();
+        const was = await row(t);
+        // After the review was opened, before the write
+        const prepare = t.db.prepare.bind(t.db);
+        let done = false;
+        (t.env as Record<string, unknown>).REPORTS_DB = new Proxy(t.db, {
+          get: (db, key) =>
+            key !== 'prepare'
+              ? Reflect.get(db, key)
+              : (sql: string) => {
+                  const stmt = prepare(sql);
+                  if (done || /^SELECT/.test(sql)) return stmt;
+                  done = true;
+                  return { bind: (...p: unknown[]) => ({ run: async () => (await CASE(t), stmt.bind(...p).run()) }) };
+                },
+        });
+        const r = await t.call('POST', `/api/review/r1/${path}`, { body });
+        assert.deepEqual([path, r.status, r.body], [path, 404, GONE]);
+        assert.equal(await actions(t), 0);
+        assert.deepEqual(await row(t), was);
+      }
+    });
+
+    it('a decision that another reviewer took first is not written over', async () => {
+      const t = open({ subject_type: 'post', subject_id: 'ch1/p1' });
+      t.env.VIDEOS.fetch = async () => {
+        await t.db.prepare("UPDATE content_reviews SET status = 'rejected', decision = 'reject', decided_by = 'rev2', decided_at = ? WHERE id = 'r1'").bind(NOW).run();
+        return Response.json({ success: true });
+      };
+      const r = await t.call('POST', '/api/review/r1/decision', { body: { decision: 'approve' } });
+      assert.deepEqual([r.status, r.body.code], [409, 'not_open']);
+      assert.deepEqual([(await row(t))!.decided_by, await actions(t)], ['rev2', 0]);
+    });
+  });
+
   it('reads its cases by an index', async () => {
     const t = setup();
     const { noCaseAboutReviewSql } = await import('../src/lib/csam');
     const plan = (await t.db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM content_reviews r WHERE id = ? AND ${noCaseAboutReviewSql('r')}`).bind('x').all<{ detail: string }>()).results.map((p) => p.detail);
     assert.equal(plan.some((d) => /^SCAN/.test(d)), false, plan.join(' | '));
     assert.ok(plan.some((d) => /idx_csam_cases_item \(item_type=\? AND item_id=\?\)/.test(d)), plan.join(' | '));
+    assert.ok(plan.some((d) => /idx_csam_cases_profile_image \(uploader_id=\?\)/.test(d)), plan.join(' | '));
   });
 });

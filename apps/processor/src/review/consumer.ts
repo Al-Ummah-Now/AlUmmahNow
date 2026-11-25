@@ -78,7 +78,8 @@ export function outcomePath(p: Pick<VideoReviewScanPayload, 'videoId' | 'subject
   return p.subject === 'livestream' ? `/internal/review/livestream/${id}/outcome` : `/internal/review/${id}/outcome`;
 }
 
-async function sendOutcome(env: ReviewConsumerEnv, p: VideoReviewScanPayload, routing: Pick<ReviewRouting, 'route' | 'risk' | 'nsfw' | 'escalate' | 'holdCause'>, findingsCount: number): Promise<void> {
+/** False: not applied, since there is nothing to apply it to any more. */
+async function sendOutcome(env: ReviewConsumerEnv, p: VideoReviewScanPayload, routing: Pick<ReviewRouting, 'route' | 'risk' | 'nsfw' | 'escalate' | 'holdCause'>, findingsCount: number): Promise<boolean> {
   if (!env.VIDEOS) throw new ProviderError('VIDEOS service binding missing', true);
   const body: ReviewOutcomeRequest = { reviewId: p.reviewId, mode: p.mode, timing: p.timing, routing, findingsCount, checkedAt: new Date().toISOString() };
   const res = await env.VIDEOS.fetch(`https://videos.internal${outcomePath(p)}`, {
@@ -86,8 +87,9 @@ async function sendOutcome(env: ReviewConsumerEnv, p: VideoReviewScanPayload, ro
     headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
     body: JSON.stringify(body),
   });
-  // 409: a newer review or a person already decided: nothing to apply, not an error
+  // 409: a newer review, a person already decided, or the item is gone: nothing to apply, not an error
   if (!res.ok && res.status !== 409) throw new ProviderError(`outcome not applied (${res.status})`, true);
+  return res.ok;
 }
 
 /** Alerts on a hold: the live admin queue at once, and an in-app + push notice per subscriber (VR6). */
@@ -220,12 +222,13 @@ export async function handleVideoReviewScan(
   logger.info('[Review] Checked', { videoId: p.videoId, reviewId: p.reviewId, mode: p.mode, route: routing.route, nsfw: routing.nsfw, escalate: routing.escalate, partial, costUsd: Math.round(costUsd * 1e5) / 1e5 });
   if (p.mode === 'shadow') return { status: 'done', route: routing.route };
 
+  let applied: boolean;
   try {
-    await sendOutcome(env, p, routing, findings.length);
+    applied = await sendOutcome(env, p, routing, findings.length);
   } catch (error) {
     return { status: 'retry', error: error instanceof Error ? error.message : String(error) };
   }
-  if (routing.route === 'hold') await alertReviewers(env, p, routing, (p.metadataText.split('\n')[0] ?? '').slice(0, 120), logger);
+  if (applied && routing.route === 'hold') await alertReviewers(env, p, routing, (p.metadataText.split('\n')[0] ?? '').slice(0, 120), logger);
   return { status: 'done', route: routing.route };
 }
 
@@ -277,6 +280,7 @@ export async function handleImageReviewScan(
       body: JSON.stringify({ subject: p.subject, subjectId: p.subjectId, reviewId: p.reviewId, result: route }),
     });
     if (!res.ok && res.status !== 409) throw new ProviderError(`image outcome not applied (${res.status})`, true);
+    return res.ok;
   };
   if (existing?.checked_at && existing.route) {
     if (p.mode !== 'shadow') {
@@ -329,11 +333,12 @@ export async function handleImageReviewScan(
   await finishReviewRow(db, asVideo, { routing, findings, partial: false, models: settled.models, costUsd: usdFor(settled.neurons), mediaRetentionDays: p.settings.mediaRetentionDays }, new Date(now));
   logger.info('[Review] Image checked', { subject: p.subject, subjectId: p.subjectId, route: routing.route, nsfw: routing.nsfw, mode: p.mode });
   if (p.mode === 'shadow') return { status: 'done', route: routing.route };
+  let applied: boolean;
   try {
-    await sendImageOutcome(routing.route);
+    applied = await sendImageOutcome(routing.route);
   } catch (error) {
     return { status: 'retry', error: error instanceof Error ? error.message : String(error) };
   }
-  if (routing.route === 'hold') await alertReviewers(env, asVideo, routing, (p.text ?? p.subject).slice(0, 120), logger);
+  if (applied && routing.route === 'hold') await alertReviewers(env, asVideo, routing, (p.text ?? p.subject).slice(0, 120), logger);
   return { status: 'done', route: routing.route };
 }

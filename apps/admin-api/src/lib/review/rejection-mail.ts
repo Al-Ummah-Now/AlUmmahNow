@@ -15,6 +15,7 @@
  * ("review-rejection-email" in lib/errors-actions.ts). No migration: the Resend idempotency key
  * (review id + decision time) keeps a retried job from sending twice.
  */
+import { noCaseAboutReviewSql } from '../csam';
 import {
   REVIEW_UNDO_MINUTES,
   STUDIO_AR,
@@ -223,11 +224,11 @@ export async function processRejectionMailJob(env: MailEnv, msg: QueueMessageLik
       logger.error('[RejectionMail] Malformed job dropped', { id: msg.id });
       return 'done';
     }
-    const row = await env.REPORTS_DB.prepare('SELECT id, subject_type, subject_id, owner_id, status, decision, decided_at, reason_code FROM content_reviews WHERE id = ?')
+    const row = await env.REPORTS_DB.prepare(`SELECT id, subject_type, subject_id, owner_id, status, decision, decided_at, reason_code FROM content_reviews r WHERE id = ? AND ${noCaseAboutReviewSql('r')}`)
       .bind(job.reviewId)
       .first<RejectedRow>();
     if (!stillRejected(row, job)) {
-      logger.debug('[RejectionMail] Not sent: the rejection was undone or decided again', { reviewId: job.reviewId });
+      logger.debug('[RejectionMail] Not sent: the rejection was undone or decided again, or the item is withheld', { reviewId: job.reviewId });
       return 'done';
     }
 

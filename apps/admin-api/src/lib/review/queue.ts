@@ -4,7 +4,7 @@
  * service so they are unit tested without the Workers runtime.
  *
  * Rules: content reviewers never see escalations (minors, extremism; VR7); only super admins see an
- * item under a takedown; an appeal is decided by
+ * item under a takedown, and a write on one does nothing; an appeal is decided by
  * someone other than the person who rejected it (VR10); every decision, undo and NSFW reveal is
  * audited in moderation_actions; a decision is applied to the video by api-videos (the single
  * writer of its review state) before the row records it.
@@ -85,6 +85,7 @@ export interface ReviewRow {
 
 export const PAGE_MAX = 50;
 const ACTION_STATUSES = ['in_review', 'appealed'];
+const DECIDABLE = [...ACTION_STATUSES, 'post_review', 'checking'];
 
 // ---------- queue ----------
 
@@ -343,6 +344,20 @@ export async function reviewAudio(env: ReviewEnv, reviewer: Reviewer, id: string
   return new Response(res.body, { status: res.status, headers: out });
 }
 
+/**
+ * One write on a review, done only while the reviewer may open it: a takedown that starts after they opened it
+ * stops it. `still`: what else must hold of the row.
+ */
+async function change(db: D1Database, reviewer: Reviewer, id: string, write: { set: string; params: unknown[]; still?: string; stillParams?: unknown[] }): Promise<void> {
+  const res = await db
+    .prepare(`UPDATE content_reviews SET ${write.set} WHERE id = ?${write.still ? ` AND ${write.still}` : ''}${withheldFrom(reviewer) ? ` AND ${noCaseAboutReviewSql('content_reviews')}` : ''}`)
+    .bind(...write.params, id, ...(write.stillParams ?? []))
+    .run();
+  if (((res.meta as { changes?: number } | undefined)?.changes ?? 0) > 0) return;
+  await openReview(db, reviewer, id);
+  throw new ReviewError(409, 'not_open', 'This review changed meanwhile; open it again');
+}
+
 /** A media object of the review (frames, manifest), only under the subject's own review/ prefix. */
 export async function reviewMedia(env: ReviewEnv, reviewer: Reviewer, id: string, key: string) {
   const row = await openReview(env.REPORTS_DB, reviewer, id);
@@ -403,6 +418,20 @@ async function applyOnImage(env: ReviewEnv, row: ReviewRow, decision: 'approve' 
   throw new ReviewError(res.status === 409 ? 409 : res.status === 400 ? 400 : 502, 'videos_refused', payload?.error ?? `api-videos answered ${res.status}`);
 }
 
+/**
+ * Applies a decision at api-videos, which refuses an item under a takedown itself. The reviewer must still be
+ * allowed to open the review right before, and a refusal tells them no more than that it is not there.
+ */
+async function applyDecision(env: ReviewEnv, reviewer: Reviewer, id: string, apply: () => Promise<void>): Promise<void> {
+  await openReview(env.REPORTS_DB, reviewer, id);
+  try {
+    await apply();
+  } catch (error) {
+    await openReview(env.REPORTS_DB, reviewer, id);
+    throw error;
+  }
+}
+
 export interface DecisionInput {
   decision: 'approve' | 'reject' | 'escalate' | 'undo';
   reasonCode?: string;
@@ -419,7 +448,7 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
 
   if (input.decision === 'escalate') {
     if (!ACTION_STATUSES.includes(row.status)) throw new ReviewError(409, 'not_open', `This review is ${row.status}`);
-    await db.prepare('UPDATE content_reviews SET escalate = 1, assigned_to = NULL, updated_at = ? WHERE id = ?').bind(iso, id).run();
+    await change(db, reviewer, id, { set: 'escalate = 1, assigned_to = NULL, updated_at = ?', params: [iso], still: "status IN ('in_review', 'appealed')" });
     await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_escalate', actorId: reviewer.id, reason: note }, iso);
     return { review: { ...row, escalate: 1 } };
   }
@@ -428,33 +457,41 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
     if (!row.decided_at || row.decided_by !== reviewer.id) throw new ReviewError(409, 'nothing_to_undo', 'Only your own decision can be undone');
     if (!row.undo_until || iso > row.undo_until) throw new ReviewError(409, 'undo_expired', `Decisions can be undone for ${REVIEW_UNDO_MINUTES} minutes`);
     if (!VIDEO_LIKE.includes(row.subject_type)) throw new ReviewError(409, 'undo_video_only', 'An image decision cannot be undone; decide it again from History');
-    await applyOnVideo(env, row, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso });
+    await applyDecision(env, reviewer, id, () => applyOnVideo(env, row, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso }));
     const restored = row.appeal_of ? 'appealed' : 'in_review';
-    await db.prepare('UPDATE content_reviews SET status = ?, decision = NULL, decided_at = NULL, decided_by = NULL, reason_code = NULL, note = NULL, undo_until = NULL, media_purge_after = NULL, updated_at = ? WHERE id = ?').bind(restored, iso, id).run();
+    await change(db, reviewer, id, {
+      set: 'status = ?, decision = NULL, decided_at = NULL, decided_by = NULL, reason_code = NULL, note = NULL, undo_until = NULL, media_purge_after = NULL, updated_at = ?',
+      params: [restored, iso],
+      still: 'decided_at = ?',
+      stillParams: [row.decided_at],
+    });
     await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_undo', actorId: reviewer.id }, iso);
     return { review: { ...row, status: restored, decision: null, decided_at: null } };
   }
 
-  if (!['in_review', 'appealed', 'post_review', 'checking'].includes(row.status)) throw new ReviewError(409, 'not_open', `This review is ${row.status}`);
+  if (!DECIDABLE.includes(row.status)) throw new ReviewError(409, 'not_open', `This review is ${row.status}`);
   if (input.decision === 'reject' && !isReviewReasonCode(input.reasonCode)) throw new ReviewError(400, 'reason_required', 'Pick a reason to reject');
   if (row.appeal_of) {
     // VR10: someone other than the person who rejected it decides the appeal
     const original = await db.prepare('SELECT decided_by FROM content_reviews WHERE id = ?').bind(row.appeal_of).first<{ decided_by: string | null }>();
     if (original?.decided_by === reviewer.id) throw new ReviewError(403, 'different_reviewer', 'An appeal is decided by a different reviewer');
   }
-  if (VIDEO_LIKE.includes(row.subject_type)) {
-    await applyOnVideo(env, row, { reviewId: id, decision: input.decision, reasonCode: input.reasonCode as VideoReviewReasonCode | undefined, note, reviewerId: reviewer.id, decidedAt: iso });
-  } else {
-    await applyOnImage(env, row, input.decision, reviewer.id, input.reasonCode);
-  }
+  const { decision } = input;
+  // Read first: nothing slow between the decision at api-videos and the row
   const settings = await readVideoReviewSettings(env.global_settings as ReviewSettingsBucket | undefined);
+  await applyDecision(env, reviewer, id, () =>
+    VIDEO_LIKE.includes(row.subject_type)
+      ? applyOnVideo(env, row, { reviewId: id, decision, reasonCode: input.reasonCode as VideoReviewReasonCode | undefined, note, reviewerId: reviewer.id, decidedAt: iso })
+      : applyOnImage(env, row, decision, reviewer.id, input.reasonCode),
+  );
   const purge = new Date(now.getTime() + settings.mediaRetentionDays * 86_400_000).toISOString();
   const undoUntil = new Date(now.getTime() + REVIEW_UNDO_MINUTES * 60_000).toISOString();
   const status = input.decision === 'approve' ? 'approved' : 'rejected';
-  await db
-    .prepare('UPDATE content_reviews SET status = ?, decision = ?, reason_code = ?, note = ?, decided_at = ?, decided_by = ?, undo_until = ?, media_purge_after = ?, updated_at = ? WHERE id = ?')
-    .bind(status, input.decision, input.decision === 'reject' ? input.reasonCode : null, note ?? null, iso, reviewer.id, undoUntil, purge, iso, id)
-    .run();
+  await change(db, reviewer, id, {
+    set: 'status = ?, decision = ?, reason_code = ?, note = ?, decided_at = ?, decided_by = ?, undo_until = ?, media_purge_after = ?, updated_at = ?',
+    params: [status, decision, decision === 'reject' ? input.reasonCode : null, note ?? null, iso, reviewer.id, undoUntil, purge, iso],
+    still: `status IN (${DECIDABLE.map((s) => `'${s}'`).join(', ')})`,
+  });
   await audit(db, { reviewId: id, subjectId: row.subject_id, action: `review_${input.decision}`, actorId: reviewer.id, reason: input.reasonCode ?? null, details: { note: note ?? null } }, iso);
   if (input.decision === 'reject' && row.subject_type === 'video' && row.owner_id) {
     // The creator's email (#1279), sent once the undo window has passed; the decision stands either way
@@ -467,15 +504,22 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
 }
 
 export async function claimReview(db: D1Database, reviewer: Reviewer, id: string, now = new Date()) {
-  const row = await openReview(db, reviewer, id);
-  await db.prepare('UPDATE content_reviews SET assigned_to = ?, updated_at = ? WHERE id = ?').bind(reviewer.id, now.toISOString(), id).run();
+  await openReview(db, reviewer, id);
+  await change(db, reviewer, id, { set: 'assigned_to = ?, updated_at = ?', params: [reviewer.id, now.toISOString()] });
   return { assignedTo: reviewer.id };
 }
 
 /** Reveal of a blurred NSFW item: audited (who, what, when). */
 export async function recordReveal(db: D1Database, reviewer: Reviewer, id: string, target: string, now = new Date()) {
-  const row = await openReview(db, reviewer, id);
-  await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_reveal', actorId: reviewer.id, details: { target: String(target).slice(0, 300) } }, now.toISOString());
+  await openReview(db, reviewer, id);
+  const res = await db
+    .prepare(
+      `INSERT INTO moderation_actions (id, signal_id, subject_type, subject_id, action, actor_type, actor_id, reason, details_json, created_at)
+       SELECT ?, NULL, 'video_review', r.subject_id, 'review_reveal', 'user', ?, NULL, ?, ? FROM content_reviews r WHERE r.id = ?${withheldFrom(reviewer) ? ` AND ${noCaseAboutReviewSql('r')}` : ''}`,
+    )
+    .bind(crypto.randomUUID(), reviewer.id, JSON.stringify({ reviewId: id, target: String(target).slice(0, 300) }), now.toISOString(), id)
+    .run();
+  if (!((res.meta as { changes?: number } | undefined)?.changes ?? 0)) throw new ReviewError(404, 'not_found', 'Review not found');
   return { recorded: true };
 }
 
@@ -507,13 +551,13 @@ export async function reviewStats(db: D1Database, reviewer?: Reviewer, now = new
   const oldest = await db.prepare(`SELECT MIN(sla_due_at) AS t FROM content_reviews r WHERE status IN ('in_review', 'appealed')${shown}`).first<{ t: string | null }>();
   // The live queue time creators see when flagged (VR6): median wait of the last 50 decisions
   const waits = await db
-    .prepare(`SELECT (julianday(decided_at) - julianday(sla_due_at)) * 1440 AS m FROM content_reviews WHERE decided_at IS NOT NULL AND sla_due_at IS NOT NULL ORDER BY decided_at DESC LIMIT 50`)
+    .prepare(`SELECT (julianday(decided_at) - julianday(sla_due_at)) * 1440 AS m FROM content_reviews r WHERE decided_at IS NOT NULL AND sla_due_at IS NOT NULL${shown} ORDER BY decided_at DESC LIMIT 50`)
     .all<{ m: number }>();
   const sorted = (waits.results ?? []).map((w) => Math.max(0, Number(w.m))).sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
   const cost = await db.prepare(`SELECT COALESCE(SUM(usd), 0) AS usd FROM ai_usage_daily WHERE day = ? AND feature = 'video_review'`).bind(day).first<{ usd: number }>();
   const shadow = await db
-    .prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN route = 'hold' THEN 1 ELSE 0 END) AS held, SUM(nsfw) AS nsfw FROM content_reviews WHERE status = 'shadow' AND created_at >= ?`)
+    .prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN route = 'hold' THEN 1 ELSE 0 END) AS held, SUM(nsfw) AS nsfw FROM content_reviews r WHERE status = 'shadow' AND created_at >= ?${shown}`)
     .bind(since)
     .first<{ n: number; held: number | null; nsfw: number | null }>();
   return {

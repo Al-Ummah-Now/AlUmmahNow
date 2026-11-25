@@ -132,7 +132,8 @@ async function applyToPost(env: ImageReviewEnv, req: ImageReviewResultRequest): 
 	let publish = false;
 	let post: Record<string, any> | null = null;
 	const result = await updateRecord(env.community_posts, `posts/${channelId}/${postId}.json`, (p) => {
-		if (!p.review || p.review.reviewId !== req.reviewId) return 'refuse';
+		// An image of a channel or an account that is taken down is gone from pendingImages; a post is marked
+		if (!p.review || p.csamTakedown || p.review.reviewId !== req.reviewId) return 'refuse';
 		const was = p.review.status;
 		const now = new Date().toISOString();
 		if (req.result === 'approve') {
