@@ -16,7 +16,7 @@
  * to it is the format's canonical type, whatever alias the browser used.
  */
 
-import { isArabicLocale } from '@al-ummah/shared-types';
+import { isArabicLocale, isolateText } from '@al-ummah/shared-types';
 
 export interface VideoFormat {
   /** How the format is written in help text */
@@ -82,21 +82,13 @@ export const VIDEO_PICKER_ACCEPT: string = [
   ...VIDEO_FORMATS.flatMap((f) => [f.mimeType, ...f.aliases]),
 ].join(',');
 
-const FIRST_STRONG_ISOLATE = '\u2068';
-const POP_DIRECTIONAL_ISOLATE = '\u2069';
-
 /**
- * A Latin name (a format, a file name) inside Arabic text, isolated from the text around it. The Arabic
- * comma is neutral between two Latin names, so without this the whole list is one left-to-right run:
- * «يدعم» then MP4 at the far left, the list reading backwards and breaking oddly across lines. Each
- * name isolated, the commas and spaces follow the Arabic direction: MP4 comes first, next to «يدعم».
- * English text is returned as it is.
+ * «MP4, M4V, …» for help text. Arabic copy takes the Arabic comma «،», and each name is its own bidi isolate
+ * (isolateText, shared-types): the Arabic comma is neutral between two Latin names, so without it the whole list
+ * is one left-to-right run, «يدعم» then MP4 at the far left, the list reading backwards and breaking oddly across
+ * lines. Isolated, MP4 comes first, next to the text before it.
  */
-export function bidiIsolate(lang: string, text: string): string {
-  return isArabicLocale(lang) ? `${FIRST_STRONG_ISOLATE}${text}${POP_DIRECTIONAL_ISOLATE}` : text;
-}
-
-/** «MP4, M4V, …» for help text; Arabic copy takes the Arabic comma «،» and isolates each name (bidiIsolate) */
 export function videoFormatsText(lang: string): string {
-  return VIDEO_FORMATS.map((f) => bidiIsolate(lang, f.label)).join(isArabicLocale(lang) ? '، ' : ', ');
+  const arabic = isArabicLocale(lang);
+  return VIDEO_FORMATS.map((f) => (arabic ? isolateText(f.label) : f.label)).join(arabic ? '، ' : ', ');
 }
