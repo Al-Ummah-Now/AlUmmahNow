@@ -34,8 +34,9 @@ jobs:
     runs-on: ubuntu-24.04
     # Nested timeouts: Playwright 55 min (uploads stop starting at 30, the encode wait ends by 42, then the
     # deletes) < the test step 60 < the qa-encode lock 65 < this job: 15 setup + 90 waiting for a release +
-    # 65 for the slot + 60 for the test + 45 for the teardown (account deletion, leftover check, probe)
-    timeout-minutes: 280
+    # 65 for the slot + 60 for the test + 10 for the video cleanup + 45 for the teardown (account deletion,
+    # leftover check, probe)
+    timeout-minutes: 290
     permissions:
       contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?; the release check below
@@ -99,6 +100,8 @@ jobs:
             # Videos the check makes, for the leftover check's Bunny and R2 lookups and the upload cap
             echo "E2E_RUN_RESOURCES_FILE=$RUNNER_TEMP/run-resources.txt"
             echo "FORMATS_SUMMARY_FILE=$RUNNER_TEMP/formats-summary.md"
+            # The throwaway account's refresh token and channel, kept current by the check, for the cleanup step below
+            echo "FORMATS_SESSION_FILE=$RUNNER_TEMP/formats-session.json"
           } >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v6
@@ -174,6 +177,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" release "${{ steps.encode-lock.outputs.lock }}" --holder "${{ steps.encode-lock.outputs.holder }}"
+
+      # Every video the run initiated is deleted here too, whatever became of the test process (a timeout, a
+      # cancel, an expired session): the ids are in the run resources file, the account's session in
+      # FORMATS_SESSION_FILE. Trusted copy. Bounded: 5 at a time, each request 30 s, the whole step 10 min.
+      - name: Delete the videos the run made
+        if: always() && hashFiles('.ci-trusted/scripts/e2e/delete-format-videos.ts') != ''
+        timeout-minutes: 10
+        run: >-
+          node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/delete-format-videos.ts"
+          --resources "$E2E_RUN_RESOURCES_FILE" --session "$FORMATS_SESSION_FILE"
 
       # The result table: what the form did, Bunny's encode and our transcoder's, per format
       - name: Result table
@@ -322,11 +335,18 @@ jobs:
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
-        # Read from the trusted checkout on stdin (-I: no imports from the workspace)
-        run: >-
-          python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
-          --remove "$SUITE/test-results" "$SUITE/release-report"
-          < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
+        # Read from the trusted checkout on stdin (-I: no imports from the workspace). A run cancelled before
+        # the checkout (while it waits for a release) has nothing to scan.
+        run: |
+          S="$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
+          if [ ! -f "$S" ]; then echo "the scanner is not checked out (cancelled before the checkout): nothing to scan"; exit 0; fi
+          python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET \
+            --remove "$SUITE/test-results" "$SUITE/release-report" < "$S"
+
+      # The session file holds a refresh token: it never leaves the runner
+      - name: Remove the session file
+        if: always()
+        run: rm -f "$FORMATS_SESSION_FILE"
 
       - uses: actions/upload-artifact@v4
         if: failure()
