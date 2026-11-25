@@ -6,7 +6,9 @@ import './globals.css';
 import { VersionSkewProvider } from '@/lib/version-skew/VersionSkewProvider';
 import { ErrorReportingProvider } from '@/lib/errors/ErrorReportingProvider';
 import { appIcons } from '@/lib/favicon';
-import { getSiteTheme } from '@/lib/site-theme';
+import { headers } from 'next/headers';
+import { defaultSiteTheme, getSiteTheme } from '@/lib/site-theme';
+import { STATIC_FILE_HEADER } from '@/lib/http/static-file';
 import { MODE_SCRIPT } from '@/lib/color-mode';
 import { TYPED_RECORDER_SCRIPT } from '@/lib/forms/keep-typed-before-hydration';
 import { KeepTypedBeforeHydration } from '@/components/forms/KeepTypedBeforeHydration';
@@ -42,7 +44,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const { locale, dir } = await getI18n();
-  const [theme, siteTheme] = await Promise.all([getTheme(), getSiteTheme()]);
+  const [theme, siteTheme] = await Promise.all([getTheme(), (await headers()).has(STATIC_FILE_HEADER) ? defaultSiteTheme : getSiteTheme()]);
 
   // data-theme: the site's theme (the admin follows it). data-color-mode: the admin's light/dark
   // preference; MODE_SCRIPT turns it into the .dark class before first paint (src/lib/color-mode.ts).

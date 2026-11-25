@@ -24,6 +24,9 @@ export interface ActiveSiteTheme {
 
 const fallback: ActiveSiteTheme = { id: DEFAULT_SITE_THEME, css: null };
 
+/** For a page that is not worth a read (the not-found page of a missing file). */
+export const defaultSiteTheme: ActiveSiteTheme = fallback;
+
 /** A custom package's compiled CSS, or null when it cannot be used. Exported for tests. */
 export function acceptPackageCss(css: string, id: string): string | null {
   // Compiled from a validated package; still never let it out of its <style> or past its scope

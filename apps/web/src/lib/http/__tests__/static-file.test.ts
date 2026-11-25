@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { isStaticFile, markStaticFile, STATIC_FILE_HEADER } from '../static-file';
 
 describe('a request for a file', () => {
-  it.each(['/_next/static/chunks/1.js', '/_next/static/chunks/1.js.map', '/wp-login.php', '/codecov.yml', '/icon.PNG'])('%s is one', (path) => {
+  it.each(['/_next/static/chunks/1.js', '/_next/static/chunks/1.js.map', '/_next/image', '/en/_next/static/x', '/manifest.webmanifest', '/wp-login.php', '/codecov.yml', '/icon.PNG'])('%s is one', (path) => {
     expect(isStaticFile(path)).toBe(true);
     expect(markStaticFile(new Request(`https://videos.alummahnow.net${path}`)).headers.get(STATIC_FILE_HEADER)).toBe('1');
   });
