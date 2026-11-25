@@ -3,13 +3,21 @@
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
+/** A 503 is a database that could not be read for a moment: asked again this often, this far apart. */
+const RETRIES = 3;
+const RETRY_MS = 5000;
+
 export const THEMES = ['lantern', 'zujaj', 'nahas', 'fawanees'];
 
 type Fetch = (url: string) => Promise<Pick<Response, 'ok' | 'status' | 'json' | 'text'>>;
 
 /** Throws with the reason when the setting or the rendered site is wrong; returns the summary line */
-export async function checkSiteTheme(adminApi: string, web: string, fetchFn: Fetch = fetch): Promise<string> {
-	const response = await fetchFn(`${adminApi}/public/site-theme`);
+export async function checkSiteTheme(adminApi: string, web: string, fetchFn: Fetch = fetch, sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms))): Promise<string> {
+	let response = await fetchFn(`${adminApi}/public/site-theme`);
+	for (let i = 0; i < RETRIES && response.status === 503; i++) {
+		await sleep(RETRY_MS);
+		response = await fetchFn(`${adminApi}/public/site-theme`);
+	}
 	if (!response.ok) throw new Error(`/public/site-theme answered ${response.status}; has migration 0006 been applied?`);
 	const { theme, package: pkg } = (await response.json()) as { theme?: string; package?: { id: string; version: string; css: string } };
 	if (!theme) throw new Error(`Unknown site theme: ${theme}`);

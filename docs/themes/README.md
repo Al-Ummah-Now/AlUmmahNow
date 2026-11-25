@@ -353,8 +353,9 @@ stored by `admin-api`:
 - **Delivery.** `GET /public/site-theme` answers `{ theme, package?: { id, version, css } }`. The
   videos site inlines the package's compiled CSS (fetched once per version), and serves the files
   it names from its own origin at `/api/theme-packages/<id>/<version>/assets/…` (proxied from
-  `/public/themes/…`, cached for a year). If the version is missing, or its CSS cannot be fetched or
-  fails the checks, the site renders Fawanees.
+  `/public/themes/…`, cached for a year). If the version is missing, the answer is Fawanees. If the
+  setting cannot be read it is 503; on that, and when the CSS cannot be fetched or fails the checks,
+  the videos site and the admin keep the last theme they had, Fawanees without one.
 - **Builder.** Duplicate any theme, edit every token and component section with live WCAG AA
   results, upload images and fonts into `assets/`, preview the site's real components (light/dark,
   en/ar, desktop/phone), publish, use as the site theme, export/import `.zip`, delete custom themes

@@ -14,6 +14,8 @@ const TIMEOUT_MS = 500;
 const PACKAGE_TTL_SECONDS = 86400;
 const PACKAGE_TIMEOUT_MS = 1500;
 const MAX_CSS_BYTES = 1024 * 1024;
+/** How long the last theme stands in for reads that fail. */
+const LAST_GOOD_MS = 24 * 60 * 60 * 1000;
 
 export interface ActiveSiteTheme {
   /** The html[data-theme] id */
@@ -45,7 +47,22 @@ async function packageCss(url: string, id: string): Promise<string | null> {
   }
 }
 
-/** Any failure renders the default theme; the admin never waits on this for long. */
+let lastGood: { theme: ActiveSiteTheme; at: number } | null = null;
+
+/** Forgets the isolate's last theme (tests). */
+export function resetSiteThemeCache(): void {
+  lastGood = null;
+}
+
+function good(theme: ActiveSiteTheme): ActiveSiteTheme {
+  lastGood = { theme, at: Date.now() };
+  return theme;
+}
+
+/** A read that did not answer with a theme that can render: the last one, else the default. */
+const unanswered = (): ActiveSiteTheme => (lastGood && Date.now() - lastGood.at < LAST_GOOD_MS ? lastGood.theme : fallback);
+
+/** Any failure renders this isolate's last theme, else the default; the admin never waits on this for long. */
 export async function getSiteTheme(): Promise<ActiveSiteTheme> {
   const pinned = process.env.NEXT_PUBLIC_ACTIVE_THEME;
   if (pinned) return { id: resolveSiteTheme(pinned), css: null };
@@ -56,15 +73,15 @@ export async function getSiteTheme(): Promise<ActiveSiteTheme> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       next: { revalidate: TTL_SECONDS },
     });
-    if (!response.ok) return fallback;
-    const answer = (await response.json()) as Partial<PublicSiteTheme>;
-    if (isBuiltInSiteTheme(answer.theme)) return { id: answer.theme, css: null };
-    const pkg = answer.package;
-    if (!pkg || pkg.id !== answer.theme || !/^[a-z][a-z0-9-]{1,39}$/.test(pkg.id) || !/^https?:\/\//.test(pkg.css)) return fallback;
+    if (!response.ok) return unanswered();
+    const answer = (await response.json()) as Partial<PublicSiteTheme> | null;
+    if (isBuiltInSiteTheme(answer?.theme)) return good({ id: answer.theme, css: null });
+    const pkg = answer?.package;
+    if (!pkg || pkg.id !== answer?.theme || !/^[a-z][a-z0-9-]{1,39}$/.test(pkg.id) || !/^https?:\/\//.test(pkg.css)) return unanswered();
     const css = await packageCss(pkg.css, pkg.id);
-    return css ? { id: pkg.id, css } : fallback;
+    return css ? good({ id: pkg.id, css }) : unanswered();
   } catch (error) {
-    logger.debug('[site-theme] Site theme unavailable, using the default', { error: error instanceof Error ? error.message : String(error) });
-    return fallback;
+    logger.debug('[site-theme] Site theme unavailable, using the last one or the default', { error: error instanceof Error ? error.message : String(error) });
+    return unanswered();
   }
 }
