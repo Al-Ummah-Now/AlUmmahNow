@@ -33,11 +33,28 @@ function seed() {
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter as never);
 	const env = { SEARCH_DB: db, profiles, playlists, community_posts };
-	return (json: unknown) =>
+	const call = (json: unknown) =>
 		app.request('/internal/admin/lookup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(json) }, env as never);
+	return Object.assign(call, { db });
 }
 
 describe('admin lookup', () => {
+	it('reads a comment by a key or an index, never the whole table', async () => {
+		const call = seed();
+		const seen: string[] = [];
+		const prepare = call.db.prepare.bind(call.db);
+		(call.db as any).prepare = (sql: string) => (seen.push(sql), prepare(sql));
+		// c_1 is on no channel (looked for by id alone), c_2 is, c_9 is nowhere
+		await call({ items: ['c_1', 'c_2', 'c_9'].map((id) => ({ type: 'comment', id })), users: [] });
+		const reads = seen.filter((sql) => /admin_comments/.test(sql));
+		assert.equal(reads.length, 2);
+		for (const sql of reads) {
+			const plan = call.db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('[]').map((r: any) => String(r.detail));
+			assert.ok(plan.some((d) => /^SEARCH c USING/.test(d)) && !plan.some((d) => /^SCAN c\b/.test(d)), plan.join(' | '));
+		}
+		assert.ok(reads.some((sql) => call.db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('[]').some((r: any) => /idx_admin_comments_comment/.test(r.detail))));
+	});
+
 	it('names items, their channels and owners, and users with their ban state', async () => {
 		const call = seed();
 		const res = await call({

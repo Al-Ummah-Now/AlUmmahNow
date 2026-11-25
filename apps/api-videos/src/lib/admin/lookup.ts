@@ -77,7 +77,8 @@ interface FoundComment {
 
 /**
  * Comments by id. channel_comments (primary key) says which video or post a comment is on, so admin_comments is
- * read by its own key; only comments of videos that are on no channel are looked for by id alone.
+ * read by its own key; only comments of videos that are on no channel are looked for by id alone
+ * (idx_admin_comments_comment).
  */
 async function commentsByIds(env: AdminEnv, db: SearchDb, ids: string[]): Promise<Map<string, FoundComment>> {
 	const out = new Map<string, FoundComment>();
@@ -98,7 +99,7 @@ async function commentsByIds(env: AdminEnv, db: SearchDb, ids: string[]): Promis
 					.bind(JSON.stringify(onVideo.map((r) => [r.target_id, r.comment_id])))
 					.all<Row>()
 			: { results: [] as Row[] },
-		rest.length ? db.prepare(`SELECT ${columns} FROM json_each(?) j JOIN admin_comments c ON c.comment_id = j.value`).bind(JSON.stringify(rest)).all<Row>() : { results: [] as Row[] },
+		rest.length ? db.prepare(`SELECT ${columns} FROM json_each(?) j CROSS JOIN admin_comments c ON c.comment_id = j.value`).bind(JSON.stringify(rest)).all<Row>() : { results: [] as Row[] },
 	]);
 	for (const r of [...(byKey.results ?? []), ...(byId.results ?? [])]) {
 		out.set(r.comment_id, { parentType: 'video', parentId: r.video_id, channelId: r.channel_id ?? null, ownerId: r.user_id ?? null, text: r.text, isHidden: r.is_hidden === 1 || r.status === 'held', isDeleted: false });
