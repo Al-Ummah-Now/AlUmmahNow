@@ -24,8 +24,8 @@ import type { LiveEnv } from './providers';
 export type LiveAccess = 'public' | 'managers' | 'none';
 
 export function liveSessionAccess(stream: object | null | undefined, sessionId: string): LiveAccess {
-	const s = stream as { isHidden?: unknown; isDeleted?: unknown; isPrivate?: unknown; sessionId?: unknown; liveAgainSessionId?: unknown; review?: { status?: string } } | null | undefined;
-	if (!s || s.isHidden || s.isDeleted) return 'none';
+	const s = stream as { isHidden?: unknown; isDeleted?: unknown; isPrivate?: unknown; sessionId?: unknown; liveAgainSessionId?: unknown; review?: { status?: string }; csamTakedown?: unknown } | null | undefined;
+	if (!s || s.isHidden || s.isDeleted || s.csamTakedown) return 'none';
 	if (s.isPrivate) return 'managers';
 	// Live again after a held recording: that session only (liveRecordingWithheld keeps the stream itself visible)
 	if (isLiveVodWithheld(s.review) && !(s.sessionId === sessionId && s.liveAgainSessionId === sessionId)) return 'managers';

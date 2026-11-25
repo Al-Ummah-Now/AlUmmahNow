@@ -638,6 +638,7 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 	const needsActionKey = `csam-contain:${p.caseId}`;
 	try {
 		if (!validResolution(p.resolution)) throw new Error('invalid resolution');
+		if (p.resolution.kind === 'live_stream') await streamMustBeHidden(env, p);
 		let next: ContainParams;
 		switch (p.phase) {
 			case 'plan': {
@@ -657,6 +658,10 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 					const note = erasureNote(target, erased.get(target) ?? (await erasedTargets(env.SEARCH_DB, target)), !snapshots.some((file) => file.name === name));
 					// A channel of the case's video: only that its record went
 					if (note && (erased.has(target) || note.name === 'record')) missing.push(note);
+				}
+				// Nothing was there to hide (and no erasure says why): the case says so
+				if (p.resolution.kind === 'live_stream' && missing.length === 0 && !snapshots.some((f) => f.name === 'record-live-stream.json')) {
+					missing.push({ name: 'record-live-stream.json', source: `videos/${streamKey(p.resolution.streamId!)}`, reason: "the stream's record is not there: it was not hidden or marked" });
 				}
 				await writeManifest(env, keys, { v: 1, caseId: p.caseId, matchedUrl: p.matchedUrl, resolution: p.resolution, files: snapshots, missing, createdAt: p.createdAt });
 				next = { ...p, phase: 'copy-public', files: fileStages(files), file: 0, copied: snapshots, missing };
