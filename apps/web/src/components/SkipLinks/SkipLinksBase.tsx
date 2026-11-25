@@ -1,4 +1,5 @@
 'use client';
+import { useEffect } from 'react';
 
 /**
  * Skip links (Story 1.4, AC 4 - WCAG 2.4.1 Bypass Blocks)
@@ -43,6 +44,7 @@ export interface SkipLinksBaseProps {
 }
 
 export function SkipLinksBase({ dir }: SkipLinksBaseProps) {
+  useEffect(() => { console.log(`HDR ${Date.now()} app mount SkipLinks ${location.pathname}`); return () => console.log(`HDR ${Date.now()} app unmount SkipLinks ${location.pathname}`); }, []);
   const { t } = useLanguage();
   const pathname = usePathname();
 

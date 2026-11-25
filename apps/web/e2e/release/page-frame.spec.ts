@@ -26,9 +26,12 @@ async function answerConsent(context: BrowserContext): Promise<void> {
 }
 
 /** MEASURE ONLY: logs every change of the header parts */
+let probes = 0;
 async function probeHeader(page: Page): Promise<void> {
-  page.on('console', (m) => { if (m.text().startsWith('HDR ')) process.stdout.write(`${m.text()}\n`); else if (m.type() === 'error') process.stdout.write(`HDR ${Date.now()} console-error ${m.text().slice(0, 160).replace(/https?:\S+/g, 'url')}\n`); });
+  const pageNo = `${process.pid}-${++probes}`;
+  page.on('console', (m) => { if (m.text().startsWith('HDR ')) process.stdout.write(`${m.text()} page=${pageNo}\n`); else if (m.type() === 'error') process.stdout.write(`HDR ${Date.now()} console-error ${m.text().slice(0, 160).replace(/https?:\S+/g, 'url')}\n`); });
   page.on('framenavigated', (f) => { if (f === page.mainFrame()) process.stdout.write(`HDR ${Date.now()} framenavigated ${new URL(f.url()).pathname}\n`); });
+  page.on('request', (r) => { if (r.headers()['rsc'] && !r.headers()['next-router-prefetch']) process.stdout.write(`HDR ${Date.now()} rsc ${new URL(r.url()).pathname} page=${pageNo}\n`); });
   page.on('request', (r) => { if (r.isNavigationRequest() || r.method() === 'POST' && r.url().startsWith(target().web)) process.stdout.write(`HDR ${Date.now()} request ${r.method()} ${new URL(r.url()).pathname} nav=${r.isNavigationRequest()}\n`); });
   await page.addInitScript(() => {
     const doc = Math.random().toString(36).slice(2, 6);

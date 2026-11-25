@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
@@ -22,6 +22,7 @@ interface ActiveChannelWrapperProps {
  * after channel changes.
  */
 export function ActiveChannelWrapper({ children }: ActiveChannelWrapperProps) {
+  useEffect(() => { console.log(`HDR ${Date.now()} app mount ActiveChannelWrapper ${location.pathname}`); return () => console.log(`HDR ${Date.now()} app unmount ActiveChannelWrapper ${location.pathname}`); }, []);
   const { user } = useAuth();
   const { user: sessionUser } = useMultiAccount();
   const sessionChannels = sessionUser?.channels;

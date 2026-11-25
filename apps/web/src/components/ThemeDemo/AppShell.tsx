@@ -32,6 +32,7 @@ const L = {
 interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean; testId?: string }
 
 export function AppShell() {
+  useEffect(() => { console.log(`HDR ${Date.now()} app mount AppShell ${location.pathname}`); return () => console.log(`HDR ${Date.now()} app unmount AppShell ${location.pathname}`); }, []);
   const { t, lang, oppositeLanguage } = useLanguage();
   const pathname = usePathname() ?? '';
   const router = useRouter();
