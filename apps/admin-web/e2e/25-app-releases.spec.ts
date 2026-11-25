@@ -71,7 +71,9 @@ test.describe('app releases', () => {
       const refused = page.getByTestId('app-releases-quarantined');
       await expect(refused).toContainText('v2026.11.25');
       await expect(refused).toContainText('Its signature is wrong');
+      await expect(refused).toContainText('GitHub, AlUmmahNowTools');
       await expect(refused).not.toContainText('bad_signature');
+      await expect(refused).not.toContainText('github:');
     });
 
     test('APPREL-05 on a phone nothing is off the screen and Edit is reachable', async ({ page }) => {

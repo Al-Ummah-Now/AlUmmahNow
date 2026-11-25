@@ -5703,6 +5703,8 @@ const en = {
       quarantinedTitle: 'Refused releases',
       quarantinedHint: 'These releases failed their signature or content checks. No app is told about them and nothing links to them.',
       quarantinedRow: '{tag} ({source}): {reason}',
+      sourceGitHub: 'GitHub, {repo}',
+      sourcePrivate: 'Private releases, {repo}',
       keysTitle: 'Signing keys',
       keysSet: '{repo}: key list {serial}',
       keysMissing: 'No signing keys yet: downloaded builds get a notice with the download page, and install nothing.',

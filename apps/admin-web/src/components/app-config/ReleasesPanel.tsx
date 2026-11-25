@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { APP_CONFIG_APPS, localizeDigits, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 import { markStoreAvailable, refreshAppReleases, type AppReleaseEntry, type AppReleasesView } from '@/lib/api/appConfig';
 import { useLanguage } from '@/i18n/I18nProvider';
-import type { MessageKey } from '@/i18n/translate';
+import type { MessageKey, Translator } from '@/i18n/translate';
 import { secondaryButtonClass } from '@/components/ui';
 import { smallButtonClass } from '@/components/content/parts';
 import { LocalTime } from '@/components/LocalTime';
@@ -44,6 +44,14 @@ function minimumFor(versions: AppConfigVersionsDocument, app: string, platform: 
   const keys = [`${app}/${platform}#${channel}`, `${app}/${platform}`, `${app}/*#${channel}`, `${app}/*`];
   for (const k of keys) if (versions[k]) return versions[k].minimumVersion;
   return null;
+}
+
+/** Where the index read a release (api-videos: `github:<repo>`, `admin:<repo>` for the private bucket), in words. */
+export function releaseSource(source: string, t: Translator): string {
+  const [kind, repo = ''] = source.split(/:(.*)/s);
+  if (kind === 'github') return t('appConfig.releases.sourceGitHub', { repo });
+  if (kind === 'admin') return t('appConfig.releases.sourcePrivate', { repo });
+  return source;
 }
 
 /** The release index's reasons (api-videos lib/app-updates/releases.ts); any other code shows as it is. */
@@ -274,7 +282,7 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
               <li key={`${q.source}:${q.tag}`}>
                 {fillNodes(t('appConfig.releases.quarantinedRow'), {
                   tag: <bdi dir="ltr" className="font-mono">{q.tag}</bdi>,
-                  source: <bdi dir="ltr">{q.source}</bdi>,
+                  source: releaseSource(q.source, t),
                   reason: reason(q.reason),
                 })}
               </li>
