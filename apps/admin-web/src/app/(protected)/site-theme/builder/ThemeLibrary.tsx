@@ -91,7 +91,7 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
         ))}
       </ul>
       {source && (
-        <div role="dialog" aria-modal="true" aria-labelledby="dup-title" className="fixed inset-0 z-50 grid place-items-center bg-fg/40 p-4" data-testid="theme-duplicate-dialog">
+        <div role="dialog" aria-modal="true" aria-labelledby="dup-title" className="fixed inset-0 z-50 grid place-items-center bg-bg/70 p-4" data-testid="theme-duplicate-dialog">
           <form className={`${cardClass} w-full max-w-lg space-y-3`} onSubmit={(e) => { e.preventDefault(); createCopy(); }}>
             <h3 id="dup-title" className="text-lg font-semibold text-fg">{t('themeBuilder.duplicateTitle', { name: source.name[locale] })}</h3>
             <LocalizedFieldPair
