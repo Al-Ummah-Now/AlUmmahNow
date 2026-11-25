@@ -5,9 +5,17 @@
  */
 import type { NextRequest } from 'next/server';
 import { refreshSessionMiddleware } from './lib/session-middleware';
+import type { VerifyToken } from './lib/verified-refresh';
+
+let verifier: Promise<VerifyToken> | null = null;
+/** The auth client is loaded when the first refreshed token is verified. */
+const verify: VerifyToken = async (accessToken) => {
+  verifier ??= import('./lib/auth-client').then(({ adminAuth }) => adminAuth((message, fields) => console.warn(message, fields)).verifyAccessToken);
+  return (await verifier)(accessToken);
+};
 
 export function middleware(request: NextRequest) {
-  return refreshSessionMiddleware(request, { issuer: process.env.Issuer });
+  return refreshSessionMiddleware(request, { issuer: process.env.Issuer, verify });
 }
 
 export const config = {

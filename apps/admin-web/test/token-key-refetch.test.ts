@@ -104,7 +104,7 @@ test('tokenExpired reads exp, and treats unreadable tokens as expired', () => {
 });
 
 test('every app that verifies with an openauth client wraps it in withKeyRefetch', () => {
-  for (const file of ['../src/lib/auth.ts', '../../web/src/lib/auth/openauth-client.ts', '../../admin-api/src/lib/openauth-client.ts', '../../api-videos/src/lib/openauth-client.ts']) {
+  for (const file of ['../src/lib/auth-client.ts', '../../web/src/lib/auth/openauth-client.ts', '../../admin-api/src/lib/openauth-client.ts', '../../api-videos/src/lib/openauth-client.ts']) {
     const src = readFileSync(new URL(file, import.meta.url), 'utf8');
     assert.match(src, /withKeyRefetch\(\(\) => createClient\(/, file);
   }

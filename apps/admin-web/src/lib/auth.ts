@@ -7,24 +7,24 @@
  */
 import { cache } from 'react';
 import { cookies as getCookies, headers as getHeaders } from 'next/headers';
-import { createClient } from '@al-ummah-now/openauth/client';
-import { audienceMode, withAudienceCheck, withKeyRefetch } from '@al-ummah/shared-types';
 import { redirect } from 'next/navigation';
-import { subjects } from '@/interfaces/subjects';
 import { hasPanelAccess, isReviewOnly, reviewOnlyRedirect, type PanelRole } from './roles';
+import { adminAuth } from './auth-client';
 import { logger } from './logger';
 import { verifySessionTokens } from './session-state';
 import {
   LEGACY_ACCESS_COOKIE,
   LEGACY_REFRESH_COOKIE,
   SESSION_COOKIE_NAME,
-  parseSessionCookie,
+  readSession,
   sessionCookieOptions,
 } from './session-cookie';
 import { PATH_HEADER, loginPath, safeReturnPath } from './login-flow';
 import { passkeyNeededPath, sessionPasskeyGate, type PasskeyGate } from './passkeys';
 
 export { SESSION_COOKIE_NAME };
+
+export const { getAuthClient, verifyAccessToken } = adminAuth((message, fields) => logger.warn(message, fields));
 
 export interface AdminUser {
   id: string;
@@ -44,27 +44,6 @@ export interface AdminPageSession extends AdminSession {
   passkey: PasskeyGate;
 }
 
-type AuthClient = ReturnType<typeof createClient>;
-let authClient: AuthClient | null = null;
-
-/**
- * The client is cached per isolate so its JWKS cache survives across
- * requests instead of re-fetching the auth server keys on every page view.
- * withKeyRefetch rebuilds it when a live token fails to verify, so a new
- * signing key is picked up (AlUmmahNowAuth#13).
- */
-export async function getAuthClient(): Promise<AuthClient> {
-  if (!authClient) {
-    // verify() also checks aud: only admin-web's own client's tokens (AUD_MODE log|enforce|off)
-    authClient = withAudienceCheck(
-      withKeyRefetch(() => createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! })),
-      { service: 'admin-web', issuer: process.env.Issuer, mode: () => audienceMode(process.env.AUD_MODE), route: 'admin-web session' },
-      (message, fields) => logger.warn(message, fields),
-    );
-  }
-  return authClient;
-}
-
 /**
  * Resolve the current admin session.
  *
@@ -81,37 +60,15 @@ export async function getAuthClient(): Promise<AuthClient> {
 export const getAdminSessionState = cache(async (): Promise<{ session: AdminSession | null; expired: boolean }> => {
   try {
     const cookieStore = await getCookies();
-    const sessionValue = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-    let tokens: { accessToken: string; refreshToken: string } | null = null;
-    let fromLegacyCookies = false;
-
-    if (sessionValue) {
-      tokens = parseSessionCookie(sessionValue);
-    } else {
-      const accessToken = cookieStore.get(LEGACY_ACCESS_COOKIE)?.value;
-      const refreshToken = cookieStore.get(LEGACY_REFRESH_COOKIE)?.value;
-      if (accessToken && refreshToken) {
-        tokens = { accessToken, refreshToken };
-        fromLegacyCookies = true;
-      }
-    }
+    const found = readSession(cookieStore);
+    const tokens = found?.tokens ?? null;
+    const fromLegacyCookies = !!found && !found.cookie;
 
     if (!tokens) {
       return { session: null, expired: false };
     }
 
-    const client = await getAuthClient();
-    const verdict = await verifySessionTokens(tokens, async (accessToken) => {
-      const verified = await client.verify(subjects, accessToken);
-      if (verified.err) {
-        logger.warn('[auth] Session token verification failed', {
-          name: verified.err.name,
-          message: verified.err.message,
-        });
-      }
-      return verified;
-    });
+    const verdict = await verifySessionTokens(tokens, verifyAccessToken);
 
     if (verdict.kind !== 'valid') {
       if (verdict.kind === 'refresh' && verdict.reason === 'legacy') {

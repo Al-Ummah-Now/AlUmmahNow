@@ -10,20 +10,13 @@
  * (so the browser keeps it).
  *
  * The token's `exp` is read without verifying the signature: it only decides
- * *when* to refresh. Trust still comes from getAdminSession, which verifies
- * every token against the auth server's keys.
+ * *when* to refresh. A refreshed token is verified before it is stored
+ * (verified-refresh.ts), and getAdminSession verifies every token it uses.
  */
 import { NextResponse, type NextRequest } from 'next/server';
-import {
-  LEGACY_ACCESS_COOKIE,
-  LEGACY_REFRESH_COOKIE,
-  SESSION_COOKIE_NAME,
-  parseSessionCookie,
-  sessionCookieOptions,
-  withRotatedTokens,
-  type SessionTokens,
-} from './session-cookie';
-import { REFRESH_SKEW_SECONDS, refreshTokens, shouldRefresh, unverifiedTokenRoles } from './token-refresh';
+import { SESSION_COOKIE_NAME, dropSession, readSession, storeSession, withRotatedTokens } from './session-cookie';
+import { REFRESH_SKEW_SECONDS, shouldRefresh, unverifiedTokenRoles } from './token-refresh';
+import { refreshVerified, type VerifyToken } from './verified-refresh';
 import { highestAdminRole, isReviewOnly, reviewOnlyRedirect } from './roles';
 import { PATH_HEADER, loginPath } from './login-flow';
 
@@ -32,19 +25,9 @@ const LOG_PREFIX = '[admin-web:session-refresh]';
 export interface SessionMiddlewareDeps {
   issuer: string | undefined;
   fetch?: typeof fetch;
+  verify: VerifyToken;
   now?: () => number;
   log?: Pick<Console, 'info' | 'warn'>;
-}
-
-function readTokens(request: NextRequest): { tokens: SessionTokens; cookie?: string } | null {
-  const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (cookie) {
-    const tokens = parseSessionCookie(cookie);
-    return tokens ? { tokens, cookie } : null;
-  }
-  const accessToken = request.cookies.get(LEGACY_ACCESS_COOKIE)?.value;
-  const refreshToken = request.cookies.get(LEGACY_REFRESH_COOKIE)?.value;
-  return accessToken && refreshToken ? { tokens: { accessToken, refreshToken } } : null;
 }
 
 export async function refreshSessionMiddleware(
@@ -58,7 +41,7 @@ export async function refreshSessionMiddleware(
   request.headers.set(PATH_HEADER, path);
   const next = () => NextResponse.next({ request: { headers: request.headers } });
 
-  const found = readTokens(request);
+  const found = readSession(request.cookies);
   if (!found) {
     // No session: straight to sign-in (no "Please log in" page). /login sends
     // the browser to the auth server without a prompt, which signs its active
@@ -86,20 +69,15 @@ export async function refreshSessionMiddleware(
     return next();
   }
 
-  const result = await refreshTokens(deps.issuer, found.tokens.refreshToken, deps.fetch ?? fetch);
+  const result = await refreshVerified(deps.issuer, found.tokens.refreshToken, { fetch: deps.fetch, verify: deps.verify });
 
   if (result.kind === 'refreshed') {
-    const value = withRotatedTokens(found.cookie, result.tokens);
     // Forward the new cookie to this request's render...
+    const value = withRotatedTokens(found.cookie, result.tokens);
     request.cookies.set(SESSION_COOKIE_NAME, value);
     const response = NextResponse.next({ request: { headers: request.headers } });
-    // ...and hand it to the browser.
-    response.cookies.set(SESSION_COOKIE_NAME, value, sessionCookieOptions(request.headers.get('host')));
-    if (!found.cookie) {
-      // Migrated from the legacy pair into admin_session.
-      response.cookies.delete(LEGACY_ACCESS_COOKIE);
-      response.cookies.delete(LEGACY_REFRESH_COOKIE);
-    }
+    // ...and hand it to the browser (a legacy pair moves into admin_session).
+    storeSession(response.cookies, found, result.tokens, request.headers.get('host'));
     log.info(`${LOG_PREFIX} access token refreshed`, { path: request.nextUrl.pathname });
     return response;
   }
@@ -114,9 +92,15 @@ export async function refreshSessionMiddleware(
       description: result.description,
     });
     const response = NextResponse.redirect(new URL(loginPath(path), request.url), 303);
-    response.cookies.delete(SESSION_COOKIE_NAME);
-    response.cookies.delete(LEGACY_ACCESS_COOKIE);
-    response.cookies.delete(LEGACY_REFRESH_COOKIE);
+    dropSession(response.cookies);
+    return response;
+  }
+
+  if (result.kind === 'no_access') {
+    // The account lost its roles: the same answer as signing in with it
+    log.warn(`${LOG_PREFIX} the refreshed session has no admin role`, { path: request.nextUrl.pathname });
+    const response = NextResponse.redirect(new URL('/access-denied', request.url), 303);
+    dropSession(response.cookies);
     return response;
   }
 

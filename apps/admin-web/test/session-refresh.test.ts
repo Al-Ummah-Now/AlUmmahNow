@@ -11,6 +11,7 @@ import {
 import { parseSessionCookie, withRotatedTokens } from '../src/lib/session-cookie';
 import { refreshSessionMiddleware } from '../src/lib/session-middleware';
 import { config } from '../src/middleware';
+import type { VerifyToken } from '../src/lib/verified-refresh';
 
 const ISSUER = 'https://auth.qa.alummahnow.net';
 const APP = 'https://admin.qa.alummahnow.net';
@@ -157,7 +158,14 @@ describe('session cookie format', () => {
 });
 
 describe('session refresh middleware', () => {
-  const deps = (fetchImpl: typeof fetch) => ({ issuer: ISSUER, fetch: fetchImpl, now: () => NOW * 1000, log: silent });
+  const verified: string[] = [];
+  const verifyAs =
+    (...roles: string[]) =>
+    async (token: string) => {
+      verified.push(token);
+      return { subject: { properties: { id: 'u1', email: 'admin@example.com', roles } } };
+    };
+  const deps = (fetchImpl: typeof fetch, verify: VerifyToken = verifyAs('Admin')) => ({ issuer: ISSUER, fetch: fetchImpl, verify, now: () => NOW * 1000, log: silent });
 
   it('without a session goes straight to /login, keeping the page to come back to', async () => {
     const { impl, calls } = mockFetch(() => json(500, {}));
@@ -257,6 +265,31 @@ describe('session refresh middleware', () => {
     assert.equal(response.headers.get('location'), `${APP}/login?return=%2Fdashboard`);
     const cleared = response.headers.getSetCookie().find((c) => c.startsWith('admin_session='));
     assert.ok(cleared && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(cleared), cleared);
+  });
+
+  it('checks the new token like a sign-in before it is stored', async () => {
+    const fresh = jwt(NOW + 900);
+    const refreshed = () => mockFetch(() => json(200, { access_token: fresh, refresh_token: 'user:r1' })).impl;
+    const run = (verify: VerifyToken) => refreshSessionMiddleware(request('/dashboard', { admin_session: sessionCookie(jwt(NOW - 10)) }), deps(refreshed(), verify));
+    const cleared = (r: Response) => setSession(r)?.value === '' && !r.headers.getSetCookie().join().includes('user:r1');
+
+    verified.length = 0;
+    assert.ok(setSession(await run(verifyAs('Content Reviewer')))?.value.includes('user:r1'), 'a reviewer keeps the session');
+    assert.deepEqual(verified, [fresh], 'the new token is the one verified');
+
+    const lost = await run(verifyAs('User'));
+    assert.equal(lost.headers.get('location'), `${APP}/access-denied`);
+    assert.ok(cleared(lost));
+
+    const bad = await run(async () => ({ err: { name: 'InvalidAccessTokenError' } }));
+    assert.equal(bad.headers.get('location'), `${APP}/login?return=%2Fdashboard`);
+    assert.ok(cleared(bad));
+
+    const unreadable = await run(async () => {
+      throw new Error('keys');
+    });
+    assert.equal(unreadable.headers.get('x-middleware-next'), '1');
+    assert.equal(unreadable.headers.getSetCookie().length, 0, 'nothing known about it: nothing stored, nothing cleared');
   });
 
   it('keeps the session on a transient failure', async () => {
