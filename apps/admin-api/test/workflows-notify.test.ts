@@ -274,8 +274,8 @@ describe('the other email with a value of several parts', () => {
     const e = renderInboxNotification(m as never, { to: 'support@example.com' });
     const from = [...e.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)][0][1];
     const iso = (x: string) => `\u2068${x}\u2069`;
-    assert.equal(from, `\u200e\u2066${iso('عائشة محمد')} &lt;${iso('aisha@example.com')}&gt;\u2069`);
-    assert.ok(e.text.includes(`From: \u200e\u2066${iso('عائشة محمد')} <${iso('aisha@example.com')}>\u2069`), e.text);
+    assert.equal(from, `\u200e\u2066${iso('عائشة محمد')} &lt;\u2066aisha@example.com\u2069&gt;\u2069`);
+    assert.ok(e.text.includes(`From: \u200e\u2066${iso('عائشة محمد')} <\u2066aisha@example.com\u2069>\u2069`), e.text);
   });
 
   it('a name or an address never ends its isolate or reorders the row', () => {

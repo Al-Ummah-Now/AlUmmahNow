@@ -5,7 +5,12 @@
  */
 type EmailLocale = 'en' | 'ar';
 
+import { isolateText } from '@al-ummah/shared-types';
+
 export { isolateText as isolate, stripBidiControls } from '@al-ummah/shared-types';
+
+/** An address: always left to right, whatever its first letter (LRI…PDI in place of FSI…PDI). */
+export const isolateLtr = (text: string) => `\u2066${isolateText(text).slice(1)}`;
 
 /** A phrase in the email's direction (RLI or LRI…PDI), whatever is around it: a list, or a whole row. Its values are isolated (`isolate`). */
 export const inDirection = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u2067' : '\u2066'}${text}\u2069`;

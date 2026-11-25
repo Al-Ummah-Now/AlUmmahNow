@@ -5,6 +5,7 @@
  * local `export QA_SEED_PASSWORD=...`).
  */
 import path from 'node:path';
+import './keep-alive';
 // The one place the suite imports the run-account contract shared with the
 // web suites and the workflow teardown (listed in tsconfig.json's include).
 import { RUN_USER_DOMAIN, runId, runUserEmail, runUserName } from '../../../web/e2e/test-utils/run-users';

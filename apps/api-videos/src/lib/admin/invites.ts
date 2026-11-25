@@ -90,18 +90,62 @@ export async function provisionProfile(env: AdminServiceEnv, input: { userId: st
 	return { profile: (stored ?? initial) as Row, created };
 }
 
+function cleanLocalizedMap(raw: unknown, max: number, field: string): Record<string, string> | undefined {
+	if (raw === undefined || raw === null) return undefined;
+	if (typeof raw !== 'object' || Array.isArray(raw)) throw new AdminError(400, 'invalid_request', `${field} must be an object with en and ar`);
+	const out: Record<string, string> = {};
+	for (const lang of ['en', 'ar'] as const) {
+		const value = (raw as Record<string, unknown>)[lang];
+		if (value !== undefined && value !== null && typeof value !== 'string') {
+			throw new AdminError(400, 'invalid_request', `${field}.${lang} must be text`);
+		}
+		if (typeof value === 'string' && value.trim()) {
+			const trimmed = value.trim();
+			if (trimmed.length > max) throw new AdminError(400, 'invalid_request', `${field}.${lang} must be at most ${max} characters`);
+			out[lang] = trimmed;
+		}
+	}
+	if (!Object.keys(out).length) return undefined;
+	if (!out.en || !out.ar) throw new AdminError(400, 'invalid_request', `${field} requires both en and ar`);
+	return out;
+}
+
 /**
- * A new channel owned by `userId` (an admin making it for an invited creator):
- * the same object, default or chosen @handle and queue message as POST
- * /api/channels. The owner's first channel is their main one.
+ * A new channel owned by `userId` (an admin making it for an invited creator or
+ * importing): the same object, default or chosen @handle and queue message as
+ * POST /api/channels. The owner's first channel is their main one.
+ *
+ * Localization policy (wiki guides/localized-fields.md): staff who create a channel give its name in English and
+ * Arabic, and the admin's forms require both. A plain name or description without `*Localized` is still accepted
+ * here ON PURPOSE: the released Admin Tools app sends only those. Both become required once its bilingual version
+ * (AlUmmahNowTools#65) has shipped: issue #1982. Whenever `*Localized` is given, both `en` and `ar` are
+ * required and `name`/`description` must match the `.en` entry.
  */
 export async function createChannelFor(
 	env: AdminServiceEnv,
 	userId: string,
-	input: { name: string; handle?: string | null; description?: string | null },
+	input: {
+		name?: string;
+		nameLocalized?: Record<string, string> | null;
+		handle?: string | null;
+		description?: string | null;
+		descriptionLocalized?: Record<string, string> | null;
+	},
 ): Promise<Row> {
-	const name = String(input.name ?? '').trim();
+	const nameLocalized = cleanLocalizedMap(input.nameLocalized, 100, 'nameLocalized');
+	const descriptionLocalized = cleanLocalizedMap(input.descriptionLocalized, 5000, 'descriptionLocalized');
+	const rawName = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : undefined;
+	if (rawName && nameLocalized?.en && rawName !== nameLocalized.en) {
+		throw new AdminError(400, 'invalid_request', 'name must match nameLocalized.en');
+	}
+	const name = nameLocalized?.en ?? rawName ?? '';
 	if (!name || name.length > 100) throw new AdminError(400, 'invalid_request', 'name is required (at most 100 characters)');
+	const rawDesc = typeof input.description === 'string' && input.description.trim() ? input.description.trim() : undefined;
+	if (rawDesc && rawDesc.length > 5000) throw new AdminError(400, 'invalid_request', 'description must be at most 5000 characters');
+	if (rawDesc && descriptionLocalized?.en && rawDesc !== descriptionLocalized.en) {
+		throw new AdminError(400, 'invalid_request', 'description must match descriptionLocalized.en');
+	}
+	const description = descriptionLocalized?.en ?? rawDesc ?? '';
 	const profile = await new R2Repository<Row>(env.profiles).getObject(userId);
 	if (!profile) throw new AdminError(404, 'user_not_found', 'The user has no videos profile');
 	if (input.handle) {
@@ -125,7 +169,9 @@ export async function createChannelFor(
 		...createEntityDefaults(),
 		userId,
 		name,
-		...(input.description?.trim() ? { description: input.description.trim() } : {}),
+		...(nameLocalized ? { nameLocalized } : {}),
+		...(description ? { description } : {}),
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		isMain: owned.every((ch) => !ch || ch.isDeleted),
 		playlists: [],
 		videos: [],

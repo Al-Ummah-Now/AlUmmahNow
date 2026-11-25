@@ -205,13 +205,19 @@ test.describe('Release: admin content management', () => {
       await openDetail(page, channelPath, 'channel-actions');
       await expect(page.getByTestId('channel-detail')).toHaveAttribute('data-channel-id', channelId);
 
-      // Edit
+      // Edit (bilingual EN + AR)
+      const nameAr = `قناة اختبار الإصدار ${tag}`;
       const description = `Edited by the admin E2E ${tag}`;
+      const descriptionAr = `وصف اختبار الإصدار ${tag}`;
+      await page.getByTestId('channel-edit-name-ar').fill(nameAr);
       await page.getByTestId('channel-edit-description').fill(description);
+      await page.getByTestId('channel-edit-description-ar').fill(descriptionAr);
       await page.getByTestId('channel-edit-save').click();
       await expect(page.getByTestId('content-action-message')).toBeVisible();
       await openDetail(page, channelPath, 'channel-actions');
+      await expect(page.getByTestId('channel-edit-name-ar')).toHaveValue(nameAr);
       await expect(page.getByTestId('channel-edit-description')).toHaveValue(description);
+      await expect(page.getByTestId('channel-edit-description-ar')).toHaveValue(descriptionAr);
 
       // Suspend: hidden publicly at once, the cascade to its videos runs as a job
       expect(await publicStatus(`/api/channels/${channelId}`), 'public channel before suspend').toBe(200);
@@ -233,9 +239,13 @@ test.describe('Release: admin content management', () => {
       await openDetail(page, `/videos/${encodeURIComponent(videoId)}`, 'video-actions');
       await expect(page.getByTestId('video-detail')).toBeVisible();
       const newTitle = `${videoTitle} (edited)`;
+      const newTitleAr = `مرئي اختبار الإصدار ${tag}`;
       await page.getByTestId('video-edit-title').fill(newTitle);
+      await page.getByTestId('video-edit-title-ar').fill(newTitleAr);
       await page.getByTestId('video-edit-save').click();
       await expect(page.getByTestId('video-title')).toHaveText(newTitle, { timeout: 30000 });
+      await openDetail(page, `/videos/${encodeURIComponent(videoId)}`, 'video-actions');
+      await expect(page.getByTestId('video-edit-title-ar')).toHaveValue(newTitleAr);
       // A soft delete: the page re-reads the video and shows it as deleted (its action panel, with the
       // short-lived success message, is dropped for a deleted video), with the way to restore it
       await confirm(page, 'video-delete', {

@@ -192,7 +192,20 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
           </SectionCard>
 
           <VideoActions
-            video={{ id: v.id, title: v.title, description: v.description, isPublic: v.isPublic, isDeleted: v.isDeleted, unpublished, status: v.status, processing: v.processing, width: v.width, height: v.height }}
+            video={{
+              id: v.id,
+              title: v.title,
+              titleLocalized: v.titleLocalized,
+              description: v.description,
+              descriptionLocalized: v.descriptionLocalized,
+              isPublic: v.isPublic,
+              isDeleted: v.isDeleted,
+              unpublished,
+              status: v.status,
+              processing: v.processing,
+              width: v.width,
+              height: v.height,
+            }}
             permissions={permissions}
           />
         </div>

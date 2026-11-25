@@ -127,6 +127,49 @@ describe('invited users in videos', () => {
 		assert.equal('email' in res.body.result.channel, false);
 	});
 
+	it('stores bilingual nameLocalized and descriptionLocalized when creating a channel for a user', async () => {
+		const { call } = await setup();
+		await call('POST', '/users/provision', { userId: INVITED, email: 'bilingual@example.com' });
+		const bad = await call('POST', `/users/${INVITED}/channels`, {
+			nameLocalized: { en: 'Only English', ar: '' },
+		});
+		assert.equal(bad.status, 400);
+		assert.equal(
+			(await call('POST', `/users/${INVITED}/channels`, { name: 'A', nameLocalized: { en: 'B', ar: 'ب' } })).status,
+			400,
+		);
+		assert.equal(
+			(await call('POST', `/users/${INVITED}/channels`, { nameLocalized: { en: 'Valid', ar: 'أ'.repeat(101) } })).status,
+			400,
+		);
+		const res = await call('POST', `/users/${INVITED}/channels`, {
+			nameLocalized: { en: 'Tafsir Daily', ar: 'التفسير اليومي' },
+			descriptionLocalized: { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' },
+			handle: 'tafsir-bi',
+		});
+		assert.equal(res.status, 200);
+		const ch = res.body.result.channel;
+		assert.equal(ch.name, 'Tafsir Daily');
+		assert.deepEqual(ch.nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		assert.equal(ch.description, 'Short daily lessons');
+		assert.deepEqual(ch.descriptionLocalized, { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' });
+
+		const listed = await call('GET', `/channels?ownerId=${INVITED}`);
+		assert.deepEqual(listed.body.result.items[0].nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		const detail = await call('GET', `/channels/${ch.id}`);
+		assert.deepEqual(detail.body.result.nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		assert.deepEqual(detail.body.result.descriptionLocalized, { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' });
+	});
+
+	it('a plain name is still accepted on purpose: the released Admin Tools app sends only that (#1982)', async () => {
+		const { call } = await setup();
+		await call('POST', '/users/provision', { userId: INVITED, email: 'plain.tools@example.com' });
+		const res = await call('POST', `/users/${INVITED}/channels`, { name: 'Plain Tools', description: 'From the app' });
+		assert.equal(res.status, 200);
+		assert.equal(res.body.result.channel.name, 'Plain Tools');
+		assert.equal(res.body.result.channel.nameLocalized, undefined);
+	});
+
 	it('needs the profile first', async () => {
 		const { call } = await setup();
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'X' })).body.code, 'user_not_found');

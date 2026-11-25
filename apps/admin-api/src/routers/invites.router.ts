@@ -165,15 +165,50 @@ app.get('/:id', async (c) => {
 });
 
 interface ChannelPlan {
-  create: Array<{ name: string; handle: string | null }>;
+  create: Array<{ name: string; nameLocalized?: { en: string; ar: string }; handle: string | null }>;
   transfer: string[];
 }
 
 function channelPlan(input: unknown): ChannelPlan {
   const raw = (input && typeof input === 'object' ? input : {}) as { create?: unknown; transfer?: unknown };
-  const create = (Array.isArray(raw.create) ? raw.create : [])
-    .map((ch) => ({ name: str((ch as { name?: unknown })?.name, 100), handle: str((ch as { handle?: unknown })?.handle, 60) }))
-    .filter((ch): ch is { name: string; handle: string | null } => !!ch.name);
+  const create: ChannelPlan['create'] = [];
+  for (const ch of Array.isArray(raw.create) ? raw.create : []) {
+    const item = ch as { name?: unknown; nameLocalized?: unknown; handle?: unknown } | null;
+    let nameLocalized: { en: string; ar: string } | undefined;
+    if (item?.nameLocalized !== undefined && item?.nameLocalized !== null) {
+      if (typeof item.nameLocalized !== 'object' || Array.isArray(item.nameLocalized)) {
+        throw new HttpError(400, 'invalid_request', 'Channel nameLocalized must be an object');
+      }
+      const rawLoc = item.nameLocalized as Record<string, unknown>;
+      if (rawLoc.en !== undefined && rawLoc.en !== null && typeof rawLoc.en !== 'string') {
+        throw new HttpError(400, 'invalid_request', 'Channel nameLocalized.en must be text');
+      }
+      if (rawLoc.ar !== undefined && rawLoc.ar !== null && typeof rawLoc.ar !== 'string') {
+        throw new HttpError(400, 'invalid_request', 'Channel nameLocalized.ar must be text');
+      }
+      const en = typeof rawLoc.en === 'string' ? rawLoc.en.trim() : '';
+      const ar = typeof rawLoc.ar === 'string' ? rawLoc.ar.trim() : '';
+      if (!en || !ar) throw new HttpError(400, 'invalid_request', 'Channel name requires both English and Arabic');
+      if (en.length > 100 || ar.length > 100) throw new HttpError(400, 'invalid_request', 'Channel name must be at most 100 characters');
+      nameLocalized = { en, ar };
+    }
+    if (item?.name !== undefined && item?.name !== null && typeof item.name !== 'string') {
+      throw new HttpError(400, 'invalid_request', 'Channel name must be text');
+    }
+    const rawName = typeof item?.name === 'string' ? item.name.trim() : '';
+    if (rawName.length > 100) throw new HttpError(400, 'invalid_request', 'Channel name must be at most 100 characters');
+    if (rawName && nameLocalized && rawName !== nameLocalized.en) {
+      throw new HttpError(400, 'invalid_request', 'Channel name must match nameLocalized.en');
+    }
+    const name = nameLocalized?.en ?? (rawName || null);
+    if (!name) continue;
+    if (item?.handle !== undefined && item?.handle !== null && typeof item.handle !== 'string') {
+      throw new HttpError(400, 'invalid_request', 'Channel handle must be text');
+    }
+    const rawHandle = typeof item?.handle === 'string' && item.handle.trim() ? item.handle.trim() : null;
+    if (rawHandle && rawHandle.length > 60) throw new HttpError(400, 'invalid_request', 'Channel handle must be at most 60 characters');
+    create.push({ name, ...(nameLocalized ? { nameLocalized } : {}), handle: rawHandle });
+  }
   const transfer = [...new Set((Array.isArray(raw.transfer) ? raw.transfer : []).filter((id): id is string => typeof id === 'string' && !!id.trim()))];
   if (create.length + transfer.length > 10) throw new HttpError(400, 'invalid_request', 'At most 10 channels per invite');
   return { create, transfer };

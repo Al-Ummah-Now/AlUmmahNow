@@ -20,6 +20,7 @@ import { Preview } from './Preview';
 import { formatUnit } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 import { Sep } from '@/components/Sep';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 
 type Section = 'general' | 'colours' | 'components' | 'materials' | 'typography' | 'imagery' | 'assets';
 const SECTIONS: [Section, MessageKey][] = [
@@ -59,6 +60,9 @@ export interface EditorProps {
   activeVersion: string | null;
   canEdit: boolean;
 }
+
+/** The theme package schema's limit for a name or description. */
+const THEME_TEXT_MAX = 80;
 
 export function ThemeEditor({ initial, assets: initialAssets, latestVersion: initialLatest, activeVersion: initialActive, canEdit }: EditorProps) {
   const { t, locale } = useLanguage();
@@ -105,6 +109,16 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
   // A failing pair is also shown at the role or brand colour it comes from
   const traced = useMemo(() => traceIssues(theme, issues), [theme, issues]);
   const errorsAt = (path: string) => traced.get(path) ?? [];
+  // The name and description errors in the admin's words (the validator's are English, for the list above)
+  const textErrors = (path: 'name' | 'description') => {
+    const one = (lang: 'en' | 'ar') =>
+      errorsAt(`${path}.${lang}`).length === 0
+        ? undefined
+        : theme[path]?.[lang]?.trim()
+          ? t('localized.tooLong', { max: THEME_TEXT_MAX })
+          : t('localized.required', { lang: t(lang === 'en' ? 'localized.langEnglish' : 'localized.langArabic') });
+    return { en: one('en'), ar: one('ar') };
+  };
   const unlinked = useMemo(() => unlinkedBrandColors(theme), [theme]);
   const usage = useMemo(() => brandUsage(theme), [theme]);
 
@@ -212,7 +226,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
         </ul>
       </details>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className={`${cardClass} !p-4 max-h-[calc(100vh-8rem)] overflow-y-auto`}>
           <nav className="flex flex-wrap gap-1 mb-4" aria-label={t('themeBuilder.title')}>
             {SECTIONS.map(([id, key]) => (
@@ -227,17 +241,30 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
 
           {section === 'general' && (
             <div className="space-y-3">
-              {(['en', 'ar'] as const).map((l) => (
-                <label key={l} className="block text-sm text-fg">{l === 'en' ? t('themeBuilder.nameEn') : t('themeBuilder.nameAr')}
-                  <input dir={l === 'ar' ? 'rtl' : 'ltr'} className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.name?.[l] ?? ''} onChange={(e) => update(['name', l], e.target.value)} data-testid={`general-name-${l}`} />
-                  <IssueText messages={errorsAt(`name.${l}`)} />
-                </label>
-              ))}
-              {(['en', 'ar'] as const).map((l) => (
-                <label key={l} className="block text-sm text-fg">{l === 'en' ? t('themeBuilder.descriptionEn') : t('themeBuilder.descriptionAr')}
-                  <input dir={l === 'ar' ? 'rtl' : 'ltr'} className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.description?.[l] ?? ''} onChange={(e) => update(['description'], { en: theme.description?.en ?? '', ar: theme.description?.ar ?? '', [l]: e.target.value })} />
-                </label>
-              ))}
+              <LocalizedFieldPair
+                label={t('themeBuilder.name')}
+                field="themes.name"
+                value={{ en: theme.name?.en ?? '', ar: theme.name?.ar ?? '' }}
+                onChange={(next) => update(['name'], next)}
+                errors={textErrors('name')}
+                maxLength={THEME_TEXT_MAX}
+                required
+                disabled={readOnly}
+                testId="general-name"
+                inputTestIds={{ en: 'general-name-en', ar: 'general-name-ar' }}
+              />
+              <LocalizedFieldPair
+                label={t('themeBuilder.description')}
+                field="themes.description"
+                value={{ en: theme.description?.en ?? '', ar: theme.description?.ar ?? '' }}
+                onChange={(next) => update(['description'], next.en || next.ar ? next : undefined)}
+                errors={textErrors('description')}
+                maxLength={THEME_TEXT_MAX}
+                required={false}
+                disabled={readOnly}
+                testId="general-description"
+                inputTestIds={{ en: 'general-description-en', ar: 'general-description-ar' }}
+              />
               <label className="block text-sm text-fg">{t('themeBuilder.author')}
                 <input className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.author ?? ''} onChange={(e) => update(['author'], e.target.value)} />
               </label>

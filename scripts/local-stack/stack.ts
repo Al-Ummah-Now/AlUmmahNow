@@ -30,6 +30,15 @@ export const WWW_DIR = process.env.LOCAL_STACK_WWW_DIR ? resolve(process.env.LOC
 
 export const HOST = 'localhost';
 
+/**
+ * How long the stack's own Node servers (the control API and fake CDN, the browser proxy) keep an
+ * idle connection. Node closes one after 5 s by default, which is about when a client that was
+ * starved for a few seconds (a loaded runner) sends its next request on the connection it kept:
+ * "SocketError: other side closed" (#1941). A server that holds idle connections for a minute
+ * leaves that race to the client alone.
+ */
+export const IDLE_CONNECTION_MS = 65_000;
+
 /** Ports: this repo's dev ports (CLAUDE.md) and the Auth repo's (its package.json dev scripts). */
 export const PORTS = {
   web: 3001,

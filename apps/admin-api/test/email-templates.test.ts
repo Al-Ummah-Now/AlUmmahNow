@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocaleOf, type RenderedEmail } from '../src/lib/contact-email';
 import { renderErrorAlert } from '../src/lib/errors-alerts';
 import { renderWarningEmail } from '../src/lib/warning-mail';
+import { renderRejectionEmail } from '../src/lib/review/rejection-mail';
 import { EMAIL_LOGO_URL, escapeHtml, renderEmail } from '../src/lib/email/layout';
 
 const ARABIC = /[؀-ۿ]/;
@@ -140,6 +141,55 @@ describe('the layout', () => {
     assert.ok(!mail.html.includes('data:x'));
     assert.ok(mail.text.includes('Why'));
     assert.ok(!mail.text.includes('Peek'));
+  });
+});
+
+describe('direction controls typed by people', () => {
+  const ALL = '\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069';
+  const CONTROLS = /[\u202a-\u202e\u2066-\u2069]/;
+  const bad = (t: string) => `${t}${ALL}`;
+
+  it('leave every string of an email, subject and inbox preview included', () => {
+    const block = [
+      { kind: 'p', text: bad('p') },
+      { kind: 'small', text: bad('small') },
+      { kind: 'notice', text: bad('notice') },
+      { kind: 'code', label: bad('label'), code: '123456', hint: bad('hint') },
+      { kind: 'quote', label: bad('said'), text: bad('one\ntwo') },
+      { kind: 'link', label: bad('link'), url: 'https://www.alummahnow.net/x' },
+      { kind: 'video', url: 'https://www.alummahnow.net/v', imageUrl: 'https://www.alummahnow.net/i.jpg', title: bad('title'), channel: bad('channel'), alt: bad('alt') },
+    ] as const;
+    const mail = renderEmail({ locale: 'en', subject: bad('subject'), preheader: bad('peek'), greeting: bad('hi'), heading: bad('heading'), blocks: [...block], cta: { label: bad('do'), url: 'https://www.alummahnow.net/' }, after: [...block], signoff: bad('bye'), reason: bad('why') });
+    for (const part of [mail.subject, mail.html, mail.text]) assert.doesNotMatch(part, CONTROLS);
+    assert.equal(mail.subject, 'subject');
+    assert.equal(renderEmail({ locale: 'en', subject: 'a\r\nb\u2029c', preheader: 'p', blocks: [], reason: 'r' }).subject, 'a b c');
+    assert.match(mail.text, /> one\n> two/, 'line breaks stay');
+  });
+
+  it('a row keeps the isolates the email builds it with, and nothing that overrides', () => {
+    const mail = renderEmail({ locale: 'en', subject: 's', preheader: 'p', blocks: [{ kind: 'facts', rows: [[bad('From'), '\u2068Amina\u202e\u2069 <a@example.com>']] }], reason: 'r' });
+    assert.match(mail.text, /From: \u2068Amina\u2069 <a@example\.com>/);
+    assert.doesNotMatch(mail.html, /[\u202a-\u202e]/);
+  });
+
+  it('in the emails that name people or quote them', () => {
+    const name = bad('Amina');
+    const mails = [
+      renderReply({ ...message, name }, bad('Reply'), { locale: 'en' }),
+      renderAcknowledgement({ ...message, name, message: bad('Hello') }, {}),
+      renderWarningEmail({ to: 'a@example.com', name, locale: 'ar', reasonCode: 'spam', count: 1, origin: null }),
+      renderRejectionEmail({ to: 'a@example.com', name, locale: 'en', videoId: 'v1', title: bad('Title'), reasonCode: 'other', origin: null }),
+    ];
+    for (const mail of mails) for (const part of [mail.subject, mail.html, mail.text]) assert.doesNotMatch(part, CONTROLS);
+    // Joiners and marks are part of the writing
+    const marked = renderWarningEmail({ to: 'a@example.com', name: 'می\u200cرا', locale: 'ar', reasonCode: 'spam', count: 1, origin: null });
+    assert.ok(marked.text.includes('می\u200cرا'));
+    // Contact us: the sender's row stays balanced
+    const inbox = renderInboxNotification({ ...message, name: bad('Amina'), message: bad('Hello') }, { to: 'in@example.com' });
+    assert.match(inbox.subject, /: Amina$/);
+    assert.doesNotMatch(inbox.text, /[\u202a-\u202e]/);
+    assert.equal((inbox.text.match(/[\u2066-\u2068]/g) ?? []).length, (inbox.text.match(/\u2069/g) ?? []).length);
+    assert.match(inbox.text, /From: \u200e\u2066\u2068Amina\u2069 <\u2066amina@example\.org\u2069>\u2069/);
   });
 });
 

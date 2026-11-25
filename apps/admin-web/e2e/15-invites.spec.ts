@@ -90,6 +90,7 @@ test.describe('invite creators', () => {
     await page.getByTestId('invite-email').blur();
     await page.getByTestId('invite-add-channel').click();
     await page.getByTestId('invite-channel-name').fill(CHANNEL);
+    await page.getByTestId('invite-channel-name-ar').fill(`قناة اختبار ${RUN_TAG}`);
     await shot(page, testInfo, '1-invite-form');
     await page.getByTestId('invite-submit').click();
     const created = page.getByTestId('invite-created');

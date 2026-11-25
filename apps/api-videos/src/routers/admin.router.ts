@@ -163,11 +163,33 @@ const CursorQuery = z.object({
 	pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+const requiredLocalizedPair = (max: number) =>
+	z
+		.object({
+			en: z.string().trim().min(1).max(max),
+			ar: z.string().trim().min(1).max(max),
+		})
+		.strict();
+
+const optionalLocalizedPair = (max: number) =>
+	z
+		.object({
+			en: z.string().trim().max(max).optional(),
+			ar: z.string().trim().max(max).optional(),
+		})
+		.strict()
+		.refine((v) => (!v.en && !v.ar) || (!!v.en && !!v.ar), { message: 'Both en and ar are required when providing a localized value' });
+
+/** An edit of a user's text: the languages it changes (lib/admin/localizedEdit.ts judges the result on the fresh record). */
+const editedPair = (max: number) => z.object({ en: z.string().trim().max(max).optional(), ar: z.string().trim().max(max).optional() }).strict();
+
 const ChannelEdit = z
 	.object({
 		name: z.string().trim().min(1).max(100).optional(),
+		nameLocalized: editedPair(100).optional(),
 		handle: z.string().trim().min(1).max(60).optional(),
 		description: z.string().max(5000).optional(),
+		descriptionLocalized: editedPair(5000).optional(),
 		avatarUrl: z.string().url().nullable().optional(),
 		coverUrl: z.string().url().nullable().optional(),
 	})
@@ -176,7 +198,9 @@ const ChannelEdit = z
 const VideoEdit = z
 	.object({
 		title: z.string().trim().min(1).max(200).optional(),
+		titleLocalized: editedPair(200).optional(),
 		description: z.string().max(10000).optional(),
+		descriptionLocalized: editedPair(10000).optional(),
 		isPublic: z.boolean().optional(),
 	})
 	.strict();
@@ -394,8 +418,26 @@ app.post('/users/provision', async (c) => {
 });
 app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.param('id'))));
 app.post('/users/:id/channels', async (c) => {
-	const input = parse(z.object({ name: z.string().trim().min(1).max(100), handle: z.string().trim().max(60).nullable().optional(), description: z.string().max(5000).nullable().optional() }), await body(c));
-	return ok(c, { channel: await createChannelFor(c.env, c.req.param('id'), input as { name: string; handle?: string | null; description?: string | null }) });
+	const input = parse(
+		z
+			.object({
+				name: z.string().trim().min(1).max(100).optional(),
+				nameLocalized: requiredLocalizedPair(100).nullable().optional(),
+				handle: z.string().trim().max(60).nullable().optional(),
+				description: z.string().max(5000).nullable().optional(),
+				descriptionLocalized: optionalLocalizedPair(5000).nullable().optional(),
+			})
+			.refine((v) => !v.name || !v.nameLocalized || v.name === v.nameLocalized.en, {
+				message: 'name must match nameLocalized.en',
+				path: ['name'],
+			})
+			.refine((v) => !v.description?.trim() || !v.descriptionLocalized?.en || v.description.trim() === v.descriptionLocalized.en, {
+				message: 'description must match descriptionLocalized.en',
+				path: ['description'],
+			}),
+		await body(c),
+	);
+	return ok(c, { channel: await createChannelFor(c.env, c.req.param('id'), input) });
 });
 // Admin Tools bulk import (wiki TOOLS-ADMIN TA-5): the normal initiate for any channel, owned by the
 // channel's owner and uploaded by the acting admin, without the tier gate, upload counters, draft limit

@@ -17,6 +17,7 @@ import { createVideoCategory, reorderVideoCategories, updateVideoCategory } from
 import type { VideoCategoryAdminList, VideoCategoryAdminView, VideoCategoryHistoryEntry } from '@/lib/api/category-types';
 import { reportError } from '@/lib/errors/reporter';
 import { UserName } from '@/components/audit/UserName';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 
 import { LocalTime } from '@/components/LocalTime';
 import { Sep } from '@/components/Sep';
@@ -248,16 +249,27 @@ function AddCategory({ limits, existing, onAdded }: { limits: VideoCategoryAdmin
     <section className={cardClass} aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`} className="text-xl font-semibold text-fg">{t('videoCategories.addTitle')}</h2>
       <form onSubmit={submit} noValidate className="mt-4 grid gap-4 md:grid-cols-2" data-testid="category-add-form">
-        <label className="flex flex-col gap-1 text-sm text-fg">
-          {t('videoCategories.labelEn')}
-          <input lang="en" dir="ltr" className={fieldClass} value={labelEn} maxLength={limits.label} onChange={(e) => setLabelEn(e.target.value)} aria-invalid={!!fields.labelEn} aria-describedby={described('labelEn')} data-testid="category-add-label-en" />
-          {fieldError('labelEn')}
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-fg">
-          {t('videoCategories.labelAr')}
-          <input lang="ar" dir="rtl" className={fieldClass} value={labelAr} maxLength={limits.label} onChange={(e) => setLabelAr(e.target.value)} aria-invalid={!!fields.labelAr} aria-describedby={described('labelAr')} data-testid="category-add-label-ar" />
-          {fieldError('labelAr')}
-        </label>
+        <div className="md:col-span-2">
+          <LocalizedFieldPair
+            id={`${id}-label`}
+            label={t('videoCategories.label')}
+            field="categories.label"
+            value={{ en: labelEn, ar: labelAr }}
+            onChange={(v) => {
+              setLabelEn(v.en);
+              setLabelAr(v.ar);
+            }}
+            errors={{
+              en: fields.labelEn ? t(`videoCategories.fieldErrors.${fields.labelEn}` as MessageKey) : undefined,
+              ar: fields.labelAr ? t(`videoCategories.fieldErrors.${fields.labelAr}` as MessageKey) : undefined,
+            }}
+            maxLength={limits.label}
+            required
+            disabled={busy}
+            testId="category-add-label"
+            inputTestIds={{ en: 'category-add-label-en', ar: 'category-add-label-ar' }}
+          />
+        </div>
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('videoCategories.value')}
           <input
@@ -329,22 +341,30 @@ function EditCategory({ category, limits, onDone }: { category: VideoCategoryAdm
     }
   }
 
-  const fieldError = (name: keyof Fields) => fields[name] && (
-    <span id={`${id}-${name}-error`} className="text-sm text-danger-fg">{t(`videoCategories.fieldErrors.${fields[name]}` as MessageKey)}</span>
-  );
-
   return (
     <form onSubmit={save} noValidate className="grid gap-3 md:grid-cols-2" data-testid={`category-edit-form-${category.value}`} aria-label={t('videoCategories.editNamed', { name: category.label.en })}>
-      <label className="flex flex-col gap-1 text-sm text-fg">
-        {t('videoCategories.labelEn')}
-        <input lang="en" dir="ltr" autoFocus className={fieldClass} value={labelEn} maxLength={limits.label} onChange={(e) => setLabelEn(e.target.value)} aria-invalid={!!fields.labelEn} aria-describedby={fields.labelEn ? `${id}-labelEn-error` : undefined} data-testid="category-edit-label-en" />
-        {fieldError('labelEn')}
-      </label>
-      <label className="flex flex-col gap-1 text-sm text-fg">
-        {t('videoCategories.labelAr')}
-        <input lang="ar" dir="rtl" className={fieldClass} value={labelAr} maxLength={limits.label} onChange={(e) => setLabelAr(e.target.value)} aria-invalid={!!fields.labelAr} aria-describedby={fields.labelAr ? `${id}-labelAr-error` : undefined} data-testid="category-edit-label-ar" />
-        {fieldError('labelAr')}
-      </label>
+      <div className="md:col-span-2">
+        <LocalizedFieldPair
+          id={`${id}-edit-label`}
+          label={t('videoCategories.label')}
+          field="categories.label"
+          value={{ en: labelEn, ar: labelAr }}
+          onChange={(v) => {
+            setLabelEn(v.en);
+            setLabelAr(v.ar);
+          }}
+          errors={{
+            en: fields.labelEn ? t(`videoCategories.fieldErrors.${fields.labelEn}` as MessageKey) : undefined,
+            ar: fields.labelAr ? t(`videoCategories.fieldErrors.${fields.labelAr}` as MessageKey) : undefined,
+          }}
+          maxLength={limits.label}
+          required
+          autoFocus
+          disabled={busy}
+          testId="category-edit-label"
+          inputTestIds={{ en: 'category-edit-label-en', ar: 'category-edit-label-ar' }}
+        />
+      </div>
       <label className="flex flex-col gap-1 text-sm text-fg md:col-span-2">
         {t('videoCategories.hint')}
         <textarea className={fieldClass} rows={2} value={hint} maxLength={limits.hint} onChange={(e) => setHint(e.target.value)} data-testid="category-edit-hint" />
