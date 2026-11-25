@@ -8,7 +8,8 @@ import { getServerAuthContext } from "./server-auth";
 import {
   logApiSuccess,
   logApiError,
-  logApiAuth
+  logApiAuth,
+  logApiStep
 } from "./logger";
 import { logger } from '@/lib/logger-server';
 import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
@@ -24,7 +25,8 @@ export async function getProfileCurrent(): Promise<Profile | null> {
 
   const authContext = await getServerAuthContext();
   if (!authContext) {
-    logApiError(fnName, 'Not authenticated');
+    // Signed out, or a session that just ended: an answer, not an error
+    logApiStep({ functionName: fnName, step: 'Not authenticated' });
     return null;
   }
 
@@ -38,7 +40,9 @@ export async function getProfileCurrent(): Promise<Profile | null> {
     {
       method: 'GET',
       url: buildApiUrl('/api/profile'),
-      functionName: fnName
+      functionName: fnName,
+      // No profile yet: a first sign-in
+      expectedStatuses: [404]
     },
     getServerAuthContext,
     true // require auth
@@ -78,7 +82,8 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
 
   const authContext = await getServerAuthContext();
   if (!authContext) {
-    logApiError(fnName, 'Not authenticated');
+    // Signed out, or a session that just ended: an answer, not an error
+    logApiStep({ functionName: fnName, step: 'Not authenticated' });
     return null;
   }
 

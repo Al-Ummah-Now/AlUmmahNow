@@ -521,7 +521,8 @@ export class WebSocketManager {
         this.sendAuthMessage(token);
       }
     } catch (error) {
-      logger.error('❌ Failed to get WebSocket auth token:', error);
+      // Realtime stays signed out until the next reconnect asks again: not an error of the page
+      logger.warn('[WebSocket] No access token for now', error);
     }
   }
 

@@ -24,7 +24,7 @@ import { WebSocketManager } from '@/lib/websocket/WebSocketManager';
 import { PresenceEvent } from '@/interfaces/websocket';
 import { getWebSocketUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
-import { getRealtimeAccessToken } from '@/lib/actions/realtime';
+import { fetchRealtimeToken } from '@/lib/auth/client-token';
 
 
 export interface VideoWebSocketOptions {
@@ -189,12 +189,12 @@ export function useVideoWebSocket({
       return undefined;
     }
 
-    // The access token is in httpOnly cookies, so signed-in users fetch it via a
-    // server action on each (re)connect. Anonymous viewers connect without one.
+    // The access token is in httpOnly cookies, so signed-in users fetch it from
+    // /api/auth/token on each (re)connect. Anonymous viewers connect without one.
     const getAuthToken = authToken
       ? async () => authToken
       : userId
-        ? getRealtimeAccessToken
+        ? fetchRealtimeToken
         : undefined;
 
     if (process.env.NODE_ENV !== 'production') {

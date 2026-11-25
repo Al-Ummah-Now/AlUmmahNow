@@ -60,6 +60,19 @@ describe('global event listener audit', () => {
     for (const type of dispatched) expect(GLOBAL_EVENT_ALLOWLIST.has(type)).toBe(true);
   });
 
+  it('allowlists every event the app names in a constant (aun:…), listened to or dispatched', () => {
+    const files = ['app', 'components', 'contexts', 'hooks', 'lib', 'providers', 'services'].flatMap(sourceFiles);
+    const sources = files.map(file => fs.readFileSync(path.join(ROOT, file), 'utf8'));
+    const names = new Map(sources.flatMap(s => Array.from(s.matchAll(/export const ([A-Z][A-Z0-9_]*)\s*=\s*['"](aun:[^'"]+)['"]/g), m => [m[1], m[2]] as const)));
+    const used = new Set(
+      sources.flatMap(s =>
+        Array.from(s.matchAll(/(?:\b(?:window|document)\.addEventListener\(\s*|new (?:CustomEvent|Event)\(\s*)([A-Z][A-Z0-9_]*)\b/g), m => names.get(m[1])).filter((n): n is string => !!n),
+      ),
+    );
+    expect(used).toContain('aun:channel-access-changed');
+    expect([...used].filter(type => !GLOBAL_EVENT_ALLOWLIST.has(type))).toEqual([]);
+  });
+
   it.each(registrations.map(r => [`${r.target}:${r.type} in ${r.file}`, r] as const))('%s is removed on cleanup', (_label, r) => {
     const source = fs.readFileSync(path.join(ROOT, r.file), 'utf8');
     const removed = new RegExp(`${r.target}\\.removeEventListener\\(\\s*['"]${r.type}['"]`).test(source);

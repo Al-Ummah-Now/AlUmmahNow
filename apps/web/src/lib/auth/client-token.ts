@@ -58,6 +58,13 @@ export async function fetchClientAuthToken(force = false): Promise<string | null
   return (await fetchClientAuthInfo(force)).accessToken;
 }
 
+/**
+ * The token for the realtime (WebSocket) server, fresh on every (re)connect. From the route handler, not a
+ * server action: an open page of an older release reconnects for hours, and a server action of a
+ * release that is gone answers without flight data ("can't access property map, e is undefined").
+ */
+export const fetchRealtimeToken = (): Promise<string | null> => fetchClientAuthToken(true);
+
 /** Synchronous accessor for the last fetched token (may be null). */
 export function getClientAuthToken(): string | null {
   if (typeof window !== 'undefined' && !cached) void fetchClientAuthInfo();

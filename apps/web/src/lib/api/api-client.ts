@@ -39,6 +39,8 @@ export interface ApiRequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   functionName: string;
+  /** Error statuses that are a normal answer here: not logged or reported as errors */
+  expectedStatuses?: readonly number[];
   /** Abort the request (and resolve null) after this many milliseconds */
   timeoutMs?: number;
   /** Receives the status and body of an error response, for callers that explain it */
@@ -139,7 +141,9 @@ async function sendApiRequest<T>(
     // Handle errors
     if (!response.ok) {
       const errorText = await response.text();
-      logApiError(functionName, 'API request failed', {
+      const expected = options.expectedStatuses?.includes(response.status) ?? false;
+      if (expected) logApiStep({ functionName, step: `answered ${response.status}` });
+      else logApiError(functionName, 'API request failed', {
         status: response.status,
         statusText: response.statusText,
         errorBody: errorText
@@ -152,7 +156,7 @@ async function sendApiRequest<T>(
       } catch {
         errorBody = undefined;
       }
-      reportApiFailure(functionName, method, null, response.status, response.headers.get('X-Error-Ref'));
+      if (!expected) reportApiFailure(functionName, method, null, response.status, response.headers.get('X-Error-Ref'));
       return { data: null, status: response.status, errorBody };
     }
 

@@ -140,6 +140,8 @@ export async function GET(req: NextRequest) {
     }
     logger.warn("[OAuth Callback] Refused: state does not match this browser", {
       hasState: url.searchParams.has("state"),
+      // No cookie: an old or copied link, or past the 10 minutes. Another cookie: a second sign-in started meanwhile
+      hasCookie: !!req.cookies.get(STATE_COOKIE)?.value,
       silent,
     });
     await clearSignInCookies();
