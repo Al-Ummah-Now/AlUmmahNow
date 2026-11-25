@@ -33,8 +33,8 @@ export class ReportReview extends AdminRoute {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
     const actorId = this.getUserId(c);
     try {
-      const report = await setReportReview(c.env.REPORTS_DB as never, params.reportId, body.reviewing, actorId, this.getRoles(c));
-      publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'reports', queue: 'reports' });
+      const { report, changed } = await setReportReview(c.env.REPORTS_DB as never, params.reportId, body.reviewing, actorId, this.getRoles(c));
+      if (changed) publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'reports', queue: 'reports' });
       return { success: true, result: { report } };
     } catch (err) {
       if (err instanceof DecisionError) return apiError(c, err.status, err.code, { error: err.message });

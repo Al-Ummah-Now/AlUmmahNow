@@ -27,14 +27,15 @@ async function setup(extra: Record<string, string> = {}) {
   });
   app.route('/internal/channel-reports', channelReportsRouter as never);
   fromHono(app).route('/api/moderation', moderationRouter);
+  const background: Promise<unknown>[] = [];
   const review = async (id: string, json: unknown, user = 'usr_mod', role = 'moderator') => {
-    const res = await app.request(`/api/moderation/reports/${id}/review`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': user, 'x-test-role': role }, body: JSON.stringify(json) }, env);
+    const res = await app.request(`/api/moderation/reports/${id}/review`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-test-user': user, 'x-test-role': role }, body: JSON.stringify(json) }, env, { waitUntil: (p: Promise<unknown>) => void background.push(p), passThroughOnException: () => undefined, props: {} } as never);
     const body = (await res.json()) as any;
     return { status: res.status, code: body.code, report: body.result?.report };
   };
   const underReview = async (id: string) => ((await (await app.request(`/internal/channel-reports/${id}`, { headers: { 'X-API-Key': 'k' } }, env)).json()) as any).result.underReview;
   const log = async () => ((await db.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY rowid').all<any>()).results ?? []).map((r: any) => [r.key, JSON.parse(r.new_value).action, JSON.parse(r.new_value).details.reportId, JSON.parse(r.old_value).status, r.actor_id]);
-  return { db, review, underReview, log, sql };
+  return { db, review, underReview, log, sql, background };
 }
 
 describe('start review', () => {
@@ -56,23 +57,31 @@ describe('start review', () => {
     ]);
   });
 
-  it('other open admin pages are told, and only of a review that was set', async () => {
-    const { review } = await setup({ WEBSOCKET_URL: 'wss://realtime.test/ws' });
+  it('other open admin pages are told of a status that changed, and of nothing else', async () => {
+    const { review, background } = await setup({ WEBSOCKET_URL: 'wss://realtime.test/ws' });
     const sent: unknown[] = [];
     const fetched = globalThis.fetch;
     globalThis.fetch = (async (url: string, init: RequestInit) => {
-      sent.push([url, JSON.parse(String(init.body)).items[0].channel]);
+      const item = JSON.parse(String(init.body)).items[0];
+      sent.push([url, item.channel, item.message.data.events]);
       return new Response('{}');
     }) as never;
+    const told = async (id: string, reviewing: boolean) => {
+      sent.length = 0;
+      const { status } = await review(id, { reviewing });
+      await Promise.all(background.splice(0));
+      return [status, ...sent];
+    };
+    const broadcast = ['https://realtime.test/broadcast', 'admin:moderation', [{ kind: 'changed', key: 'reports', queue: 'reports' }]];
     try {
-      await review('r1', { reviewing: true });
-      await review('done', { reviewing: true });
-      await review('r1', { reviewing: false });
-      await new Promise((r) => setTimeout(r, 20));
+      assert.deepEqual(await told('r1', true), [200, broadcast]);
+      assert.deepEqual(await told('r1', true), [200], 'started again');
+      assert.deepEqual(await told('r1', false), [200, broadcast]);
+      assert.deepEqual(await told('r1', false), [200], 'stopped again');
+      assert.deepEqual(await told('done', true), [409]);
     } finally {
       globalThis.fetch = fetched;
     }
-    assert.deepEqual(sent, [['https://realtime.test/broadcast', 'admin:moderation'], ['https://realtime.test/broadcast', 'admin:moderation']]);
   });
 
   it('asked for what it already is, it changes and records nothing', async () => {
@@ -118,7 +127,10 @@ describe('start review', () => {
       } };
       const done = setReportReview(raced as never, 'r1', true, 'usr_mod');
       if (expected) await assert.rejects(done, { code: expected });
-      else assert.equal((await done).moderator_id, 'usr_other');
+      else {
+        const { report, changed } = await done;
+        assert.deepEqual([report.moderator_id, changed], ['usr_other', false]);
+      }
       assert.deepEqual(await log(), []);
     }
   });

@@ -15,6 +15,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { PersonName } from '../src/components/audit/Named';
+import { AuditWhat } from '../src/components/audit/AuditEntryList';
 
 const ARABIC = /[؀-ۿ]/;
 const t = createTranslator('en');
@@ -101,6 +102,7 @@ describe('audit log', () => {
     assert.deepEqual(['misinformation', 'Asked by the owner', 'constructor'].map((v) => detailValue('reason', v, t)), ['Misinformation', 'Asked by the owner', 'constructor']);
     assert.deepEqual(['reviewing', 'suspended'].map((v) => detailValue('status', v, t)), ['Reviewing', 'suspended']);
     assert.equal(detailValue('note', 'spam', t), 'spam');
+    assert.deepEqual([detailValue('reason', 'misinformation', tAr), detailValue('status', 'reviewing', tAr), detailValue('reason', 'كتبه المالك', tAr)], [ar.reason.misinformation, ar.status.reviewing, 'كتبه المالك']);
   });
 
   it('asks for every person and item a page mentions, once, and never for the system', () => {
@@ -130,6 +132,16 @@ describe('an unknown user in a history line', () => {
   const render = (element: React.ReactElement, locale: 'en' | 'ar' = 'en') =>
     renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, element) as never);
   (globalThis as unknown as { React: unknown }).React = React;
+
+  it('says what a report was before, in both languages', () => {
+    const entry = { id: 'content:1', action: 'report-review-stop', actorId: 'usr_1', details: { reportId: 'rep_1', reason: 'misinformation' }, previous: { status: 'reviewing', value: 'x' }, createdAt: '' };
+    for (const [locale, tr, m] of [['en', t, en], ['ar', tAr, ar]] as const) {
+      const text = render(React.createElement(AuditWhat, { entry, names: null, t: tr, showTarget: false }), locale).replace(/<pre.*?<\/pre>/s, '').replace(/<[^>]+>/g, ' ');
+      const said = tr('auditLog.previous', { value: [`${m.auditLog.detailKeys.status}: ${m.status.reviewing}`, 'x'].join(tr('common.sep')) });
+      assert.ok(text.includes(said), `${said} in ${text}`);
+      assert.ok(text.includes(m.auditLog.detailKeys.reportId) && text.includes(m.reason.misinformation) && !text.includes('misinformation'));
+    }
+  });
 
   // Without the /users link: next/link does not render in this plain-Node test (the label and detail are the same)
   const plain = (p: ReturnType<typeof personView>) => ({ ...p, href: null });
