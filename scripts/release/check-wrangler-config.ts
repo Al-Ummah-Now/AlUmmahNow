@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APPS } from './apps.ts';
 import { parseJsonc } from './jsonc.ts';
-import { applyAccepted, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from './wrangler-config.ts';
+import { applyAccepted, checkAddresses, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from './wrangler-config.ts';
 import { checkDeployCommands, scanPackageScripts, scanWorkflow, type DeployCommand } from './deploy-commands.ts';
 import { checkSkewConfig } from './skew-config.ts';
 import { checkPreviewConfigs, checkPreviewDeploys } from './preview-config.ts';
@@ -34,7 +34,10 @@ export function runCheck(root: string, apps: AppRule[] = APPS): CheckResult {
 		if (rule.qaConfigPath) {
 			const qaPath = join(root, rule.qaConfigPath);
 			if (!existsSync(qaPath)) found.push(`${rule.app}: ${rule.qaConfigPath} not found`);
-			else found.push(...checkLogPolicy(rule.app, resolveEnv(parseJsonc(readFileSync(qaPath, 'utf8')) as WranglerConfig, null), 'qa'));
+			else {
+				const qa = resolveEnv(parseJsonc(readFileSync(qaPath, 'utf8')) as WranglerConfig, null);
+				found.push(...checkLogPolicy(rule.app, qa, 'qa'), ...checkAddresses(`${rule.app} (qa)`, qa, rule.production.addresses));
+			}
 		}
 		const result = applyAccepted(rule, found);
 		errors.push(...result.errors);

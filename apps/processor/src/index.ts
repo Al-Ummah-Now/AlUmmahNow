@@ -16,7 +16,7 @@ import { purgeExpiredTombstones } from './erasure/tombstones';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
-import { batchJob, scrubOrigin, reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
+import { batchJob, constantTimeEqual, scrubOrigin, reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { importLegacyRollups } from './lib/analytics-rollup';
@@ -145,11 +145,7 @@ const json = (body: unknown, status = 200) =>
 /** Constant-time comparison of the X-API-Key header with INTERNAL_API_KEY. */
 async function isInternalCaller(request: Request, env: QueueEnvironment): Promise<boolean> {
   const expected = await getApiKey(env.INTERNAL_API_KEY);
-  const given = request.headers.get('X-API-Key') ?? '';
-  if (!expected || given.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
-  return diff === 0;
+  return constantTimeEqual(request.headers.get('X-API-Key'), expected);
 }
 
 /**

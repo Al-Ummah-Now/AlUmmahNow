@@ -57,7 +57,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'config',
 		production: {
 			env: null,
-			name: 'al-ummah-now-production',
+			name: 'al-ummah-now-production', addresses: 'own-hosts-and-versions',
 			vars: {
 				ClientId: 'f0de3c30-0304-4ac4-86d6-1e185dec0439',
 				Issuer: AUTH_ISSUER,
@@ -70,7 +70,7 @@ export const APPS: AppRule[] = [
 			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }] }),
+		stage: stageRule({ name: 'al-ummah-now-stage', addresses: 'own-hosts-and-versions', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }] }),
 	},
 	{
 		app: 'admin-web',
@@ -80,7 +80,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'config',
 		production: {
 			env: null,
-			name: 'al-ummah-admin-web',
+			name: 'al-ummah-admin-web', addresses: 'own-hosts-and-versions',
 			vars: {
 				Issuer: AUTH_ISSUER,
 				OPENAUTH_ISSUER: AUTH_ISSUER,
@@ -96,7 +96,7 @@ export const APPS: AppRule[] = [
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
-			name: 'al-ummah-admin-web-stage',
+			name: 'al-ummah-admin-web-stage', addresses: 'own-hosts-and-versions',
 			requireRoutes: true,
 			vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, ADMIN_API_URL: 'https://admin.api.stage.alummahnow.net', NEXT_PUBLIC_BASE_URL: 'https://admin.stage.alummahnow.net', ERRORS_INGEST_URL: 'https://admin.api.stage.alummahnow.net/internal/errors' },
 			requiredBindings: [INTERNAL_API_KEY],
@@ -110,7 +110,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'videos',
+			name: 'videos', addresses: 'own-hosts',
 			vars: {
 				Issuer: AUTH_ISSUER,
 				VIDEO_REVIEW_ALLOWED: 'true',
@@ -172,7 +172,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'queue_producer', name: 'YT_IMPORT_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-yt-import-stage' }, { kind: 'secrets_store_secrets', name: 'GOOGLE_OAUTH_CLIENT_SECRET' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'd1_databases', name: 'AUTH_DB' }, { kind: 'r2_buckets', name: 'ADMIN_BACKUPS' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }, { kind: 'kv_namespaces', name: 'APP_CONFIG' }] }),
+		stage: stageRule({ name: 'videos-stage', addresses: 'own-hosts', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'queue_producer', name: 'YT_IMPORT_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-yt-import-stage' }, { kind: 'secrets_store_secrets', name: 'GOOGLE_OAUTH_CLIENT_SECRET' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'd1_databases', name: 'AUTH_DB' }, { kind: 'r2_buckets', name: 'ADMIN_BACKUPS' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }, { kind: 'kv_namespaces', name: 'APP_CONFIG' }] }),
 	},
 	{
 		app: 'processor',
@@ -182,7 +182,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-now-processor', noPublicAddress: true,
+			name: 'al-ummah-now-processor', addresses: 'none',
 			// The category-suggestion test hook answers E2E titles without the model: never in production
 			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net', CATEGORY_AI_TEST_HOOK: 'false', CMS_INTERNAL_URL: 'https://cms.alummahnow.net', VIDEO_REVIEW_ALLOWED: 'true', ...QF_HOSTS },
 			requiredBindings: [
@@ -202,7 +202,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-processor-stage', noPublicAddress: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false', ...QF_HOSTS }, requiredBindings: [INTERNAL_API_KEY, ...QURAN_SYNC, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-review-alerts-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', addresses: 'none', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false', ...QF_HOSTS }, requiredBindings: [INTERNAL_API_KEY, ...QURAN_SYNC, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-review-alerts-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
 	},
 	{
 		app: 'websocket-server',
@@ -212,7 +212,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-now-comms',
+			name: 'al-ummah-now-comms', addresses: 'own-hosts',
 			vars: {
 				ENVIRONMENT: 'production',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
@@ -231,7 +231,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }, { kind: 'r2_buckets', name: 'VIDEOS' }, { kind: 'd1_databases', name: 'NOTIFICATIONS_DB' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
+		stage: stageRule({ name: 'al-ummah-now-comms-stage', addresses: 'own-hosts', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }, { kind: 'r2_buckets', name: 'VIDEOS' }, { kind: 'd1_databases', name: 'NOTIFICATIONS_DB' }, { kind: 'd1_databases', name: 'SEARCH_DB' }] }),
 	},
 	{
 		app: 'scheduler',
@@ -241,7 +241,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-scheduler', noPublicAddress: true,
+			name: 'al-ummah-scheduler', addresses: 'none',
 			vars: { WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
@@ -254,7 +254,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-scheduler-stage', noPublicAddress: true, vars: { WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'QUEUE' }] }),
+		stage: stageRule({ name: 'al-ummah-scheduler-stage', addresses: 'none', vars: { WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'QUEUE' }] }),
 	},
 	{
 		// R2 video delivery (epic #687): transcoder container, queue consumer, /priv/ edge.
@@ -266,7 +266,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-now-media',
+			name: 'al-ummah-now-media', addresses: 'own-hosts',
 			requireRoutes: true,
 			// The container's max_instances: the ceiling of the admin's max concurrent transcodes
 			vars: { MEDIA_TRANSCODE_CEILING: '3371' },
@@ -286,7 +286,7 @@ export const APPS: AppRule[] = [
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
-			name: 'al-ummah-now-media-stage',
+			name: 'al-ummah-now-media-stage', addresses: 'own-hosts',
 			requireRoutes: true,
 			vars: { MEDIA_TRANSCODE_CEILING: '2' },
 			requiredBindings: [
@@ -310,7 +310,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-now-short-links',
+			name: 'al-ummah-now-short-links', addresses: 'own-hosts',
 			requireRoutes: true,
 			vars: {
 				ENVIRONMENT: 'production',
@@ -329,7 +329,7 @@ export const APPS: AppRule[] = [
 			env: 'stage',
 			...STAGE_GUARDS,
 			allowedHosts: ['stage.alummahnow.link'],
-			name: 'al-ummah-now-short-links-stage',
+			name: 'al-ummah-now-short-links-stage', addresses: 'own-hosts',
 			requireRoutes: true,
 			vars: { ENVIRONMENT: 'stage', SITE_ORIGIN: 'https://videos.stage.alummahnow.net', API_ORIGIN: 'https://videos.api.stage.alummahnow.net' },
 			requiredBindings: [INTERNAL_API_KEY],
@@ -345,7 +345,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-cost-monitor', noPublicAddress: true,
+			name: 'al-ummah-cost-monitor', addresses: 'none',
 			vars: { ENVIRONMENT: 'production', COLLECT_ENVS: 'production,stage,qa', ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
@@ -359,7 +359,7 @@ export const APPS: AppRule[] = [
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
-			name: 'al-ummah-cost-monitor-stage', noPublicAddress: true,
+			name: 'al-ummah-cost-monitor-stage', addresses: 'none',
 			vars: { ENVIRONMENT: 'stage', COLLECT_ENVS: 'stage' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
@@ -381,7 +381,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-status',
+			name: 'al-ummah-status', addresses: 'own-hosts',
 			requireRoutes: true,
 			vars: { ENVIRONMENT: 'production', ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors' },
 			// STATUS_NOTIFY_QUEUE: email subscription confirmations (src/subscribe.ts), consumed by admin-api
@@ -389,7 +389,7 @@ export const APPS: AppRule[] = [
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
-			name: 'al-ummah-status-stage',
+			name: 'al-ummah-status-stage', addresses: 'own-hosts',
 			requireRoutes: true,
 			vars: { ENVIRONMENT: 'stage' },
 			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'STATUS_DB' }, { kind: 'queue_producer', name: 'STATUS_NOTIFY_QUEUE' }],
@@ -403,7 +403,7 @@ export const APPS: AppRule[] = [
 		deployFlags: 'any',
 		production: {
 			env: null,
-			name: 'al-ummah-admin-api',
+			name: 'al-ummah-admin-api', addresses: 'own-hosts',
 			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net', AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.alummahnow.net', VIDEO_REVIEW_ALLOWED: 'true' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
@@ -435,6 +435,6 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH, AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'STATUS_NOTIFY_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-status-notify-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }, { kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' }, { kind: 'queue_consumer', name: 'auth-moderation-requests-stage' }, { kind: 'queue_producer', name: 'ERRORS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-dlq-stage' }, { kind: 'services', name: 'PROCESSOR' }, { kind: 'r2_buckets', name: 'SOURCEMAPS' }, { kind: 'services', name: 'SCHEDULER' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', addresses: 'own-hosts', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH, AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'STATUS_NOTIFY_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-status-notify-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }, { kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' }, { kind: 'queue_consumer', name: 'auth-moderation-requests-stage' }, { kind: 'queue_producer', name: 'ERRORS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-dlq-stage' }, { kind: 'services', name: 'PROCESSOR' }, { kind: 'r2_buckets', name: 'SOURCEMAPS' }, { kind: 'services', name: 'SCHEDULER' }] }),
 	},
 ];
