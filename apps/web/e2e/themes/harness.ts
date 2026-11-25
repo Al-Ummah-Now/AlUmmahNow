@@ -58,8 +58,26 @@ export const NOTIFICATIONS = Array.from({ length: 8 }, (_, i) => ({
   createdAt: hoursAgo(i === 0 ? 1 : 24 * i),
 }));
 
+/**
+ * Hot updates from the dev server never reach the page (#1941). The server sends its webpack hash
+ * ("sync") to every open page each time any page connects, and Next's dev client takes a changed hash
+ * for a restarted server: `window.location.reload()` (next/dist/client/dev/hot-reloader/app/web-socket.js).
+ * The two workers share one server, so one worker's first visit to a route, which compiles it, reloaded
+ * the other worker's page between two lines of its test. No source changes during a run, so nothing sent
+ * as text (sync, building, built, reloadPage, addedPage, ...) is for a test. Binary messages pass: React
+ * waits for its debug chunks before it hydrates (without them the page never does). So does everything the
+ * page sends: its pings keep the route compiled, and its console goes to the server's log.
+ */
+export async function holdHotUpdates(page: Page) {
+  await page.routeWebSocket((u) => u.pathname.endsWith('/_next/hmr'), (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((message) => { if (typeof message !== 'string') ws.send(message); });
+  });
+}
+
 /** Answers every API call the browser makes; nothing leaves the machine. */
 export async function mockApi(page: Page) {
+  await holdHotUpdates(page);
   // The local mock (mock-server.mjs) answers the API; nothing else may leave the machine
   await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
   await page.route(/^https?:\/\/127\.0\.0\.1:\d+\/api\/notifications(\?.*)?$/, (route) =>
