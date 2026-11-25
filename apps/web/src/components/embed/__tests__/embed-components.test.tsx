@@ -8,6 +8,7 @@ import UnavailableFrame from '../UnavailableFrame';
 import ShareDialog from '@/components/video/ShareDialog';
 import { parseEmbedParams } from '@/lib/embed/params';
 import { getPlayerUi } from '@/lib/video/player-ui';
+import { isAutoMuted } from '@/lib/video/volume-control';
 import type { EmbedVideo } from '@/lib/embed/content';
 
 jest.mock('@/lib/logger-client', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
@@ -52,7 +53,7 @@ afterEach(() => {
  * unmuted; `aborts` rejects that many plays with AbortError first, muted or not. Its source has
  * metadata unless `state` says otherwise.
  */
-function fakePlayer(refuse?: string, { aborts = 0, state = { readyState: 1 } } = {}) {
+function fakePlayer(refuse?: string, { aborts = 0, state = { readyState: 1, paused: false } } = {}) {
   const handlers: Record<string, Array<() => void>> = {};
   const once: Record<string, Array<() => void>> = {};
   let abortsLeft = aborts;
@@ -63,7 +64,7 @@ function fakePlayer(refuse?: string, { aborts = 0, state = { readyState: 1 } } =
     calls,
     on: (e: string, fn: () => void) => { (handlers[e] ??= []).push(fn); },
     one: (e: string, fn: () => void) => { (once[e] ??= []).push(fn); },
-    off: () => undefined,
+    off: (e: string, fn: () => void) => { handlers[e] = (handlers[e] ?? []).filter((f) => f !== fn); },
     fire: (e: string) => {
       const due = once[e] ?? [];
       once[e] = [];
@@ -91,8 +92,11 @@ function fakePlayer(refuse?: string, { aborts = 0, state = { readyState: 1 } } =
       }
       return Promise.resolve();
     },
-    paused: () => false,
-    pause: () => undefined,
+    paused: () => state.paused,
+    pause: () => {
+      state.paused = true;
+      player.fire('pause');
+    },
     currentTime: () => 0,
     duration: () => 75,
     loop: () => undefined,
@@ -194,7 +198,7 @@ describe('EmbedPlayer', () => {
   const gesture = () => render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1', gesture: '1' })} />);
 
   it('gesture start waits for the source to be attached: an earlier play() makes Video.js attach it twice in Safari', async () => {
-    const player = fakePlayer(undefined, { state: { readyState: 0 } });
+    const player = fakePlayer(undefined, { state: { readyState: 0, paused: false } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => undefined);
@@ -207,7 +211,7 @@ describe('EmbedPlayer', () => {
   });
 
   it('gesture start aborted by a source change plays at loadedmetadata (WebKit never reaches canplay while paused)', async () => {
-    const player = fakePlayer(undefined, { aborts: 1, state: { readyState: 0 } });
+    const player = fakePlayer(undefined, { aborts: 1, state: { readyState: 0, paused: false } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => player.fire('loadstart'));
@@ -218,7 +222,7 @@ describe('EmbedPlayer', () => {
   });
 
   it('sound refused and then the muted play aborted: still plays muted once the source is there', async () => {
-    const player = fakePlayer('NotAllowedError', { state: { readyState: 0 } });
+    const player = fakePlayer('NotAllowedError', { state: { readyState: 0, paused: false } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     const play = player.play;
     let abort = true;
@@ -236,20 +240,85 @@ describe('EmbedPlayer', () => {
     expect(screen.getByTestId('embed-unmute')).toBeInTheDocument();
   });
 
-  it('gesture start stops trying after its retries, and does not restart a player that was paused meanwhile', async () => {
-    const player = fakePlayer('AbortError', { state: { readyState: 0 } });
+  it('gesture start stops trying after its retries', async () => {
+    const player = fakePlayer('AbortError', { state: { readyState: 0, paused: false } });
     (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => player.fire('loadstart'));
     for (let i = 0; i < 5; i += 1) await act(async () => player.fire('loadedmetadata'));
     expect(player.calls).toHaveLength(3);
+  });
 
-    const paused = fakePlayer('AbortError');
-    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = paused;
+  it('gesture start that fails with another error is not retried (the delivery fallback plays its own source)', async () => {
+    const player = fakePlayer('NotSupportedError', { state: { readyState: 0, paused: false } });
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    await act(async () => player.fire('loadstart'));
+    await act(async () => player.fire('loadedmetadata'));
+    expect(player.calls).toHaveLength(1);
+  });
+
+  it.each([0, 1])('a pause during the pending play (AbortError too) is never overridden (readyState %i)', async (readyState) => {
+    const player = fakePlayer('AbortError', { state: { readyState: 0, paused: false } });
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    const play = player.play;
+    player.play = () => {
+      const result = play();
+      player.state.readyState = readyState;
+      player.pause(); // the pause event comes first, then the rejection
+      return result;
+    };
+    await act(async () => player.fire('loadstart'));
+    expect(player.calls).toHaveLength(1);
+    await act(async () => player.fire('loadedmetadata'));
+    await act(async () => player.fire('canplay'));
+    expect(player.calls).toHaveLength(1);
+  });
+
+  it("the host page's pause command before the source is attached cancels the start", async () => {
+    embedInto('https://host.example/page');
+    const player = fakePlayer(undefined, { state: { readyState: 0, paused: true } });
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    act(() => {
+      const event = new MessageEvent('message', { data: { type: 'aun:v1:command', command: 'pause' }, origin: 'https://host.example' });
+      Object.defineProperty(event, 'source', { value: window.parent });
+      window.dispatchEvent(event);
+    });
+    await act(async () => player.fire('loadstart'));
+    await act(async () => player.fire('loadedmetadata'));
+    expect(player.calls).toEqual([]);
+  });
+
+  it('a mute remembered from another video does not silence a gesture start', async () => {
+    const player = fakePlayer(undefined, { state: { readyState: 0, paused: false } });
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    player.muted(true); // the remembered volume, applied after ready
+    await act(async () => player.fire('loadstart'));
+    expect(player.calls).toEqual([{ muted: false }]);
+    expect(player.muted()).toBe(false);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+  });
+
+  it('a remembered volume of 0 offers "Tap to unmute", which brings the sound back', async () => {
+    const player = fakePlayer();
+    player.volume(0);
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    gesture();
+    fireEvent.click(await screen.findByTestId('embed-unmute'));
+    expect(player.volume()).toBe(1);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+  });
+
+  it("the browser's own mute is never remembered as the viewer's", async () => {
+    const player = fakePlayer('NotAllowedError');
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
     gesture();
     await act(async () => undefined);
-    await act(async () => paused.fire('loadedmetadata'));
-    expect(paused.calls).toHaveLength(1);
+    expect(player.muted()).toBe(true);
+    expect(isAutoMuted(player)).toBe(true);
   });
 
   it('plain autoplay=1 stays muted (third-party autoplay) and offers "Tap to unmute" once playing', async () => {

@@ -52,7 +52,7 @@ import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
-import { whenPlayableAgain } from '@/lib/video/start-playback';
+import { beginStart } from '@/lib/video/start-playback';
 import { recoverStuckSeeks } from '@/lib/video/seek-recovery';
 import { playerAnalyticsContext } from '@/lib/analytics/traffic-source';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
@@ -661,7 +661,6 @@ export default function CustomVideoPlayer({
         isInitializingRef.current = false;
         setPlayerReady(true);
         analyticsRef.current?.trackReady();
-        onPlayerReadyRef.current?.(player);
 
         // Reset quartiles when video loads
         quartilesFiredRef.current.clear();
@@ -682,21 +681,25 @@ export default function CustomVideoPlayer({
           markAutoMuted(player, true);
           (player as ExtendedPlayer).muted(true);
         }
+        // After the remembered volume, so a start the page makes here is not re-muted by it
+        onPlayerReadyRef.current?.(player);
 
         // The page asked for playback (a playlist, an in-app advance): unmuted first, as the
         // viewer's earlier gesture in this document allows; muted when the browser refuses
         startAutoplayRef.current = (extended: ExtendedPlayer) => {
           const attempt = () => Promise.resolve(extended.play());
           let retried = false;
+          const pending = beginStart(extended);
           const start = () => {
             if (extended.isDisposed()) return;
             attempt().catch((error: unknown) => {
               const name = (error as { name?: string } | null)?.name;
               if (extended.isDisposed()) return;
-              // The source was still being attached (Firefox and WebKit abort that play): once more when it is
+              // The source was still being attached (Firefox and WebKit abort that play): once more when
+              // it is, unless it was paused meanwhile
               if (name === 'AbortError' && !retried) {
                 retried = true;
-                whenPlayableAgain(extended, start);
+                pending.afterReload(start);
                 return;
               }
               if (name !== 'NotAllowedError') {
