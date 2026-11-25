@@ -5,9 +5,9 @@
  */
 type EmailLocale = 'en' | 'ar';
 
-/** A value with its own direction (FSI…PDI), so what is inside never reorders what is around it. */
-export const isolate = (text: string) => `\u2068${text}\u2069`;
-/** A phrase in the email's direction (RLI or LRI…PDI), whatever is around it: a list, or a whole row. */
+export { isolateText as isolate, stripBidiControls } from '@al-ummah/shared-types';
+
+/** A phrase in the email's direction (RLI or LRI…PDI), whatever is around it: a list, or a whole row. Its values are isolated (`isolate`). */
 export const inDirection = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u2067' : '\u2066'}${text}\u2069`;
 /**
  * A row in the email's direction, in every client. dir="auto" reads the first letter outside an isolate: the

@@ -190,5 +190,6 @@ export * from './api-error';
 export * from './feature-switch-store';
 export * from './features-api';
 export * from './feature-routes';
+export * from './bidi';
 export * from './workflows';
 export * from './d1-capacity';

@@ -33,6 +33,13 @@ import { sqliteD1 } from './d1-sqlite';
 const valid = { name: 'Amina', email: 'Amina@Example.org', topic: 'general', message: 'Assalamu alaikum, a question about playlists.', locale: 'ar', pageUrl: 'https://videos.alummahnow.net/ar/settings' };
 
 describe('validateContactInput', () => {
+  it('drops direction controls from the name and the address', () => {
+    const r = validateContactInput({ ...valid, name: 'Amina\u2069\u202e Y\u2067', email: 'a\u202eb@example.com' }) as { ok: true; value: { name: string; email: string } };
+    assert.ok(r.ok);
+    assert.equal(r.value.name, 'Amina Y');
+    assert.equal(r.value.email, 'ab@example.com');
+  });
+
   it('accepts a good message and normalises it', () => {
     const r = validateContactInput({ ...valid, name: '  Amina \n Y ', message: 'line one\r\nline two is here' });
     assert.equal(r.ok, true);

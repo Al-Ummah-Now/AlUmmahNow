@@ -204,7 +204,7 @@ export function renderWorkflowEmail(input: {
     blocks.push({ kind: 'p', text: c.changes });
     blocks.push({ kind: 'facts', rows: changed.map((f): [string, string] => {
       // Someone the change is about (nothing to compare): just who
-      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], emailRow(locale, fieldValue(f, f.after, locale, input.names))];
+      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], emailRow(locale, Array.isArray(f.after) ? fieldValue(f, f.after, locale, input.names) : isolate(fieldValue(f, f.after, locale, input.names)))];
       return [f.label[locale], emailRow(locale, `${emailSide(f, f.before, locale, input.names)}${locale === 'ar' ? ' ← ' : ' → '}${emailSide(f, f.after, locale, input.names)}`)];
     }) });
   }
