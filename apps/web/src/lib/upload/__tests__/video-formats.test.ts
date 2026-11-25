@@ -4,11 +4,10 @@
  * without the association gives an empty type. The check used to compare the type with
  * video/mov and video/avi, which no browser sends, so every iPhone video was refused.
  */
-import { AR_TRANSLATIONS, EN_TRANSLATIONS, fillTemplate } from '@al-ummah/shared-types';
+import { AR_TRANSLATIONS, EN_TRANSLATIONS, fillTemplate, isolateText } from '@al-ummah/shared-types';
 import {
   VIDEO_FORMATS,
   VIDEO_PICKER_ACCEPT,
-  bidiIsolate,
   isAcceptedVideoFile,
   videoFormatOf,
   videoFormatsText,
@@ -140,12 +139,24 @@ describe('upload copy', () => {
     }
   });
 
-  it('isolates a Latin name in Arabic text (a file name, a format) and leaves English alone', () => {
-    expect(bidiIsolate('ar', 'notes.txt')).toBe('\u2068notes.txt\u2069');
-    expect(bidiIsolate('en', 'notes.txt')).toBe('notes.txt');
-    const refusal = fillTemplate('ar', AR_TRANSLATIONS.batch.errors.invalidFileType, { filename: bidiIsolate('ar', 'notes.txt'), formats: videoFormatsText('ar') });
+  it('isolates the refused file\'s name and each format with the shared isolateText', () => {
+    const refusal = fillTemplate('ar', AR_TRANSLATIONS.batch.errors.invalidFileType, { filename: isolateText('notes.txt'), formats: videoFormatsText('ar') });
     expect(refusal).toContain('\u2068notes.txt\u2069');
     expect(refusal).toContain('\u2068MP4\u2069، \u2068M4V\u2069');
+    // English keeps its plain list
+    expect(videoFormatsText('en')).toBe('MP4, M4V, MOV, WebM, MKV, AVI, WMV, FLV');
+  });
+
+  it('a file name with bidi controls cannot reorder or end the isolate around it', () => {
+    // An override (RLO) would reverse what follows, a PDI would end the isolate early: both are dropped
+    const name = 'report\u202Egnp.exe\u2069.txt';
+    const refusal = fillTemplate('ar', AR_TRANSLATIONS.batch.errors.invalidFileType, { filename: isolateText(name), formats: videoFormatsText('ar') });
+    expect(refusal).toContain('\u2068reportgnp.exe.txt\u2069');
+    expect(refusal).not.toMatch(/[\u202a-\u202e]/);
+    // One isolate for the name and one per format: no stray PDI from the name
+    expect((refusal.match(/\u2069/g) ?? []).length).toBe(1 + 8);
+    const english = fillTemplate('en', EN_TRANSLATIONS.batch.errors.invalidFileType, { filename: isolateText(name), formats: videoFormatsText('en') });
+    expect(english).not.toMatch(/[\u202a-\u202e]/);
   });
 
   it('writes the Arabic copy with «مرئي», never «فيديو»', () => {
