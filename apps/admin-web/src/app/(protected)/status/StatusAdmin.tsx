@@ -16,6 +16,8 @@ import { createIncident, deleteIncident, postIncidentUpdate, purgeIncident, rest
 import type { StatusIncident } from '@/lib/api/status-types';
 import { DateTimeField } from '@/components/DateField';
 import { Select } from '@/components/select/Select';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
+import type { LocalizedPair } from '@/lib/localized';
 
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -23,33 +25,57 @@ import { Sep } from '@/components/Sep';
 type Kind = 'incident' | 'maintenance';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 
-function TextPair({ prefix, kind, label, max, multiline, testId }: { prefix: string; kind: 'title' | 'body'; label: { en: string; ar: string }; max: number; multiline?: boolean; testId: string }) {
+function TextPair({
+  prefix,
+  kind,
+  label,
+  max,
+  multiline,
+  testId,
+  value,
+  onChange,
+  disabled,
+}: {
+  prefix: string;
+  kind: 'title' | 'body';
+  label: string;
+  max: number;
+  multiline?: boolean;
+  testId: string;
+  value: LocalizedPair;
+  onChange: (next: LocalizedPair) => void;
+  disabled?: boolean;
+}) {
   const id = useId();
-  const field = (lang: 'en' | 'ar') => {
-    const props = {
-      id: `${id}-${lang}`,
-      name: `${prefix}${kind === 'title' ? 'Title' : 'Body'}${lang === 'en' ? 'En' : 'Ar'}`,
-      required: true,
-      maxLength: max,
-      dir: lang === 'ar' ? 'rtl' : 'ltr',
-      lang,
-      className: `${fieldClass} w-full`,
-      'data-testid': `${testId}-${lang}`,
-    } as const;
-    return (
-      <div>
-        <label htmlFor={props.id} className={labelClass}>{label[lang]}</label>
-        {multiline ? <textarea {...props} rows={3} /> : <input {...props} type="text" />}
-      </div>
-    );
-  };
-  return <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{field('en')}{field('ar')}</div>;
+  const baseName = `${prefix}${kind === 'title' ? 'Title' : 'Body'}`;
+  return (
+    <div>
+      <input type="hidden" name={`${baseName}En`} value={value.en} />
+      <input type="hidden" name={`${baseName}Ar`} value={value.ar} />
+      <LocalizedFieldPair
+        id={id}
+        label={label}
+        field={kind === 'title' ? 'status.title' : 'status.body'}
+        value={value}
+        onChange={onChange}
+        multiline={multiline}
+        rows={3}
+        maxLength={max}
+        required
+        disabled={disabled}
+        testId={testId}
+        inputTestIds={{ en: `${testId}-en`, ar: `${testId}-ar` }}
+      />
+    </div>
+  );
 }
 
 export function NewIncidentForm() {
   const { t, locale } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   const [kind, setKind] = useState<Kind>('incident');
+  const [titlePair, setTitlePair] = useState<LocalizedPair>({ en: '', ar: '' });
+  const [bodyPair, setBodyPair] = useState<LocalizedPair>({ en: '', ar: '' });
   const statuses = kind === 'maintenance' ? MAINTENANCE_STATUSES : INCIDENT_STATUSES;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -64,10 +90,10 @@ export function NewIncidentForm() {
       () =>
         createIncident({
           kind,
-          titleEn: String(d.get('newTitleEn') ?? ''),
-          titleAr: String(d.get('newTitleAr') ?? ''),
-          bodyEn: String(d.get('newBodyEn') ?? ''),
-          bodyAr: String(d.get('newBodyAr') ?? ''),
+          titleEn: titlePair.en,
+          titleAr: titlePair.ar,
+          bodyEn: bodyPair.en,
+          bodyAr: bodyPair.ar,
           status: String(d.get('status') ?? ''),
           impact: kind === 'incident' ? String(d.get('impact') ?? '') : undefined,
           components,
@@ -76,7 +102,11 @@ export function NewIncidentForm() {
         }),
       { success: t(kind === 'incident' ? 'statusPage.created' : 'statusPage.maintenanceCreated') },
     );
-    if (done) form.reset();
+    if (done) {
+      form.reset();
+      setTitlePair({ en: '', ar: '' });
+      setBodyPair({ en: '', ar: '' });
+    }
   }
 
   return (
@@ -94,8 +124,8 @@ export function NewIncidentForm() {
             ))}
           </div>
         </fieldset>
-        <TextPair prefix="new" kind="title" label={{ en: t('statusPage.new.titleEn'), ar: t('statusPage.new.titleAr') }} max={STATUS_TEXT_LIMITS.title} testId="status-title" />
-        <TextPair prefix="new" kind="body" label={{ en: t('statusPage.new.bodyEn'), ar: t('statusPage.new.bodyAr') }} max={STATUS_TEXT_LIMITS.body} multiline testId="status-body" />
+        <TextPair prefix="new" kind="title" label={t('statusPage.new.fieldTitle')} max={STATUS_TEXT_LIMITS.title} testId="status-title" value={titlePair} onChange={setTitlePair} disabled={busy !== null} />
+        <TextPair prefix="new" kind="body" label={t('statusPage.new.fieldMessage')} max={STATUS_TEXT_LIMITS.body} multiline testId="status-body" value={bodyPair} onChange={setBodyPair} disabled={busy !== null} />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label htmlFor="status-status" className={labelClass}>{t('statusPage.new.status')}</label>
@@ -150,6 +180,7 @@ export function NewIncidentForm() {
 function UpdateForm({ incident }: { incident: StatusIncident }) {
   const { t } = useLanguage();
   const { run, busy, error, message } = useContentAction();
+  const [bodyPair, setBodyPair] = useState<LocalizedPair>({ en: '', ar: '' });
   const statuses = incident.kind === 'maintenance' ? MAINTENANCE_STATUSES : INCIDENT_STATUSES;
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -160,13 +191,16 @@ function UpdateForm({ incident }: { incident: StatusIncident }) {
       () =>
         postIncidentUpdate(incident.id, {
           status: String(d.get('status') ?? ''),
-          bodyEn: String(d.get('updBodyEn') ?? ''),
-          bodyAr: String(d.get('updBodyAr') ?? ''),
+          bodyEn: bodyPair.en,
+          bodyAr: bodyPair.ar,
           ...(incident.kind === 'incident' ? { impact: String(d.get('impact') ?? incident.impact) } : {}),
         }),
       { success: t('statusPage.updated') },
     );
-    if (done) form.reset();
+    if (done) {
+      form.reset();
+      setBodyPair({ en: '', ar: '' });
+    }
   }
   return (
     <form onSubmit={submit} className="mt-4 space-y-3 border-t border-border pt-4" data-testid={`status-update-form-${incident.id}`}>
@@ -187,7 +221,7 @@ function UpdateForm({ incident }: { incident: StatusIncident }) {
           </div>
         )}
       </div>
-      <TextPair prefix="upd" kind="body" label={{ en: t('statusPage.new.bodyEn'), ar: t('statusPage.new.bodyAr') }} max={STATUS_TEXT_LIMITS.body} multiline testId="status-update-body" />
+      <TextPair prefix="upd" kind="body" label={t('statusPage.new.fieldMessage')} max={STATUS_TEXT_LIMITS.body} multiline testId="status-update-body" value={bodyPair} onChange={setBodyPair} disabled={busy !== null} />
       <ActionFeedback error={error} message={message} />
       <button type="submit" className={primaryButtonClass} disabled={busy !== null} data-testid="status-update-submit">
         {busy ? t('content.working') : t('statusPage.update.post')}

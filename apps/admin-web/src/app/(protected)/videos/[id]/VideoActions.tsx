@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { deleteVideo, moveVideo, updateVideo, uploadVideoThumbnail, videoAction } from '@/lib/api/content';
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { fieldClass, primaryButtonClass } from '@/components/ui';
+import { primaryButtonClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
+import { hasBoth, hasLanguages, samePair, userTextEdit, userTextErrors, userTextPair, type LocalizedPair } from '@/lib/localized';
 import { VideoActionsSlot } from '../extensions';
 import { ThumbnailCropDialog, loadImageFile } from '@/components/content/ThumbnailCropDialog';
 import { shapesMatch, type ThumbnailCropSize } from '@al-ummah/shared-types';
@@ -17,7 +19,9 @@ interface Props {
   video: {
     id: string;
     title: string;
+    titleLocalized?: Record<string, string>;
     description: string;
+    descriptionLocalized?: Record<string, string>;
     isPublic: boolean;
     isDeleted: boolean;
     unpublished: boolean;
@@ -36,8 +40,11 @@ export function VideoActions({ video, permissions }: Props) {
   const router = useRouter();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
-  const [title, setTitle] = useState(video.title);
-  const [description, setDescription] = useState(video.description);
+  const initialTitle = userTextPair(video.title, video.titleLocalized);
+  const initialDescription = userTextPair(video.description, video.descriptionLocalized);
+  const [title, setTitle] = useState<LocalizedPair>(initialTitle);
+  const [description, setDescription] = useState<LocalizedPair>(initialDescription);
+  const [fieldErrors, setFieldErrors] = useState<{ titleEn?: string; titleAr?: string; descEn?: string; descAr?: string }>({});
   const [isPublic, setIsPublic] = useState(video.isPublic);
   const [target, setTarget] = useState('');
   // Bumped after a move so the channel picker starts empty again
@@ -60,10 +67,10 @@ export function VideoActions({ video, permissions }: Props) {
     await run('thumbnail', () => uploadVideoThumbnail(video.id, form), { success: t('content.saved') });
   }
 
-  const edit: { title?: string; description?: string; isPublic?: boolean } = {};
-  if (title.trim() !== video.title) edit.title = title.trim();
-  if (description !== video.description) edit.description = description;
-  if (isPublic !== video.isPublic) edit.isPublic = isPublic;
+  const titleChanged = !samePair(title, initialTitle);
+  const descChanged = !samePair(description, initialDescription);
+  const visChanged = isPublic !== video.isPublic;
+  const hasChanges = titleChanged || descChanged || visChanged;
 
   return (
     <div className="space-y-6" data-testid="video-actions">
@@ -73,19 +80,75 @@ export function VideoActions({ video, permissions }: Props) {
         <SectionCard title={t('videos.editTitle')} id={`${ids}-edit`} testId="video-edit">
           <form
             className="space-y-4"
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
-              if (Object.keys(edit).length) await run('edit', () => updateVideo(video.id, edit), { success: t('content.saved') });
+              if (!hasChanges) return;
+              const nextErrors: typeof fieldErrors = {};
+              if (titleChanged) {
+                const missing = userTextErrors(initialTitle, title, true);
+                if (missing.includes('en')) nextErrors.titleEn = t('localized.required', { lang: t('localized.langEnglish') });
+                if (missing.includes('ar')) nextErrors.titleAr = t('localized.required', { lang: t('localized.langArabic') });
+              }
+              if (descChanged) {
+                const missing = userTextErrors(initialDescription, description, false);
+                if (missing.includes('en')) nextErrors.descEn = t('localized.required', { lang: t('localized.langEnglish') });
+                if (missing.includes('ar')) nextErrors.descAr = t('localized.required', { lang: t('localized.langArabic') });
+              }
+              setFieldErrors(nextErrors);
+              if (Object.keys(nextErrors).length) return;
+
+              const edit: Parameters<typeof updateVideo>[1] = {};
+              if (titleChanged) {
+                const { plain, map } = userTextEdit(initialTitle, title, hasLanguages(video.titleLocalized));
+                edit.title = plain;
+                if (map) edit.titleLocalized = map;
+              }
+              if (descChanged) {
+                const { plain, map } = userTextEdit(initialDescription, description, hasLanguages(video.descriptionLocalized));
+                edit.description = plain;
+                if (map) edit.descriptionLocalized = map;
+              }
+              if (visChanged) edit.isPublic = isPublic;
+              await run('edit', () => updateVideo(video.id, edit), { success: t('content.saved') });
             }}
           >
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-title`} className="text-sm text-fg-muted">{t('videos.titleField')}</label>
-              <input id={`${ids}-title`} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required dir="auto" className={fieldClass} data-testid="video-edit-title" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-desc`} className="text-sm text-fg-muted">{t('videos.description')}</label>
-              <textarea id={`${ids}-desc`} value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} dir="auto" className={`${fieldClass} w-full`} data-testid="video-edit-description" />
-            </div>
+            <LocalizedFieldPair
+              id={`${ids}-title`}
+              label={t('videos.titleField')}
+              field="videos.title"
+              value={title}
+              onChange={(next) => {
+                setTitle(next);
+                setFieldErrors((prev) => ({ ...prev, titleEn: undefined, titleAr: undefined }));
+              }}
+              errors={{ en: fieldErrors.titleEn, ar: fieldErrors.titleAr }}
+              maxLength={200}
+              required={hasBoth(initialTitle)}
+              help={hasBoth(initialTitle) ? undefined : t('localized.oneIsEnough')}
+              disabled={!!busy}
+              testId="video-edit-title"
+              inputTestIds={{ en: 'video-edit-title', ar: 'video-edit-title-ar' }}
+            />
+            <LocalizedFieldPair
+              id={`${ids}-desc`}
+              label={t('videos.description')}
+              field="videos.description"
+              value={description}
+              onChange={(next) => {
+                setDescription(next);
+                setFieldErrors((prev) => ({ ...prev, descEn: undefined, descAr: undefined }));
+              }}
+              errors={{ en: fieldErrors.descEn, ar: fieldErrors.descAr }}
+              multiline
+              rows={5}
+              maxLength={5000}
+              required={hasBoth(initialDescription)}
+              help={hasBoth(initialDescription) ? undefined : t('localized.oneIsEnough')}
+              disabled={!!busy}
+              testId="video-edit-description"
+              inputTestIds={{ en: 'video-edit-description', ar: 'video-edit-description-ar' }}
+            />
             <fieldset className="flex flex-wrap gap-4 text-sm">
               <legend className="text-sm text-fg-muted mb-1">{t('videos.visibility')}</legend>
               {[true, false].map((value) => (
@@ -95,7 +158,7 @@ export function VideoActions({ video, permissions }: Props) {
                 </label>
               ))}
             </fieldset>
-            <button type="submit" className={`${primaryButtonClass} disabled:opacity-60`} disabled={!!busy || Object.keys(edit).length === 0} data-testid="video-edit-save">
+            <button type="submit" className={`${primaryButtonClass} disabled:opacity-60`} disabled={!!busy || !hasChanges} data-testid="video-edit-save">
               {busy === 'edit' ? t('content.working') : t('content.save')}
             </button>
           </form>

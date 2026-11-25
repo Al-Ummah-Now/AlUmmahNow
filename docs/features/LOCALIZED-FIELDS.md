@@ -5,6 +5,13 @@ has to set it, or you provide a translation service from one to the other; only 
 content." User content (videos, posts, comments, playlists, channel and profile text, a scholar's
 own bio) is out of scope.
 
+Staff and user content (2026-11-24): staff who **create** something (a channel, an invite with a channel,
+a category, a status post, a theme) give both languages, always. Staff who **edit** a user's channel or
+video that has one language may leave it at one: the other is offered with Translate, not required, and a
+text nobody touched is not rewritten (a plain text without languages stays plain). A text that has both
+keeps both. A caller that knows only the plain field changes the language it shows and leaves the other
+(`apps/api-videos/src/lib/admin/localizedEdit.ts`, `apps/admin-web/src/lib/localized.ts`).
+
 ## Behaviour
 
 - Both languages are first-class. Saving with one missing is a validation error, in the API and

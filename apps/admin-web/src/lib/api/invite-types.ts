@@ -59,7 +59,7 @@ export interface NewInviteInput {
   locale: 'en' | 'ar';
   note?: string;
   expiresInDays?: number;
-  channels?: { create: Array<{ name: string; handle?: string }>; transfer: string[] };
+  channels?: { create: Array<{ name: string; nameLocalized?: { en: string; ar: string }; handle?: string }>; transfer: string[] };
 }
 
 /** A video the invite form can attach (admin-api GET /api/invites/videos): public, ready and listed. */

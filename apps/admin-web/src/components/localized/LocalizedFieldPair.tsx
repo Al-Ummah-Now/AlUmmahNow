@@ -38,7 +38,7 @@ export const smallTranslateButton =
 type Status =
   | { kind: 'idle' }
   | { kind: 'busy'; to: FieldLang }
-  | { kind: 'done'; to: FieldLang; replaced: boolean }
+  | { kind: 'done'; to: FieldLang; replaced: boolean; cut: boolean }
   | { kind: 'undone'; to: FieldLang }
   | { kind: 'error'; message: string };
 
@@ -56,6 +56,7 @@ export interface LocalizedFieldPairProps {
   maxLength?: number;
   required?: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
   /** Optional help under the pair */
   help?: string;
   /** Base id (defaults to a generated one); inputs get `${id}-en` / `${id}-ar` */
@@ -68,7 +69,7 @@ export interface LocalizedFieldPairProps {
   translate?: TranslateFn;
 }
 
-export function LocalizedFieldPair({ label, field, value, onChange, errors, multiline = false, rows = 3, maxLength, required = true, disabled = false, help, id, testId, inputTestIds, translate = translateFields }: LocalizedFieldPairProps) {
+export function LocalizedFieldPair({ label, field, value, onChange, errors, multiline = false, rows = 3, maxLength, required = true, disabled = false, autoFocus = false, help, id, testId, inputTestIds, translate = translateFields }: LocalizedFieldPairProps) {
   const { t, locale } = useLanguage();
   const generated = useId();
   const base = id ?? `lf-${generated.replace(/:/g, '')}`;
@@ -107,8 +108,9 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
       const previous = value[to];
       const replaced = previous.trim().length > 0 && previous !== s.text;
       setUndo(replaced ? { lang: to, previous } : null);
-      set(to, maxLength ? s.text.slice(0, maxLength) : s.text);
-      setStatus({ kind: 'done', to, replaced });
+      const cut = !!maxLength && s.text.length > maxLength;
+      set(to, cut ? s.text.slice(0, maxLength) : s.text);
+      setStatus({ kind: 'done', to, replaced, cut });
     } catch (error) {
       reportError(error, { shown: true, extra: { action: 'translate-field', field } });
       setStatus({ kind: 'error', message: t('localized.errors.failed') });
@@ -127,7 +129,12 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
     status.kind === 'busy'
       ? t('localized.translating')
       : status.kind === 'done'
-        ? t(status.replaced ? 'localized.replaced' : 'localized.filled', { lang: langName(status.to) })
+        ? [
+            t(status.replaced ? 'localized.replaced' : 'localized.filled', { lang: langName(status.to) }),
+            status.cut ? t('localized.cut', { lang: langName(status.to), max: maxLength ?? 0 }) : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
         : status.kind === 'undone'
           ? t('localized.undone', { lang: langName(status.to) })
           : status.kind === 'error'
@@ -146,6 +153,7 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
       dir: lang === 'ar' ? 'rtl' : 'ltr',
       disabled,
       required,
+      autoFocus: autoFocus && lang === 'en' ? true : undefined,
       maxLength,
       'aria-invalid': error ? true : undefined,
       'aria-describedby': describedBy,

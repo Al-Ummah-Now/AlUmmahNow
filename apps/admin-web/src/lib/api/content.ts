@@ -82,7 +82,16 @@ export async function getChannelLabelHistory(id: string): Promise<ChannelLabelEv
   return state?.history ?? [];
 }
 
-export async function updateChannel(id: string, edit: { name?: string; handle?: string; description?: string }): Promise<ActionResult<unknown>> {
+export async function updateChannel(
+  id: string,
+  edit: {
+    name?: string;
+    nameLocalized?: { en?: string; ar?: string };
+    handle?: string;
+    description?: string;
+    descriptionLocalized?: { en?: string; ar?: string };
+  },
+): Promise<ActionResult<unknown>> {
   return toResult(() => fetchAdmin(`${BASE}/channels/${enc(id)}`, json('PATCH', edit)));
 }
 
@@ -154,7 +163,16 @@ export async function getVideo(id: string): Promise<VideoDetailView> {
   return fetchAdmin(`${BASE}/videos/${enc(id)}`);
 }
 
-export async function updateVideo(id: string, edit: { title?: string; description?: string; isPublic?: boolean }): Promise<ActionResult<unknown>> {
+export async function updateVideo(
+  id: string,
+  edit: {
+    title?: string;
+    titleLocalized?: { en?: string; ar?: string };
+    description?: string;
+    descriptionLocalized?: { en?: string; ar?: string };
+    isPublic?: boolean;
+  },
+): Promise<ActionResult<unknown>> {
   return toResult(() => fetchAdmin(`${BASE}/videos/${enc(id)}`, json('PATCH', edit)));
 }
 

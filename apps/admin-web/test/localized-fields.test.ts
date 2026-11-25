@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import * as React from 'react';
 import type { AdminFieldTranslateRequest } from '@al-ummah/shared-types';
-import { emptyLangs, filterMissing, missingItems, missingLang, suggestionOf, translateBatches, translateErrorCode } from '../src/lib/localized';
+import { emptyLangs, filterMissing, missingItems, missingLang, suggestionOf, translateBatches, translateErrorCode, userTextEdit, userTextErrors, userTextPair } from '../src/lib/localized';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -50,6 +50,37 @@ describe('localized helpers', () => {
     assert.deepEqual(suggestionOf(undefined), { kind: 'empty' });
     assert.equal(translateErrorCode('daily_limit'), 'daily_limit');
     assert.equal(translateErrorCode('weird'), 'failed');
+  });
+
+  it('a user’s text stands in the input of its own language', () => {
+    assert.deepEqual(userTextPair('Lessons', undefined), { en: 'Lessons', ar: '' });
+    assert.deepEqual(userTextPair('دروس', {}), { en: '', ar: 'دروس' });
+    assert.deepEqual(userTextPair('', null), { en: '', ar: '' });
+    // Stored languages win over the plain text, which repeats one of them
+    assert.deepEqual(userTextPair('دروس', { ar: 'دروس' }), { en: '', ar: 'دروس' });
+    assert.deepEqual(userTextPair('Lessons', { en: 'Lessons', ar: 'دروس' }), { en: 'Lessons', ar: 'دروس' });
+  });
+
+  it('an edit of it needs one language, or both where it had both', () => {
+    const p = (en: string, ar: string) => ({ en, ar });
+    assert.deepEqual(userTextErrors(p('A', ''), p('B', ''), true), []);
+    assert.deepEqual(userTextErrors(p('A', ''), p('', 'ب'), true), []);
+    assert.deepEqual(userTextErrors(p('A', ''), p(' ', ''), true), ['en']);
+    assert.deepEqual(userTextErrors(p('', 'أ'), p('', ''), true), ['ar']);
+    assert.deepEqual(userTextErrors(p('A', 'أ'), p('A', ''), true), ['ar']);
+    assert.deepEqual(userTextErrors(p('A', 'أ'), p('', ''), true), ['en', 'ar']);
+    assert.deepEqual(userTextErrors(p('A', 'أ'), p('', ''), false), []);
+    assert.deepEqual(userTextErrors(p('A', 'أ'), p('', 'أ'), false), ['en']);
+  });
+
+  it('it sends languages only for a text that has them or gets a second one', () => {
+    const p = (en: string, ar: string) => ({ en, ar });
+    assert.deepEqual(userTextEdit(p('A', ''), p(' B ', ''), false), { plain: 'B' });
+    assert.deepEqual(userTextEdit(p('A', ''), p('B', ''), true), { plain: 'B', map: { en: 'B' } });
+    assert.deepEqual(userTextEdit(p('A', ''), p('', 'ب'), false), { plain: 'ب', map: { ar: 'ب' } });
+    assert.deepEqual(userTextEdit(p('A', ''), p('A', 'ب'), false), { plain: 'A', map: { en: 'A', ar: 'ب' } });
+    assert.deepEqual(userTextEdit(p('', ''), p('', ''), false), { plain: '' });
+    assert.deepEqual(userTextEdit(p('A', 'ب'), p('', ''), true), { plain: '', map: {} });
   });
 
   it('the Arabic strings use «مرئي», never «فيديو»', () => {
@@ -158,6 +189,19 @@ describe('LocalizedFieldPair and Translate missing in a DOM', () => {
     await click(limited.q('name-translate-en'));
     assert.match(limited.q('name-status')?.textContent ?? '', /استنفدت ترجمات اليوم/);
     await limited.unmount();
+  });
+
+  it('a translation longer than the field is cut and says so, in the page’s digits', async () => {
+    for (const [locale, words] of [
+      ['en', /Arabic translation is longer than 10 characters and was cut/],
+      ['ar', /أطول من ١٠ حرفًا فقُصّت/],
+    ] as const) {
+      const p = await pair({ en: 'News', ar: '' }, () => ok('أخبار اليوم كلها'), { maxLength: 10 }, locale);
+      await click(p.q('name-translate-en'));
+      assert.equal((p.q('name-ar') as HTMLInputElement).value, 'أخبار اليوم كلها'.slice(0, 10));
+      assert.match(p.q('name-status')?.textContent ?? '', words);
+      await p.unmount();
+    }
   });
 
   it('a form can keep its own input test ids', async () => {

@@ -3788,3 +3788,120 @@ describe('soft deletes (Recently deleted, restore, cleanup)', () => {
 		assert.equal((await call('POST', '/deletions/bogus/x/restore')).status, 404);
 	});
 });
+
+describe('admin bilingual channel and video edits', () => {
+	// One walk for the two records with a user's text
+	const KINDS = [
+		{ path: '/channels/ch1', main: 'name', mainMap: 'nameLocalized' },
+		{ path: '/videos/v1', main: 'title', mainMap: 'titleLocalized' },
+	] as const;
+	for (const { path, main, mainMap } of KINDS) {
+		const read = async (call: Awaited<ReturnType<typeof setup>>['call']) => (await call('GET', path)).body.result as Record<string, any>;
+
+		it(`${main}: both languages are stored, shown, and the plain text is the English one`, async () => {
+			const { call } = await setup();
+			const patched = await call('PATCH', path, {
+				[main]: 'Fiqh Academy',
+				[mainMap]: { en: ' Fiqh Academy ', ar: 'أكاديمية الفقه' },
+				description: 'Structured courses',
+				descriptionLocalized: { en: 'Structured courses', ar: 'دورات منظمة' },
+			});
+			assert.equal(patched.status, 200);
+			const detail = await read(call);
+			assert.equal(detail[main], 'Fiqh Academy');
+			assert.deepEqual(detail[mainMap], { en: 'Fiqh Academy', ar: 'أكاديمية الفقه' });
+			assert.equal(detail.description, 'Structured courses');
+			assert.deepEqual(detail.descriptionLocalized, { en: 'Structured courses', ar: 'دورات منظمة' });
+		});
+
+		it(`${main}: a text with one language can be edited in it, and the other is added when given`, async () => {
+			const { call } = await setup();
+			for (const only of ['en', 'ar'] as const) {
+				const text = only === 'en' ? 'One language' : 'لغة واحدة';
+				assert.equal((await call('PATCH', path, { [main]: text, [mainMap]: { [only]: text } })).status, 200);
+				const one = await read(call);
+				assert.equal(one[main], text);
+				assert.deepEqual(one[mainMap], { [only]: text });
+				// The description too, empty strings counting as none
+				assert.equal((await call('PATCH', path, { descriptionLocalized: { en: only === 'en' ? 'About' : '', ar: only === 'ar' ? 'نبذة' : '' } })).status, 200);
+				assert.deepEqual((await read(call)).descriptionLocalized, { [only]: only === 'en' ? 'About' : 'نبذة' });
+				assert.equal((await call('PATCH', path, { descriptionLocalized: {} })).status, 200);
+			}
+			assert.equal((await call('PATCH', path, { [mainMap]: { en: 'Two', ar: 'لغتان' } })).status, 200);
+			assert.deepEqual((await read(call))[mainMap], { en: 'Two', ar: 'لغتان' });
+		});
+
+		it(`${main}: a text with both languages keeps both`, async () => {
+			const { call } = await setup();
+			const both = { [mainMap]: { en: 'Two', ar: 'لغتان' }, descriptionLocalized: { en: 'About', ar: 'نبذة' } };
+			assert.equal((await call('PATCH', path, both)).status, 200);
+			for (const bad of [{ [mainMap]: { en: 'Two' } }, { [mainMap]: { en: '', ar: 'لغتان' } }, { descriptionLocalized: { en: 'About', ar: ' ' } }]) {
+				assert.equal((await call('PATCH', path, bad)).status, 400, JSON.stringify(bad));
+			}
+			const kept = await read(call);
+			assert.deepEqual(kept[mainMap], both[mainMap]);
+			assert.deepEqual(kept.descriptionLocalized, both.descriptionLocalized);
+			// The whole description may go; the main text may not
+			assert.equal((await call('PATCH', path, { descriptionLocalized: { en: '', ar: '' } })).status, 200);
+			const cleared = await read(call);
+			assert.equal(cleared.description, '');
+			assert.equal(cleared.descriptionLocalized, undefined);
+			assert.equal((await call('PATCH', path, { [mainMap]: { en: '', ar: '' } })).status, 400);
+			assert.equal((await call('PATCH', path, { [mainMap]: {} })).status, 400);
+		});
+
+		it(`${main}: a caller that knows only the plain text changes the language it shows, and loses nothing else`, async () => {
+			const { call } = await setup();
+			await call('PATCH', path, { [mainMap]: { en: 'Two', ar: 'لغتان' }, descriptionLocalized: { en: 'About', ar: 'نبذة' } });
+			assert.equal((await call('PATCH', path, { [main]: 'Two, fixed' })).status, 200);
+			assert.equal((await call('PATCH', path, { description: 'About us' })).status, 200);
+			const detail = await read(call);
+			assert.equal(detail[main], 'Two, fixed');
+			assert.deepEqual(detail[mainMap], { en: 'Two, fixed', ar: 'لغتان' });
+			assert.equal(detail.description, 'About us');
+			assert.deepEqual(detail.descriptionLocalized, { en: 'About us', ar: 'نبذة' });
+			// Arabic only: its plain text is the Arabic one
+			await call('PATCH', path, { descriptionLocalized: {} });
+			await call('PATCH', path, { descriptionLocalized: { ar: 'نبذة' } });
+			await call('PATCH', path, { description: 'نبذة أخرى' });
+			assert.deepEqual((await read(call)).descriptionLocalized, { ar: 'نبذة أخرى' });
+			// Cleared: no language keeps the old text
+			await call('PATCH', path, { description: '' });
+			assert.equal((await read(call)).descriptionLocalized, undefined);
+		});
+
+		it(`${main}: a text without languages stays so while only its plain text is edited`, async () => {
+			const { call } = await setup();
+			assert.equal((await call('PATCH', path, { [main]: 'Plain', description: 'Plain words' })).status, 200);
+			const detail = await read(call);
+			assert.equal(detail[main], 'Plain');
+			assert.equal(detail[mainMap], undefined);
+			assert.equal(detail.descriptionLocalized, undefined);
+		});
+
+		it(`${main}: refuses a plain text that is not the languages' own, unknown languages, and texts too long`, async () => {
+			const { call } = await setup();
+			for (const bad of [
+				{ [main]: 'A', [mainMap]: { en: 'B', ar: 'ب' } },
+				{ [main]: 'A', [mainMap]: { ar: 'ب' } },
+				{ description: 'A', descriptionLocalized: { en: 'B', ar: 'ب' } },
+				{ description: 'A', descriptionLocalized: {} },
+				{ [mainMap]: { en: 'A', fr: 'B' } },
+				{ [mainMap]: { en: 'x'.repeat(201) } },
+				{ descriptionLocalized: { ar: 'ن'.repeat(10001) } },
+				{ [mainMap]: 'A' },
+			]) {
+				assert.equal((await call('PATCH', path, bad)).status, 400, JSON.stringify(bad).slice(0, 80));
+			}
+		});
+	}
+
+	it('a refused text claims no handle', async () => {
+		const { call } = await setup({ channels: { ch1: channel('ch1'), ch2: channel('ch2') } });
+		await call('PATCH', '/channels/ch1', { nameLocalized: { en: 'Two', ar: 'لغتان' } });
+		const before = (await call('GET', '/channels/ch1')).body.result.handle;
+		assert.equal((await call('PATCH', '/channels/ch1', { handle: 'kept-free', nameLocalized: { en: 'Two' } })).status, 400);
+		assert.equal((await call('GET', '/channels/ch1')).body.result.handle, before);
+		assert.equal((await call('PATCH', '/channels/ch2', { handle: 'kept-free' })).status, 200);
+	});
+});
