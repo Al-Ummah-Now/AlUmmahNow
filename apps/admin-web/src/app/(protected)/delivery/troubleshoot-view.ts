@@ -40,6 +40,7 @@ export const REASON_LABEL: Record<TranscodeReason, MessageKey> = {
   container_silent: 'transcodeTroubleshoot.reasons.container_silent',
   no_video_stream: 'transcodeTroubleshoot.reasons.no_video_stream',
   source_changed: 'transcodeTroubleshoot.reasons.source_changed',
+  colour_unsupported: 'transcodeTroubleshoot.reasons.colour_unsupported',
   encode_failed: 'transcodeTroubleshoot.reasons.encode_failed',
   upload_failed: 'transcodeTroubleshoot.reasons.upload_failed',
   cancelled: 'transcodeTroubleshoot.reasons.cancelled',

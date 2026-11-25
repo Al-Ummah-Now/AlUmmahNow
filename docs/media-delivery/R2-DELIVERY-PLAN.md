@@ -92,6 +92,14 @@ Ladder (H.264 high, AAC 128k): 360p, 480p, 720p, 1080p, never above the source. 
 use the same rungs by short side (360×640 … 1080×1920). CRF 23 with `maxrate` caps per rung:
 0.8 / 1.4 / 2.8 / 5 Mbps.
 
+Colors: everything published (rungs, MP4, thumbnails, preview) is SDR BT.709, limited range, and tagged so,
+whatever the source (`apps/media/container/colour.mjs`). HLG and PQ (Dolby Vision over either included) are
+tone mapped through a generated 3D table, the same one the importer uses (`ENCODE_LADDER.colour`); SDR in
+another matrix, range or gamut is converted; SDR BT.709 pixels are not touched. A source nothing here shows
+right (Dolby Vision profile 5, ICtCp) fails with `colour_unsupported`. Renditions encoded on a computer are
+refused with `hdr` when they carry HDR tags or metadata, `colour` when they are not SDR BT.709, and the server
+encodes the file itself. Thumbnails and previews are written in BT.601, which is how JPEG and WebP are read.
+
 ### Limits we design around (from Cloudflare)
 
 - **No Cache Reserve for R2 public buckets.** A cold long tail costs first-byte latency, not money.

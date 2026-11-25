@@ -4272,6 +4272,7 @@ const ar: Messages = {
       container_silent: 'توقفت الحاوية عن إرسال التقدّم.',
       no_video_stream: 'لا يحتوي الملف على مرئي.',
       source_changed: 'الملف المرفوع غير الملف الذي قرأه المستورد. يلزم رفعه من جديد.',
+      colour_unsupported: 'صيغة HDR في الملف لا يمكننا تحويلها (مثل Dolby Vision، الملف التعريفي ٥).',
       encode_failed: 'تعذّر ترميز الملف.',
       upload_failed: 'تعذّر حفظ النسخ في R2.',
       cancelled: 'ألغاه مشرف.',

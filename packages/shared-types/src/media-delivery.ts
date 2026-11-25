@@ -94,7 +94,7 @@ export interface TranscodeResult {
 	objects: number;
 	bytes: number;
 	durationSeconds: number;
-	source: { width: number; height: number; durationSeconds: number; bytes: number; codec?: string; hasAudio: boolean; /** Bunny file it was read from: original, play_1080p.mp4 … */ file?: string };
+	source: { width: number; height: number; durationSeconds: number; bytes: number; codec?: string; hasAudio: boolean; /** What the source's colours were and what was done (container/colour.mjs) */ colour?: SourceColour; /** Bunny file it was read from: original, play_1080p.mp4 … */ file?: string };
 	timings: { downloadMs: number; transcodeMs: number; uploadMs: number; totalMs: number };
 	thumbnail: string;
 	preview?: string;
@@ -107,6 +107,19 @@ export interface TranscodeResult {
 	 * check and were published as they are; otherwise the server encoded and `reason` says why.
 	 */
 	prebuilt?: { used: boolean; reason?: PrebuiltRejection; rung?: string };
+}
+
+/**
+ * A source's colours as its file says them, and what the transcode did: `as_is` (SDR BT.709 already),
+ * `convert` (SDR in another matrix, range or gamut) or `hlg` / `pq` (HDR, tone mapped). What is published
+ * is always SDR BT.709.
+ */
+export const SOURCE_COLOUR_KINDS = ['as_is', 'convert', 'hlg', 'pq'] as const;
+export interface SourceColour {
+	kind: (typeof SOURCE_COLOUR_KINDS)[number];
+	transfer?: string;
+	primaries?: string;
+	matrix?: string;
 }
 
 /** Why the server encoded instead of using the creator's renditions (apps/media/container/prebuilt.mjs). */
@@ -124,6 +137,9 @@ export const PREBUILT_REJECTIONS = [
 	'no_video',
 	'video_codec',
 	'pixel_format',
+	// HDR tags or metadata on a rung; or a rung in other colours than SDR BT.709 (container/colour.mjs)
+	'hdr',
+	'colour',
 	'size',
 	'audio',
 	'segment_length',
@@ -208,7 +224,7 @@ export function sanitizeSourceFacts(value: unknown): TranscodeSourceFacts | null
 export type SourceVerdict = 'has_video' | 'audio_only' | 'half_written' | 'unreadable';
 
 /** Why a video could not be made, as the creator reads it (en + ar in the apps; the stored reason is English) */
-export const UPLOAD_ISSUE_CODES = ['source_changed', 'audio_only', 'half_written', 'unreadable'] as const;
+export const UPLOAD_ISSUE_CODES = ['source_changed', 'audio_only', 'half_written', 'unreadable', 'colour_unsupported'] as const;
 export type UploadIssueCode = (typeof UPLOAD_ISSUE_CODES)[number];
 export const isUploadIssueCode = (code: unknown): code is UploadIssueCode => (UPLOAD_ISSUE_CODES as readonly unknown[]).includes(code);
 

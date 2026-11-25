@@ -22,6 +22,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
+import { colourOf, colourPlan, cubeText, hasHdrData, toSdrFilters } from './colour.mjs';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs, stillWithFallbacks } from './ladder.mjs';
 import { SourceFacts, sourceChanged, streamFacts } from './source-facts.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
@@ -192,7 +193,7 @@ async function extractReview(job, src, info) {
 		await mkdir(join(dir, 'frames'), { recursive: true });
 		await mkdir(join(dir, 'audio'), { recursive: true });
 		const { interval, capped } = frameInterval(info.durationSeconds, job.review);
-		const times = frameTimes(await runCollectingStderr('ffmpeg', framesArgs({ input: src, out: join(dir, 'frames'), interval, sceneThreshold: job.review.sceneThreshold })));
+		const times = frameTimes(await runCollectingStderr('ffmpeg', framesArgs({ input: src, out: join(dir, 'frames'), interval, sceneThreshold: job.review.sceneThreshold, plan: info.plan, cube: info.cube })));
 		const files = (await readdir(join(dir, 'frames'))).filter((f) => f.endsWith('.jpg')).sort();
 		const frames = thinFrames(files.map((file, i) => ({ file, atMs: times[i] ?? Math.round(i * interval * 1000) })), job.review.maxFrames);
 		let audioCount = 0;
@@ -231,6 +232,7 @@ async function probe(file) {
 	return {
 		...size,
 		codec: v.codec_name,
+		colour: colourOf(v),
 		fps: den ? num / den : 0,
 		durationSeconds: Number(json.format?.duration) || Number(v.duration) || 0,
 		hasAudio: (json.streams || []).some((s) => s.codec_type === 'audio'),
@@ -299,8 +301,11 @@ async function probeRendition(dir, pl) {
 			.split('\n')
 			.map((l) => Number(l.trim().replace(/,$/, '')))
 			.filter((n) => Number.isFinite(n));
+		// HDR metadata sits in the container or in the first frame's SEI
+		const first = JSON.parse(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-read_intervals', '%+#1', '-show_frames', '-print_format', 'json', file]));
+		const hdrData = [v, ...(first.frames || [])].some((x) => hasHdrData(x));
 		return {
-			...(v ? { video: { codec: v.codec_name, width: v.width, height: v.height, pixFmt: v.pix_fmt, profile: v.profile, level: v.level, keyframeSeconds: keys } } : {}),
+			...(v ? { video: { codec: v.codec_name, width: v.width, height: v.height, pixFmt: v.pix_fmt, profile: v.profile, level: v.level, keyframeSeconds: keys, colour: { ...colourOf(v), hdrData } } } : {}),
 			...(a ? { audio: { codec: a.codec_name, channels: a.channels } } : {}),
 		};
 	} catch (error) {
@@ -320,11 +325,11 @@ const EXACT_FRAMES_PER_RUNG = 2;
  * One frame at `t` seconds as a tiny grey thumbnail (MATCH_FRAME_SIZE), or null. Seeks on the input
  * first (fast); `exact` decodes from the start instead, for files whose index does not seek there.
  */
-async function greyFrame(input, t, exact = false) {
+async function greyFrame(input, t, exact = false, sdr = '') {
 	const { width, height } = MATCH_FRAME_SIZE;
 	const seek = ['-ss', String(t)];
 	try {
-		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1'], exact ? EXACT_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
+		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,${sdr ? `${sdr},` : ''}format=gray`, '-f', 'rawvideo', 'pipe:1'], exact ? EXACT_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
 		return buf.length === width * height ? buf : null;
 	} catch {
 		return null;
@@ -343,8 +348,10 @@ async function loudness(input) {
  */
 async function compareRungs(src, playlists, info) {
 	const times = matchTimes(info.durationSeconds, undefined, () => randomInt(0, 1_000_000) / 1_000_000);
+	// The source as viewers get it: an HDR one is tone mapped before it is compared
+	const sdr = toSdrFilters(info.plan, { cube: info.cube });
 	const sourceFrames = [];
-	for (const t of times) sourceFrames.push(await greyFrame(src, t));
+	for (const t of times) sourceFrames.push(await greyFrame(src, t, false, sdr));
 	let sourceEnvelope = null;
 	if (info.hasAudio) {
 		try {
@@ -369,7 +376,7 @@ async function compareRungs(src, playlists, info) {
 			}
 			if (frame && !reference && sourceExact < EXACT_FRAMES_PER_RUNG) {
 				sourceExact++;
-				reference = sourceFrames[i] = await greyFrame(src, times[i], true);
+				reference = sourceFrames[i] = await greyFrame(src, times[i], true, sdr);
 			}
 			frameDistances.push(frameDistance(reference, frame));
 		}
@@ -510,6 +517,14 @@ async function runJob(job) {
 	const info = await probe(src);
 	const rungs = ladderFor(info);
 	log('probed', { info, rungs: rungs.map((r) => r.name) });
+	// Everything published is SDR BT.709 (colour.mjs); a source we cannot show right is refused, not published wrong
+	const plan = colourPlan(info.colour);
+	if (plan.kind === 'unsupported') throw Object.assign(new Error(plan.reason), { fatal: true });
+	info.plan = plan;
+	if (plan.kind === 'hlg' || plan.kind === 'pq') {
+		info.cube = join(WORK, `${plan.kind}.cube`);
+		await writeFile(info.cube, cubeText(plan.kind));
+	}
 	await event({ type: 'started', jobId: job.jobId, rungs: rungs.map((r) => r.name), source: info });
 
 	tracker = new RungTracker(rungs);
@@ -528,7 +543,7 @@ async function runJob(job) {
 		// One pass encodes every rung: all 'encoding' with the shared %
 		tracker.setAll('encoding', 0);
 		if (tracker.due(Date.now())) await progressEvent();
-		await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps }), (line) => {
+		await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps, plan: info.plan, cube: info.cube }), (line) => {
 			const s = progressSeconds(line);
 			if (s === null || !(info.durationSeconds > 0)) return;
 			current.progress = Math.min(0.99, s / info.durationSeconds);
@@ -538,8 +553,10 @@ async function runJob(job) {
 	}
 	// Stills and review come from what viewers will get: the creator's top rung when it is used
 	const published = prebuilt?.used ? prebuilt.top : src;
+	// The creator's rung is SDR already; the source needs its plan
+	const shown = prebuilt?.used ? { ...info, plan: undefined, cube: undefined } : info;
 	setStage('stills');
-	const stills = stillsArgs({ input: published, out, durationSeconds: info.durationSeconds });
+	const stills = stillsArgs({ input: published, out, durationSeconds: info.durationSeconds, plan: shown.plan, cube: shown.cube });
 	// Each attempt is bounded: a poster is a few seconds of decoding, so a minute means a stuck input
 	const still = { run, log, timeoutMs: STILL_TIMEOUT_MS };
 	await stillWithFallbacks(still, stills.thumb, stills.thumbFallbacks);
@@ -566,7 +583,7 @@ async function runJob(job) {
 	}
 	// Review media from the published content (the source, or the creator's top rung), before the
 	// source is deleted (only when the job asks for it)
-	const review = job.review && job.reviewPrefix ? await extractReview(job, published, info) : undefined;
+	const review = job.review && job.reviewPrefix ? await extractReview(job, published, shown) : undefined;
 	await rm(src, { force: true });
 	const tTranscode = Date.now();
 
@@ -599,7 +616,7 @@ async function runJob(job) {
 		objects: files.length,
 		bytes: 0,
 		durationSeconds: info.durationSeconds,
-		source: { width: info.width, height: info.height, durationSeconds: info.durationSeconds, bytes: sourceBytes, codec: info.codec, hasAudio: info.hasAudio, ...(sourceFile ? { file: sourceFile } : {}) },
+		source: { width: info.width, height: info.height, durationSeconds: info.durationSeconds, bytes: sourceBytes, codec: info.codec, hasAudio: info.hasAudio, colour: { kind: info.plan.kind, ...(info.colour.transfer ? { transfer: info.colour.transfer } : {}), ...(info.colour.primaries ? { primaries: info.colour.primaries } : {}), ...(info.colour.matrix ? { matrix: info.colour.matrix } : {}) }, ...(sourceFile ? { file: sourceFile } : {}) },
 		timings: { downloadMs: tDownload - t0, transcodeMs: tTranscode - tDownload, uploadMs: tUpload - tTranscode, totalMs: tUpload - t0 },
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),
