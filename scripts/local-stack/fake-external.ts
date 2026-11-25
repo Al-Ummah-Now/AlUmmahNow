@@ -16,7 +16,8 @@
  * - Google and YouTube (Move from YouTube): fake-google.ts.
  * - Cloudflare API (api.cloudflare.com): only the read calls of the transcode troubleshooting panel
  *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
- *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
+ *   other token or call is refused, except a cache purge, which any token may ask for: nothing is cached
+ *   here, so it is done. PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
@@ -423,6 +424,8 @@ export const fakeCloudflare = { logVideo: null as string | null };
  */
 async function cloudflareApi(request: Request, url: URL): Promise<Response> {
   const ok = (result: unknown) => json({ success: true, errors: [], messages: [], result });
+  // An account's media is gone only once the CDN was told (api-videos lib/privacy/erase-media.ts): the stack caches nothing
+  if (request.method === 'POST' && /^\/client\/v4\/zones\/[^/]+\/purge_cache$/.test(url.pathname)) return ok({ id: 'fake-purge' });
   if (!(request.headers.get('authorization') ?? '').startsWith(`Bearer ${FAKE_CF_TOKEN_PREFIX}`)) {
     return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403);
   }

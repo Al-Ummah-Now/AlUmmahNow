@@ -176,7 +176,7 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
   // Errors the run's users raised (error_events.user_id, error_group_users.user_key): kept by the errors
   // retention when deployed, this run's test data here
   for (const table of ['site_settings_log', 'admin_audit_log', 'error_events', 'error_group_users']) await eraseRowsMentioning('al-ummah-now-reports', table, markers);
-  for (const table of ['admin_jobs', 'admin_deletions', 'search_tombstones', 'search_channels', 'search_meta', 'content_ownership', 'channel_access', 'upload_rate_windows']) {
+  for (const table of ['admin_jobs', 'admin_deletions', 'media_erase_targets', 'search_tombstones', 'search_channels', 'search_meta', 'content_ownership', 'channel_access', 'upload_rate_windows']) {
     await eraseRowsMentioning('al-ummah-now-search', table, markers);
   }
 }

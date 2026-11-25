@@ -1,4 +1,5 @@
 import { EraseMediaUnavailable, eraseMediaHooks } from '../../lib/privacy/erase-media';
+import { isRunAccount } from '../../lib/e2e/runAccounts';
 import { stopSupportBeforeErasure } from '../../lib/support/erasure';
 import { vendorContext } from '../../lib/support/jobs';
 import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
@@ -144,7 +145,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 		const env = c.env;
 		// Media goes through a job written down before each record is deleted (lib/privacy/erase-media.ts)
 		const budget = budgetFor(c);
-		const media = eraseMediaHooks(env, budget);
+		const media = eraseMediaHooks(env, budget, { runAccount: isRunAccount(env as never, (c.get('auth') as { email?: string } | undefined)?.email) });
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
 		// The Bunny collections (lib/channelCollection.ts) never throw
 		const onProfileDeleted = async (id: string, profile: unknown) => {

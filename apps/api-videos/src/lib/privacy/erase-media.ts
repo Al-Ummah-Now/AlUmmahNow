@@ -89,8 +89,9 @@ const PATHS_PER_ITEM = 50;
 const IMAGE_CHUNK = 10;
 /** The first delete comes this long after the last record of the list went (seconds). */
 export const ERASE_DELAY = 24 * 3600;
-/** A run account's (test data): only until the pass that writes the job has finished. */
-export const RUN_ACCOUNT_DELAY = 120;
+/** A run account's (test data, lib/e2e/runAccounts.ts): at once, tried again soon, no second look, and nothing of it is kept. */
+export const RUN_ACCOUNT_DELAY = 5;
+const RUN_ACCOUNT_RETRIES = [5, 5, 10, 15, 20, 30];
 /** R2 objects one part deletes. */
 const PART_KEYS = 500;
 /** Outside calls (R2, D1, HTTP) one step makes; a Worker makes at most 1000, and what the last one of a step still needs fits in the rest. */
@@ -246,6 +247,7 @@ class Outbox {
 	constructor(
 		private readonly env: Env,
 		private readonly delay: number,
+		private readonly run: boolean,
 	) {}
 
 	/** Resolves once the items and the target are stored. Throws when they could not be: the caller must not delete the record. */
@@ -274,7 +276,7 @@ class Outbox {
 				return;
 			}
 		}
-		const job = await createJob(this.env, { kind: ERASE_MEDIA_JOB, targetKind: 'user', targetId: ERASED_USER_ID, actorId: 'system', params: { items, runAfter, delay: this.delay }, delaySeconds: Math.min(MAX_QUEUE_DELAY, this.delay) });
+		const job = await createJob(this.env, { kind: ERASE_MEDIA_JOB, targetKind: 'user', targetId: ERASED_USER_ID, actorId: 'system', params: { items, runAfter, delay: this.delay, ...(this.run ? { run: true } : {}) }, delaySeconds: Math.min(MAX_QUEUE_DELAY, this.delay) });
 		if (job.status === 'failed') throw new EraseMediaUnavailable(job.lastError ?? 'the queue refused it');
 		this.job = { id: job.id, count: items.length };
 	}
@@ -313,9 +315,9 @@ export interface MediaHooks {
  * included: the record stays, and the erase is called again. `budget`: the pass's, for what a channel or profile
  * reads and writes (too little left: the pass stops there, and the next one starts it with its whole budget).
  */
-export function eraseMediaHooks(rawEnv: unknown, budget?: { spend(n: number): void }, opts: { delaySeconds?: number } = {}): MediaHooks {
+export function eraseMediaHooks(rawEnv: unknown, budget?: { spend(n: number): void }, opts: { runAccount?: boolean } = {}): MediaHooks {
 	const env = rawEnv as Env;
-	const outbox = new Outbox(env, opts.delaySeconds ?? ERASE_DELAY);
+	const outbox = new Outbox(env, opts.runAccount ? RUN_ACCOUNT_DELAY : ERASE_DELAY, opts.runAccount === true);
 	const bound = () => {
 		if (!dbOf(env) || !env.ADMIN_JOBS_QUEUE) throw new EraseMediaUnavailable('SEARCH_DB or ADMIN_JOBS_QUEUE is not bound');
 	};
@@ -466,7 +468,8 @@ async function purgeImages(env: Env, urls: string[], counts: EraseMediaCounts, c
 async function deleteImages(s: Step, target: { kind: 'video' | 'channel' | 'user'; id: string }, paths: string[], uploaders: string[], own?: true): Promise<boolean> {
 	const { env, db, counts, calls } = s;
 	const targets: EraseTarget[] = [target, ...[...new Set(uploaders)].filter((id) => target.kind !== 'user' || id !== target.id).map((id) => ({ kind: 'user' as const, id }))];
-	const files = { t: 'files' as const, kind: target.kind, id: target.id, paths, ...(own ? { own } : {}) };
+	// The job names no account: whose an account's files are is on their rows
+	const files = { t: 'files' as const, kind: target.kind, id: target.kind === 'user' ? '' : target.id, paths, ...(own ? { own } : {}) };
 	const taken = await part(s, targets, async (done) => {
 		s.unfinished.push(files);
 		calls.spend();
@@ -741,7 +744,10 @@ async function eraseFiles(s: Step, item: Extract<MediaItem, { t: 'files' }>): Pr
 	const rows = await rowsOf(env, item.paths, calls);
 	if (item.own) {
 		const uploaders = [...rows.values()].map((row) => row.owner_id).filter((id): id is string => !!id);
-		return (await deleteImages(s, item, item.paths, uploaders, true)) ? 'done' : 'takedown';
+		// The rows go last: without them there is nothing left to finish
+		const id = item.kind === 'user' ? uploaders[0] : item.id;
+		if (!id) return 'done';
+		return (await deleteImages(s, { kind: item.kind, id }, item.paths, uploaders, true)) ? 'done' : 'takedown';
 	}
 	const decided = await decide(s, item.paths, rows, new Shown(env, calls), false);
 	const left = item.paths.slice(decided.last ? item.paths.indexOf(decided.last) + 1 : 0);
@@ -781,7 +787,12 @@ async function eraseVideo(s: Step, item: Extract<MediaItem, { t: 'video' }>): Pr
 		const outcome = await deletePages(s, bucket, prefix, target);
 		if (outcome !== 'done') return outcome;
 	}
-	const folder = await eraseImageFolder(s, videoThumbnailFolder(id), item, target);
+	// A thumbnail that cannot go yet does not keep the video: the item is tried again for it
+	let problem: unknown;
+	const folder = await eraseImageFolder(s, videoThumbnailFolder(id), item, target).catch((error): Outcome => {
+		problem = error ?? new Error('thumbnails not erased');
+		return 'done';
+	});
 	if (folder !== 'done') return folder;
 	for (let n = CAPTION_JOBS; n === CAPTION_JOBS; ) {
 		if (!calls.has(CAPTION_JOBS * 5)) return 'more';
@@ -795,6 +806,7 @@ async function eraseVideo(s: Step, item: Extract<MediaItem, { t: 'video' }>): Pr
 	if (!calls.has(FINISH_CALLS)) return 'more';
 	const taken = await part(s, [target], (done) => finishVideo(s, item, done));
 	if (!taken) return 'takedown';
+	if (problem) throw problem;
 	counts.videos++;
 	return 'done';
 }
@@ -804,31 +816,38 @@ async function finishVideo(s: Step, item: Extract<MediaItem, { t: 'video' }>, do
 	const { env, counts, calls } = s;
 	const { id } = item;
 	calls.spend(FINISH_CALLS);
+	// What is stored first, and the CDN whatever became of it: neither waits for the other
+	let problem: unknown;
+	try {
+		// Nothing is listed here: what came after the pages above is the second look's
+		await forgetVideoMedia(env as never, id);
+		if (item.bunny) {
+			const { client, libraryId } = await bunnyClientForVideo(env as never, item.bunny.library);
+			if (await deleteBunnyVideo(client, libraryId, item.bunny.ref)) {
+				done.deleted++;
+				counts.files++;
+			}
+		}
+		await deleteVideoSideRecords(env as never, id, { ...(item.side ?? {}), id } as never, { folders: false });
+		if (env.NOTIFICATIONS_DB) {
+			await env.NOTIFICATIONS_DB.batch([
+				env.NOTIFICATIONS_DB.prepare('DELETE FROM notifications WHERE entity_id = ?').bind(id),
+				env.NOTIFICATIONS_DB.prepare('DELETE FROM liked_videos WHERE video_id = ?').bind(id),
+			]);
+		}
+		// The processor's own copies and the search row; the pass that deleted the record may have stopped before it said so
+		if (env.queue) await new Queue(env.queue as never).send(MessageType.VideoDelete, { videoId: id, userId: ERASED_USER_ID, reason: 'erasure-media', timestamp: new Date().toISOString() });
+	} catch (error) {
+		problem = error ?? new Error('not finished');
+	}
 	// Public renditions are served with no Worker: the CDN is told even when R2 holds nothing any more
-	// Nothing is listed here: what came after the pages above is the second look's
 	await purgeVideoCdn(env as never, id, { strict: true });
-	await forgetVideoMedia(env as never, id);
 	if (env.MEDIA && env.MEDIA_PUBLIC_HOST) {
 		const purged = await purgeCdn(env as never, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/${r2ThumbnailPrefix(id)}`] });
 		if (purged === 'failed') throw new Error('CDN purge of the thumbnails failed');
 		if (purged === 'not_configured') noteCache(counts, 'cloudflare');
 	}
-	if (item.bunny) {
-		const { client, libraryId } = await bunnyClientForVideo(env as never, item.bunny.library);
-		if (await deleteBunnyVideo(client, libraryId, item.bunny.ref)) {
-			done.deleted++;
-			counts.files++;
-		}
-	}
-	await deleteVideoSideRecords(env as never, id, { ...(item.side ?? {}), id } as never, { folders: false });
-	if (env.NOTIFICATIONS_DB) {
-		await env.NOTIFICATIONS_DB.batch([
-			env.NOTIFICATIONS_DB.prepare('DELETE FROM notifications WHERE entity_id = ?').bind(id),
-			env.NOTIFICATIONS_DB.prepare('DELETE FROM liked_videos WHERE video_id = ?').bind(id),
-		]);
-	}
-	// The processor's own copies and the search row; the pass that deleted the record may have stopped before it said so
-	if (env.queue) await new Queue(env.queue as never).send(MessageType.VideoDelete, { videoId: id, userId: ERASED_USER_ID, reason: 'erasure-media', timestamp: new Date().toISOString() });
+	if (problem) throw problem;
 }
 
 /** Sessions one query reads. */
@@ -904,6 +923,8 @@ interface JobParams {
 	runAfter?: string;
 	/** How long after a record went (seconds) */
 	delay?: number;
+	/** A run account's media */
+	run?: true;
 	/** Not yet: their record went less than a day ago */
 	waits?: MediaItem[];
 	/** Parts that were being deleted when a delivery stopped for good (Step.unfinished) */
@@ -971,8 +992,9 @@ export async function runEraseMedia(rawEnv: unknown, job: AdminJob): Promise<Job
 
 	// The round is over
 	const tries = p.tries ?? 0;
-	if (left.length && tries < RETRY_DELAYS.length) {
-		return { done: false, params: { ...p, unfinished: undefined, started: true, items: [...left.map((l) => l.item), ...waits], left: [], waits: [], again, counts, tries: tries + 1 } as Record<string, unknown>, result, delaySeconds: RETRY_DELAYS[tries], note: left.map((l) => `${nameOf(l.item)}: ${l.why}`).join('; ').slice(0, 1000) };
+	const retries = p.run ? RUN_ACCOUNT_RETRIES : RETRY_DELAYS;
+	if (left.length && tries < retries.length) {
+		return { done: false, params: { ...p, unfinished: undefined, started: true, items: [...left.map((l) => l.item), ...waits], left: [], waits: [], again, counts, tries: tries + 1 } as Record<string, unknown>, result, delaySeconds: retries[tries], note: left.map((l) => `${nameOf(l.item)}: ${l.why}`).join('; ').slice(0, 1000) };
 	}
 	const stuck = left.filter((l) => l.why !== 'its record still exists');
 	if (stuck.length) throw new Error(`Not erased: ${stuck.map((l) => `${nameOf(l.item)} (${l.why})`).join('; ')}`.slice(0, 1800));
@@ -985,12 +1007,12 @@ export async function runEraseMedia(rawEnv: unknown, job: AdminJob): Promise<Job
 	}
 	// No account is named for longer than its images take
 	await forgetAccounts(dbOf(env)!, job.id);
-	if (!p.swept && again.length) {
+	if (!p.swept && !p.run && again.length) {
 		return { done: false, params: { started: true, delay: p.delay, items: again, counts, swept: true, tries: 0 } as Record<string, unknown>, result: { ...counts }, delaySeconds: SWEEP_DELAY, note: null };
 	}
 	// The row keeps what was done, not the list
-	if (items.length) return { done: false, params: { started: true, counts, swept: true } as Record<string, unknown>, result: { ...counts } };
-	await closeTargets(dbOf(env)!, job.id);
+	if (items.length) return { done: false, params: { started: true, run: p.run, counts, swept: true } as Record<string, unknown>, result: { ...counts } };
+	await closeTargets(dbOf(env)!, job.id, { all: p.run === true });
 	const unsure = counts.kept.filter((k) => k.endsWith(UNSURE));
 	if (unsure.length) {
 		reportNeedsAction('api-videos', env as ErrorReporterEnv, undefined, {

@@ -109,8 +109,12 @@ export async function forgetAccounts(db: D1Database, jobId: string): Promise<voi
 	await db.prepare(`DELETE FROM media_erase_targets WHERE job_id = ? AND target_kind = 'user'`).bind(jobId).run();
 }
 
-/** The job is done: its rows keep what was deleted when, not the list. */
-export async function closeTargets(db: D1Database, jobId: string): Promise<void> {
+/** The job is done: its rows keep what was deleted when, not the list. `all`: none of them (a run account's). */
+export async function closeTargets(db: D1Database, jobId: string, opts: { all?: boolean } = {}): Promise<void> {
+	if (opts.all) {
+		await db.prepare('DELETE FROM media_erase_targets WHERE job_id = ?').bind(jobId).run();
+		return;
+	}
 	await db.batch([
 		db.prepare(`DELETE FROM media_erase_targets WHERE job_id = ? AND (target_kind IN ('user', 'post') OR (erased_at IS NULL AND first_deleted_at IS NULL AND stopped_at IS NULL))`).bind(jobId),
 		db.prepare('UPDATE media_erase_targets SET media = NULL WHERE job_id = ?').bind(jobId),

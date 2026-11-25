@@ -64,6 +64,8 @@ export const HISTORY: Record<string, { table: string; key: string[] }[] | 'r2'> 
     { table: 'admin_jobs', key: ['id'] },
     { table: 'admin_deletions', key: ['kind', 'target_id'] },
     { table: 'admin_job_users', key: ['user_id', 'job_id'] },
+    // What an admin's purge deleted when (kept with the job's own row)
+    { table: 'media_erase_targets', key: ['target_kind', 'target_id', 'job_id'] },
   ],
   'd1:al-ummah-now-reports': [
     { table: 'admin_audit_log', key: ['id'] },

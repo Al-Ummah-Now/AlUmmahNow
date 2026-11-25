@@ -26,6 +26,13 @@ describe('fake Bunny', () => {
     assert.ok(vertical.height > vertical.width, `vertical clip: ${vertical.width}x${vertical.height}`);
   });
 
+  it('a cache purge is done with any token (nothing is cached); any other Cloudflare call is refused', async () => {
+    const ask = (path: string, method = 'POST') => call(`https://api.cloudflare.com/client/v4${path}`, { method, headers: { authorization: 'Bearer local-stack-fake' }, ...(method === 'POST' ? { body: '{}' } : {}) });
+    const purge = await ask('/zones/z1/purge_cache');
+    assert.deepEqual([purge.status, ((await purge.json()) as { success: boolean }).success], [200, true]);
+    for (const [path, method] of [['/zones/z1/purge_cache', 'GET'], ['/zones/z1/dns_records', 'POST'], ['/accounts/a1/queues', 'GET'], ['/x/zones/z1/purge_cache', 'POST']]) assert.equal((await ask(path, method)).status, 403, `${method} ${path}`);
+  });
+
   it('create → TUS upload in two chunks with a resume → processing → encode on demand → CDN serves', async () => {
     const created = await (await call('https://video.bunnycdn.com/library/424242/videos', { method: 'POST', body: JSON.stringify({ title: 't' }) })).json() as { guid: string };
     const bytes = fixture('e2e-sample.mp4');
