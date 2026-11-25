@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPurgeGrace, failing, parseArgs, readResources, report, splitByAccount, type Leftovers } from '../run-leftovers.ts';
+import { PROBE_RETRIES, applyPurgeGrace, failing, parseArgs, probeFetch, readResources, report, splitByAccount, type Leftovers } from '../run-leftovers.ts';
 
 describe('run leftovers (deployed)', () => {
   it('only QA or stage, only a run id marker', () => {
@@ -40,5 +40,27 @@ describe('run leftovers (deployed)', () => {
     assert.deepEqual(l.erasePending.map((e) => `${e.kind}:${e.id}`), ['profile:usr_gone', 'channel:ch-gone', 'creator tier:usr_gone']);
     assert.equal(failing(l), 3, 'the live account, its channel and its tier');
     assert.match(report('123-1', l)[0], /: 3 \(\+3 of deleted run accounts, erase pending\)/);
+  });
+  it('retries the probe while a fresh workers.dev URL answers 404 or 5xx, then takes the real answer', async () => {
+    const answers = [404, 404, 503, 200];
+    const calls: string[] = [];
+    const sleeps: number[] = [];
+    const res = await probeFetch('https://probe.example/r2', { method: 'POST' }, {
+      fetch: (async (url: string) => { calls.push(url); return new Response('{}', { status: answers.shift() ?? 200 }); }) as typeof fetch,
+      sleep: async (ms) => void sleeps.push(ms),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 4);
+    assert.deepEqual(sleeps, [5000, 5000, 5000]);
+  });
+  it('gives up after a minute of 404 and hands the last answer back; a real error is not retried', async () => {
+    let n = 0;
+    const always404 = await probeFetch('https://probe.example/r2', {}, { fetch: (async () => { n++; return new Response('', { status: 404 }); }) as typeof fetch, sleep: async () => undefined });
+    assert.equal(always404.status, 404);
+    assert.equal(n, PROBE_RETRIES + 1);
+    let m = 0;
+    const unauthorized = await probeFetch('https://probe.example/r2', {}, { fetch: (async () => { m++; return new Response('', { status: 401 }); }) as typeof fetch, sleep: async () => undefined });
+    assert.equal(unauthorized.status, 401);
+    assert.equal(m, 1);
   });
 });
