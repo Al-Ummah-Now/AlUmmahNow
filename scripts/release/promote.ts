@@ -104,14 +104,10 @@ export function wranglerFailureDetail(output: string, max = 2000): string {
 	return head ? `${head}\n…\n${tail}` : tail;
 }
 
-/** What `wrangler triggers deploy` applied, as the release log shows it: counts and custom domains, never an account address. */
-export function triggerLines(worker: string, output: string): string[] {
-	const lines = output.replace(/\u001b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim());
-	const domains = lines.flatMap((l) => /^([a-z0-9.-]+\.(?:alummahnow\.(?:net|org)|alummahnow\.link))(?:\/\S*)? \(custom domain/.exec(l)?.[1] ?? []);
-	const count = (re: RegExp) => lines.filter((l) => re.test(l)).length;
-	return [
-		`${worker}: triggers deployed; workers.dev address ${lines.some((l) => /workers\.dev/.test(l)) ? 'ON' : 'off'}, ${count(/^schedule: /)} schedules, ${count(/^Consumer for /)} consumers${domains.length ? `, ${domains.join(', ')}` : ''}`,
-	];
+/** Where a Worker answers after its triggers were deployed: Cloudflare's own setting, as one line of the release log. */
+export function addressLine(worker: string, setting: { enabled?: unknown; previews_enabled?: unknown } | null): string {
+	const state = (v: unknown) => (v === true ? 'ON' : v === false ? 'off' : 'unknown');
+	return `${worker}: triggers deployed; workers.dev ${state(setting?.enabled)}, preview URLs ${state(setting?.previews_enabled)}`;
 }
 
 export type Runner = (cwd: string, args: string[]) => string;
@@ -154,6 +150,8 @@ export interface PromoteDeps {
 	captureBuilds?: (env: ReleaseEnv, apps: string[]) => Promise<BuildSnapshot[]>;
 	/** `overrides` (worker -> candidate) reaches the candidates at 0%; without it, what serves 100% */
 	checkSkew?: (env: ReleaseEnv, snapshots: BuildSnapshot[], overrides?: Record<string, string>) => Promise<CheckResult[]>;
+	/** The Worker's workers.dev and preview URL setting (read after `triggers deploy`) */
+	addressSetting?: (worker: string) => Promise<{ enabled?: unknown; previews_enabled?: unknown }>;
 	log: (line: string) => void;
 }
 
@@ -267,7 +265,9 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 	try {
 		for (const { r, a } of promoted) {
 			run(a.cwd, ['versions', 'deploy', `${r.candidate}@100%`, ...a.configArgs, '-y', '--message', message]);
-			for (const line of triggerLines(a.worker, run(a.cwd, ['triggers', 'deploy', ...a.configArgs]))) log(line);
+			run(a.cwd, ['triggers', 'deploy', ...a.configArgs]);
+			// Information only: an unreadable setting never fails a release
+			log(addressLine(a.worker, (await deps.addressSetting?.(a.worker).catch(() => null)) ?? null));
 		}
 		await deps.waitForVersions(env, versioned(released), false);
 		const post = await smokeFailures();
@@ -359,6 +359,7 @@ if (isMain) {
 			smoke: (e, overrides) => runSmoke({ env: e, overrides }),
 			waitForVersions,
 			waitForHosts,
+			addressSetting: (worker) => createCfClient().request('GET', `/workers/scripts/${worker}/subdomain`),
 			ensureDomains: async (e, list) => void (await ensureCustomDomains(createCfClient(), expectedDomains(e, list), log, attachWhenMissing(e))),
 			skewArgs: (a, previous) => skewArgsFor(a, previous, log),
 			captureBuilds: async (e, list) =>

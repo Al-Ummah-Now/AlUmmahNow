@@ -4,7 +4,7 @@
 import { SKEW_HOST_HEADER } from '../skew-host';
 import { skewRequest, SKEW_SIGNATURE_HEADER, type SkewHopEnv } from '../skew-hop';
 
-const env: SkewHopEnv = { CF_WORKER_NAME: 'al-ummah-now-production', CF_PREVIEW_DOMAIN: 'acct', INTERNAL_API_KEY: { get: async () => 'k1' } };
+const env: SkewHopEnv = { CF_WORKER_NAME: 'al-ummah-now-production', CF_PREVIEW_DOMAIN: 'acct', CF_DEPLOYMENT_MAPPING: JSON.stringify({ now: 'current', old: '1a2b3c4d-0000-4000-8000-000000000000' }), INTERNAL_API_KEY: { get: async () => 'k1' } };
 const NOW = Date.parse('2026-11-25T12:00:30Z');
 const VERSION = '1a2b3c4d-al-ummah-now-production.acct.workers.dev';
 
@@ -15,23 +15,38 @@ const forwarded = (signed: Request, host = VERSION, path?: string) => {
   url.hostname = host;
   return new Request(path ? new URL(path, url) : url, signed);
 };
-const sign = async (req: Request, e = env, at = NOW) => (await skewRequest(req, e, 'current', at))!;
+const sign = async (req: Request, e = env, at = NOW) => (await skewRequest(req, e, at))!;
 
 describe('the skew hop', () => {
   it('an old version answers what the current one signed, with the public host and no signature', async () => {
-    const out = await skewRequest(forwarded(await sign(open('/en/upload?x=1', { method: 'POST', body: '["a"]' }))), env, 'old', NOW + 60_000);
+    const out = await skewRequest(forwarded(await sign(open('/en/upload?x=1', { method: 'POST', body: '["a"]' }))), env, NOW + 60_000);
     expect(out!.url).toBe('https://videos.alummahnow.net/en/upload?x=1');
     expect(out!.headers.has(SKEW_SIGNATURE_HEADER)).toBe(false);
     expect([out!.method, await out!.text()]).toEqual(['POST', '["a"]']);
   });
 
-  it('signs only a request for another build, and never keeps a client signature', async () => {
-    const plain = new Request('https://videos.alummahnow.net/en', { headers: { [SKEW_SIGNATURE_HEADER]: 'f'.repeat(64) } });
-    expect((await sign(plain)).headers.has(SKEW_SIGNATURE_HEADER)).toBe(false);
-    const current = await skewRequest(open(), env, 'old', NOW);
-    expect(current!.headers.has(SKEW_SIGNATURE_HEADER)).toBe(false);
-    expect((await sign(new Request('https://videos.alummahnow.net/_next/static/a.js?dpl=old'))).headers.get(SKEW_SIGNATURE_HEADER)).toMatch(/^[0-9a-f]{64}$/);
-    expect((await sign(new Request('https://other.alummahnow.net/en', { headers: { 'x-deployment-id': 'old' } }))).headers.has(SKEW_SIGNATURE_HEADER)).toBe(false);
+  it('signs only a request OpenNext forwards, from the first request of an isolate, and never keeps a client signature', async () => {
+    const forged = { [SKEW_SIGNATURE_HEADER]: 'f'.repeat(64) };
+    const unsigned: [string, Request, SkewHopEnv?][] = [
+      ['no build', new Request('https://videos.alummahnow.net/en', { headers: forged })],
+      ['the current build', new Request('https://videos.alummahnow.net/en', { headers: { ...forged, 'x-deployment-id': 'now' } })],
+      ['the current build by ?dpl=', new Request('https://videos.alummahnow.net/_next/static/a.js?dpl=now', { headers: forged })],
+      ['a build that is not mapped', new Request('https://videos.alummahnow.net/en', { headers: { ...forged, 'x-deployment-id': 'ancient' } })],
+      ['a property name', new Request('https://videos.alummahnow.net/en', { headers: { ...forged, 'x-deployment-id': 'constructor' } })],
+      ['another of our hosts', new Request('https://other.alummahnow.net/en', { headers: { ...forged, 'x-deployment-id': 'old' } })],
+      ['no mapping', open('/en', { headers: forged }), { ...env, CF_DEPLOYMENT_MAPPING: undefined }],
+      ['a broken mapping', open('/en', { headers: forged }), { ...env, CF_DEPLOYMENT_MAPPING: '{' }],
+    ];
+    for (const [name, req, e = env] of unsigned) expect([name, (await sign(req, e)).headers.has(SKEW_SIGNATURE_HEADER)]).toEqual([name, false]);
+    for (const req of [open(), new Request('https://videos.alummahnow.net/_next/static/a.js?dpl=old', { headers: forged })]) {
+      expect((await sign(req)).headers.get(SKEW_SIGNATURE_HEADER)).toMatch(/^(?!f{64})[0-9a-f]{64}$/);
+    }
+  });
+
+  it('accepts a signature from the minute before or after', async () => {
+    const good = await sign(open());
+    expect(await skewRequest(forwarded(good), env, NOW + 60_000)).not.toBeNull();
+    expect(await skewRequest(forwarded(good), env, NOW - 60_000)).not.toBeNull();
   });
 
   it('refuses everything else on a preview URL', async () => {
@@ -56,24 +71,24 @@ describe('the skew hop', () => {
       ['another environment', forwarded(good), { ...env, INTERNAL_API_KEY: 'k2' }],
       ['no key', forwarded(good), { ...env, INTERNAL_API_KEY: undefined }],
       ['too old', forwarded(good), env, NOW + 121_000],
-      ['from the future', forwarded(good), env, NOW - 61_000],
+      ['from the future', forwarded(good), env, NOW - 121_000],
     ];
-    for (const [name, req, e = env, at = NOW] of refused) expect([name, await skewRequest(req, e, 'old', at)]).toEqual([name, null]);
-    expect(await skewRequest(forwarded(good), env, 'old', NOW)).not.toBeNull();
+    for (const [name, req, e = env, at = NOW] of refused) expect([name, await skewRequest(req, e, at)]).toEqual([name, null]);
+    expect(await skewRequest(forwarded(good), env, NOW)).not.toBeNull();
   });
 
   it('the admin app signs and accepts its own hostnames only', async () => {
     const admin = { ...env, CF_WORKER_NAME: 'al-ummah-admin-web' };
     const at = '1a2b3c4d-al-ummah-admin-web.acct.workers.dev';
     const asked = await sign(new Request('https://admin.alummahnow.net/users', { headers: { 'x-deployment-id': 'old' } }), admin);
-    expect(await skewRequest(forwarded(asked, at), admin, 'old', NOW)).not.toBeNull();
+    expect(await skewRequest(forwarded(asked, at), admin, NOW)).not.toBeNull();
     expect((await sign(open(), admin)).headers.has(SKEW_SIGNATURE_HEADER)).toBe(false);
-    expect(await skewRequest(forwarded(await sign(open()), at), admin, 'old', NOW)).toBeNull();
+    expect(await skewRequest(forwarded(await sign(open()), at), admin, NOW)).toBeNull();
   });
 
   it('PR previews (no CF_WORKER_NAME) and local development answer as before', async () => {
-    expect(await skewRequest(new Request('https://al-ummah-web-pr-12.acct.workers.dev/en'), {}, 'x', NOW)).not.toBeNull();
+    expect(await skewRequest(new Request('https://al-ummah-web-pr-12.acct.workers.dev/en'), {}, NOW)).not.toBeNull();
     const local = new Request('http://localhost:3000/');
-    expect(await skewRequest(local, env, 'x', NOW)).toBe(local);
+    expect(await skewRequest(local, env, NOW)).toBe(local);
   });
 });

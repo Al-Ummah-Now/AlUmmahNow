@@ -3,7 +3,7 @@
  * version answers there only for a request the current version signed. Everything else on a preview URL gets 421.
  *
  * HMAC-SHA-256 over the public host, method, path with query and the minute, with a key derived from
- * INTERNAL_API_KEY (both versions have the same binding). A signature holds for at most two minutes.
+ * INTERNAL_API_KEY (both versions have the same binding). A signature holds for the minute it was made in, one before and one after (clocks differ a little).
  * A version that has this code is asked only by versions that have it too: a deployment's mapping names older
  * builds only. CF_WORKER_NAME is set on deployments with skew protection, so PR previews and local development are
  * not affected.
@@ -17,6 +17,8 @@ export const SKEW_SIGNATURE_HEADER = 'x-aun-skew-signature';
 export interface SkewHopEnv {
   CF_WORKER_NAME?: string;
   CF_PREVIEW_DOMAIN?: string;
+  /** Build id → Worker version id, or "current" (scripts/release/skew-mapping.ts) */
+  CF_DEPLOYMENT_MAPPING?: string;
   INTERNAL_API_KEY?: string | { get(): Promise<string> };
 }
 
@@ -44,6 +46,24 @@ async function hopKey(env: SkewHopEnv): Promise<CryptoKey | null> {
   return key;
 }
 
+let mapping: { text: string; builds: Map<string, unknown> } | null = null;
+
+/** Whether OpenNext forwards a request of this build: it is mapped to another version. Read from env, so it holds from an isolate's first request. */
+function isOlderBuild(build: string, env: SkewHopEnv): boolean {
+  const text = env.CF_DEPLOYMENT_MAPPING ?? '';
+  if (mapping?.text !== text) {
+    let builds = new Map<string, unknown>();
+    try {
+      builds = new Map(Object.entries(JSON.parse(text || '{}') as Record<string, unknown>));
+    } catch {
+      // No usable mapping: OpenNext forwards nothing either
+    }
+    mapping = { text, builds };
+  }
+  const version = mapping.builds.get(build);
+  return typeof version === 'string' && version !== '' && version !== 'current';
+}
+
 const message = (host: string, method: string, url: URL, minute: number) => encoder.encode([LABEL, host, method, url.pathname + url.search, minute].join('\n'));
 const toHex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer), (b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -61,17 +81,17 @@ async function signed(request: Request, env: SkewHopEnv, now: number): Promise<b
   const key = await hopKey(env);
   if (!key) return false;
   const bytes = Uint8Array.from(signature.match(/../g) ?? [], (h) => parseInt(h, 16));
-  for (const minute of [minuteOf(now), minuteOf(now) - 1]) {
+  for (const minute of [minuteOf(now), minuteOf(now) - 1, minuteOf(now) + 1]) {
     if (await crypto.subtle.verify('HMAC', key, bytes, message(host, request.method, url, minute))) return true;
   }
   return false;
 }
 
 /**
- * The request Next should see, or null when this Worker does not answer it.
- * A public request is signed only when it names another build (that is the one OpenNext forwards).
+ * The request Next should see, or null when this Worker does not answer it. A public request is signed only when
+ * OpenNext will forward it to an older version; any other leaves without a signature, whatever it came with.
  */
-export async function skewRequest(request: Request, env: SkewHopEnv, currentBuild = process.env.DEPLOYMENT_ID, now = Date.now()): Promise<Request | null> {
+export async function skewRequest(request: Request, env: SkewHopEnv, now = Date.now()): Promise<Request | null> {
   const url = new URL(request.url);
   if (env.CF_WORKER_NAME && isPreviewHost(url.hostname)) {
     if (!(await signed(request, env, now))) return null;
@@ -81,10 +101,9 @@ export async function skewRequest(request: Request, env: SkewHopEnv, currentBuil
   }
   const out = withPublicHost(request);
   const build = request.headers.get('x-deployment-id') ?? url.searchParams.get('dpl');
-  const hop = !!env.CF_WORKER_NAME && !!build && build !== currentBuild && isOwnHost(url.host, env);
+  const hop = !!env.CF_WORKER_NAME && !!build && isOlderBuild(build, env) && isOwnHost(url.host, env);
   if (!hop && !request.headers.has(SKEW_SIGNATURE_HEADER)) return out;
   const headers = new Headers(out.headers);
-  // Never a client's own value
   headers.delete(SKEW_SIGNATURE_HEADER);
   const key = hop ? await hopKey(env) : null;
   if (key) headers.set(SKEW_SIGNATURE_HEADER, toHex(await crypto.subtle.sign('HMAC', key, message(url.host, request.method, url, minuteOf(now)))));
