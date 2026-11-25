@@ -8,7 +8,7 @@ import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { videoFailuresById } from '@/lib/api/failures';
+import { tryVideoFailures } from '@/lib/api/failures';
 import { failureIds } from '@/lib/video-failure';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
@@ -82,13 +82,14 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
   // Why the failed ones failed: the linked video first, the panel's jobs, the recent transcodes
-  const failures = await videoFailuresById(
+  const known = await tryVideoFailures(
     failureIds([
       ...(focusVideo ? [{ id: focusVideo, failed: true }] : []),
       ...(troubleshoot?.jobs?.items ?? []).map((j) => ({ id: j.videoId, failed: j.state === 'failed' })),
       ...(jobs ?? []).map((j) => ({ id: j.video_id, failed: j.status === 'failed' })),
     ]),
   );
+  const failures = known ?? {};
   const query = (next: Record<string, string>) => `?${new URLSearchParams({ days: String(days), ...(filter === 'all' ? {} : { status: filter }), ...next })}`;
 
   return (
@@ -111,7 +112,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         </>
       )}
 
-      <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} failures={failures} />
+      <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} failures={known} />
 
       {/* The period filters only the sections under it, so its buttons sit right above them */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">

@@ -17,6 +17,12 @@ export async function withoutHidden<T extends { id: string }>(db: D1Database, ro
   return hidden.size === 0 ? rows : rows.filter((r) => !isHiddenItem(hidden, type, r.id));
 }
 
+/** The same for rows that name a video otherwise. */
+export async function withoutHiddenVideos<T>(db: D1Database, roles: readonly unknown[] | undefined, rows: T[], videoId: (row: T) => string | null | undefined): Promise<T[]> {
+  const hidden = await hiddenFrom(db, roles, rows.flatMap((r) => { const id = videoId(r); return id ? [{ type: 'video' as const, id }] : []; }));
+  return hidden.size === 0 ? rows : rows.filter((r) => !isHiddenItem(hidden, 'video', videoId(r) ?? ''));
+}
+
 /** The item without anything that says what or whose it is. */
 export const withheldSummary = (s: ReportedItemSummary): ReportedItemSummary => ({ ...s, title: null, parentId: null, parentType: null, channel: null, owner: null, takenDown: true });
 

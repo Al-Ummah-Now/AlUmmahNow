@@ -87,6 +87,8 @@ export interface FailedVideoState {
   uploadStatus?: string | null;
   issue?: { kind: string; code?: string | null } | null;
   r2?: { status: string; error?: string | null } | null;
+  /** R2 decides the video's state: Bunny holds no copy, or its copy failed */
+  r2Decides?: boolean;
   /** The failed job: its raw error (or the record's own) and what the container saw */
   job?: { error?: string | null; source: TroubleshootSource | null } | null;
 }
@@ -95,9 +97,14 @@ export interface FailedVideoState {
 export function explainVideoFailure(v: FailedVideoState): VideoFailureExplained | null {
   const code = isUploadIssueCode(v.issue?.code) ? v.issue.code : null;
   if (v.r2?.status === 'failed') return explainTranscodeFailure({ reason: transcodeErrorReason(v.job?.error ?? v.r2.error), source: v.job?.source ?? null }, code);
+  // The only copy is being transcoded again: what it failed of last time is being found out anew
+  if (v.r2Decides && v.issue?.kind !== 'needs_reupload' && (v.r2?.status === 'queued' || v.r2?.status === 'transcoding')) return null;
   if (v.issue?.kind === 'stalled') return explained('bunny', 'stalled');
-  if (code) return explained(v.issue?.kind === 'encode_failed' ? 'bunny' : 'upload', code);
-  if (v.issue?.kind === 'encode_failed') return explained('bunny', 'bunny_failed');
+  if (v.issue?.kind === 'encode_failed') {
+    if (v.r2Decides) return explained('r2', code ?? 'encode_failed');
+    return explained('bunny', code ?? 'bunny_failed');
+  }
+  if (code) return explained('upload', code);
   if (v.issue?.kind === 'needs_reupload') return explained('upload', 'upload_missing');
   return v.uploadStatus === 'failed' ? explained('upload', 'unknown') : null;
 }

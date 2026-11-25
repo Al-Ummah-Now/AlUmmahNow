@@ -23,7 +23,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
-import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
+import { baseName, VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
 import { uploadVisibility } from '../../lib/visibility';
 
 const MAX_BATCH_SIZE = 15;
@@ -252,7 +252,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							...(videoData.commentSettings ? { commentSettings: videoData.commentSettings } : {}),
 							ageRestricted: videoData.ageRestricted,
 							madeForKids: videoData.madeForKids,
-							...(videoData.fileName ? { originalFilename: videoData.fileName } : {}),
+							...(videoData.fileName ? { originalFilename: baseName(videoData.fileName) } : {}),
 							category: sharedMetadata?.category,
 							format: videoData.format,
 							...(sharedMetadata?.category ? { categorySource: 'uploader' as const } : {}),

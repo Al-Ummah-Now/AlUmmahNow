@@ -33,7 +33,7 @@ function setup(roles: string[], answer: (path: string, body: any) => { status: n
   app.route('/api/processing', processingRouter);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
   const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, new_value, actor_id FROM site_settings_log').all<any>()).results ?? [];
-  return { req, calls, audit };
+  return { req, calls, audit, db: env.REPORTS_DB };
 }
 
 const post = (json: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } });
@@ -51,6 +51,22 @@ describe('/api/processing', () => {
     assert.equal(res.status, 200);
     assert.equal(calls[0].path, '/internal/processing/videos?status=stuck&bunny=1');
     assert.equal(calls[0].key, 'k');
+  });
+
+  it('lists only the videos the reader’s lists show, page by page', async () => {
+    const OTHER = '00000000-0000-4000-8000-000000000002';
+    for (const [roles, shown] of [[['Admin'], [OTHER]], [['super_admin'], [ID, OTHER]]] as const) {
+      const { req, calls, db } = setup([...roles], (path) => ({
+        status: 200,
+        json: { success: true, result: path.endsWith('/errors') ? { videos: [{ id: ID }, { id: OTHER }], thumbnailFlagged: { items: [{ videoId: ID }, { videoId: OTHER }], total: 2 }, deadLetters: [] } : { items: [{ id: ID }, { id: OTHER }], nextOffset: 200 } },
+      }));
+      await db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)").bind(ID).run();
+      const list = ((await (await req('/api/processing/videos?status=failed&offset=100')).json()) as any).result;
+      assert.deepEqual([list.items.map((v: any) => v.id), list.nextOffset], [shown, 200]);
+      assert.ok(calls[0].path.includes('offset=100'), calls[0].path);
+      const errors = ((await (await req('/api/processing/errors')).json()) as any).result;
+      assert.deepEqual([errors.videos.map((v: any) => v.id), errors.thumbnailFlagged.items.map((v: any) => v.videoId), errors.thumbnailFlagged.total], [shown, shown, shown.length]);
+    }
   });
 
   it('sync dry run previews without an audit row; apply is audited', async () => {

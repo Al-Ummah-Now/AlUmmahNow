@@ -95,6 +95,7 @@ import {
   newErrorRef,
   scrubEvent,
   type ErrorEventInput,
+  baseName,
 } from '@al-ummah/shared-types';
 import { enqueueIngest } from '../endpoints/errors/ErrorsIngest';
 import { allowClientEvents } from '../lib/errors-store';
@@ -317,7 +318,7 @@ const itemView = (r: ImportItemRow) => ({
   batchId: r.batch_id,
   channelId: r.channel_id,
   sha256: r.sha256,
-  fileName: r.file_name,
+  fileName: baseName(r.file_name),
   fileSize: r.file_size,
   videoId: r.video_id,
   state: r.state,
@@ -341,7 +342,7 @@ export function parseNewItem(body: unknown):
   const b = body as Record<string, unknown>;
   const sha256 = typeof b.sha256 === 'string' ? b.sha256.toLowerCase() : '';
   if (!SHA256.test(sha256)) return { ok: false, error: 'sha256 must be the file\'s SHA-256 (64 hex digits)' };
-  const fileName = typeof b.fileName === 'string' ? b.fileName.trim().slice(0, 500) : '';
+  const fileName = typeof b.fileName === 'string' ? baseName(b.fileName.trim()).slice(0, 500) : '';
   if (!fileName) return { ok: false, error: 'fileName is required' };
   if (typeof b.fileSize !== 'number' || !Number.isSafeInteger(b.fileSize) || b.fileSize <= 0) return { ok: false, error: 'fileSize must be a positive whole number of bytes' };
   if (typeof b.mimeType !== 'string' || !b.mimeType.startsWith('video/')) return { ok: false, error: 'mimeType must be a video type' };

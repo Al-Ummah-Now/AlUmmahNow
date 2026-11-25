@@ -23,17 +23,20 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+const pageHref = (status: string, offset: number) => `/processing?${new URLSearchParams({ status, ...(offset ? { offset: String(offset) } : {}) })}`;
+
 /** Upload processing health: stuck and failed uploads (on Bunny or on R2) with why and what to do, next to Bunny's and R2's state, with Sync / Retry / Mark failed, and the thumbnail shape check. */
 export default async function ProcessingHealthPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filter = parseFilter(params.status);
+  const offset = Math.max(0, Number.parseInt(String(params.offset ?? ''), 10) || 0);
   const { t, locale } = await getI18n();
   const session = await getAdminSession();
   if (!canUseProcessing(session?.user.role)) {
     return <ErrorAlert testId="processing-no-access">{t('processing.noAccess')}</ErrorAlert>;
   }
 
-  const [videos, thumbs] = await Promise.allSettled([listProcessingVideos({ status: filter }), listThumbnailRuns()]);
+  const [videos, thumbs] = await Promise.allSettled([listProcessingVideos({ status: filter, offset }), listThumbnailRuns()]);
   const data: ProcessingVideosResponse | null = videos.status === 'fulfilled' ? videos.value : null;
   if (videos.status === 'rejected') {
     logger.error('[processing] Failed to load', { error: videos.reason instanceof Error ? videos.reason.message : String(videos.reason) });
@@ -86,9 +89,16 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
 
       {!data && <ErrorAlert testId="processing-error">{t('processing.loadFailed')}</ErrorAlert>}
       {data && data.items.length === 0 && (
-        <div className={`${cardClass} text-center text-fg-muted`} data-testid="processing-empty">{t('processing.empty')}</div>
+        <div className={`${cardClass} text-center text-fg-muted`} data-testid="processing-empty">{t(typeof data.nextOffset === 'number' || offset > 0 ? 'processing.pageEmpty' : 'processing.empty')}</div>
       )}
-      {data && data.items.length > 0 && <ProcessingTable rows={data.items} failures={failures} locale={locale} />}
+      {/* A new page starts with nothing selected */}
+      {data && data.items.length > 0 && <ProcessingTable key={`${filter}:${offset}`} rows={data.items} failures={failures} locale={locale} />}
+      {data && (offset > 0 || typeof data.nextOffset === 'number') && (
+        <nav className="mt-4 flex flex-wrap items-center justify-between gap-2" aria-label={t('processing.pages')} data-testid="processing-pages">
+          {offset > 0 ? <Link href={pageHref(filter, 0)} className={secondaryButtonClass} data-testid="processing-first">{t('processing.firstPage')}</Link> : <span />}
+          {typeof data.nextOffset === 'number' && <Link href={pageHref(filter, data.nextOffset)} className={secondaryButtonClass} data-testid="processing-next">{t('processing.nextPage')}</Link>}
+        </nav>
+      )}
     </div>
   );
 }

@@ -448,7 +448,9 @@ export function VideosList() {
                 onDone={() => {
                   setSelected(new Set());
                   void queryClient.invalidateQueries({ queryKey: listRootKey(VIDEO_RESOURCE) });
+                  void queryClient.invalidateQueries({ queryKey: ['video-failures'] });
                 }}
+                r2Failed={new Set(rows.filter((r) => r.r2?.status === 'failed').map((r) => r.id))}
               />
             </div>
           }

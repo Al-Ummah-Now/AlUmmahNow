@@ -1,6 +1,7 @@
 'use server';
 
 import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
+import { VIDEO_FAILURES_MAX } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { ReportDetail, TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -307,10 +308,11 @@ export async function deleteContactMessage(id: string, reason = ''): Promise<Act
 
 // Upload processing health (admin-api /api/processing; videos:processing)
 
-export async function listProcessingVideos(params: { status?: string; channelId?: string } = {}): Promise<ProcessingVideosResponse> {
+export async function listProcessingVideos(params: { status?: string; channelId?: string; offset?: number } = {}): Promise<ProcessingVideosResponse> {
   const query = new URLSearchParams();
   if (params.status) query.set('status', params.status);
   if (params.channelId) query.set('channelId', params.channelId);
+  if (params.offset) query.set('offset', String(params.offset));
   const suffix = query.size ? `?${query}` : '';
   return fetchAdmin<ProcessingVideosResponse>(`/api/processing/videos${suffix}`);
 }
@@ -395,8 +397,14 @@ async function readResult<T>(endpoint: string): Promise<ActionResult<T>> {
 
 /** Why these videos failed (admin-api /api/media/failures; media:manage). Ids without a failure are left out. */
 export async function getVideoFailures(ids: string[]): Promise<ActionResult<{ items: VideoFailure[] }>> {
-  if (!ids.length) return { ok: true, data: { items: [] } };
-  return readResult<{ items: VideoFailure[] }>(`/api/media/failures?ids=${ids.map(encodeURIComponent).join(',')}`);
+  // As many reads as it takes, one after another
+  const items: VideoFailure[] = [];
+  for (let i = 0; i < ids.length; i += VIDEO_FAILURES_MAX) {
+    const result = await readResult<{ items: VideoFailure[] }>(`/api/media/failures?ids=${ids.slice(i, i + VIDEO_FAILURES_MAX).map(encodeURIComponent).join(',')}`);
+    if (!result.ok) return result;
+    items.push(...result.data.items);
+  }
+  return { ok: true, data: { items } };
 }
 
 /** Per-job view, container and queue status, and the token's state. A result, not a throw (the panel polls it). */

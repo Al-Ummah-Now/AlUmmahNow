@@ -85,7 +85,7 @@ export function ProcessingTable({ rows, failures }: { rows: ProcessingVideoRow[]
 
   const retry = async () =>
     (await mayRetry(chosen)) &&
-    run('retry', () => retryFailed(chosen, failures), () => {
+    run('retry', () => retryFailed(chosen, failures, new Set(rows.filter((r) => r.r2Status === 'failed').map((r) => r.id))), () => {
       setNotice(t('processing.retried', { count: chosen.length }));
       setSelected(new Set());
       router.refresh();

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/AppLink';
 import { explainTranscodeFailure, TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView, type VideoFailure } from '@al-ummah/shared-types';
 import { FailureWhy } from '@/components/content/failure';
-import { causedByFile, failureStepLabel } from '@/lib/video-failure';
+import { causedByFile, failureIds, failureStepLabel } from '@/lib/video-failure';
 import {
   getTranscodeLogs,
   getTranscodeTroubleshoot,
+  getVideoFailures,
   removeTroubleshootToken,
   setTroubleshootToken,
   testTroubleshootToken,
@@ -37,8 +38,8 @@ export interface TranscodeTroubleshootingProps {
   canSetToken: boolean;
   /** ?video=<id> (the Errors page links here): that video's job first, and the logs filter set to it */
   focusVideo: string | null;
-  /** Why videos failed, by id, as the page was loaded (the linked video, the failed jobs) */
-  failures: Readonly<Record<string, VideoFailure>>;
+  /** Why videos failed, by id, as the page was loaded (the linked video, the failed jobs); read again on every refresh. Null: not known */
+  failures: Readonly<Record<string, VideoFailure>> | null;
 }
 
 /**
@@ -46,9 +47,10 @@ export interface TranscodeTroubleshootingProps {
  * admin to troubleshoot?"): why an R2 transcode waits or fails, without Cloudflare access. Polls
  * admin-api every 30 s while the page is visible; log lines load only when asked for.
  */
-export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, failures }: TranscodeTroubleshootingProps) {
+export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, failures: loadedFailures }: TranscodeTroubleshootingProps) {
   const { t, locale } = useLanguage();
   const [data, setData] = useState<TranscodeTroubleshoot | null>(initial);
+  const [failures, setFailures] = useState(loadedFailures);
   const [stale, setStale] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [logsFilter, setLogsFilter] = useState(focusVideo ?? '');
@@ -62,8 +64,12 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, fai
     try {
       const result = await getTranscodeTroubleshoot(focusVideo);
       if (result.ok) {
+        // Why they failed, as it is now: a retry that worked takes its card away
+        const why = await getVideoFailures(failureIds([...(focusVideo ? [{ id: focusVideo, failed: true }] : []), ...(result.data.jobs?.items ?? []).map((j) => ({ id: j.videoId, failed: j.state === 'failed' }))]));
         setData(result.data);
-        setStale(false);
+        if (why.ok) setFailures(Object.fromEntries(why.data.items.map((f) => [f.videoId, f])));
+        else logger.warn('[delivery] Failures refresh failed', { status: why.status });
+        setStale(!why.ok);
       } else {
         logger.warn('[delivery] Troubleshoot refresh failed', { status: result.status });
         setStale(true);
@@ -75,7 +81,7 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, fai
       inFlight.current = false;
       setRefreshing(false);
     }
-  }, []);
+  }, [focusVideo]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -110,7 +116,8 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo, fai
           <JobsList
             data={data}
             focusVideo={focusVideo}
-            failures={failures}
+            failures={failures ?? {}}
+            failuresKnown={failures !== null}
             t={t}
             locale={locale}
             onChanged={refresh}
@@ -188,7 +195,7 @@ function when(iso: string | null, locale: string): string | null {
   return Number.isNaN(d.getTime()) ? null : formatDate(d, locale as Locale, true);
 }
 
-function JobsList({ data, focusVideo, failures, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; failures: Readonly<Record<string, VideoFailure>>; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
+function JobsList({ data, focusVideo, failures, failuresKnown, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; failures: Readonly<Record<string, VideoFailure>>; failuresKnown: boolean; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
   // A linked video that failed without a transcode job to list (its upload, or Bunny)
   const focused = focusVideo && !data.jobs?.items.some((j) => j.videoId === focusVideo) ? failures[focusVideo] : undefined;
   const [busy, setBusy] = useState<string | null>(null);
@@ -227,6 +234,9 @@ function JobsList({ data, focusVideo, failures, t, locale, onChanged, onShowLogs
           </h4>
           <FailureWhy failure={focused} t={t} link={false} />
         </div>
+      )}
+      {jobs && focusVideo && failuresKnown && !focused && !jobs.items.some((j) => j.videoId === focusVideo) && (
+        <p className="rounded-lg border border-focus bg-surface-2 p-4 text-sm text-fg" data-testid="troubleshoot-focus-none">{t('transcodeTroubleshoot.focusNone')}</p>
       )}
       {jobs?.transcoder === 'unbound' && <p className="text-sm text-fg-muted" data-testid="troubleshoot-transcoder-unbound">{t('transcodeTroubleshoot.transcoderUnbound')}</p>}
       {jobs?.transcoder === 'error' && <p className="text-sm text-danger-fg" data-testid="troubleshoot-transcoder-error">{t('transcodeTroubleshoot.transcoderError')}</p>}

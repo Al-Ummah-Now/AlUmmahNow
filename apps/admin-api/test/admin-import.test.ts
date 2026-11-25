@@ -388,6 +388,10 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     assert.equal((await h.req('/api/admin/import/batches', post({ channelId: 'nope' }))).status, 404);
     assert.equal((await h.req('/api/admin/import/batches/none/items', post(FILE))).status, 404);
     assert.equal((await h.req('/api/admin/import/items/none/uploaded', post({}))).status, 404);
+    for (const fileName of ['C:\\Users\\someone\\lesson-01.mp4', '/home/someone/lesson-01.mp4']) {
+      const parsed = parseNewItem({ ...FILE, fileName });
+      assert.equal(parsed.ok && parsed.value.fileName, 'lesson-01.mp4');
+    }
     assert.equal(parseNewItem({ ...FILE, sha256: 'abc' }).ok, false);
     assert.equal(parseNewItem({ ...FILE, fileSize: 1.5 }).ok, false);
     assert.equal(parseNewItem({ ...FILE, mimeType: 'image/png' }).ok, false);

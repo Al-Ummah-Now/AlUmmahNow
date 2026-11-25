@@ -1,5 +1,5 @@
 /** The words for why a video failed and what to do (shared-types video-failure.ts). Server and client safe; tested. */
-import { VIDEO_FAILURES_MAX, type VideoFailure, type VideoFailureReason, type VideoFailureStep } from '@al-ummah/shared-types';
+import type { VideoFailure, VideoFailureReason, VideoFailureStep } from '@al-ummah/shared-types';
 import type { MessageKey } from '@/i18n/translate';
 import { REASON_LABEL, SOURCE_VERDICT_LABEL } from '@/app/(protected)/delivery/troubleshoot-view';
 
@@ -37,13 +37,16 @@ export const failureHref = (videoId: string) => `/delivery?video=${encodeURIComp
 /** The same file fails again: Retry says so first. */
 export const causedByFile = (f: Pick<VideoFailure, 'cause'> | null | undefined) => f?.cause === 'file';
 
-/** Ids to ask about: those that may have failed, as many as one read takes. */
+/** Ids to ask about: those that may have failed. */
 export function failureIds(rows: readonly { id: string; failed: boolean }[]): string[] {
-  return [...new Set(rows.filter((r) => r.failed).map((r) => r.id))].slice(0, VIDEO_FAILURES_MAX);
+  return [...new Set(rows.filter((r) => r.failed).map((r) => r.id))];
 }
 
-/** Retry: an R2 failure transcodes again, anything else asks Bunny again. */
-export function splitRetry(ids: readonly string[], failures: Readonly<Record<string, Pick<VideoFailure, 'where'>>>): { r2: string[]; bunny: string[] } {
-  const r2 = ids.filter((id) => failures[id]?.where === 'r2');
-  return { r2, bunny: ids.filter((id) => failures[id]?.where !== 'r2') };
+/**
+ * Retry: an R2 failure transcodes again, anything else asks Bunny again. `r2Failed`: those whose row says so, for
+ * when why they failed could not be read.
+ */
+export function splitRetry(ids: readonly string[], failures: Readonly<Record<string, Pick<VideoFailure, 'where'>>>, r2Failed: ReadonlySet<string> = new Set()): { r2: string[]; bunny: string[] } {
+  const onR2 = (id: string) => (failures[id] ? failures[id].where === 'r2' : r2Failed.has(id));
+  return { r2: ids.filter(onR2), bunny: ids.filter((id) => !onR2(id)) };
 }

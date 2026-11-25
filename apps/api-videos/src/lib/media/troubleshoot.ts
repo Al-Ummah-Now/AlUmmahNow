@@ -135,18 +135,13 @@ export function toTroubleshootJob(row: JobRow, title: string | null, answer: Tra
 	};
 }
 
-async function titles(env: TroubleshootEnv, ids: string[]): Promise<Map<string, string>> {
-	const out = new Map<string, string>();
-	if (!env.SEARCH_DB || !ids.length) return out;
-	try {
-		const { results } = await env.SEARCH_DB.prepare(`SELECT id, admin_title AS title FROM content_ownership WHERE kind = 'video' AND id IN (SELECT value FROM json_each(?))`)
-			.bind(JSON.stringify(ids))
-			.all<{ id: string; title: string | null }>();
-		for (const r of results ?? []) if (r.title) out.set(r.id, r.title);
-	} catch (error) {
-		logger.warn('[MediaTroubleshoot] Titles unavailable', { error: error instanceof Error ? error.message : String(error) });
-	}
-	return out;
+/** The videos of these jobs as the admin lists know them. */
+async function listedVideos(env: TroubleshootEnv, ids: string[]): Promise<Map<string, { title: string | null; deleted: boolean }>> {
+	if (!env.SEARCH_DB || !ids.length) return new Map();
+	const { results } = await env.SEARCH_DB.prepare(`SELECT id, admin_title AS title, is_deleted FROM content_ownership WHERE kind = 'video' AND id IN (SELECT value FROM json_each(?))`)
+		.bind(JSON.stringify([...new Set(ids)]))
+		.all<{ id: string; title: string | null; is_deleted: number }>();
+	return new Map((results ?? []).map((r) => [r.id, { title: r.title, deleted: r.is_deleted === 1 }]));
 }
 
 async function activeRows(env: TroubleshootEnv): Promise<JobRow[]> {
@@ -170,7 +165,7 @@ export async function readTroubleshootJobs(env: TroubleshootEnv, now = Date.now(
 	const at = new Date(now).toISOString();
 	if (!env.SEARCH_DB) return { items: [], at, transcoder: env.MEDIA_WORKER ? 'ok' : 'unbound' };
 	const since = new Date(now - FINISHED_DAYS * 86400_000).toISOString();
-	const [active, recent, focused] = await Promise.all([
+	const [allActive, recent, focused] = await Promise.all([
 		activeRows(env),
 		env.SEARCH_DB.prepare(
 			`SELECT ${FINISHED_COLUMNS} FROM media_jobs
@@ -181,15 +176,18 @@ export async function readTroubleshootJobs(env: TroubleshootEnv, now = Date.now(
 			.then((r) => r.results ?? []),
 		focus ? env.SEARCH_DB.prepare(`SELECT ${FINISHED_COLUMNS} FROM media_jobs WHERE video_id = ? AND status IN ('failed', 'cancelled')`).bind(focus).first<JobRow>() : null,
 	]);
-	const finished = focused && !recent.some((r) => r.video_id === focused.video_id) ? [focused, ...recent] : recent;
-	const names = await titles(env, [...active, ...finished].map((r) => r.video_id));
+	const allFinished = focused && !recent.some((r) => r.video_id === focused.video_id) ? [focused, ...recent] : recent;
+	// Of the videos the admin lists show only: a deleted one's jobs go with it (a new one's row may come after its job)
+	const listed = await listedVideos(env, [...allActive, ...allFinished].map((r) => r.video_id));
+	const active = allActive.filter((r) => !listed.get(r.video_id)?.deleted);
+	const finished = allFinished.filter((r) => listed.get(r.video_id)?.deleted === false);
 	const asked = !!env.MEDIA_WORKER;
 	const answers = await Promise.all(active.map((r) => askTranscoder(env, r.video_id)));
 	const failedAsks = asked && active.length > 0 && answers.every((a) => a === null);
 	return {
 		items: [
-			...active.map((r, i) => toTroubleshootJob(r, names.get(r.video_id) ?? null, answers[i] ?? null, asked)),
-			...finished.map((r) => toTroubleshootJob(r, names.get(r.video_id) ?? null, null, false)),
+			...active.map((r, i) => toTroubleshootJob(r, listed.get(r.video_id)?.title ?? null, answers[i] ?? null, asked)),
+			...finished.map((r) => toTroubleshootJob(r, listed.get(r.video_id)?.title ?? null, null, false)),
 		],
 		at,
 		transcoder: !asked ? 'unbound' : failedAsks ? 'error' : 'ok',
