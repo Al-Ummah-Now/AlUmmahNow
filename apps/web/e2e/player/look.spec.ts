@@ -2,9 +2,9 @@
  * Review screenshots of each state, attached to the report (and written to PLAYER_SHOTS_DIR when
  * set) so the owner and reviewers can look at every browser side by side.
  */
-import { test, type Page, type TestInfo } from '@playwright/test';
+import { type Page, type TestInfo } from '@playwright/test';
 import path from 'path';
-import { openHarness, pauseAt, startPlayback } from './harness';
+import { openHarness, pauseAt, startPlayback, test } from './harness';
 
 async function shot(page: Page, info: TestInfo, name: string, target = page.locator('.video-js.vjs-fanous').first()) {
   const file = `${info.project.name}-${name}.png`;

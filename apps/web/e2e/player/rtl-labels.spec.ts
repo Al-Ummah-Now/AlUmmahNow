@@ -9,8 +9,8 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { expect, test, type Page } from '@playwright/test';
-import { openHarness, pauseAt, PLAYER_THEMES, startPlayback } from './harness';
+import { expect, type Page } from '@playwright/test';
+import { openHarness, pauseAt, PLAYER_THEMES, startPlayback, test } from './harness';
 
 const SIZES = [
   { name: 'desktop', width: 1440, height: 900 },

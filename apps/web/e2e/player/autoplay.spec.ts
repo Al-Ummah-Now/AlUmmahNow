@@ -7,8 +7,8 @@
  * end screen with Watch again and more videos; autoplay off shows that screen with no countdown.
  * The account endpoints are served here: no backend, no paid service.
  */
-import { expect, test, type Page } from '@playwright/test';
-import { openHarness, pauseAt, startPlayback } from './harness';
+import { expect, type Page } from '@playwright/test';
+import { openHarness, pauseAt, startPlayback, test } from './harness';
 
 const toggle = (page: Page) => page.getByTestId('player-autoplay-toggle');
 const tip = (page: Page) => page.getByTestId('player-autoplay-tip');

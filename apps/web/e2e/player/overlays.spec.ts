@@ -10,8 +10,8 @@
  * their scrim. The shortcuts dialog's layout (centred, two columns, compact rows, unclipped key
  * chips, the X and Escape only) and the caption style dialog are checked here too.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { animationsDone, layoutBox, openHarness, pauseAt, startPlayback } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsDone, layoutBox, openHarness, pauseAt, startPlayback, test } from './harness';
 import { digit, shownDigits } from '../test-utils/digits';
 
 const TOLERANCE = 1;

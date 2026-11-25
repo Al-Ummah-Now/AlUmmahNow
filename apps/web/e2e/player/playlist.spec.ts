@@ -8,8 +8,8 @@
  * The queue (GET /api/playlists/fixtures/queue) is served here: the saved order is deliberately not
  * alphabetical, so following it is not an accident of sorting.
  */
-import { expect, test, type Page } from '@playwright/test';
-import { openHarness } from './harness';
+import { expect, type Page } from '@playwright/test';
+import { openHarness, test } from './harness';
 
 const ORDER = ['dark', 'short', 'bright'] as const;
 type Fixture = (typeof ORDER)[number];

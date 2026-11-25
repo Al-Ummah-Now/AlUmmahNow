@@ -8,8 +8,8 @@
  * source a second time, which aborted that play, and the retry waited for a `canplay` WebKit never
  * sends while paused. The start is read from the console: nothing is evaluated in the page before it.
  */
-import { expect, test } from '@playwright/test';
-import { routeFixtures } from './harness';
+import { expect } from '@playwright/test';
+import { routeFixtures, test } from './harness';
 
 test.skip(({ browserName }) => browserName !== 'webkit', 'Video.js attaches the source twice on a Safari user agent only; the release spec (embed-frame-sound) starts the embed in Chrome too');
 

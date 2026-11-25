@@ -4,8 +4,8 @@
  * pixels (harness.ts inkBox), in every browser, at device scale 1 and 2, left to right and right to
  * left. Anything more than 1px off fails.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { animationsDone, inkBox, layoutBox, openHarness, pauseAt, startPlayback, type Box } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsDone, inkBox, layoutBox, openHarness, pauseAt, startPlayback, test, type Box } from './harness';
 
 const TOLERANCE = 1;
 /** Optical nudge of play triangles: 7% of the icon width, rounded to whole pixels (player-skin.css) */

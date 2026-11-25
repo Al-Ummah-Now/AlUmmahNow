@@ -7,8 +7,8 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { layoutBox, openHarness, pauseAt, PLAYER_THEMES, startPlayback, type Box } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { layoutBox, openHarness, pauseAt, PLAYER_THEMES, startPlayback, test, type Box } from './harness';
 
 const TOLERANCE = 1;
 const SHOTS = process.env.PLAYER_SHOTS_DIR;

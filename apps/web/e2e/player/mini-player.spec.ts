@@ -5,8 +5,8 @@
  * playing, then the floating player must be inside the viewport, not covered by anything (its
  * centre and its control bar are the topmost element there) and painting a moving picture.
  */
-import { expect, test, type Page } from '@playwright/test';
-import { openHarness, pixels, startPlayback } from './harness';
+import { expect, type Page } from '@playwright/test';
+import { openHarness, pixels, startPlayback, test } from './harness';
 
 /** What the browser hit-tests at a point belongs to the player */
 const playerOnTop = (page: Page, x: number, y: number) =>

@@ -3,8 +3,8 @@
  * default (owner decision 2026-11-22). Off, the captions panel has no Download row at all; on, it
  * offers the shown track's file from the API.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { animationsDone, openHarness, pauseAt, startPlayback } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsDone, openHarness, pauseAt, startPlayback, test } from './harness';
 
 async function captionsPanelWithEnglishShown(page: Page, player: Locator): Promise<Locator> {
   // The control bar shows once playback has started

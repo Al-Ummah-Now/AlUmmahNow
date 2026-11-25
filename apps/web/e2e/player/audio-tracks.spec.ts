@@ -11,8 +11,8 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { openHarness, pauseAt, startPlayback } from './harness';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { openHarness, pauseAt, startPlayback, test } from './harness';
 
 const SHOTS = process.env.PLAYER_SHOTS_DIR;
 const DUB = 'tdub00000001';

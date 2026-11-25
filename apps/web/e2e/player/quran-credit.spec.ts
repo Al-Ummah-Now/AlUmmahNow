@@ -4,8 +4,8 @@
  * line; the web player takes it off the cue and shows it as a link directly under the cue, at the
  * cue's end side, only while such a cue is on screen, and in the captions menu.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { animationsDone, layoutBox, mediaState, openHarness, pauseAt, startPlayback } from './harness';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsDone, layoutBox, mediaState, openHarness, pauseAt, startPlayback, test } from './harness';
 
 // What GET /subtitles/:lang serves: a speech cue, a Quran cue with the credit line, a speech cue
 const EN = `WEBVTT

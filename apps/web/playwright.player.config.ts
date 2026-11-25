@@ -44,7 +44,10 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Chrome'], channel: 'chrome', deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
-    { name: 'firefox', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Firefox'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
+    // Traced on the retry only: recording a trace made the same Firefox test take 96 s instead of 60 s (the
+    // median of 16 each, alternating on one runner, #2040), past the 90 s limit. A failure still has its
+    // screenshot, and its retry the trace
+    { name: 'firefox', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Firefox'], trace: 'on-first-retry', deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
     { name: 'webkit', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Safari'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
     // Touch phones and foldables (e2e/player/mobile-*.spec.ts): Android Chrome and iPhone Safari
     { name: 'mobile-chrome', testMatch: MOBILE_SPECS, use: { ...devices['Pixel 7'], channel: 'chrome' } },
