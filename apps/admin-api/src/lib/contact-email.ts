@@ -6,7 +6,7 @@
  */
 import { isSinkAddress, type ContactLocale, type ContactTopic } from './contact';
 import { escapeHtml, formatEmailDate, renderEmail, type EmailDoc } from './email/layout';
-import { emailRow, isolate } from './email/direction';
+import { emailRow, isolate, stripBidiControls } from './email/direction';
 
 export const DEFAULT_CONTACT_FROM = 'Al Ummah Now <support@alummahnow.net>';
 
@@ -73,14 +73,14 @@ export function renderInboxNotification(m: MessageForEmail, opts: { to: string; 
   const doc = withEnv(
     {
       locale: 'en',
-      subject: `[Contact] ${topic}: ${m.name}`.slice(0, 200),
-      preheader: `${m.name} wrote about ${topic.toLowerCase()}: ${m.message.replace(/\s+/g, ' ').slice(0, 90)}`,
+      subject: `[Contact] ${topic}: ${stripBidiControls(m.name)}`.slice(0, 200),
+      preheader: `${stripBidiControls(m.name)} wrote about ${topic.toLowerCase()}: ${m.message.replace(/\s+/g, ' ').slice(0, 90)}`,
       heading: `New Contact us message (${topic})`,
       blocks: [
         {
           kind: 'facts',
           rows: [
-            ['From', emailRow('en', `${isolate(m.name)} <${m.email}>`)],
+            ['From', emailRow('en', `${isolate(m.name)} <${isolate(m.email)}>`)],
             ['Account', m.user_id ? `Signed in (user ${m.user_id})` : 'Signed out'],
             ['Language', m.locale === 'ar' ? 'Arabic' : 'English'],
             ...(m.page_url ? ([['Page', m.page_url]] as [string, string][]) : []),

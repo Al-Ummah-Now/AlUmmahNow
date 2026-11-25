@@ -255,7 +255,7 @@ describe('review fixes (#1832)', () => {
       assert.equal(cells[1], row(`${iso('عائشة')}${comma}${iso('Yusuf Rahman')}`));
       assert.equal(cells[2], row(`${iso('عائشة')}${arrow}${iso('Yusuf Rahman')}`));
       assert.equal(cells[3], row(`${iso('Yusuf Rahman')}${arrow}${iso('عائشة')}`));
-      assert.equal(cells[4], row('Yusuf Rahman'));
+      assert.equal(cells[4], row(iso('Yusuf Rahman')));
       assert.equal(cells[6], row(`${iso('Creator')}${arrow}${iso('عالِم')}`));
       const list = (...x: string[]) => `${open}${x.map(iso).join(comma)}\u2069`;
       assert.equal(cells[7], row(`${list('Yusuf Rahman', 'عائشة')}${arrow}${list('Bilal Ahmed', 'Yusuf Rahman')}`), 'a changed list keeps the email\'s direction on both sides');
@@ -273,6 +273,36 @@ describe('the other email with a value of several parts', () => {
     const m = { id: 'm1', name: 'عائشة محمد', email: 'aisha@example.com', topic: 'other', message: 'السلام عليكم', locale: 'ar', created_at: '2026-11-24T12:00:00.000Z', user_id: null, page_url: null };
     const e = renderInboxNotification(m as never, { to: 'support@example.com' });
     const from = [...e.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)][0][1];
-    assert.equal(from, '\u200e\u2066\u2068عائشة محمد\u2069 &lt;aisha@example.com&gt;\u2069');
+    const iso = (x: string) => `\u2068${x}\u2069`;
+    assert.equal(from, `\u200e\u2066${iso('عائشة محمد')} &lt;${iso('aisha@example.com')}&gt;\u2069`);
+    assert.ok(e.text.includes(`From: \u200e\u2066${iso('عائشة محمد')} <${iso('aisha@example.com')}>\u2069`), e.text);
+  });
+
+  it('a name or an address never ends its isolate or reorders the row', () => {
+    const bad = ['\u2069\u2069\u202e', '\u202b', '\u202d', '\u2067', '\u2069\n\u202e', '\u2069\u2029\u202e'];
+    for (const c of bad) {
+      const m = { id: 'm1', name: `Amina${c} x`, email: `a${c}b@example.com`, topic: 'other', message: 'hi there', locale: 'en', created_at: '2026-11-24T12:00:00.000Z', user_id: null, page_url: null };
+      const e = renderInboxNotification(m as never, { to: 'support@example.com' });
+      const from = [...e.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)][0][1];
+      const line = e.text.split('\n').find((l) => l.startsWith('From: '))!;
+      for (const row of [from, line.slice('From: '.length)]) {
+        assert.equal(row.match(/[\u2066-\u2068]/g)!.length, 3, JSON.stringify(row));
+        assert.equal(row.match(/\u2069/g)!.length, 3);
+        assert.doesNotMatch(row, /[\u202a-\u202e\u2028\u2029\n]/);
+        assert.ok(row.startsWith('\u200e\u2066') && row.endsWith('\u2069'));
+      }
+      assert.doesNotMatch(e.subject, /[\u202a-\u202e\u2066-\u2069]/);
+      // A person's or a tier's name in an approval email, the same
+      const names = new Map([['a', `Yusuf${c}`], ['b', `Bilal${c}`]]);
+      const fields = [{ key: 'k', label: { en: 'k', ar: 'k' }, kind: 'person' as const, before: null, after: ['a', 'b'] }, { key: 'l', label: { en: 'l', ar: 'l' }, kind: 'person' as const, before: 'a', after: 'a' }, { key: 'm', label: { en: 'm', ar: 'm' }, kind: 'text' as const, before: `x${c}`, after: `y${c}` }];
+      const w = renderWorkflowEmail({ to: 'a@example.org', locale: 'ar', event: 'proposed', request: { ...request, fields }, actorName: 'A', names });
+      for (const [, cell] of w.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)) {
+        assert.equal(cell.match(/[\u2066-\u2068]/g)!.length, cell.match(/\u2069/g)!.length, JSON.stringify(cell));
+        assert.doesNotMatch(cell, /[\u202a-\u202e]/);
+        // Never closed before its end: the row's own isolate is the last to close
+        let depth = 0;
+        for (const ch of cell.slice(1, -1)) { if (/[\u2066-\u2068]/.test(ch)) depth++; if (ch === '\u2069') depth--; assert.ok(depth > 0); }
+      }
+    }
   });
 });

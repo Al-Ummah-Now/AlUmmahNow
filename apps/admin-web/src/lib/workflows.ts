@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, isolateText, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -57,7 +57,7 @@ export function workflowValue(f: WorkflowField, v: unknown, locale: Locale, t: T
   if (f.kind === 'bool') return v ? t('workflows.yes') : t('workflows.no');
   const separator = locale === 'ar' ? '، ' : ', ';
   // Each name isolated (FSI…PDI), so a Latin name and the Arabic comma after it keep the list's direction on one line
-  if (f.kind === 'person') return Array.isArray(v) ? workflowPeople(v, t, names).map((name) => `\u2068${name}\u2069`).join(separator) : workflowPeople([v], t, names)[0];
+  if (f.kind === 'person') return Array.isArray(v) ? workflowPeople(v, t, names).map(isolateText).join(separator) : workflowPeople([v], t, names)[0];
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale === 'ar' ? 'ar' : 'en'] ?? String(x);
   if (Array.isArray(v)) return v.map(label).join(separator);
   if (f.kind === 'enum') return label(v);
