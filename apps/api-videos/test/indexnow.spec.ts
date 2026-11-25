@@ -26,11 +26,11 @@ let version = 1_000;
 const write = (db: SqliteD1, id: string, object: Record<string, unknown> | null) =>
 	syncSearchDocument(db as never, 'video', id, object, { version: ++version });
 
-function recorder(status = 202) {
+function recorder(status = 202, headers: Record<string, string> = {}) {
 	const calls: { url: string; body: any }[] = [];
 	const fetcher = (async (url: string, init: RequestInit) => {
 		calls.push({ url, body: JSON.parse(String(init.body)) });
-		return new Response(null, { status });
+		return new Response(null, { status, headers });
 	}) as unknown as typeof fetch;
 	return { calls, fetcher };
 }
@@ -186,6 +186,7 @@ describe('IndexNow flush', () => {
 		const { calls, fetcher } = recorder(429);
 		await flushIndexNow(env, fetcher);
 		assert.equal(ttl, 6 * 3600);
+		assert.deepEqual(pending(db).map((r: { video_id: string }) => r.video_id), ['v1'], 'nothing dropped by the 429');
 		await write(db, 'v2', videoFixture({ id: 'v2' }));
 		assert.deepEqual(await flushIndexNow(env, fetcher), { sent: 0, videos: 0, waiting: true });
 		assert.equal(calls.length, 1);
@@ -193,7 +194,15 @@ describe('IndexNow flush', () => {
 		const later = recorder(202);
 		await flushIndexNow(env, later.fetcher);
 		assert.equal(later.calls.length, 1);
+		assert.deepEqual([...later.calls[0].body.urlList].sort(), ['ar/video/v1', 'ar/video/v2', 'en/video/v1', 'en/video/v2'].map((p) => `${PROD}/${p}`));
 		assert.deepEqual(pending(db), []);
+		// The engine's own Retry-After, in seconds or as a date
+		for (const [retryAfter, hours] of [['43200', 12], [new Date(Date.now() + 10 * 3600_000).toUTCString(), 10], ['60', 6]] as const) {
+			kv.clear();
+			await write(db, `v-${hours}`, videoFixture({ id: `v-${hours}` }));
+			await flushIndexNow(env, recorder(429, { 'retry-after': retryAfter }).fetcher);
+			assert.ok(Math.abs(ttl - hours * 3600) <= 60, `${retryAfter}: ${ttl}`);
+		}
 		assert.equal(indexNowWaitSeconds('43200'), 12 * 3600);
 		assert.equal(indexNowWaitSeconds('999999'), 24 * 3600);
 		assert.equal(indexNowWaitSeconds('soon'), 6 * 3600);
