@@ -659,6 +659,17 @@ describe('taking a live stream down', () => {
 		assert.deepEqual((await manifestOf(t)).files.map((f: { name: string }) => f.name).sort(), ['record-channel.json', 'record-live-sessions.json', 'record-live-stream.json', 'record-uploader-profile.json']);
 	});
 
+	it('nothing is copied or removed while the stream is not hidden', async () => {
+		const t = setup();
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', PLACEHOLDER);
+		const put = t.env.videos.put.bind(t.env.videos);
+		(t.env.videos as any).put = async (key: string, value: string, opts: never) => (key === 'livestream:live-synth-01' ? null : put(key, value, opts));
+		const job = await start(t, [['sess-synth-01', 'selfhosted', null]]).catch(() => null);
+		assert.ok(!job || job.status === 'failed');
+		assert.equal(t.env.LIVE_MEDIA.store.size, 1);
+		(t.env.videos as any).put = put;
+	});
+
 	it('a self-hosted recording is kept whole (best rendition, in order), then every object of it is removed and the CDN purged', async () => {
 		const t = setup();
 		(t.env as Record<string, unknown>).LIVE_PUBLIC_HOST = 'live.test';
