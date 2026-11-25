@@ -535,6 +535,8 @@ export interface AdminUserSearchItem extends AdminUserRow {
   channelCount: number;
   /** The user's member role on `channelId` ('admin' | 'editor' | 'moderator'), if any. */
   channelRole: string | null;
+  /** On the videos admin's staff list (admin-api adds it): an official handle goes to them without a second tick. */
+  isStaff?: boolean;
 }
 
 export interface VideosBan {

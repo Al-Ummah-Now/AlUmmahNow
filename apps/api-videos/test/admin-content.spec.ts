@@ -874,6 +874,30 @@ describe('channel actions', () => {
 		assert.ok(!raw.channel_tabs.store.has('channel-handle-history/lamahat'), 'the name no longer redirects to the channel that gave it up');
 	});
 
+	it('a channel with an official handle moves only when that is allowed, also when it got the handle meanwhile (§3.5)', async () => {
+		const { raw, call, jobOf } = await setup({ channels: { ch1: channel('ch1', { handle: 'LamaHat' }) } });
+		const move = (body: Record<string, unknown> = {}) => call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, ...body });
+		for (const body of [{}, { allowOfficialHandle: false }]) {
+			const refused = await move(body);
+			assert.deepEqual([refused.status, refused.body.code], [409, 'official_handle_confirm']);
+		}
+		assert.equal((await move({ allowOfficialHandle: 'yes' })).status, 400);
+		// A plain handle, made official after the first read: refused under the lock, which is released
+		const channelNow = () => JSON.parse(raw.channels.store.get('ch1')!);
+		raw.channels.store.set('ch1', JSON.stringify({ ...channelNow(), handle: 'ch1' }));
+		const get = raw.profiles.get.bind(raw.profiles);
+		raw.profiles.get = (async (...args: Parameters<typeof get>) => {
+			raw.channels.store.set('ch1', JSON.stringify({ ...channelNow(), handle: 'ummah' }));
+			return get(...args);
+		}) as typeof raw.profiles.get;
+		assert.equal((await move()).body.code, 'official_handle_confirm');
+		raw.profiles.get = get as typeof raw.profiles.get;
+		assert.equal(channelNow().userId, OWNER);
+		const job = await jobOf(await move({ allowOfficialHandle: true }));
+		assert.equal(job.status, 'succeeded');
+		assert.deepEqual([channelNow().userId, channelNow().handle], [OTHER, 'ummah']);
+	});
+
 	it('a plain channel edit refuses an official handle and points to the take-back tool (CC-4)', async () => {
 		const { raw, call } = await setup();
 		const refused = await call('PATCH', '/channels/ch1', { handle: 'Lamahat' });

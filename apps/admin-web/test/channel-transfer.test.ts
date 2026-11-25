@@ -14,7 +14,7 @@ import { I18nProvider } from '../src/i18n/I18nProvider';
 import { createTranslator } from '../src/i18n/translate';
 import { Autocomplete } from '../src/components/search/Autocomplete';
 import { ConfirmButton } from '../src/components/content/actions';
-import { bidiIsolate, confirmMatches, transferConfirmValues, transferItem, userMeta, userName } from '../src/components/content/transfer-model';
+import { bidiIsolate, confirmMatches, isOfficialHandle, needsOfficialTick, transferConfirmValues, transferItem, userMeta, userName } from '../src/components/content/transfer-model';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -86,6 +86,30 @@ describe('transfer text', () => {
     // No @handle for users (handles belong to channels): an unnamed user is called by their email
     assert.equal(userName(user('a', { displayName: '' })), 'a@example.com');
     assert.equal(userName(user('a', { displayName: '', userName: null })), 'a@example.com');
+  });
+});
+
+describe('an official handle (AUN-CHANNEL-CLAIM §3.5)', () => {
+  it('is one of the site’s names, in any case', () => {
+    for (const handle of ['ummah', 'Lamahat', 'AL-UMMAH-NOW']) assert.equal(isOfficialHandle(handle), true, handle);
+    for (const handle of [null, '', 'ummahs', 'morningadhkar']) assert.equal(isOfficialHandle(handle), false, String(handle));
+  });
+
+  it('needs its own tick for anyone who is not known to be staff', () => {
+    assert.equal(needsOfficialTick('ummah', user('usr_1')), true, 'not known: asked');
+    assert.equal(needsOfficialTick('ummah', user('usr_1', { isStaff: false })), true);
+    assert.equal(needsOfficialTick('ummah', user('usr_1', { isStaff: true })), false);
+    assert.equal(needsOfficialTick('ummah', null), false, 'nobody picked yet');
+    assert.equal(needsOfficialTick('morningadhkar', user('usr_1')), false);
+  });
+
+  it('the form asks with a box of its own, waits for it, and forgets it when another person is picked', () => {
+    const file = readFileSync(new URL('../src/app/(protected)/channels/[id]/ChannelTransfer.tsx', import.meta.url), 'utf8');
+    assert.match(file, /\{needsTick && <TransferOption [^\n]*transferAllowOfficial/);
+    assert.match(file, /disabled=\{[^\n]*\(needsTick && !options\.allowOfficialHandle\)\}/);
+    assert.match(file, /setTarget\(id[^\n]*\n[^\n]*\n\s*setOptions\(\(o\) => \(\{ \.\.\.o, allowOfficialHandle: false \}\)\)/);
+    assert.match(file, /else if \(official\) \{[\s\S]*isStaff: false/, 'refused: asked from here on');
+    assert.ok(en.content.errors.official_handle_confirm && ar.content.errors.official_handle_confirm);
   });
 });
 

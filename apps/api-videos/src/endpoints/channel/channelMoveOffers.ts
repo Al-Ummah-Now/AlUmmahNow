@@ -54,6 +54,7 @@ export const MOVE_ROUTE_CODES: Readonly<Record<string, string>> = {
 	channel_is_live: 'move_channel_live',
 	channel_has_support: 'move_channel_has_support',
 	channel_suspended: 'move_channel_suspended',
+	official_handle_confirm: 'official_handle',
 	new_owner_banned: 'move_receiver_not_allowed',
 	new_owner_not_found: 'move_receiver_not_allowed',
 	new_owner_channel_limit: 'move_receiver_channel_limit',
