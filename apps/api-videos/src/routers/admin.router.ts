@@ -7,6 +7,7 @@
  * bans) and writes the audit log itself.
  */
 import { MoveError, stopMoveOffer } from '../lib/channelMoves';
+import { channelMoveOffers } from '../lib/admin/moveOffers';
 import { DEFAULT_TIER_ID } from '@al-ummah/shared-types';
 import { readTierChange, recordTierChange, recordTierChangeEmail } from '../lib/tierChanges';
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upgradeMode';
@@ -352,6 +353,7 @@ app.post('/channels/:id/handle/take', async (c) => {
 	const { handle } = parse(z.object({ handle: z.string().trim().min(1).max(60) }), await body(c));
 	return ok(c, await admin.takeOfficialHandle(c.env, c.req.param('id'), handle, actor(c)));
 });
+app.get('/channels/:id/move-offers', async (c) => ok(c, await channelMoveOffers(c.env as never, c.req.param('id'))));
 // An admin stops an owner's open channel offer (wiki AUN-CHANNEL-CLAIM §5, CC-D1)
 app.post('/channels/:id/move-offers/:offerId/stop', async (c) => {
 	try {

@@ -26,6 +26,7 @@ import {
   contentPermissionsFor,
   hasContentPermission,
   type AdminChannelDetail,
+  type AdminChannelMoveOffer,
   type AdminChannelRow,
   type AdminJob,
   type AdminContentPermission,
@@ -341,7 +342,11 @@ app.post('/channels/:id/handle/take', async (c) => {
   return ok(c, taken);
 });
 
-// Stop an owner's open channel offer (wiki AUN-CHANNEL-CLAIM §5): super admins, with a reason
+// An owner's open channel offer, and stopping it (wiki AUN-CHANNEL-CLAIM §5): super admins; stopping needs a reason
+app.get('/channels/:id/move-offers', async (c) => {
+  need(c, 'channels:transfer');
+  return ok(c, await videos<{ offers: AdminChannelMoveOffer[] }>(c, `/channels/${encodeURIComponent(c.req.param('id'))}/move-offers`));
+});
 app.post('/channels/:id/move-offers/:offerId/stop', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');

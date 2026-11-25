@@ -222,6 +222,18 @@ export interface AdminChannelRow {
   openReports?: number;
 }
 
+/** An owner's open offer to hand their channel to one of its admins (wiki AUN-CHANNEL-CLAIM §5), for the admin channel page. */
+export interface AdminChannelMoveOffer {
+  id: string;
+  /** 'accepting': its receiver has accepted and the move is starting; it can't be stopped any more */
+  status: 'offered' | 'accepting';
+  from: AdminUserRow;
+  to: AdminUserRow;
+  keepContactEmail: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface AdminChannelDetail extends AdminChannelRow {
   description: string;
   /** The scholar label's kind while verified (wiki Epic 21, E21-D4) */

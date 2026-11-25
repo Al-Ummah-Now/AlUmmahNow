@@ -4,12 +4,14 @@ import { useId, useState } from 'react';
 import {
   deleteChannel,
   setChannelVerified,
+  stopChannelMoveOffer,
   suspendChannel,
   unsuspendChannel,
   updateChannel,
   uploadChannelImage,
   type ChannelLabelEvent,
 } from '@/lib/api/content';
+import type { AdminChannelMoveOffer } from '@al-ummah/shared-types';
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate } from '@/i18n/translate';
@@ -22,6 +24,7 @@ import { ChannelTransfer } from './ChannelTransfer';
 import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLabelDialog';
 import { ChannelHandleTools } from './ChannelHandleTools';
 import { FileButton } from '@/components/FileButton';
+import { ChannelMoveOffers } from './ChannelMoveOffers';
 
 interface Props {
   channel: {
@@ -42,10 +45,12 @@ interface Props {
   permissions: AdminContentPermission[];
   /** Scholar label grants and removals, newest first (admins only) */
   labelHistory?: ChannelLabelEvent[];
+  /** The owner's open offer to hand the channel over (super admins only); null: could not be read */
+  moveOffers?: AdminChannelMoveOffer[] | null;
 }
 
 /** Edit, images, verification, suspension, transfer and delete for one channel; each shown only to roles that may use it. */
-export function ChannelActions({ channel, permissions, labelHistory = [] }: Props) {
+export function ChannelActions({ channel, permissions, labelHistory = [], moveOffers = [] }: Props) {
   const { t, locale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
@@ -258,6 +263,8 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
           )}
         </SectionCard>
       )}
+
+      {can('channels:transfer') && <ChannelMoveOffers channelId={channel.id} offers={moveOffers} stop={stopChannelMoveOffer} />}
 
       {can('channels:transfer') && (
         <ChannelTransfer

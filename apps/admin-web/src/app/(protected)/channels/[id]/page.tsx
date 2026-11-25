@@ -1,6 +1,7 @@
 import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
-import { getChannel, getChannelLabelHistory, getContentPermissions, type ChannelLabelEvent } from '@/lib/api/content';
+import { getChannel, getChannelLabelHistory, getChannelMoveOffers, getContentPermissions, type ChannelLabelEvent } from '@/lib/api/content';
+import type { AdminChannelMoveOffer } from '@al-ummah/shared-types';
 import type { AdminContentPermission, ChannelDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
@@ -25,6 +26,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   let channel: ChannelDetailView | null = null;
   let permissions: AdminContentPermission[] = [];
   let labelHistory: ChannelLabelEvent[] = [];
+  let moveOffers: AdminChannelMoveOffer[] | null = [];
   try {
     [channel, permissions] = await Promise.all([getChannel(id), getContentPermissions()]);
     // The label history is extra: a failure leaves it out, never the page
@@ -32,6 +34,13 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       logger.warn('[channels] Label history not loaded', { id, error: e instanceof Error ? e.message : String(e) });
       return [];
     });
+    // So is the owner's open offer: its card says so when it can't be read
+    if (permissions.includes('channels:transfer') && !channel.isDeleted) {
+      moveOffers = await getChannelMoveOffers(id).catch((e: unknown) => {
+        logger.error('[channels] Move offers not loaded', { id, error: e instanceof Error ? e.message : String(e) });
+        return null;
+      });
+    }
   } catch (e) {
     if (e instanceof AdminApiError && e.status === 404) notFound();
     logger.error('[channels] Failed to load channel', { id, error: e instanceof Error ? e.message : String(e) });
@@ -163,6 +172,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             }}
             permissions={permissions}
             labelHistory={labelHistory}
+            moveOffers={moveOffers}
           />
         </div>
 
