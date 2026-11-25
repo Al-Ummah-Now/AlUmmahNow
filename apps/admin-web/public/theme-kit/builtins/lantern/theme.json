@@ -742,7 +742,8 @@
     "headerGraphic": {
       "light": "assets/auth-header.light.svg",
       "dark": "assets/auth-header.dark.svg"
-    }
+    },
+    "headerGraphicFrame": "band"
   },
   "browser": {
     "themeColor": {
