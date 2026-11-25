@@ -3,30 +3,40 @@
  * Pure functions only, unit-tested; the runner does the I/O.
  *
  * QA's buckets hold more records than one run can read, so a run never needs all of them: it lists
- * every key (cheap), keeps a short copy of each record it read with the object's etag (the state, an
- * artifact the next run starts from), and reads only what is new or changed until its time is up.
- * An item is deleted only when everything its verdict depends on has been read; the rest waits for a
- * later run. No address of an account outside the test domains is kept in the state.
+ * every key (cheap), keeps what the rules need of each record it read with the object's etag (the
+ * state, a private R2 object on QA), and reads only what is new or changed until its time is up. An
+ * item is deleted only when everything its verdict depends on has been read; the rest waits for a
+ * later run.
+ *
+ * The state holds keys, etags, ids, dates, flags, the kind of an account and which test marker a title
+ * or name matched. Never a title, a name, a text or an address; a handle only as its object's key. What a run publishes
+ * (publicItems) holds less: this repo, its artifacts and its logs are public.
  */
 import {
+	type AccountKind,
 	type Action,
+	type NameMarker,
+	type TitleMarker,
 	type Verdict,
 	accountKind,
 	applyMinAge,
-	blockChannelDeletion,
-	classifyChannel,
-	classifyHandleEntry,
-	classifyPlaylist,
-	classifyPost,
+	channelMarkers,
+	channelVerdict,
 	classifyScheduleEntry,
-	classifySection,
 	classifyTabsConfig,
-	classifyVideo,
+	handleVerdict,
+	isTempText,
 	junkCommentIds,
-	JUNK_COMMENT,
+	playlistMarker,
+	playlistVerdict,
+	postVerdict,
+	RULES_FINGERPRINT,
 	scheduleEntryVideoId,
-	staleProfileChannels,
+	sectionVerdict,
+	staleChannels,
 	type StoredComment,
+	videoMarker,
+	videoVerdict,
 } from './e2e-leftovers.ts';
 
 /** Record stores the cleanup reads, in the order a run takes turns reading them. */
@@ -35,51 +45,45 @@ export type Store = (typeof STORES)[number];
 
 export interface VideoEntry {
 	id: string;
-	title?: string;
 	userId?: string;
 	channelId?: string;
 	created?: string;
-	isPublic?: boolean;
-	isDeleted?: boolean;
-	uploadStatus?: string;
+	marker?: TitleMarker;
 	/** Probe comments only */
-	junk?: { id: string; text?: string; userId?: string; created?: string }[];
+	junk?: { id: string; created?: string }[];
 }
 export interface ChannelEntry {
 	id: string;
-	name?: string;
 	userId?: string;
-	email?: string;
+	kind: AccountKind;
+	markers: NameMarker[];
 	isMain?: boolean;
-	handle?: string;
-	created?: string;
+	isDeleted?: boolean;
+	dateCreated?: string;
 }
 export interface ProfileEntry {
 	id: string;
-	email?: string;
+	kind: AccountKind;
+	/** Test accounts only */
 	channels?: string[];
 }
 export interface PlaylistEntry {
 	id: string;
-	title?: string;
 	channelId?: string;
-	userId?: string;
+	marker?: TitleMarker;
 }
 export interface PostEntry {
 	id: string;
 	channelId: string;
-	content?: string;
-	status?: string;
-	userId?: string;
 	created?: string;
+	temp: boolean;
 }
 export interface SectionEntry {
-	title?: string;
+	temp: boolean;
 }
 export interface HandleEntry {
 	channelId?: string;
 	userId?: string;
-	handle?: string;
 }
 interface Entries {
 	videos: VideoEntry;
@@ -91,38 +95,62 @@ interface Entries {
 	handles: HandleEntry;
 }
 
-/** One record read: the object's etag and the short copy (null: not a record). */
+/** One record read: the etag it was read with and what the rules need of it (null: not a record). */
 export type Cached<T> = [etag: string, entry: T | null];
 export type State = { version: string; stores: { [S in Store]: Record<string, Cached<Entries[S]>> } };
 /** Every listed key of a store and its etag. */
 export type Listing = Record<Store, Map<string, string>>;
 
-/** The short copies depend on these: a change reads everything again. */
-export const STATE_VERSION = `1 ${JUNK_COMMENT.source}`;
+/** Read under other rules (or in another form): read again. */
+export const STATE_VERSION = `2 ${RULES_FINGERPRINT}`;
 
 export const emptyState = (): State => ({
 	version: STATE_VERSION,
 	stores: { profiles: {}, channels: {}, videos: {}, playlists: {}, posts: {}, sections: {}, handles: {} },
 });
 
-/** The state a previous run left; anything unusable means a fresh start. */
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+
+/** Whether `entry` is what `shorten` makes of a record of this store. */
+function isEntry(store: Store, entry: unknown): boolean {
+	if (entry === null) return true;
+	if (!isRecord(entry)) return false;
+	const strings = (keys: string[]) => keys.every((k) => entry[k] === undefined || typeof entry[k] === 'string');
+	if (store === 'sections') return typeof entry.temp === 'boolean';
+	if (store === 'handles') return strings(['channelId', 'userId']);
+	if (typeof entry.id !== 'string' || !strings(['userId', 'channelId', 'created', 'dateCreated', 'kind', 'marker'])) return false;
+	switch (store) {
+		case 'videos':
+			return entry.junk === undefined || (Array.isArray(entry.junk) && entry.junk.every((j) => isRecord(j) && typeof j.id === 'string'));
+		case 'channels':
+			return typeof entry.kind === 'string' && Array.isArray(entry.markers);
+		case 'profiles':
+			return typeof entry.kind === 'string' && (entry.channels === undefined || (Array.isArray(entry.channels) && entry.channels.every((c) => typeof c === 'string')));
+		case 'posts':
+			return typeof entry.channelId === 'string' && typeof entry.temp === 'boolean';
+		default:
+			return true;
+	}
+}
+
+/** The state a previous run left; anything that is not exactly one means a fresh start. */
 export function parseState(text: string | null): State {
 	try {
-		const parsed = JSON.parse(text ?? '') as State;
-		if (parsed?.version === STATE_VERSION && STORES.every((s) => parsed.stores?.[s] && typeof parsed.stores[s] === 'object')) return parsed;
+		const parsed: unknown = JSON.parse(text ?? '');
+		if (isRecord(parsed) && parsed.version === STATE_VERSION && isRecord(parsed.stores)) {
+			const stores = parsed.stores;
+			const ok = STORES.every((store) => {
+				const cached = stores[store];
+				return isRecord(cached) && Object.values(cached).every((c) => Array.isArray(c) && c.length === 2 && typeof c[0] === 'string' && isEntry(store, c[1]));
+			});
+			if (ok) return parsed as State;
+		}
 	} catch {
 		// a fresh start
 	}
 	return emptyState();
 }
-
-const text = (value: unknown, max = 120): string | undefined => (typeof value === 'string' ? value.slice(0, max) : undefined);
-const TEST_DOMAIN = /@(e2e\.alummahnow\.net|delivered\.resend\.dev)$/i;
-/** Test addresses as they are; of anyone else only that there is one (accountKind: 'other'). */
-export const keptEmail = (email: unknown): string | undefined =>
-	typeof email !== 'string' || !email ? undefined : TEST_DOMAIN.test(email.trim()) ? email.trim() : 'non-test';
-
-type Raw = Record<string, unknown>;
 
 function findComment(list: StoredComment[] | undefined, id: string): (StoredComment & { dateCreated?: string }) | undefined {
 	for (const c of list ?? []) {
@@ -134,40 +162,32 @@ function findComment(list: StoredComment[] | undefined, id: string): (StoredComm
 }
 
 /** A record as read → what the rules need of it; null when it is not a record of the store. */
-export function shorten<S extends Store>(store: S, raw: Raw | null): Entries[S] | null {
+export function shorten<S extends Store>(store: S, raw: Record<string, unknown> | null): Entries[S] | null {
 	const of = (): Entries[Store] | null => {
-		if (!raw || typeof raw !== 'object') return null;
-		if (store === 'sections') return { title: text(raw.title) };
-		if (store === 'handles') return { channelId: text(raw.channelId), userId: text(raw.userId), handle: text(raw.handle) };
+		if (!isRecord(raw)) return null;
+		if (store === 'sections') return { temp: videoMarker(str(raw.title)) === 'temp' };
+		if (store === 'handles') return { channelId: str(raw.channelId), userId: str(raw.userId) };
 		if (typeof raw.id !== 'string' || !raw.id) return null;
+		const id = raw.id;
 		switch (store as Store) {
 			case 'videos': {
 				const comments = Array.isArray(raw.comments) ? (raw.comments as StoredComment[]) : undefined;
-				const junk = junkCommentIds({ id: raw.id, comments }).map((id) => {
-					const c = findComment(comments, id);
-					return { id, text: text(c?.text), userId: c?.userId, created: c?.dateCreated };
-				});
-				return {
-					id: raw.id, title: text(raw.title), userId: text(raw.userId), channelId: text(raw.channelId), created: text(raw.dateCreated),
-					isPublic: raw.isPublic as boolean | undefined, isDeleted: raw.isDeleted as boolean | undefined, uploadStatus: text(raw.uploadStatus),
-					...(junk.length ? { junk } : {}),
-				};
+				const junk = junkCommentIds({ id, comments }).map((c) => ({ id: c, created: findComment(comments, c)?.dateCreated }));
+				return { id, userId: str(raw.userId), channelId: str(raw.channelId), created: str(raw.dateCreated), marker: videoMarker(str(raw.title)), ...(junk.length ? { junk } : {}) };
 			}
 			case 'channels':
-				return { id: raw.id, name: text(raw.name), userId: text(raw.userId), email: keptEmail(raw.email), isMain: raw.isMain === true, handle: text(raw.handle), created: text(raw.dateCreated) };
+				return { id, userId: str(raw.userId), kind: accountKind(str(raw.email)), markers: channelMarkers(str(raw.name)), isMain: raw.isMain === true, isDeleted: raw.isDeleted === true, dateCreated: str(raw.dateCreated) };
 			case 'profiles': {
-				const email = keptEmail(raw.email);
-				const kind = accountKind(email);
-				const mine = kind === 'throwaway' || kind === 'pinned-e2e';
-				return { id: raw.id, email, ...(mine && Array.isArray(raw.channels) ? { channels: raw.channels.filter((c): c is string => typeof c === 'string') } : {}) };
+				const kind = accountKind(str(raw.email));
+				const test = kind === 'throwaway' || kind === 'pinned-e2e';
+				return { id, kind, ...(test && Array.isArray(raw.channels) ? { channels: raw.channels.filter((c): c is string => typeof c === 'string') } : {}) };
 			}
 			case 'playlists':
-				return { id: raw.id, title: text(raw.title), channelId: text(raw.channelId), userId: text(raw.userId) };
+				return { id, channelId: str(raw.channelId), marker: playlistMarker(str(raw.title)) };
 			default:
-				return { id: raw.id, channelId: text(raw.channelId) ?? '', content: text(raw.content), status: text(raw.status), userId: text(raw.userId), created: text(raw.createdAt) };
+				return { id, channelId: str(raw.channelId) ?? '', created: str(raw.createdAt), temp: isTempText(str(raw.content)) };
 		}
 	};
-	// JSON drops undefined fields, so a copy read from the state equals a fresh one
 	return of() as Entries[S] | null;
 }
 
@@ -182,12 +202,11 @@ export function prune(state: State, listing: Listing): void {
 export interface Pending {
 	store: Store;
 	key: string;
-	etag: string;
 }
 
 /** What is still to be read, the stores taking turns so that each run gets further in all of them. */
 export function pendingReads(state: State, listing: Listing): Pending[] {
-	const queues = STORES.map((store) => [...listing[store]].filter(([key]) => !state.stores[store][key]).map(([key, etag]) => ({ store, key, etag })));
+	const queues = STORES.map((store) => [...listing[store].keys()].filter((key) => !state.stores[store][key]).map((key) => ({ store, key })));
 	const out: Pending[] = [];
 	for (let i = 0, more = true; more; i++) {
 		more = false;
@@ -202,13 +221,25 @@ export function pendingReads(state: State, listing: Listing): Pending[] {
 
 export interface InventoryItem {
 	kind: 'video' | 'comment' | 'channel' | 'playlist' | 'post' | 'section' | 'schedule-entry' | 'profile-ref' | 'handle' | 'tabs';
+	/** Record id; for a section, a handle, a tab config and a schedule entry, the key */
 	id: string;
-	title?: string;
-	owner?: string;
+	/** Object key, and the etag the verdict is about: the runner deletes only that version */
+	key: string;
+	etag?: string;
+	owner?: AccountKind;
 	parent?: string;
 	action: Action | 'wait';
 	reason: string;
-	detail?: Record<string, unknown>;
+	/** profile-ref: the channel ids to drop */
+	channels?: string[];
+}
+
+/** What goes with a channel: it is deleted only when these are gone. */
+export interface OnChannel {
+	videos: string[];
+	playlists: string[];
+	posts: string[];
+	sections: string[];
 }
 
 const WAIT = (what: string) => ({ action: 'wait' as const, reason: `${what} not read yet (a later run decides)` });
@@ -219,106 +250,124 @@ export function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 	else map.set(key, [value]);
 }
 
-/** Owner label for the inventory: test accounts by address, anyone else only by kind. */
-function ownerLabel(email: string | undefined, userId: string | undefined): string {
-	const kind = accountKind(email);
-	if (kind === 'other') return `non-test account ${userId ?? ''}`.trim();
-	return email ?? `unknown (${userId ?? 'no user id'})`;
+export interface Inventory {
+	items: InventoryItem[];
+	channels: ChannelEntry[];
+	onChannel: Map<string, OnChannel>;
 }
 
 /** The verdict of every record read so far. `state` must be pruned against `listing`. */
 export function buildInventory(
 	state: State,
 	listing: Listing,
-	keys: { schedule: string[]; tabs: string[] },
+	keys: { schedule: Map<string, string>; tabs: Map<string, string> },
 	options: { now: number; minAgeMs: number },
-): { items: InventoryItem[]; channels: ChannelEntry[]; videosByChannel: Map<string, string[]> } {
+): Inventory {
 	const { now, minAgeMs } = options;
-	const read = <S extends Store>(store: S) => Object.values(state.stores[store]).map((c) => (c as Cached<Entries[S]>)[1]).filter((e): e is NonNullable<typeof e> => e !== null) as Entries[S][];
-	const complete = (store: Store) => listing[store].size === Object.keys(state.stores[store]).length;
-	const videos = read('videos');
-	const channels = read('channels');
-	const profiles = read('profiles');
+	type Row<S extends Store> = { key: string; etag: string; entry: Entries[S] };
+	const rows = <S extends Store>(store: S): Row<S>[] =>
+		Object.entries(state.stores[store] as Record<string, Cached<Entries[S]>>).flatMap(([key, [etag, entry]]) => (entry ? [{ key, etag, entry }] : []));
+	const complete = (store: Store) => [...listing[store].keys()].every((key) => !!state.stores[store][key]);
+	const videos = rows('videos');
+	const channels = rows('channels');
+	const profiles = rows('profiles');
+	const playlists = rows('playlists');
+	const posts = rows('posts');
+	const sections = rows('sections');
 	const allChannels = complete('channels');
-	const allVideos = complete('videos');
+	// A channel goes with everything on it, so everything that may be on one must be known
+	const missing = (['channels', 'videos', 'playlists', 'posts', 'sections'] as const).filter((store) => !complete(store));
 
-	// Owner address of a user id: from the profile, else from one of the user's channels
-	const fromProfile = new Map<string, string>();
-	for (const p of profiles) if (p.email) fromProfile.set(p.id, p.email);
-	const fromChannel = new Map<string, string>();
-	for (const c of channels) if (c.userId && c.email && !fromChannel.has(c.userId)) fromChannel.set(c.userId, c.email);
-	const ownerEmail = (userId: string | undefined) => (userId ? (fromProfile.get(userId) ?? fromChannel.get(userId)) : undefined);
+	// Kind of a user's account: from the profile, else from one of the user's channels
+	const fromProfile = new Map<string, AccountKind>();
+	for (const { entry: p } of profiles) if (p.kind !== 'unknown') fromProfile.set(p.id, p.kind);
+	const fromChannel = new Map<string, AccountKind>();
+	for (const { entry: c } of channels) if (c.userId && c.kind !== 'unknown' && !fromChannel.has(c.userId)) fromChannel.set(c.userId, c.kind);
+	const ownerKind = (userId: string | undefined): AccountKind => (userId ? (fromProfile.get(userId) ?? fromChannel.get(userId) ?? 'unknown') : 'unknown');
 	const ownerKnown = (userId: string | undefined) =>
 		!userId || fromProfile.has(userId) || (allChannels && (!listing.profiles.has(userId) || !!state.stores.profiles[userId]));
 
 	const items: InventoryItem[] = [];
+	type Any = Verdict | ReturnType<typeof WAIT>;
+	const onChannel = new Map<string, OnChannel>();
+	const blocked = new Map<string, Set<string>>();
+	/** What is on a channel, and whether it would go with it. */
+	const hold = (channelId: string | undefined, store: keyof OnChannel, id: string, ifDeleted: Any): void => {
+		if (!channelId) return;
+		let on = onChannel.get(channelId);
+		if (!on) onChannel.set(channelId, (on = { videos: [], playlists: [], posts: [], sections: [] }));
+		on[store].push(id);
+		if (ifDeleted.action === 'delete') return;
+		const why = blocked.get(channelId) ?? new Set<string>();
+		blocked.set(channelId, why.add(ifDeleted.action));
+	};
+	const post = (p: PostEntry, action: Action | undefined) => applyMinAge(postVerdict(p.temp, action, p.channelId), p.created, now, minAgeMs);
+
 	const videoAction = new Map<string, Action | 'wait'>();
-	const actionsOnChannel = new Map<string, (Action | 'wait')[]>();
-	const videosByChannel = new Map<string, string[]>();
-	for (const v of videos) {
-		const label = ownerLabel(ownerEmail(v.userId), v.userId);
-		const verdict = ownerKnown(v.userId) ? applyMinAge(classifyVideo(v, ownerEmail), v.created, now, minAgeMs) : WAIT('owner');
+	for (const { key, etag, entry: v } of videos) {
+		const owner = ownerKind(v.userId);
+		const verdict: Any = ownerKnown(v.userId) ? applyMinAge(videoVerdict(v, owner), v.created, now, minAgeMs) : WAIT('owner');
 		videoAction.set(v.id, verdict.action);
-		if (v.channelId) {
-			push(actionsOnChannel, v.channelId, verdict.action);
-			if (verdict.action === 'delete') push(videosByChannel, v.channelId, v.id);
-		}
-		items.push({
-			kind: 'video', id: v.id, title: v.title, owner: label, parent: v.channelId, ...verdict,
-			detail: { isPublic: v.isPublic ?? null, isDeleted: v.isDeleted ?? false, uploadStatus: v.uploadStatus ?? null, created: v.created ?? null },
-		});
+		hold(v.channelId, 'videos', v.id, verdict);
+		items.push({ kind: 'video', id: v.id, key, etag, owner, parent: v.channelId, ...verdict });
 		if (verdict.action === 'delete') continue;
 		for (const c of v.junk ?? []) {
-			const cv = applyMinAge({ action: 'delete', reason: 'test probe comment' }, c.created, now, minAgeMs);
-			items.push({ kind: 'comment', id: c.id, title: c.text, owner: ownerLabel(ownerEmail(c.userId), c.userId), parent: v.id, ...cv });
+			items.push({ kind: 'comment', id: c.id, key, parent: v.id, ...applyMinAge({ action: 'delete', reason: 'test probe comment' }, c.created, now, minAgeMs) });
 		}
 	}
+	for (const { entry: p } of playlists) hold(p.channelId, 'playlists', p.id, playlistVerdict(p, 'delete'));
+	for (const { entry: p } of posts) hold(p.channelId, 'posts', p.id, post(p, 'delete'));
+	for (const { key, entry: s } of sections) hold(key.split('/')[0], 'sections', key, sectionVerdict(s.temp, 'delete', key.split('/')[0]));
 
 	const channelAction = new Map<string, Action>();
-	for (const c of channels) {
-		const on = actionsOnChannel.get(c.id) ?? [];
-		let verdict: Verdict | ReturnType<typeof WAIT> = applyMinAge(classifyChannel(c), c.created, now, minAgeMs);
+	for (const { key, etag, entry: c } of channels) {
+		let verdict: Any = applyMinAge(channelVerdict(c, c.kind), c.dateCreated, now, minAgeMs);
 		if (verdict.action === 'delete') {
-			verdict = !allVideos || on.includes('wait') ? WAIT('a video that may be on it') : blockChannelDeletion(verdict, on as Action[]);
+			const why = blocked.get(c.id);
+			if (missing.length > 0 || why?.has('wait')) verdict = WAIT('something that may be on it');
+			else if (why) verdict = { action: 'unsure', reason: `${verdict.reason}, but it still holds something that is not being deleted` };
 		}
 		// Waiting channels count as kept for everything that depends on them
 		channelAction.set(c.id, verdict.action === 'wait' ? 'keep' : verdict.action);
-		items.push({ kind: 'channel', id: c.id, title: c.name, owner: ownerLabel(c.email, c.userId), ...verdict, detail: { isMain: c.isMain ?? false, handle: c.handle ?? null } });
+		items.push({ kind: 'channel', id: c.id, key, etag, owner: c.kind, ...verdict });
 	}
-	for (const p of read('playlists')) {
-		items.push({ kind: 'playlist', id: p.id, title: p.title, owner: ownerLabel(ownerEmail(p.userId), p.userId), parent: p.channelId, ...classifyPlaylist(p, p.channelId ? channelAction.get(p.channelId) : undefined) });
-	}
-	for (const p of read('posts')) {
-		const verdict = applyMinAge(classifyPost(p.content, channelAction.get(p.channelId), p.channelId), p.created, now, minAgeMs);
-		items.push({ kind: 'post', id: p.id, title: p.content, owner: ownerLabel(ownerEmail(p.userId), p.userId), parent: p.channelId, ...verdict, detail: { status: p.status ?? null } });
-	}
-	for (const [key, [, section]] of Object.entries(state.stores.sections)) {
+	const actionOf = (channelId: string | undefined) => (channelId ? channelAction.get(channelId) : undefined);
+	for (const { key, etag, entry: p } of playlists) items.push({ kind: 'playlist', id: p.id, key, etag, parent: p.channelId, ...playlistVerdict(p, actionOf(p.channelId)) });
+	for (const { key, etag, entry: p } of posts) items.push({ kind: 'post', id: p.id, key, etag, parent: p.channelId, ...post(p, actionOf(p.channelId)) });
+	for (const { key, etag, entry: s } of sections) {
 		const channelId = key.split('/')[0];
-		items.push({ kind: 'section', id: key, title: section?.title, parent: channelId, ...classifySection(section?.title, channelAction.get(channelId), channelId) });
+		items.push({ kind: 'section', id: key, key, etag, parent: channelId, ...sectionVerdict(s.temp, actionOf(channelId), channelId) });
 	}
-	for (const key of keys.schedule) {
+	for (const [key, etag] of keys.schedule) {
 		const id = scheduleEntryVideoId(key);
 		// Whether a video exists is known from the listing, read or not
 		const action = id ? (videoAction.get(id) ?? (listing.videos.has(id) ? 'keep' : 'missing')) : 'keep';
-		items.push({ kind: 'schedule-entry', id: key, parent: id ?? undefined, ...classifyScheduleEntry(key, action === 'wait' ? 'keep' : action) });
+		items.push({ kind: 'schedule-entry', id: key, key, etag, parent: id ?? undefined, ...classifyScheduleEntry(key, action === 'wait' ? 'keep' : action) });
 	}
 	const existing = new Set(listing.channels.keys());
 	const deleting = new Set([...channelAction].filter(([, action]) => action === 'delete').map(([id]) => id));
-	for (const p of profiles) {
-		const stale = staleProfileChannels(p, existing, deleting);
-		if (stale.length > 0) items.push({ kind: 'profile-ref', id: p.id, owner: p.email, action: 'delete', reason: 'profile lists channels that are deleted', detail: { channels: stale } });
+	for (const { key, etag, entry: p } of profiles) {
+		const stale = staleChannels(p.kind, p.channels, existing, deleting);
+		if (stale.length > 0) items.push({ kind: 'profile-ref', id: p.id, key, etag, owner: p.kind, action: 'delete', reason: 'profile lists channels that are deleted', channels: stale });
 	}
-	for (const [key, [, entry]] of Object.entries(state.stores.handles)) {
-		const email = ownerEmail(entry?.userId);
-		const verdict = classifyHandleEntry(entry, email, existing, deleting);
+	for (const { key, etag, entry: h } of rows('handles')) {
+		const owner = ownerKind(h.userId);
+		const verdict = handleVerdict(h, owner, existing, deleting);
 		if (verdict.action === 'keep') continue;
-		items.push({ kind: 'handle', id: key, title: entry?.handle, owner: ownerLabel(email, entry?.userId), parent: entry?.channelId, ...(ownerKnown(entry?.userId) ? verdict : WAIT('owner')) });
+		items.push({ kind: 'handle', id: key, key, etag, owner, parent: h.channelId, ...(ownerKnown(h.userId) ? verdict : WAIT('owner')) });
 	}
-	for (const key of keys.tabs) {
+	for (const [key, etag] of keys.tabs) {
 		const verdict = classifyTabsConfig(key, existing, deleting);
-		if (verdict.action !== 'keep') items.push({ kind: 'tabs', id: key, ...verdict });
+		if (verdict.action !== 'keep') items.push({ kind: 'tabs', id: key, key, etag, parent: key.replace(/^channel-tabs\//, ''), ...verdict });
 	}
-	return { items, channels, videosByChannel };
+	return { items, channels: channels.map((c) => c.entry), onChannel };
+}
+
+/** Items as a run may publish them: no key (a handle's key is the handle) and nothing that is kept. */
+export function publicItems(items: readonly InventoryItem[]) {
+	return items
+		.filter((i) => i.action !== 'keep')
+		.map(({ kind, id, owner, parent, action, reason }) => ({ kind, id: kind === 'handle' ? '(a handle)' : id, owner, parent, action, reason }));
 }
 
 export type Counts = Record<Action | 'wait', number>;
@@ -329,7 +378,15 @@ export function summarize(items: InventoryItem[]): Record<string, Counts> {
 }
 
 /** When each part of a run must be over, from its start. The job's own limit is above the last one. */
-export const DEADLINES_MIN = { list: 12, read: 30, write: 48, reconcile: 54 } as const;
+export const DEADLINES_MIN = { list: 12, read: 30, channels: 44, write: 48, reconcile: 54 } as const;
+
+export type Outcome = 'done' | 'skipped' | 'failed';
+export interface Tally {
+	done: number;
+	skipped: number;
+	failed: number;
+	left: number;
+}
 
 /**
  * Runs `fn` over the items until the deadline, or until `maxFailuresInRow` fail in a row (the
@@ -338,36 +395,30 @@ export const DEADLINES_MIN = { list: 12, read: 30, write: 48, reconcile: 54 } as
 export async function mapUntil<T>(
 	items: readonly T[],
 	limit: number,
-	fn: (item: T) => Promise<boolean>,
+	fn: (item: T) => Promise<Outcome>,
 	options: { deadline: number; now?: () => number; maxFailuresInRow?: number },
-): Promise<{ done: number; failed: number; left: number }> {
+): Promise<Tally> {
 	const now = options.now ?? Date.now;
 	const maxInRow = options.maxFailuresInRow ?? Infinity;
 	let next = 0;
-	let done = 0;
-	let failed = 0;
+	const tally = { done: 0, skipped: 0, failed: 0 };
 	let inRow = 0;
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
 		while (next < items.length && now() < options.deadline && inRow < maxInRow) {
-			const item = items[next++];
-			if (await fn(item)) {
-				done++;
-				inRow = 0;
-			} else {
-				failed++;
-				inRow++;
-			}
+			const outcome = await fn(items[next++]);
+			tally[outcome]++;
+			inRow = outcome === 'failed' ? inRow + 1 : 0;
 		}
 	}));
-	return { done, failed, left: items.length - next };
+	return { ...tally, left: items.length - next };
 }
 
 /**
  * A run is red only when it got nowhere: there was something to read or delete and not one of it
- * succeeded. Anything left over, or failed once, is for the next run.
+ * succeeded. Anything left over, skipped because it changed, or failed once, is for the next run.
  */
-export function stalled(run: { toRead: number; read: number; toDelete: number; deleted: number }): string | null {
+export function stalled(run: { toRead: number; read: number; toDelete: number; deleted: number; skipped: number }): string | null {
 	if (run.toRead > 0 && run.read === 0) return `none of ${run.toRead} records could be read`;
-	if (run.toDelete > 0 && run.deleted === 0) return `none of ${run.toDelete} leftovers could be deleted`;
+	if (run.toDelete > run.skipped && run.deleted === 0) return `none of ${run.toDelete} leftovers could be deleted`;
 	return null;
 }

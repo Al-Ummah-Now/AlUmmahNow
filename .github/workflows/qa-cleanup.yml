@@ -8,15 +8,15 @@
 # Anything younger than 2 hours is left alone, so a running E2E job is never hit.
 #
 # One run cannot read all of QA, so a run is bounded (list, read, delete and reconcile each have a
-# deadline) and starts from what earlier runs read: the state, an artifact of the last run that has
-# one. Each run reads what is new or changed, deletes what it knows enough about and leaves the rest
+# deadline) and starts from what earlier runs read: the state, a private R2 object on QA that
+# only an apply run writes. Each run reads what is new or changed, deletes what it knows enough about and leaves the rest
 # for the next day. It ends red only when it got nowhere.
 #
 # QA only: the script refuses any other host, worker config or bucket.
 # Token: R2 + D1 edit and Workers Scripts edit (wrangler's remote bindings) on the
-# QA account. The inventory JSON is uploaded as an artifact. The repo is public, so it and the log show
-# titles, names and text only of what is marked as test data (publicItem in scripts/qa/e2e-leftovers.ts).
-# The scheduled run takes the inventory only and deletes nothing (paused until #2027).
+# QA account. The inventory JSON is uploaded as an artifact. The repo is public, so it and the log hold
+# no title, name, handle, text or address (publicItems in scripts/qa/cleanup-inventory.ts).
+# The scheduled run takes the inventory only and deletes nothing; deletes need a manual apply run.
 name: QA Cleanup
 
 on:
@@ -35,8 +35,6 @@ on:
 permissions:
   contents: read
   packages: read
-  # The previous runs' state artifact
-  actions: read
 
 concurrency:
   group: qa-cleanup
@@ -70,28 +68,15 @@ jobs:
           pnpm --filter @al-ummah/logger build
           pnpm --filter @al-ummah/theme-packages build
 
-      - name: Get what earlier runs read
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # The newest run of this workflow on main that left a state; none (or too old): start afresh
-          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow qa-cleanup.yml --branch main --limit 14 --json databaseId -q '.[].databaseId'); do
-            if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name qa-cleanup-state --dir "$RUNNER_TEMP/state" 2>/dev/null; then
-              echo "State of run $id"
-              break
-            fi
-          done
-
       - name: Sweep QA
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Scheduled runs only take the inventory (deletes are paused until #2027); a manual run applies only when asked to
+          # Scheduled runs only take the inventory; a manual run deletes only when asked to
           MODE: ${{ inputs.mode || 'dry-run' }}
         run: |
           set -o pipefail
-          mkdir -p "$RUNNER_TEMP/state"
-          args=(--out "$RUNNER_TEMP/qa-cleanup.json" --state "$RUNNER_TEMP/state/qa-cleanup-state.json")
+          args=(--out "$RUNNER_TEMP/qa-cleanup.json")
           if [ "$MODE" = apply ]; then args+=(--apply --reconcile); fi
           pnpm -s qa:cleanup "${args[@]}" 2>&1 | grep -vE 'internal error; reference|^$' | tee qa-cleanup.txt
           { echo "### QA cleanup ($MODE)"; echo '```'; grep -E '^\[cleanup\]|^  ' qa-cleanup.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -100,7 +85,7 @@ jobs:
         if: always()
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: python3 scripts/ci/scan-artifacts-for-secrets.py --env CLOUDFLARE_API_TOKEN --remove "$RUNNER_TEMP/qa-cleanup.json" "$RUNNER_TEMP/state"
+        run: python3 scripts/ci/scan-artifacts-for-secrets.py --env CLOUDFLARE_API_TOKEN --remove "$RUNNER_TEMP/qa-cleanup.json"
 
       - name: Upload inventory
         if: always()
@@ -108,14 +93,5 @@ jobs:
         with:
           name: qa-cleanup-inventory
           path: ${{ runner.temp }}/qa-cleanup.json
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: Upload what was read, for the next run
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-cleanup-state
-          path: ${{ runner.temp }}/state/qa-cleanup-state.json
           retention-days: 30
           if-no-files-found: ignore
