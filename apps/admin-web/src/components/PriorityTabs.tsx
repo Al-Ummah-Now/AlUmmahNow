@@ -32,9 +32,11 @@ function focusQuietly(el: HTMLElement) {
 
 /**
  * A count pill in the menu: the page's surface colour is the menu's own in dark themes, so there it is a tint of the
- * row's text (pills marked data-pill="plain"; the danger ones keep their colours).
+ * row's text (pills marked data-pill="plain"), and a red one is a tint of its red: the light page's red fill is the
+ * menu's own colour there (pills marked data-pill="danger").
  */
-const MENU_PILL = '[&_[data-pill=plain]]:bg-[color-mix(in_srgb,currentColor_16%,transparent)] [&_[data-pill=plain]]:text-[inherit]';
+const MENU_PILL =
+  '[&_[data-pill=plain]]:bg-[color-mix(in_srgb,currentColor_16%,transparent)] [&_[data-pill=plain]]:text-[inherit] [&_[data-pill=danger]]:bg-[color-mix(in_srgb,var(--danger-fg)_18%,transparent)]';
 
 export interface PriorityTab {
   id: string;
