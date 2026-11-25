@@ -1598,6 +1598,16 @@ describe('taking a video down', () => {
 		assert.deepEqual(env.playlists.read('pl1').videos, []);
 	});
 
+	it('a cache purge the token may not do says what to fix on the case\'s job', async () => {
+		const t = setup();
+		seedOriginal(t.env);
+		const base = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => (String(input).includes('/purge_cache') ? new Response('{}', { status: 403 }) : base(input as never, init))) as typeof fetch;
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION });
+		await t.drain();
+		assert.match((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.lastError, /Cloudflare refused the cache purge \(403\): the token in the Secrets Store secret media-cdn-api-token/);
+	});
+
 	it('a tampered evidence chunk fails its check instead of streaming', async () => {
 		const t = setup();
 		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg', resolution: { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });

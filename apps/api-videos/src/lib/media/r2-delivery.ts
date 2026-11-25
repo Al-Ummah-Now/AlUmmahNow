@@ -807,8 +807,9 @@ async function deleteRendition(env: MediaEnv, videoId: string, access: MediaAcce
 
 /** A video's copies on the CDN (every rendition). `strict`: throws when the purge failed. */
 export async function purgeVideoCdn(env: MediaEnv, videoId: string, opts: { strict?: boolean } = {}): Promise<void> {
-	const purged = await purgeCdnPrefix(env, `${videoId}/`);
-	if (opts.strict && purged === 'failed') throw new Error(`CDN purge failed for ${videoId}`);
+	let status: number | null = null;
+	const purged = await purgeCdnPrefix(env, `${videoId}/`, (s) => (status = s));
+	if (opts.strict && purged === 'failed') throw new Error(cdnPurgeProblem(status));
 }
 
 /** What D1 holds of a video's R2 media: its original's row is closed, its backfill rows go (docs/media-delivery/BACKFILL.md). */
@@ -854,17 +855,28 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 
 export type CdnPurge = 'purged' | 'not_configured' | 'failed';
 
+/** Told when a purge failed: Cloudflare's status, or null when it did not answer. */
+export type PurgeFailed = (status: number | null) => void;
+
+/** What to say, and do, about a purge that failed. A refusal is the token's: trying again does not help. */
+export function cdnPurgeProblem(status: number | null): string {
+	if (status === 401 || status === 403) {
+		return `Cloudflare refused the cache purge (${status}): the token in the Secrets Store secret media-cdn-api-token may not purge the alummahnow.net zone. Give it the Cache Purge permission on that zone, or store one that has it, then Retry.`;
+	}
+	return `Cloudflare cache purge failed${status === null ? '' : ` (${status})`}`;
+}
+
 /** Drops cached copies of pub/<rest> from the CDN when a zone token with Cache Purge is set. */
-async function purgeCdnPrefix(env: MediaEnv, rest: string): Promise<CdnPurge> {
+async function purgeCdnPrefix(env: MediaEnv, rest: string, onFailed?: PurgeFailed): Promise<CdnPurge> {
 	if (!env.MEDIA_PUBLIC_HOST) return 'not_configured';
-	return purgeCdn(env, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/pub/${rest}`] });
+	return purgeCdn(env, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/pub/${rest}`] }, onFailed);
 }
 
 /**
  * Cloudflare cache purge on the alummahnow.net zone (by URL or by prefix). Never throws:
  * 'not_configured' without a zone token, 'failed' when the API refused.
  */
-export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body: { files: string[] } | { prefixes: string[] }): Promise<CdnPurge> {
+export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body: { files: string[] } | { prefixes: string[] }, onFailed?: PurgeFailed): Promise<CdnPurge> {
 	if (!env.MEDIA_CDN_API_TOKEN) return 'not_configured';
 	const list = 'files' in body ? body.files : body.prefixes;
 	if (!list.length) return 'purged';
@@ -881,14 +893,24 @@ export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body:
 			});
 			if (!res.ok) {
 				logger.warn('[Media] CDN purge failed', { status: res.status, count: part.length });
+				onFailed?.(res.status);
 				return 'failed';
 			}
 		}
 		return 'purged';
 	} catch (error) {
 		logger.warn('[Media] CDN purge failed', { error: error instanceof Error ? error.message : String(error) });
+		onFailed?.(null);
 		return 'failed';
 	}
+}
+
+/** The same, for work that is not done until the CDN was told: throws, saying why and what to do. */
+export async function purgeCdnOrThrow(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body: { files: string[] } | { prefixes: string[] }): Promise<Exclude<CdnPurge, 'failed'>> {
+	let status: number | null = null;
+	const purged = await purgeCdn(env, body, (s) => (status = s));
+	if (purged === 'failed') throw new Error(cdnPurgeProblem(status));
+	return purged;
 }
 
 /** Mark the move on the record and queue it (the processing-check queue carries it). */

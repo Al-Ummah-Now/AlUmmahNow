@@ -36,7 +36,7 @@ import { imagePathOf, isUploadRow } from '../csam/imageOwners';
 import { logger } from '../logger';
 import { deleteImageFile, imageStorageConfigured, listImageFolder } from '../media/imageFiles';
 import { bunnyRef } from '../media/providers/bunny';
-import { forgetVideoMedia, purgeCdn, purgeVideoCdn } from '../media/r2-delivery';
+import { forgetVideoMedia, purgeCdnOrThrow, purgeVideoCdn } from '../media/r2-delivery';
 import { PLAYLIST_ADD_PREFIX } from '../playlistUploadAdds';
 import Queue from '../queue';
 import { isOwnershipComplete } from '../search/ownership';
@@ -454,8 +454,7 @@ async function deletePages(s: Step, bucket: R2Bucket | undefined, prefix: string
 async function purgeImages(env: Env, urls: string[], counts: EraseMediaCounts, calls: Calls): Promise<void> {
 	if (!urls.length) return;
 	calls.spend(Math.ceil(urls.length / 30));
-	const cdn = await purgeCdn(env as never, { files: urls });
-	if (cdn === 'failed') throw new Error('Cloudflare cache purge failed');
+	const cdn = await purgeCdnOrThrow(env as never, { files: urls });
 	calls.spend(env.BUNNY_API_KEY ? urls.length : 0);
 	const edge = await purgeBunnyEdge(env as never, urls);
 	if (edge === 'failed') throw new Error('Bunny edge purge failed');
@@ -847,8 +846,7 @@ async function finishVideo(s: Step, item: Extract<MediaItem, { t: 'video' }>, do
 	// Public renditions are served with no Worker: the CDN is told even when R2 holds nothing any more
 	await purgeVideoCdn(env as never, id, { strict: true });
 	if (env.MEDIA && env.MEDIA_PUBLIC_HOST) {
-		const purged = await purgeCdn(env as never, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/${r2ThumbnailPrefix(id)}`] });
-		if (purged === 'failed') throw new Error('CDN purge of the thumbnails failed');
+		const purged = await purgeCdnOrThrow(env as never, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/${r2ThumbnailPrefix(id)}`] });
 		if (purged === 'not_configured') noteCache(counts, 'cloudflare');
 	}
 	if (problem) throw problem;
@@ -1037,11 +1035,13 @@ export async function onEraseMediaFailed(env: unknown, job: AdminJob, error: str
 	// A part nobody is deleting any more (a delivery takes its own back; a failed job's mark counts for nobody)
 	const db = dbOf(env as Env);
 	if (db) await endStaleParts(db, job.id).catch((e) => logger.warn('[EraseMedia] Marks not taken back', { jobId: job.id, error: e instanceof Error ? e.message : String(e) }));
+	// What to fix comes first, once: the list of what is left can be long
+	const fix = /Cloudflare refused the cache purge.*?then Retry\./.exec(error)?.[0];
 	reportNeedsAction('api-videos', env as ErrorReporterEnv, undefined, {
 		key: `admin-job:${job.id}`,
 		source: 'admin-job',
 		title: 'Media of an erased account not deleted',
-		message: error.slice(0, 500),
+		message: (fix ? `${fix} ${error.split(fix).join('the cache purge')}` : error).slice(0, 700),
 		itemType: 'admin-job',
 		itemId: job.id,
 		itemUrl: '/jobs',

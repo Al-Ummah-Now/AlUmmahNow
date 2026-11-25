@@ -39,7 +39,7 @@ import Queue, { MessageType } from '../queue';
 import { createJob, getJob, type JobOutcome } from '../admin/jobs';
 import { banUser, purgeVideoForCsam, type AdminServiceEnv } from '../admin/service';
 import { readBan } from '../admin/bans';
-import { accessDrift, purgeCdn, purgeVideoRenditions, queueMediaMove, type CdnPurge, type MediaEnv } from '../media/r2-delivery';
+import { accessDrift, purgeCdn, purgeCdnOrThrow, purgeVideoRenditions, queueMediaMove, type CdnPurge, type MediaEnv } from '../media/r2-delivery';
 import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
 import { commentTarget, copyStep, keepJson, storedComment, listNameOf, planEvidence, readKeptJson, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
@@ -354,7 +354,7 @@ async function purgeRecordings(env: ContainEnv, p: ContainParams, provider: Stor
 	const host = (env as { LIVE_PUBLIC_HOST?: string }).LIVE_PUBLIC_HOST;
 	if (provider === 'selfhosted' && host) {
 		const { results } = await env.SEARCH_DB!.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' LIMIT 200").bind(streamId).all<{ id: string }>();
-		if (results?.length && (await purgeCdn(env as never, { prefixes: results.map((s) => `${host}/hls/${s.id}/`) })) === 'failed') throw new Error('Cloudflare cache purge failed');
+		if (results?.length) await purgeCdnOrThrow(env as never, { prefixes: results.map((s) => `${host}/hls/${s.id}/`) });
 	}
 	return { removed, more };
 }
@@ -530,9 +530,7 @@ async function purgePublic(env: ContainEnv, p: ContainParams): Promise<ContainPa
 		if (recordings.more) return { ...p, purge };
 	}
 	const urls = paths.map(imageUrlOf);
-	const cdn = await purgeCdn(env as never, { files: urls });
-	if (cdn === 'failed') throw new Error('Cloudflare cache purge failed');
-	purge.cdn = cdn;
+	purge.cdn = await purgeCdnOrThrow(env as never, { files: urls });
 	purge.bunnyEdge = await purgeBunnyEdge(env as never, urls);
 	if (purge.bunnyEdge === 'failed') throw new Error('Bunny edge purge failed');
 	for (const path of paths) await forgetImageOwner(env.SEARCH_DB, path);
