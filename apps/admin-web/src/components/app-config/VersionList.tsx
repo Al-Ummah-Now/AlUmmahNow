@@ -6,7 +6,7 @@
  * comes from the releases list; one stored by an older document is shown read-only.
  */
 import { useId } from 'react';
-import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, localizeDigits } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
@@ -81,6 +81,7 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled, read
     );
   };
   const platformProblems = problemsFor(problems, d.id, 'platform');
+  if (readOnly) return <VersionSummary draft={d} n={n} />;
   return (
     <li className="rounded-lg border border-border bg-surface p-4" data-testid="app-config-version" data-target={`${d.app}/${d.platform}`}>
       <div role="group" aria-labelledby={`${ids}-title`} className="min-w-0 space-y-4">
@@ -88,11 +89,9 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled, read
           <h3 id={`${ids}-title`} className="text-sm font-medium text-fg">
             {t('appConfig.entry', { n })}
           </h3>
-          {!readOnly && (
-            <button type="button" className={`${dangerButtonClass} min-h-11 min-w-11`} onClick={onRemove} disabled={disabled} aria-label={t('appConfig.removeEntry', { n })} data-testid="app-config-version-remove">
-              <span aria-hidden="true">×</span>
-            </button>
-          )}
+          <button type="button" className={`${dangerButtonClass} min-h-11 min-w-11`} onClick={onRemove} disabled={disabled} aria-label={t('appConfig.removeEntry', { n })} data-testid="app-config-version-remove">
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex min-w-0 flex-col gap-1 text-sm">
@@ -152,12 +151,50 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled, read
         <NotesOverrides
           items={d.notesOverrides}
           disabled={disabled}
-          readOnly={readOnly}
           problems={problems.filter((p) => p.id === d.id)}
           onChange={(notesOverrides) => onChange({ notesOverrides })}
         />
         {problemsFor(problems, d.id, '').length > 0 && <FieldProblems problems={problemsFor(problems, d.id, '')} id={`${ids}-entry-problem`} />}
       </div>
+    </li>
+  );
+}
+
+/** An entry for admins who can only look: its values as text, not fields that can't be used. */
+function VersionSummary({ draft: d, n }: { draft: VersionDraft; n: number }) {
+  const { t, locale } = useLanguage();
+  const ids = useId();
+  const line = (label: MessageKey, value: React.ReactNode) => (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
+      <dt className="shrink-0 text-fg-muted sm:w-56">{t(label)}</dt>
+      <dd className="min-w-0 break-words text-fg">{value}</dd>
+    </div>
+  );
+  return (
+    <li className="rounded-lg border border-border bg-surface p-4 text-sm" data-testid="app-config-version" data-target={`${d.app}/${d.platform}`} aria-labelledby={`${ids}-title`}>
+      <h3 id={`${ids}-title`} className="mb-3 font-medium text-fg">
+        {t('appConfig.entry', { n })}
+      </h3>
+      <dl className="space-y-2">
+        {line('appConfig.app', t(`appConfig.appNames.${d.app}` as MessageKey))}
+        {line('appConfig.platform', d.platform === '*' ? t('appConfig.allPlatforms') : t(`appConfig.platformNames.${d.platform}` as MessageKey))}
+        {line('appConfig.channel', t(d.channel === 'beta' ? 'appConfig.channelBeta' : 'appConfig.channelAll'))}
+        {line('appConfig.minimumVersion', <bdi dir="ltr">{localizeDigits(locale, d.minimumVersion)}</bdi>)}
+        {d.storeUrl && line('appConfig.storeUrl', <bdi dir="ltr">{d.storeUrl}</bdi>)}
+        {d.messageEn && line('appConfig.messageEn', <span lang="en" dir="ltr">{d.messageEn}</span>)}
+        {d.messageAr && line('appConfig.messageAr', <span lang="ar" dir="rtl">{d.messageAr}</span>)}
+        {d.notesOverrides.map((o) => (
+          <div key={o.id} className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
+            <dt className="shrink-0 text-fg-muted sm:w-56">
+              {t('appConfig.notesVersion')} <bdi dir="ltr">{localizeDigits(locale, o.version)}</bdi>
+            </dt>
+            <dd className="min-w-0 space-y-1 break-words text-fg">
+              <p lang="en" dir="ltr">{o.en}</p>
+              <p lang="ar" dir="rtl">{o.ar}</p>
+            </dd>
+          </div>
+        ))}
+      </dl>
     </li>
   );
 }
@@ -185,11 +222,10 @@ function LocalizedArea({ id, label, value, dir, lang, disabled, problems, onChan
 }
 
 /** Release notes for one version only (wiki AUN-APP-UPDATES §3.4): version, English and Arabic, at most five. */
-function NotesOverrides({ items, disabled, readOnly, problems, onChange }: { items: NotesOverrideDraft[]; disabled?: boolean; readOnly?: boolean; problems: Problem[]; onChange: (items: NotesOverrideDraft[]) => void }) {
+function NotesOverrides({ items, disabled, problems, onChange }: { items: NotesOverrideDraft[]; disabled?: boolean; problems: Problem[]; onChange: (items: NotesOverrideDraft[]) => void }) {
   const { t } = useLanguage();
   const ids = useId();
   const update = (id: string, patch: Partial<NotesOverrideDraft>) => onChange(items.map((o) => (o.id === id ? { ...o, ...patch } : o)));
-  if (readOnly && !items.length) return null;
   const at = (o: NotesOverrideDraft, field: string) => problems.filter((p) => p.field === `notes.${o.id}.${field}`);
   return (
     <fieldset className="min-w-0 space-y-3 rounded-md border border-border p-3" aria-describedby={`${ids}-hint`} data-testid="app-config-version-notes">
@@ -206,19 +242,15 @@ function NotesOverrides({ items, disabled, readOnly, problems, onChange }: { ite
           </label>
           <LocalizedArea id={`${o.id}-en`} label={t('appConfig.notesEn')} value={o.en} dir="ltr" lang="en" disabled={disabled} problems={at(o, 'en')} onChange={(v) => update(o.id, { en: v })} testId="app-config-version-notes-en" />
           <LocalizedArea id={`${o.id}-ar`} label={t('appConfig.notesAr')} value={o.ar} dir="rtl" lang="ar" disabled={disabled} problems={at(o, 'ar')} onChange={(v) => update(o.id, { ar: v })} testId="app-config-version-notes-ar" />
-          {!readOnly && (
-            <button type="button" className={`${dangerButtonClass} min-h-11 min-w-11 self-start justify-self-end sm:mt-6`} onClick={() => onChange(items.filter((x) => x.id !== o.id))} disabled={disabled} aria-label={t('appConfig.removeNotes', { version: o.version || '—' })}>
-              <span aria-hidden="true">×</span>
-            </button>
-          )}
+          <button type="button" className={`${dangerButtonClass} min-h-11 min-w-11 self-start justify-self-end sm:mt-6`} onClick={() => onChange(items.filter((x) => x.id !== o.id))} disabled={disabled} aria-label={t('appConfig.removeNotes', { version: o.version || '—' })}>
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
       ))}
       <FieldProblems problems={problems.filter((p) => p.field === 'notesOverrides')} id={`${ids}-notes-problem`} />
-      {!readOnly && (
-        <button type="button" className={smallButtonClass} onClick={() => onChange([...items, newNotesOverride()])} disabled={disabled || items.length >= NOTES_OVERRIDES_MAX} data-testid="app-config-version-notes-add">
-          {t('appConfig.addNotes')}
-        </button>
-      )}
+      <button type="button" className={smallButtonClass} onClick={() => onChange([...items, newNotesOverride()])} disabled={disabled || items.length >= NOTES_OVERRIDES_MAX} data-testid="app-config-version-notes-add">
+        {t('appConfig.addNotes')}
+      </button>
     </fieldset>
   );
 }

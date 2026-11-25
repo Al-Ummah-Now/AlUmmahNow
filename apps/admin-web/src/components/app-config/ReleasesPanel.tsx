@@ -72,7 +72,7 @@ export function ReleasesPanel({ initial, versions, canEdit, onEdit }: Props) {
   const cell = 'flex items-baseline gap-3 px-3 py-1 md:table-cell md:py-2';
   /** The column's name beside its value, on phones only (the table's header names it from md up) */
   const label = (column: 'colPlatform' | 'colChannel' | 'colLatest' | 'colReleased' | 'colSignature' | 'colStores' | 'colMinimum') => (
-    <span className="w-28 shrink-0 text-fg-muted md:hidden" aria-hidden="true">{t(`appConfig.releases.${column}`)}</span>
+    <span className="w-32 shrink-0 text-fg-muted md:hidden" aria-hidden="true">{t(`appConfig.releases.${column}`)}</span>
   );
 
   const byApp = useMemo(() => {
