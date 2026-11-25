@@ -61,16 +61,27 @@ describe('what the file is', () => {
   const words = (messages: unknown) => ((key: string, params: Record<string, string> = {}) => String(lookup(messages, key)).replace(/\{(\w+)\}/g, (_m, k) => params[k] ?? '')) as never;
 
   it('says it in plain words, with size, length, streams and empty bytes', () => {
-    const out = sourceLines({ ...source, streams: [...source.streams] }, words(en), 'en');
+    const out = sourceLines({ ...source, streams: [...source.streams] }, 'no_video_stream', words(en), 'en');
     assert.equal(out.verdict, 'The file has sound only, no picture.');
     assert.deepEqual(out.details.slice(2), ['Sound: \u2068aac\u2069', 'Cover image: \u2068mjpeg\u2069', 'Empty bytes: 1.2% of the first MB, 0% of the last MB']);
   });
 
   it('in Arabic with Arabic digits and words', () => {
-    const out = sourceLines({ ...source, streams: [], zeroEndPercent: 100 }, words(ar), 'ar');
+    const out = sourceLines({ ...source, streams: [], zeroEndPercent: 100 }, 'no_video_stream', words(ar), 'ar');
     assert.equal(out.verdict, ar.transcodeTroubleshoot.source.halfWritten);
     assert.match(out.details.join(' '), /[٠-٩]/);
     assert.doesNotMatch(out.details.join(' '), /[0-9]/);
+  });
+
+  it('names empty bytes only when there are some', () => {
+    const zeros = (over: object) => sourceLines({ ...source, streams: [], zeroStartPercent: 0, zeroEndPercent: 0, ...over }, null, words(en), 'en').details.some((d) => d.startsWith('Empty bytes'));
+    assert.deepEqual([zeros({}), zeros({ zeroStartPercent: 0.4 }), zeros({ zeroEndPercent: 100 })], [false, true, true]);
+  });
+
+  it('stands in for "no video in it", never for another reason or a file that has one', () => {
+    const isReason = (streams: { kind: 'video' | 'audio'; codec: string }[], reason: TroubleshootJob['reason']) => sourceLines({ ...source, streams }, reason, words(en), 'en').isReason;
+    const audio = [{ kind: 'audio' as const, codec: 'aac' }];
+    assert.deepEqual([isReason(audio, 'no_video_stream'), isReason([], 'no_video_stream'), isReason([{ kind: 'video', codec: 'h264' }], 'no_video_stream'), isReason(audio, 'encode_failed'), isReason(audio, null)], [true, true, false, false, false]);
   });
 });
 
