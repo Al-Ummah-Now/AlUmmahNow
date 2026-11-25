@@ -55,6 +55,23 @@ describe('compareVersions / updateStatus', () => {
 });
 
 describe('GET /api/app-config', () => {
+	it('no root key: notice with no URL; a root key in the variable ends it at once (AUN-APP-UPDATES §4.1.1)', async () => {
+		const tag = 'v2026.11.24';
+		const url = `https://github.com/Al-Ummah-Now/AlUmmahNowTools/releases/tag/${tag}`;
+		const entry = { app: 'tools', platform: 'windows', channel: 'stable', repo: 'AlUmmahNowTools', version: '2026.11.24', tag, publishedAt: '2026-11-24T20:29:30Z', notes: { en: 'Unsigned.', ar: 'غير موقَّع.' }, signed: false, private: false, url, manifestUrl: url, artifacts: [], stores: [], history: [] };
+		const APP_CONFIG = new MemoryKV({ releases: { entries: { 'tools/windows/stable': entry }, keys: {}, seen: {} } });
+		const SEARCH_DB = await switchedOn();
+		const ask = async (extra: Record<string, unknown> = {}) =>
+			((await (await call('platform=windows&app=tools&version=2026.11.22&source=managed', { APP_CONFIG, SEARCH_DB, ...extra })).json()) as { update: Record<string, unknown> }).update;
+		const u = await ask();
+		assert.deepEqual([u.enabled, u.status, u.action, u.latestVersion, u.signed, u.available, u.notes], [true, 'recommended', 'notice', '2026.11.24', false, true, null]);
+		assert.deepEqual([u.url, u.storeUrl, u.manifestUrl, u.tag, u.keys], [null, null, null, null, null]);
+		for (const UPDATE_ROOT_KEYS of [JSON.stringify({ AlUmmahNowTools: ['WDF0ms+fkqEYaNE9+4ouJJUzdja9NV+sZkoitP8P2kg='] }), 'not json']) {
+			const closed = await ask({ UPDATE_ROOT_KEYS });
+			assert.deepEqual([closed.status, closed.action, closed.latestVersion], ['ok', 'none', null], UPDATE_ROOT_KEYS);
+		}
+	});
+
 	it('never blocks without configuration, and shows nothing while the switch is off', async () => {
 		const res = await call('platform=android&app=viewer&version=0.1.0');
 		assert.equal(res.status, 200);

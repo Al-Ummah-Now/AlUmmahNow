@@ -208,6 +208,18 @@ describe('release index', () => {
 		assert.equal((await indexReleases(env(kv), { fetchImpl: fakeFetch(published) })).added.length, 0);
 	});
 
+	it('a feed or an App Store answer above its limit is refused; what was known stays', async () => {
+		const kv = new MemoryKV();
+		const doc = emptyReleases();
+		doc.appStore['net.alummahnow.viewer'] = { version: '1.2.0', trackId: 1, url: 'https://apps.apple.com/app/id1', checkedAt: '' };
+		await kv.put(RELEASES_KEY, JSON.stringify(doc));
+		const r = await indexReleases(keyless(kv), {
+			fetchImpl: fakeFetch({ [feed()]: { status: 200, body: 'x'.repeat(3 * 1024 * 1024) }, [lookup('net.alummahnow.viewer')]: { status: 200, body: ' '.repeat(300 * 1024) } }),
+		});
+		assert.deepEqual(r.feedErrors.find((e) => e.source === `github:${TOOLS}`), { source: `github:${TOOLS}`, status: 'too_large' });
+		assert.equal((await readReleases(kv as unknown as KVNamespace)).appStore['net.alummahnow.viewer'].version, '1.2.0');
+	});
+
 	it('a file above its limit is refused without being read whole', async () => {
 		const kv = new MemoryKV();
 		const r = await indexReleases(keyless(kv), { fetchImpl: fakeFetch({ [feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.24']) }, [dl('v2026.11.24', 'app-release.json')]: { status: 200, body: ' '.repeat(300 * 1024) } }) });
@@ -231,6 +243,7 @@ describe('release index', () => {
 		for (const bad of ['nope', '[]', '"x"']) assert.equal(noKeyRepos(fresh, bad).size, 0, bad);
 		assert.equal(noKeyRepos(fresh, JSON.stringify({ [TOOLS]: ['short'] })).has(TOOLS), false, 'a malformed key counts as configured');
 		assert.equal(noKeyRepos(fresh, JSON.stringify({ [TOOLS]: [] })).has(TOOLS), true);
+		assert.equal(noKeyRepos(fresh, JSON.stringify({ AlUmmahNowTool: [root.pub] })).size, 0, 'a mistyped repo name');
 		fresh.keys[TOOLS] = { serial: 1, list: '{}', sig: '{}', revoked: [], yanked: [], acceptedAt: '' };
 		assert.equal(noKeyRepos(fresh, undefined).has(TOOLS), false, 'a stored key list');
 	});
