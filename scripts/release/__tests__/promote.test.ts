@@ -309,35 +309,60 @@ describe('smoke', () => {
 		};
 		const health = (results: CheckResult[]) => results.find((r) => r.name === 'admin-api: health')!;
 
-		it('is a failure in any other check, and every request has a timeout', async () => {
-			const signals: unknown[] = [];
-			const results = await runSmoke({
-				env: 'stage',
-				requestTimeoutMs: 30,
-				fetchImpl: ((_input: unknown, init?: RequestInit) => {
-					signals.push(init?.signal);
-					return new Promise((_, reject) => init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason as Error)));
-				}) as unknown as typeof fetch,
+		/**
+		 * A real server: no headers (/headers), or headers and half a body (/body), then nothing. Real sockets also keep
+		 * the event loop alive: AbortSignal.timeout's timer does not, so a promise that only waits for it never settles.
+		 */
+		const stalling = async (run: (url: string) => Promise<void>) => {
+			const server = createServer((req, res) => {
+				if (req.url === '/body') res.writeHead(200, { 'Content-Type': 'application/json' }).write('{"status":');
 			});
-			assert.ok(signals.length > 5);
-			assert.ok(signals.every((s) => s instanceof AbortSignal));
-			assert.ok(results.length > 5);
-			// The live edge host included: it passes only when it refuses the connection
-			for (const r of results) {
-				assert.equal(r.ok, false, r.name);
-				assert.match(r.detail, /timeout/i, r.name);
+			await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+			try {
+				await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+			} finally {
+				server.closeAllConnections();
+				await new Promise((r) => server.close(r));
 			}
-		});
+		};
+
+		it('is a failure in any other check, and every request has a timeout', () =>
+			stalling(async (url) => {
+				const signals: unknown[] = [];
+				const results = await runSmoke({
+					env: 'stage',
+					requestTimeoutMs: 50,
+					fetchImpl: ((_input: unknown, init?: RequestInit) => {
+						signals.push(init?.signal);
+						return fetch(`${url}/headers`, init);
+					}) as unknown as typeof fetch,
+				});
+				assert.ok(signals.length > 5);
+				assert.ok(signals.every((s) => s instanceof AbortSignal));
+				assert.ok(results.length > 5);
+				// The live edge host included: it passes only when it refuses the connection
+				for (const r of results) {
+					assert.equal(r.ok, false, r.name);
+					assert.match(r.detail, /timeout/i, r.name);
+				}
+			}));
+
+		it('says so when the live edge host stalls in the middle of its body', () =>
+			stalling(async (url) => {
+				const base = fakeFetch();
+				const results = await runSmoke({
+					env: 'stage',
+					requestTimeoutMs: 50,
+					fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => (new URL(String(input)).pathname === '/time' ? fetch(`${url}/body`, init) : base(input, init))) as typeof fetch,
+				});
+				const failed = results.filter((r) => !r.ok);
+				assert.deepEqual(failed.map((r) => r.name), ['api-videos: live edge host answers']);
+				assert.match(failed[0].detail, /timeout/i);
+			}));
 
 		for (const path of ['/headers', '/body']) {
-			it(`is not yet while the candidate is waited for, and a failure otherwise (${path})`, async () => {
-				// A real server: no headers, or headers and half a body, then nothing
-				const server = createServer((req, res) => {
-					if (req.url === '/body') res.writeHead(200, { 'Content-Type': 'application/json' }).write('{"status":');
-				});
-				await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-				try {
-					const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`;
+			it(`is not yet while the candidate is waited for, and a failure otherwise (${path})`, () =>
+				stalling(async (url) => {
 					const run = async (o?: Record<string, string>) => {
 						let n = 0;
 						const base = fakeFetch({ health: V(6) });
@@ -346,7 +371,7 @@ describe('smoke', () => {
 							overrides: o,
 							requestTimeoutMs: 50,
 							sleep: async () => {},
-							fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => (isAdminHealth(input) && n++ === 0 ? fetch(url, init) : base(input, init))) as typeof fetch,
+							fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => (isAdminHealth(input) && n++ === 0 ? fetch(url + path, init) : base(input, init))) as typeof fetch,
 						});
 						return { health: health(results), asked: n };
 					};
@@ -355,11 +380,7 @@ describe('smoke', () => {
 					const once = await run();
 					assert.deepEqual([once.health.ok, once.asked], [false, 1]);
 					assert.match(once.health.detail, /timeout/i);
-				} finally {
-					server.closeAllConnections();
-					server.close();
-				}
-			});
+				}));
 		}
 
 		it('never makes the wait longer than its deadline', async (t) => {
