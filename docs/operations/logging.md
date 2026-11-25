@@ -54,6 +54,9 @@ Data is redacted before it is written (`redact()` in the policy module):
   data: TUS chunks, thumbnails, images), `error` on a 5xx. A thrown error is
   logged once by the error handler with its stack, and the summary stays quiet.
   4xx responses are part of the `info` summary, not warnings.
+  A slow one of web, admin-web, api-videos and admin-api also says where its time went: `steps` (D1, R2, KV,
+  service bindings and fetches: calls × total, longest), `waitMs` (time with a call in flight; the rest is our
+  own work), `cold` (the isolate's first request) and `ageMs` (`@al-ummah/shared-types/request-steps`).
 - **web / admin-web**: `worker.ts` writes the same summary for pages and API
   routes (static assets excluded).
 - **processor**: one `job` line per queue batch (`messages`, `retried`,
