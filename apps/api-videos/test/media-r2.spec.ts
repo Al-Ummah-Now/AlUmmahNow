@@ -178,6 +178,40 @@ describe('R2 dual write', () => {
 		assert.equal(raw.TRANSCODE_QUEUE.messages.length, 2);
 	});
 
+	it('a re-encode keeps the rendition that plays until the new one is ready, and after it fails', async () => {
+		const { env, raw, videos } = setup({ isPublic: true, uploadStatus: 'ready' });
+		await enqueueTranscode(env, ID, 'upload');
+		const first = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const result = { rungs: [{ name: '720p', width: 1280, height: 720, maxrate: 1, bandwidth: 1, bytes: 1, segments: 1 }], objects: 1, bytes: 1, durationSeconds: 60, source: { width: 1280, height: 720, durationSeconds: 60, bytes: 1, hasAudio: true }, timings: {}, thumbnail: 'thumb.jpg' };
+		await applyJobEvent(env, undefined, ev(first, { type: 'ready', result: result as never }));
+		const playing = (await r2Urls(env, videos.read(ID)))!.playUrl;
+		assert.match(playing, new RegExp(`/pub/${ID}/${first.rev}/master.m3u8$`));
+		const { r2Provider } = await import('../src/lib/media/providers/r2');
+		// Encoded again: the same URL plays while it runs, and the provider stays ready
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		assert.equal(videos.read(ID).r2.status, 'queued');
+		assert.equal((await r2Urls(env, videos.read(ID)))!.playUrl, playing);
+		assert.equal(r2Provider.record(videos.read(ID))!.status, 'ready');
+		// The new one fails: still the same
+		const second = raw.TRANSCODE_QUEUE.messages[1] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(second, { type: 'failed', error: 'encode_failed', final: true }));
+		assert.equal(videos.read(ID).r2.status, 'failed');
+		assert.equal((await r2Urls(env, videos.read(ID)))!.playUrl, playing);
+		// Asked again after that: the one kept is not lost
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		assert.equal(videos.read(ID).r2.previous.rev, first.rev);
+		assert.equal((await r2Urls(env, videos.read(ID)))!.playUrl, playing);
+		// Made private meanwhile: the kept public copy is never served for it
+		videos.store.set(ID, JSON.stringify({ ...videos.read(ID), isPublic: false }));
+		assert.equal(await r2Urls(env, videos.read(ID)), null);
+		videos.store.set(ID, JSON.stringify({ ...videos.read(ID), isPublic: true }));
+		// The new one is ready: it plays, and the kept one goes
+		const third = raw.TRANSCODE_QUEUE.messages[2] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(third, { type: 'ready', result: result as never }));
+		assert.match((await r2Urls(env, videos.read(ID)))!.playUrl, new RegExp(`/${third.rev}/master.m3u8$`));
+		assert.equal(videos.read(ID).r2.previous, undefined);
+	});
+
 	it('public URLs are plain', async () => {
 		const { env } = setup();
 		const urls = await r2Urls(env, { id: ID, r2: { status: 'ready', jobId: 'j', rev: 'abcdefgh12345678', access: 'pub', attempts: 1, queuedAt: 'x' } });

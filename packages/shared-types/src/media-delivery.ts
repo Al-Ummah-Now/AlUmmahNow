@@ -323,8 +323,12 @@ export interface VideoR2State {
 	failure?: TranscodeFailure;
 	/** How long the latest attempt took to start (TranscodeStartup) */
 	startup?: TranscodeStartup;
-	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
-	previous?: { rev: string; access: MediaAccess };
+	/**
+	 * A re-transcode: the rendition set that keeps playing until this one is ready (then deleted), and
+	 * after it fails. `result` (since 2026-11-25) is what makes it playable meanwhile; an older entry without
+	 * it only keeps its files.
+	 */
+	previous?: { rev: string; access: MediaAccess; result?: TranscodeResult; readyAt?: string };
 }
 
 /** Message on the transcode queue (api-videos → apps/media). */

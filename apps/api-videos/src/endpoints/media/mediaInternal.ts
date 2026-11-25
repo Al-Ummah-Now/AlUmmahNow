@@ -7,7 +7,7 @@
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/mp4               Mp4JobEvent (remux-only job, #1182) → the video record's result.mp4
  *   POST /internal/media/retry             { ids: string[] } → transcode again
- *   GET  /internal/media/hdr-check         the latest HDR check (lib/media/hdr-check.ts), or null
+ *   GET  /internal/media/hdr-check?live=1  the latest HDR check (lib/media/hdr-check.ts), or null; live: figures only
  *   POST /internal/media/hdr-check         { actorId } → starts one (read only); started: false while one runs
  *   GET  /internal/media/jobs?status=&limit=  recent jobs (media_jobs)
  *   GET  /internal/media/summary?days=     time to playable and cost inputs per source, plus `live`
@@ -47,6 +47,7 @@ import { readVideoFailures } from '../../lib/media/failures';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readHdrCheck, startHdrCheck } from '../../lib/media/hdr-check';
+import { apiError } from '../../lib/api-error';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
@@ -170,11 +171,11 @@ export function createMediaInternalRouter() {
 		return c.json({ success: true, result: { results } });
 	});
 
-	app.get('/hdr-check', async (c) => c.json({ success: true, result: { run: await readHdrCheck(c.env) } }));
+	app.get('/hdr-check', async (c) => c.json({ success: true, result: { run: await readHdrCheck(c.env, { live: c.req.query('live') === '1' }) } }));
 
 	app.post('/hdr-check', async (c) => {
 		const body = (await c.req.json().catch(() => null)) as { actorId?: unknown } | null;
-		if (typeof body?.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		if (typeof body?.actorId !== 'string' || !body.actorId) return apiError(c, 400, 'bad_request', { error: 'actorId is required' });
 		return c.json({ success: true, result: await startHdrCheck(c.env, body.actorId) });
 	});
 

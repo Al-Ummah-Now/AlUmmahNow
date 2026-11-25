@@ -41,6 +41,7 @@ import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from
 import { withoutHiddenVideos } from '../lib/moderation/takedown';
 import { logger } from '../lib/logger';
 import troubleshootRouter from './mediaTroubleshoot.router';
+import { withoutHidden } from '../lib/moderation/takedown';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
 
@@ -89,8 +90,8 @@ app.onError((error, c) => {
 
 const bad = (c: C, error: string) => c.json({ success: false, code: 'bad_request', error }, 400);
 
-/** Inserts the audit rows before a change; returns a function that removes them (the change failed). */
-async function writeAudit(c: C, rows: { key: string; oldValue: unknown; newValue: unknown }[]): Promise<() => Promise<void>> {
+/** Inserts the audit rows before a change; returns a function that removes them (the change failed), or only those of `keys`. */
+async function writeAudit(c: C, rows: { key: string; oldValue: unknown; newValue: unknown }[]): Promise<(keys?: readonly string[]) => Promise<void>> {
   const db = c.env.REPORTS_DB;
   const now = new Date().toISOString();
   const ids = rows.map(() => crypto.randomUUID());
@@ -101,8 +102,10 @@ async function writeAudit(c: C, rows: { key: string; oldValue: unknown; newValue
         .bind(ids[i], row.key, row.oldValue === undefined ? null : JSON.stringify(row.oldValue), JSON.stringify(row.newValue), actorOf(c), now, auditOriginJson()),
     ),
   );
-  return async () => {
-    await db.batch(ids.map((id) => db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(id))).catch((error) =>
+  return async (keys) => {
+    const gone = ids.filter((_, i) => !keys || keys.includes(rows[i]!.key));
+    if (!gone.length) return;
+    await db.batch(gone.map((id) => db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(id))).catch((error) =>
       logger.error('[Media] Could not drop the audit rows of a failed change', { error: String(error) }),
     );
   };
@@ -186,11 +189,17 @@ app.post('/retry', async (c) => {
     return bad(c, `ids must be 1-${MAX_IDS} video ids`);
   }
   const unique = [...new Set(ids as string[])];
-  const result = await audited(
-    c,
-    unique.map((id) => ({ key: `${MEDIA_VIDEO_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'transcode_again' } })),
-    () => callVideosInternal(c.env, '/internal/media/retry', { method: 'POST', json: { ids: unique } }),
-  );
+  const drop = await writeAudit(c, unique.map((id) => ({ key: `${MEDIA_VIDEO_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'transcode_again' } })));
+  let result: unknown;
+  try {
+    result = await callVideosInternal(c.env, '/internal/media/retry', { method: 'POST', json: { ids: unique } });
+  } catch (error) {
+    await drop();
+    throw error;
+  }
+  // A video that was not queued again (not found, already encoding) changed nothing: its audit row goes
+  const notQueued = ((result as { results?: { videoId?: unknown; queued?: unknown }[] })?.results ?? []).filter((r) => r.queued === false && typeof r.videoId === 'string').map((r) => `${MEDIA_VIDEO_AUDIT_PREFIX}${r.videoId}`);
+  if (notQueued.length) await drop(notQueued);
   logger.info('[Media] Transcode again', { count: unique.length, actorId: actorOf(c) });
   return c.json({ success: true, result });
 });
@@ -199,16 +208,23 @@ app.post('/retry', async (c) => {
 // HDR check: which published renditions still carry HDR colors (read only; re-encoding is /retry)
 // ---------------------------------------------------------------------------
 
+type HdrRun = { items?: { id: string; title: string | null }[] } | null;
+
+/** Videos under a takedown are listed for super admins only, like every admin list (lib/moderation/takedown.ts). */
+const visibleRun = async (c: C, run: HdrRun): Promise<HdrRun> =>
+  run?.items?.length ? { ...run, items: await withoutHidden(c.env.REPORTS_DB as never, c.get('auth')?.roles, 'video', run.items) } : run;
+
 app.get('/hdr-check', async (c) => {
-  const result = await callVideosInternal(c.env, '/internal/media/hdr-check');
-  return c.json({ success: true, result });
+  const live = c.req.query('live') === '1';
+  const result = (await callVideosInternal(c.env, '/internal/media/hdr-check', { query: live ? { live: '1' } : {} })) as { run: HdrRun };
+  return c.json({ success: true, result: { run: await visibleRun(c, result.run) } });
 });
 
 app.post('/hdr-check', async (c) => {
-  const result = await audited(c, [{ key: MEDIA_HDR_CHECK_AUDIT_KEY, oldValue: undefined, newValue: { action: 'hdr_check' } }], () =>
-    callVideosInternal(c.env, '/internal/media/hdr-check', { method: 'POST', json: { actorId: actorOf(c) } }),
-  );
-  return c.json({ success: true, result });
+  const result = (await callVideosInternal(c.env, '/internal/media/hdr-check', { method: 'POST', json: { actorId: actorOf(c) } })) as { started: boolean; run: HdrRun };
+  // Only a check that started is a change of anybody's
+  if (result.started) await writeAudit(c, [{ key: MEDIA_HDR_CHECK_AUDIT_KEY, oldValue: undefined, newValue: { action: 'hdr_check' } }]);
+  return c.json({ success: true, result: { ...result, run: await visibleRun(c, result.run) } });
 });
 
 // ---------------------------------------------------------------------------

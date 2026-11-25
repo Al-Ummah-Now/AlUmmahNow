@@ -8,8 +8,14 @@ import { SqliteD1 } from './search-sqlite-d1';
 
 const REV = 'e29db4ad6918a943';
 const id = (n: number) => `${String(n).padStart(8, '0')}-aaaa-bbbb-cccc-dddddddddddd`;
-const video = (n: number, r2: Record<string, unknown> = {}, over: Record<string, unknown> = {}) => ({ id: id(n), title: `Lesson ${n}`, r2: { status: 'ready', rev: REV, access: 'pub', result: { rungs: [{ name: '360p' }, { name: '720p' }] }, ...r2 }, ...over });
-const colr = (p: number, t: number, m: number) => Uint8Array.from([0, 0, 0, 19, 0x63, 0x6f, 0x6c, 0x72, 0x6e, 0x63, 0x6c, 0x78, 0, p, 0, t, 0, m, 0]);
+const video = (n: number, r2: Record<string, unknown> = {}, over: Record<string, unknown> = {}): Record<string, any> => ({ id: id(n), title: `Lesson ${n}`, r2: { status: 'ready', rev: REV, access: 'pub', result: { rungs: [{ name: '360p' }, { name: '720p' }] }, ...r2 }, ...over });
+const u32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+const box = (type: string, body: number[]) => [...u32(8 + body.length), ...[...type].map((c) => c.charCodeAt(0)), ...body];
+/** A minimal init segment whose avc1 entry carries this colr box. */
+const colr = (p: number, t: number, m: number) => {
+	const entry = box('avc1', [...Array(78).fill(0), ...box('colr', [...[...'nclx'].map((c) => c.charCodeAt(0)), 0, p, 0, t, 0, m, 0])]);
+	return Uint8Array.from(box('moov', box('trak', box('mdia', box('minf', box('stbl', box('stsd', [0, 0, 0, 0, ...u32(1), ...entry])))))));
+};
 
 class Media {
 	reads: string[] = [];
@@ -54,10 +60,10 @@ async function drain(env: any): Promise<string[]> {
 
 describe('HDR check', () => {
 	it('finds HLG, PQ and BT.2020 in both buckets, and leaves SDR, untagged and unready ones', async () => {
-		const videos = [video(1), video(2), video(3, { access: 'priv' }), video(4), video(5, { status: 'queued', result: undefined }), video(6, {}, { isDeleted: true }), video(7), video(8)];
+		const videos = [video(1), video(2), video(3, { access: 'priv' }), video(4), video(5, { status: 'queued', result: undefined }), video(6, {}, { isDeleted: true }), video(7), video(8), video(10, {}, { suspensionHolds: [{ kind: 'csam' }] }), video(11, {}, { csamTakedown: { at: 't' } })];
 		const { env, bucket } = await setup(
 			videos,
-			{ ...rendition('pub', 1, colr(9, 18, 9)), ...rendition('pub', 2, colr(1, 1, 1)), ...rendition('pub', 4, Uint8Array.from([1, 2, 3])), ...rendition('pub', 7, null), ...rendition('pub', 8, colr(9, 14, 9), '../../x.mp4') },
+			{ ...rendition('pub', 10, colr(9, 18, 9)), ...rendition('pub', 11, colr(9, 18, 9)), ...rendition('pub', 1, colr(9, 18, 9)), ...rendition('pub', 2, colr(1, 1, 1)), ...rendition('pub', 4, Uint8Array.from([1, 2, 3])), ...rendition('pub', 7, null), ...rendition('pub', 8, colr(9, 14, 9), '../../x.mp4') },
 			rendition('priv', 3, colr(9, 16, 9)),
 			[id(9)],
 		);
@@ -69,7 +75,7 @@ describe('HDR check', () => {
 		const done = (await readHdrCheck(env)) as HdrCheckRun;
 		assert.equal(done.status, 'done');
 		assert.equal(done.startedBy, 'admin-1');
-		assert.deepEqual(done.counts, { scanned: 9, checked: 4, hdr: 2, skipped: 3, unreadable: 2 });
+		assert.deepEqual(done.counts, { scanned: 11, checked: 4, hdr: 2, skipped: 5, unreadable: 2 });
 		assert.deepEqual(done.items.map((i) => [i.id, i.kind, i.now]), [[id(1), 'hlg', 'same'], [id(3), 'pq', 'same']]);
 		assert.equal(JSON.stringify([...bucket.store]), before, 'no video changed');
 		assert.ok(!env.MEDIA.reads.some((k: string) => k.includes('..')), 'never reads outside the rendition');
@@ -96,7 +102,41 @@ describe('HDR check', () => {
 		const said: string[] = [];
 		const send = (over: object) => handleHdrCheckMessage(env, { body: { ...body, ...over }, attempts: 1, ack: () => said.push('ack'), retry: () => said.push('retry') });
 		await send({ page: 1 });
-		await send({ runId: 'another-run-0001' });
+		await send({ runId: 'another-run-0001', page: 2 });
+		assert.deepEqual(said, ['retry', 'ack']);
+	});
+
+	it('a held video found earlier loses its title; the live figures read no video', async () => {
+		const { env, bucket } = await setup([video(1)], rendition('pub', 1, colr(9, 18, 9)));
+		await startHdrCheck(env, 'a');
+		await drain(env);
+		const reads = bucket.calls;
+		assert.equal((await readHdrCheck(env, { live: true }))!.items.length, 0);
+		assert.equal(bucket.calls, reads, 'live reads no record');
+		bucket.store.set(id(1), JSON.stringify(video(1, {}, { suspensionHolds: [{ kind: 'csam' }] })));
+		assert.deepEqual((await readHdrCheck(env))!.items.map((i) => [i.title, i.now]), [[null, 'gone']]);
+	});
+
+	it('says where every listed video is now, however long the list', async () => {
+		const videos = Array.from({ length: 130 }, (_, i) => video(i + 1));
+		const { env, bucket } = await setup(videos, Object.assign({}, ...videos.map((_, i) => rendition('pub', i + 1, colr(9, 18, 9)))));
+		await startHdrCheck(env, 'a');
+		await drain(env);
+		bucket.store.set(id(125), JSON.stringify(video(125, { status: 'transcoding' })));
+		const items = (await readHdrCheck(env))!.items;
+		assert.equal(items.length, 130);
+		assert.ok(items.every((i) => i.now));
+		assert.equal(items.find((i) => i.id === id(125))!.now, 'encoding');
+	});
+
+	it('a send that fails leaves no run that says it is running; a first page early for its record waits', async () => {
+		const { env } = await setup([video(1)], rendition('pub', 1, colr(1, 1, 1)));
+		env.PROCESSING_CHECK_QUEUE.send = async () => { throw new Error('queue down'); };
+		await assert.rejects(startHdrCheck(env, 'a'));
+		assert.equal(await readHdrCheck(env), null);
+		const said: string[] = [];
+		await handleHdrCheckMessage(env, { body: { kind: 'hdr-check', runId: 'not-recorded-yet-01', page: 0, cursor: null }, attempts: 1, ack: () => said.push('ack'), retry: () => said.push('retry') });
+		await handleHdrCheckMessage(env, { body: { kind: 'hdr-check', runId: 'not-recorded-yet-01', page: 0, cursor: null }, attempts: 4, ack: () => said.push('ack'), retry: () => said.push('retry') });
 		assert.deepEqual(said, ['retry', 'ack']);
 	});
 

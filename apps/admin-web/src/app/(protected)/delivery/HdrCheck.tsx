@@ -12,7 +12,7 @@ import { LocalTime } from '@/components/LocalTime';
 import type { Translator } from '@/i18n/translate';
 import { logger } from '@/lib/logger-client';
 import { deliveryFormats } from './format';
-import { HDR_KIND_LABEL, HDR_NOW_LABEL, HDR_REENCODE_MAX, hdrSelectable } from './hdr-check-view';
+import { HDR_KIND_LABEL, HDR_NOW_LABEL, HDR_REENCODE_MAX, hdrSelectable, notQueued } from './hdr-check-view';
 
 const REFRESH_MS = 10_000;
 const checkClass = 'size-5 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
@@ -31,13 +31,19 @@ export function HdrCheck({ initial, failed }: { initial: HdrCheckRun | null; fai
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const inFlight = useRef(false);
 
-  const refresh = useCallback(async () => {
+  // While it runs: the figures alone (no record reads); once done, the list with where each video is now
+  const refresh = useCallback(async (live = false) => {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const result = await getHdrCheck();
+      const result = await getHdrCheck(live);
       if (result.ok) {
-        setRun(result.data);
+        const next = result.data;
+        if (live && next?.status === 'done') {
+          inFlight.current = false;
+          return refresh(false);
+        }
+        setRun((prev) => (live && next && prev ? { ...next, items: prev.items } : next));
         setError(null);
       } else setError(t('hdrCheck.loadFailed'));
     } catch (e) {
@@ -52,12 +58,12 @@ export function HdrCheck({ initial, failed }: { initial: HdrCheckRun | null; fai
   useEffect(() => {
     if (!running) return;
     const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (document.visibilityState === 'visible') void refresh(true);
     }, REFRESH_MS);
     return () => window.clearInterval(id);
   }, [running, refresh]);
 
-  async function act(action: () => Promise<{ ok: boolean; status?: number }>, failure: string, done: () => void) {
+  async function act<T>(action: () => Promise<{ ok: true; data: T } | { ok: false; status: number }>, failure: string, done: (data: T) => void) {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -68,7 +74,7 @@ export function HdrCheck({ initial, failed }: { initial: HdrCheckRun | null; fai
         setError(result.status === 401 ? t('errors.notAuthenticated') : failure);
         return;
       }
-      done();
+      done(result.data);
       await refresh();
     } catch (e) {
       logger.error('[delivery] HDR check action request failed', { error: e instanceof Error ? e.message : String(e) });
@@ -78,7 +84,7 @@ export function HdrCheck({ initial, failed }: { initial: HdrCheckRun | null; fai
     }
   }
 
-  const selectable = hdrSelectable(run?.items ?? []);
+  const selectable = running ? [] : hdrSelectable(run?.items ?? []);
   const chosen = selectable.filter((id) => picked.has(id)).slice(0, HDR_REENCODE_MAX);
   const toggle = (id: string) => setPicked((prev) => {
     const next = new Set(prev);
@@ -128,9 +134,12 @@ export function HdrCheck({ initial, failed }: { initial: HdrCheckRun | null; fai
                   busy={busy}
                   testId="hdr-check-reencode"
                   dialogTestId="hdr-check-confirm"
-                  onConfirm={() => act(() => retryMediaJobs(chosen), t('hdrCheck.reencodeFailed'), () => {
-                    setNotice(t('hdrCheck.queued', { count: f.integer(chosen.length) }));
-                    setPicked(new Set());
+                  onConfirm={() => act(() => retryMediaJobs(chosen), t('hdrCheck.reencodeFailed'), (data) => {
+                    const left = notQueued(data?.results);
+                    const queued = chosen.length - left.length;
+                    const names = left.map((id) => run.items.find((i) => i.id === id)?.title || id);
+                    setNotice([t('hdrCheck.queued', { count: f.integer(queued) }), ...(left.length ? [t('hdrCheck.notQueued', { count: f.integer(left.length), videos: names.join(locale === 'ar' ? '، ' : ', ') })] : [])].join(' '));
+                    setPicked(new Set(left));
                   })}
                 />
               </div>
