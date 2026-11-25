@@ -25,7 +25,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { publicErrors, publicSummary, type ErrorsData } from './public-report.ts';
-import { type LeftOut, leftOutLine, messageTemplate, placeLog, restrictedPath, unrestricted } from './restricted.ts';
+import { type LeftOut, leftOutLine, messageTemplate, placed, placeLog, requestPath, restrictedPath, unrestricted } from './restricted.ts';
 import { clip, scrub } from './scrub.ts';
 import { seal } from './seal.ts';
 
@@ -238,9 +238,6 @@ export function uaFamily(ua: unknown): string {
 }
 
 /** Path of a request URL without host or query. */
-export function pathOf(url: unknown): string {
-	return String(url ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]!.split('#')[0]!;
-}
 
 async function pathTrace(app: string, script: string, needles: string[], since: Date, until: Date): Promise<void> {
 	p(`## Requests: ${app} (${script}) matching ${needles.join(', ')}`);
@@ -269,15 +266,6 @@ async function pathTrace(app: string, script: string, needles: string[], since: 
 	left.lines += r2.leftOut;
 	for (const line of r2.lines) p(line);
 	p();
-}
-
-const requestPath = (e: any): string => pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
-
-/** The events of one Worker that may be in the report. A restricted request takes all its lines with it. */
-function placed(events: any[]): { e: any; template: boolean }[] {
-	const of = events.map((e) => ({ e, place: placeLog(e, requestPath(e)) }));
-	const requests = new Set(of.filter((x) => x.place === 'restricted').map((x) => x.e.$workers?.requestId).filter(Boolean));
-	return of.filter((x) => x.place !== 'restricted' && !requests.has(x.e.$workers?.requestId)).map((x) => ({ e: x.e, template: x.place === 'template' }));
 }
 
 /** The --paths listing. Pure. */

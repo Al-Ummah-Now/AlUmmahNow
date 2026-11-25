@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ALL_SQL, REPORTS_D1, originLine, pathOf, scriptsFor, topFrames, uaFamily } from '../prod-errors.ts';
+import { ALL_SQL, REPORTS_D1, originLine, scriptsFor, topFrames, uaFamily } from '../prod-errors.ts';
+import { pathOf } from '../restricted.ts';
 
 test('every statement is a bounded SELECT on indexed columns, no LIKE', () => {
 	for (const sql of ALL_SQL) {

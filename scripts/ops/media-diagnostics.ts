@@ -19,6 +19,9 @@
  *    warn/error lines around each (to tell a backlog, a retry, a source wait or an image pull apart).
  *    No titles or user data are printed.
  *
+ * Log lines of the restricted areas are left out, sealed or not, and counted (restricted.ts); an api-videos or
+ * admin-api line that cannot be placed prints its message's template only.
+ *
  * Only al-ummah resources are named and read. Calls are GET lists/reads, the GraphQL Analytics
  * read and the Observability telemetry query (a POST that only reads). The token is never printed;
  * credentials, emails and addresses are scrubbed even from the sealed report. The --search workflow input is public.
@@ -28,6 +31,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { publicMedia, type MediaData } from './public-report.ts';
+import { messageTemplate, placed } from './restricted.ts';
 import { clip, scrub } from './scrub.ts';
 import { seal } from './seal.ts';
 
@@ -88,6 +92,7 @@ const out: string[] = [];
 /** What the public part is made of */
 const data: Omit<MediaData, 'env' | 'since' | 'until'> = { deployments: null, backlog: { queue: null, dlq: null }, containers: null, starts: null, logs: [] };
 const p = (s = '') => out.push(scrub(s));
+let leftOut = 0;
 
 async function deployments(names: Names): Promise<void> {
 	p(`## ${names.media}: deployments`);
@@ -184,7 +189,7 @@ async function containerQuota(all: any[]): Promise<void> {
 	p();
 }
 
-async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false): Promise<{ warn: number; error: number; readable: boolean }> {
+async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false, media = false): Promise<{ warn: number; error: number; readable: boolean }> {
 	p(`## Logs: ${script}${key === '$workers.scriptName' ? '' : ` (${key})`}`);
 	const filters: unknown[] = [{ key, operation: 'eq', type: 'string', value: script }];
 	if (search) filters.push({ key: '$metadata.message', operation: 'includes', type: 'string', value: search });
@@ -199,24 +204,36 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 		p(`unavailable: ${errs(r)}`), p();
 		return { warn: 0, error: 0, readable: false };
 	}
-	// warn/error only (these Workers log nothing else; invocation events and console.log are left out)
-	const events = (r.body.result?.events?.events ?? []).filter((e: any) => allLevels || /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')));
-	p(`${events.length} events`);
-	const rows = events
-		.map((e: any) => {
+	const x = mediaLogLines(r.body.result?.events?.events ?? [], { allLevels, media });
+	leftOut += x.leftOut;
+	for (const line of x.lines) p(line);
+	p();
+	return { warn: x.warn, error: x.error, readable: true };
+}
+
+/**
+ * Warn/error lines (these Workers log nothing else; invocation events and console.log are left out), without the
+ * restricted areas. `media`: the media Worker and its container, whose lines have no tag and no such areas: in
+ * full unless one names them. Pure.
+ */
+export function mediaLogLines(all: any[], { allLevels = false, media = false } = {}): { lines: string[]; leftOut: number; warn: number; error: number } {
+	const level = (e: any) => String(e.$metadata?.level ?? e.source?.level ?? '');
+	const wanted = all.filter((e) => allLevels || /warn|error/i.test(level(e)));
+	const ids = new Set(wanted.map((e) => e.$workers?.requestId).filter(Boolean));
+	// Placed with every line of their requests: one of them can name the area the others do not
+	const of = placed(all.filter((e) => wanted.includes(e) || ids.has(e.$workers?.requestId))).filter((x) => wanted.includes(x.e));
+	const rows = of
+		.map(({ e, template }) => {
 			const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
-			const level = e.$metadata?.level ?? e.source?.level ?? '';
-			const msg = e.$metadata?.message ?? e.source?.message ?? '';
+			const text = e.$metadata?.message ?? e.source?.message ?? '';
 			const trigger = e.$workers?.event?.queue ? 'queue' : e.$workers?.eventType ?? '';
+			if (template && !media) return `- ${t} [${level(e)}] ${trigger} ${messageTemplate(text)}`;
 			const c = e.$container ? ` {placement:${e.$container.placementId ?? ''},host:${e.$container.hostname ?? ''},v:${e.$container.version ?? ''}}` : '';
-			const src = (clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 700)) + c;
-			return `- ${t} [${level}] ${trigger} ${msg} ${src}`;
+			return `- ${t} [${level(e)}] ${trigger} ${text} ${clip(typeof e.source === 'object' ? JSON.stringify(e.source) : e.source, 700)}${c}`;
 		})
 		.sort();
-	for (const row of rows) p(row);
-	p();
-	const warn = events.filter((e: any) => /warn/i.test(String(e.$metadata?.level ?? e.source?.level ?? ''))).length;
-	return { warn, error: events.length - warn, readable: true };
+	const warn = of.filter((x) => /warn/i.test(level(x.e))).length;
+	return { lines: [`${rows.length} events`, ...rows], leftOut: wanted.length - of.length, warn, error: of.length - warn };
 }
 
 async function discover(names: Names, since: Date, until: Date): Promise<void> {
@@ -234,7 +251,7 @@ async function discover(names: Names, since: Date, until: Date): Promise<void> {
 	// By application id (from the Containers API), so only our own application is read
 	const apps = await get(`/accounts/${account}/containers/applications`);
 	const mine = (apps.body?.result ?? []).filter((a: any) => typeof a.name === 'string' && a.name.startsWith(names.media) && (names.media !== 'al-ummah-now-media' || !/-(stage|qa)/.test(a.name)));
-	for (const a of mine) await logs(a.id, since, until, '', '$container.applicationId', true);
+	for (const a of mine) await logs(a.id, since, until, '', '$container.applicationId', true, true);
 	p();
 }
 
@@ -290,7 +307,7 @@ async function startTimes(env: EnvName): Promise<void> {
 		const queued = Date.parse(String(w.queued_at));
 		const started = Date.parse(String(w.started_at));
 		if (!Number.isFinite(queued) || !Number.isFinite(started)) continue;
-		await logs(namesFor(env).media, new Date(queued - 120_000), new Date(started + 120_000), '');
+		await logs(namesFor(env).media, new Date(queued - 120_000), new Date(started + 120_000), '', undefined, false, true);
 	}
 }
 
@@ -339,9 +356,10 @@ async function main(): Promise<void> {
 	await containers(names);
 	await startTimes(env);
 	await costInputs(env);
-	for (const [app, s] of [['media', names.media], ['api-videos', names.videos], ['admin-api', names.admin]] as const) data.logs.push({ app, ...(await logs(s, since, until, search)) });
+	for (const [app, s] of [['media', names.media], ['api-videos', names.videos], ['admin-api', names.admin]] as const) data.logs.push({ app, ...(await logs(s, since, until, search, undefined, false, app === 'media')) });
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);
+	p(`${leftOut} restricted lines left out`);
 	const sealedPath = arg('sealed', '');
 	if (sealedPath) writeFileSync(sealedPath, JSON.stringify(seal(out.join('\n') + '\n')));
 	process.stdout.write(publicMedia({ env, since, until, ...data }).join('\n') + '\n');
