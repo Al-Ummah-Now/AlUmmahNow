@@ -334,7 +334,7 @@ export function VideosList() {
       id: 'created',
       from: '4xl',
       header: t('videos.colCreated'),
-      className: 'text-sm text-fg-muted whitespace-nowrap',
+      className: 'text-sm text-fg-muted',
       cell: (v) => (v.createdAt ? <RelativeTime value={v.createdAt} /> : t('content.none')),
     },
   ];
