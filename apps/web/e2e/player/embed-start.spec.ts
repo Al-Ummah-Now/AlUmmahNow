@@ -20,7 +20,8 @@ test.beforeEach(async ({ page, baseURL }) => {
   await routeFixtures(page);
   // The harness page refuses framing; the real embed pages do not
   await page.route((url) => url.origin === site.origin && url.searchParams.get('embed') === '1', async (route) => {
-    if (route.request().resourceType() !== 'document') return route.fallback();
+    // Only the document: the page also opens a web socket and fetches its own payload at this URL
+    if (!(route.request().headers().accept ?? '').includes('text/html')) return route.fallback();
     const response = await route.fetch();
     const headers = response.headers();
     // The body is fetched decoded
