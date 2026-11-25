@@ -116,6 +116,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const startWithSoundRef = useRef(params.autoplay && params.gesture);
   /** That start, while it may still play */
   const startRef = useRef<PlaybackStart | null>(null);
+  /** The host page's last word before the player was there: paused */
+  const pauseWantedRef = useRef(false);
   /** "Watch on" shows its icon alone where its label would cover the picture (see useCompactLink) */
   const watchLabelRef = useRef<HTMLSpanElement>(null);
   const playerRef = useRef<ExtendedPlayer | null>(null);
@@ -142,11 +144,13 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     const player = playerRef.current;
     switch (command.command) {
       case 'play':
+        pauseWantedRef.current = false;
         if (!player) setActivated(true);
         else void Promise.resolve(player.play()).catch(() => undefined);
         break;
       case 'pause':
-        // Also before there is anything to pause: the start under way does not play after it
+        // Also before there is anything to pause, or a player at all: the start does not play after it
+        pauseWantedRef.current = true;
         startRef.current?.cancel();
         player?.pause();
         break;
@@ -221,26 +225,33 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
       if (!player.muted() && (player.volume() ?? 1) > 0) setNeedsUnmute(false);
     });
 
+    // Playing without sound (an autoplay rule, or a remembered volume of 0): offer it
+    const offerSound = () => {
+      if (player.muted() || player.volume() === 0) setNeedsUnmute(true);
+    };
+
     if (startWithSoundRef.current) {
       // A gesture start (once per frame): play with sound; muted only if the browser refuses
       startWithSoundRef.current = false;
       const start = beginStart(player);
       startRef.current = start;
+      if (pauseWantedRef.current) start.cancel();
+      player.one('playing', offerSound);
       const tryPlay = (retries: number): Promise<void> =>
         Promise.resolve(player.play()).then(
-          () => {
-            // The remembered volume can be 0: offer sound then too
-            if (player.muted() || player.volume() === 0) setNeedsUnmute(true);
-          },
+          offerSound,
           (err: unknown) => {
             const name = (err as { name?: string } | null)?.name;
             if (name === 'NotAllowedError') {
-              // Even muted play was refused: the big play button stays
-              if (player.muted() || start.cancelled()) return undefined;
-              // The browser's mute, not the viewer's: never remembered
+              if (start.cancelled()) return undefined;
+              if (player.muted()) {
+                // Even muted play was refused: the big play button stays, with the viewer's sound
+                player.muted(false);
+                return undefined;
+              }
+              // The browser's mute, not the viewer's: marked before it, so it is never remembered
               markAutoMuted(player, true);
               player.muted(true);
-              setNeedsUnmute(true);
               return tryPlay(retries);
             }
             // Aborted by a source change: again when that source is there
