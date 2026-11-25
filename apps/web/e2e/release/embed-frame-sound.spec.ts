@@ -22,6 +22,7 @@
  */
 import { test, expect, type Browser, type Frame, type Page } from '@playwright/test';
 import { useOwnData, type Clip, type CreatedVideo } from './builders';
+import { countConsoleLine, noConsoleCounts, type ConsoleCounts } from './console-counts';
 import { runVideosReady, sharedRunVideosOn } from './run-videos';
 import { releaseEnv, target } from './targets';
 
@@ -78,6 +79,67 @@ async function host(page: Page, src: string, size: { width: number; height: numb
 async function embedFrame(page: Page): Promise<Frame> {
   await expect.poll(() => !!page.frame({ url: /\/embed\/v\// }), { timeout: 30000 }).toBe(true);
   return page.frame({ url: /\/embed\/v\// })!;
+}
+
+/**
+ * What the embed was doing when a check on it failed, for the failure message. WebKit failed its
+ * first attempt here on stage in 4 of the last 8 releases (v2026.11.24.4, .24.6, .25, .25.2: the big
+ * play button stayed, "the player did not start" after 60 s, the retry playing in 5 s) and a
+ * screenshot cannot say whether play() was refused, the source was never attached or the media never
+ * loaded. Read after the failure, so it cannot start anything the check was waiting for.
+ *
+ * The CI logs are public, so this is an allow list: the media element's numbers and flags, where its
+ * source points as none/blob/http, the player's classes out of a fixed list, the document's
+ * visibility and focus, and counts of the console's lines. No console text and no URL.
+ */
+async function embedState(page: Page, counts: ConsoleCounts): Promise<string> {
+  const frame = page.frame({ url: /\/embed\/v\// });
+  // evaluate has no timeout of its own: on a hung page it would hold the original failure back for
+  // the test's whole budget, so the state is raced against 3 s and the console counts come out anyway
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const state = frame
+    ? await Promise.race([
+      frame
+        .evaluate(() => {
+          const v = document.querySelector<HTMLVideoElement>('.video-js video');
+          const classes = document.querySelector('.video-js')?.classList;
+          const source = (src: string) => (!src ? 'none' : src.startsWith('blob:') ? 'blob' : /^https?:/.test(src) ? 'http' : 'other');
+          return {
+            video: v
+              ? {
+                readyState: v.readyState, networkState: v.networkState, paused: v.paused, muted: v.muted,
+                errorCode: v.error?.code ?? null, currentSrc: source(v.currentSrc),
+              }
+              : null,
+            playerClasses: classes
+              ? ['vjs-has-started', 'vjs-playing', 'vjs-paused', 'vjs-waiting', 'vjs-seeking', 'vjs-ended', 'vjs-error',
+                'vjs-user-active', 'vjs-user-inactive', 'vjs-controls-enabled', 'vjs-live'].filter((name) => classes.contains(name))
+              : null,
+            visibility: document.visibilityState,
+            focused: document.hasFocus(),
+          };
+        })
+        // The reason is not printed: an evaluate error's message can quote the page
+        .catch(() => 'evaluate failed'),
+      new Promise<string>((resolve) => {
+        timer = setTimeout(() => resolve('no answer in 3 s'), 3_000);
+      }),
+    ]).finally(() => clearTimeout(timer))
+    : 'no embed frame';
+  return `embed state: ${JSON.stringify(state)}\nconsole counts: ${JSON.stringify(counts)}`;
+}
+
+/** Appends the embed's state to a failed check's message; whatever was thrown (an Error or not) stays the cause */
+async function failWithState(error: unknown, page: Page, counts: ConsoleCounts): Promise<never> {
+  const message = error instanceof Error ? error.message : String(error);
+  throw new Error(`${message}\n${await embedState(page, counts)}`, { cause: error });
+}
+
+/** Counts the page's console lines (the frame's included) for `embedState`; no line's text is kept */
+function countConsole(page: Page): ConsoleCounts {
+  const counts = noConsoleCounts();
+  page.on('console', (message) => countConsoleLine(counts, message.type(), message.text()));
+  return counts;
 }
 
 const media = (frame: Frame) =>
@@ -179,6 +241,7 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
     for (const scheme of ['dark', 'light'] as const) {
       test(`${clip} in a ${width}x${height} frame (${scheme})`, async ({ page }) => {
         await page.emulateMedia({ colorScheme: scheme });
+        const consoleCounts = countConsole(page);
         await host(page, `${target().web}/embed/v/${videos[clip].id}?lang=ar&autoplay=1`, { width, height }, 'load');
         const frame = await embedFrame(page);
         await expect(frame.locator('.custom-video-player')).toBeVisible({ timeout: 45000 });
@@ -193,7 +256,7 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         // control bar by design (stage, WebKit, v2026.11.13.3: the bar measured 0x0). Replay it if
         // it ended, then hold it paused: a paused player keeps its bar up, so the layout is measured
         // on the bar itself
-        await expect
+        const started = expect
           .poll(async () => frame.evaluate(() => {
             const v = document.querySelector<HTMLVideoElement>('.video-js video');
             if (!v) return false;
@@ -206,11 +269,12 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
             return v.paused && !document.querySelector('.video-js.vjs-ended');
           }), { message: 'the player did not start (or replay) and pause', timeout: 30000 })
           .toBe(true);
+        await started.catch((error: unknown) => failWithState(error, page, consoleCounts));
         // Wake the controls (they fade while playing)
         await page.locator('#aun').hover({ position: { x: width / 2, y: height / 2 } });
         await page.locator('#aun').hover({ position: { x: width / 2 + 5, y: height / 2 + 5 } });
         // The poll returns the failing parts by name, so a red run says which one
-        await expect
+        const filled = expect
           .poll(async () => {
             const l = await look(frame);
             const failing: string[] = [];
@@ -233,6 +297,7 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
             return failing;
           }, { message: 'player fills the frame; picture fitted; one-row controls and the progress bar at the bottom; "Watch on" clear of the picture', timeout: 15000 })
           .toEqual([]);
+        await filled.catch((error: unknown) => failWithState(error, page, consoleCounts));
       });
     }
   }
@@ -291,13 +356,15 @@ test.describe('Release: a click-started play has sound', () => {
         console.log(`[embed-first-playing] ${JSON.stringify({ muted: v.muted || v.volume === 0 })}`);
       }, { capture: true, once: true });
     });
+    const consoleCounts = countConsole(page);
     const first: { start: { muted: boolean } | null } = { start: null };
     page.on('console', (message) => {
       const found = /^\[embed-first-playing\] (.*)$/.exec(message.text());
       if (found && !first.start) first.start = JSON.parse(found[1]!) as { muted: boolean };
     });
     await host(page, `${target().web}/embed/v/${videos.landscape40.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
-    await expect.poll(() => first.start, { message: 'the player did not start', timeout: 60000 }).not.toBeNull();
+    await expect.poll(() => first.start, { message: 'the player did not start', timeout: 60000 }).not.toBeNull()
+      .catch((error: unknown) => failWithState(error, page, consoleCounts));
     const frame = await embedFrame(page);
     await skipIfPredates(frame);
     if (browserName === 'chromium') {
