@@ -75,12 +75,12 @@ function setup(checks: Record<string, FeaturePrecondition>) {
   const app = new Hono();
   app.use('*', errorEnvelope);
   app.use('*', async (c, next) => {
-    c.set('auth' as never, { userId: 'sa1', roles: ['super_admin'], payload: { auth_time: Math.floor(Date.now() / 1000) } } as never);
+    c.set('auth' as never, { userId: 'sa1', roles: (c.req.header('x-test-roles') ?? 'super_admin').split(','), payload: { auth_time: Math.floor(Date.now() / 1000) } } as never);
     await next();
   });
   app.route('/api/features', createFeaturesRouter(checks as never));
   const call = async (path: string, init: RequestInit = {}) => {
-    const res = await app.request(`/api/features${path}`, { ...init, headers: { 'Content-Type': 'application/json', 'X-App-Locale': 'ar' } }, env as never);
+    const res = await app.request(`/api/features${path}`, { ...init, headers: { 'Content-Type': 'application/json', 'X-App-Locale': 'ar', ...(init.headers as Record<string, string> | undefined) } }, env as never);
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   };
   const put = (key: string, json: unknown) => call(`/${key}`, { method: 'PUT', body: JSON.stringify(json) });
@@ -90,7 +90,7 @@ function setup(checks: Record<string, FeaturePrecondition>) {
       type: 'features.set', scope, version: 1, requestId: null, by: 'seed',
       config: { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] },
     }).run();
-  return { call, put, needApprover };
+  return { env, call, put, needApprover };
 }
 
 beforeEach(() => forgetFeatureSwitches());
@@ -153,6 +153,17 @@ describe('admin-web reads /api/features as admin-api answers it', () => {
     assert.ok(!out.ok && out.kind === 'pending' && out.requestId.length > 0 && out.enabled === true, JSON.stringify(out));
     const list = readFeatureList((await t.call('')).body);
     assert.deepEqual(list.find((i) => i.key === 'creatorSupport')!.pending, { requestId: (out as { requestId: string }).requestId, enabled: true });
+  });
+
+  it('a change stored as money is marked waiting only for who sees money; any other for every reader', async () => {
+    const t = setup({ creatorSupport: async () => ({ ok: true }) });
+    await t.needApprover('creatorSupport');
+    assert.equal((await t.put('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'r' })).status, 202);
+    const waiting = async (roles: string) => !!readFeatureList((await t.call('', { headers: { 'x-test-roles': roles } })).body).find((i) => i.key === 'creatorSupport')!.pending;
+    for (const roles of ['super_admin', 'admin', 'moderator']) assert.equal(await waiting(roles), true, roles);
+    await t.env.SEARCH_DB.prepare("UPDATE workflow_requests SET domain = 'money'").run();
+    assert.equal(await waiting('super_admin'), true);
+    for (const roles of ['admin', 'moderator']) assert.equal(await waiting(roles), false, roles);
   });
 
   it('any other refusal is left to the server message', async () => {

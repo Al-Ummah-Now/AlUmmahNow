@@ -225,9 +225,9 @@ app.get('/requests', async (c) => {
     status: status && (WORKFLOW_STATUSES as readonly string[]).includes(status) ? (status as WorkflowStatus) : undefined,
     type: type && isWorkflowActionType(type) ? type : undefined,
     cursor: c.req.query('cursor') ?? null,
+    money: seesMoney(c, actor),
   });
-  const money = seesMoney(c, actor);
-  return ok(c, { items: money ? page.items : page.items.filter((i) => i.domain !== 'money'), next: page.next });
+  return ok(c, page);
 });
 
 /** The open request of each `target` (kind:id, repeated), for the pages that change them: { items: { target: requestId } }. */
