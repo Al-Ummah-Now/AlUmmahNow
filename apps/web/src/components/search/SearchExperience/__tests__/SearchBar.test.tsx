@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { ChannelSearch } from '@/components/ChannelTabs/ChannelSearch';
 import { AR_TRANSLATIONS as ar } from '@/lib/i18n/translations/ar';
 import { EN_TRANSLATIONS as en } from '@/lib/i18n/translations/en';
 import type { SearchHistoryEntry } from '@/lib/search/history';
@@ -19,6 +20,10 @@ jest.mock('@/lib/search/suggest-client', () => ({
   fetchSuggestions: jest.fn(),
 }));
 const mockFetch = fetchSuggestions as jest.MockedFunction<typeof fetchSuggestions>;
+jest.mock('@/lib/search/history', () => ({
+  ...jest.requireActual('@/lib/search/history'),
+  getSearchHistory: jest.fn().mockResolvedValue([]),
+}));
 
 const HISTORY: SearchHistoryEntry[] = [{ query: 'tafsir', at: 1 }, { query: 'hadith', at: 2 }];
 
@@ -77,6 +82,29 @@ describe('SearchBar', () => {
     expect(options.map(option => option.textContent)).toEqual(['السيرة في مكة', 'Another talk', 'السيرة كاملة']);
     fireEvent.click(options[0]);
     expect(push).toHaveBeenLastCalledWith('/ar/video/v1');
+  });
+
+  it.each([
+    { surface: 'header', search: () => <Harness /> },
+    { surface: 'channel', search: () => <ChannelSearch channelId="ch1" /> },
+  ])('refreshes cached $surface suggestions for the same query on a language switch', async ({ surface, search }) => {
+    mockFetch.mockResolvedValue([
+      { type: 'video', text: 'Early Seerah', id: 'v1', titleLocalized: { en: 'Early Seerah', ar: 'السيرة في مكة' } },
+    ]);
+    const { rerender } = render(search());
+    if (surface === 'channel') fireEvent.click(screen.getByTestId('channel-search-open'));
+    const field = screen.getByRole('combobox');
+    fireEvent.change(field, { target: { value: 'seer' } });
+    await act(async () => { jest.advanceTimersByTime(250); });
+    expect(screen.getByRole('option')).toHaveTextContent('Early Seerah');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    mockLang = 'ar';
+    rerender(search());
+    await act(async () => { jest.advanceTimersByTime(250); });
+    expect(screen.getByRole('combobox')).toHaveValue('seer');
+    expect(screen.getByRole('option')).toHaveTextContent('السيرة في مكة');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('opens the picked channel, video or playlist', async () => {

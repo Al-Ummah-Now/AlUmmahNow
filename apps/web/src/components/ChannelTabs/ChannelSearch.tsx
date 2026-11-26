@@ -96,7 +96,7 @@ export function ChannelSearch({ channelId }: { channelId: string }) {
         onSelect={choose}
         onSubmit={search}
         load={load}
-        loadKey={channelId}
+        loadKey={`${channelId}:${lang}`}
         groups={groups}
         emptyOptions={recent}
         emptyHeader={history.length > 0 ? (
