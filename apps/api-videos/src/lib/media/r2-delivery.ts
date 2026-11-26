@@ -1348,10 +1348,13 @@ export async function sweepMedia(env: MediaEnv, jobs: SweepCandidate[], now = Da
 async function reconcileRenditions(env: MediaEnv, video: MediaVideo): Promise<void> {
 	const to = accessDrift(video);
 	const revocations = desiredAccess(video) === 'priv' ? (video.r2?.retired ?? []).filter((r) => r.access === 'pub') : [];
-	await Promise.all([
+	// Keep the write hook alive until revocation finishes, even if the move could not be queued.
+	const results = await Promise.allSettled([
 		to ? queueMediaMove(env, video.id, to) : undefined,
 		...revocations.map((r) => queueRetiredRendition(env, video, r)),
 	]);
+	const failure = results.find((result) => result.status === 'rejected');
+	if (failure) throw failure.reason;
 }
 
 /** Write hook: reconcile visibility and revoke retired public URLs on restriction. */

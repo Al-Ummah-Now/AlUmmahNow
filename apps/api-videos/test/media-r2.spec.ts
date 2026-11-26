@@ -3,6 +3,7 @@
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { setImmediate } from 'node:timers/promises';
 import { MessageType, MEDIA_MAX_EDGE_TTL_SECONDS, publicMp4Path, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, transcodeCeilingOf, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import {
 	accessDrift,
@@ -326,20 +327,27 @@ describe('re-encoding a published rendition', () => {
 		assert.equal(raw.MEDIA_PRIVATE.store.has(`priv/${ID}/${job.rev}/master.m3u8`), true);
 	});
 
-	it('revokes the retired public copy directly when its immediate enqueue fails', async (t) => {
+	it('waits for direct revocation of the retired copy during a full queue outage', async (t) => {
 		const { env, raw, videos } = existing();
 		await enqueueTranscode(env, ID, 'retry', { force: true });
 		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
 		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
-		const send = raw.PROCESSING_CHECK_QUEUE.send.bind(raw.PROCESSING_CHECK_QUEUE);
-		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async (msg: { kind: string }) => {
-			if (msg.kind === 'media-retire') throw new Error('queue unavailable');
-			await send(msg);
+		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async () => {
+			throw new Error('queue unavailable');
+		});
+
+		env.MEDIA_CDN_API_TOKEN = 'purge-token';
+		let purged = false;
+		t.mock.method(globalThis, 'fetch', async () => {
+			await setImmediate();
+			purged = true;
+			return new Response('{}');
 		});
 
 		await videos.put(ID, JSON.stringify({ ...videos.read(ID), isPublic: false }));
 		await onVideoWritten(env, videos.read(ID));
 
+		assert.equal(purged, true);
 		assert.equal(raw.MEDIA.store.has(oldMaster), false);
 		assert.equal(videos.read(ID).r2.retired, undefined);
 	});
@@ -349,10 +357,13 @@ describe('re-encoding a published rendition', () => {
 		await enqueueTranscode(env, ID, 'retry', { force: true });
 		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
 		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
-		const send = raw.PROCESSING_CHECK_QUEUE.send.bind(raw.PROCESSING_CHECK_QUEUE);
-		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async (msg: { kind: string }) => {
-			if (msg.kind === 'media-retire') throw new Error('queue unavailable');
-			await send(msg);
+		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async () => {
+			throw new Error('queue unavailable');
+		});
+		const put = raw.global_settings.put.bind(raw.global_settings);
+		t.mock.method(raw.global_settings, 'put', async (key: string, value: string) => {
+			await setImmediate();
+			return put(key, value);
 		});
 		const remove = raw.MEDIA.delete.bind(raw.MEDIA);
 		let storageUnavailable = true;
