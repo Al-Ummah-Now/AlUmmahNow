@@ -1111,13 +1111,24 @@ export function stuckJobNotice(video: Pick<MediaVideo, 'id' | 'r2'>, now: number
 	};
 }
 
-/** Bounded: looks at the given candidates only (the caller lists them from the ownership index). */
-export async function sweepMedia(env: MediaEnv, ids: string[], now = Date.now(), ctx?: ExecutionContextLike, slotsFull = false): Promise<{ requeued: number; moved: number }> {
+type SweepCandidate = { video_id: string; job_id: string };
+
+/** Bounded: looks at the supplied media_jobs candidates only. */
+export async function sweepMedia(env: MediaEnv, jobs: SweepCandidate[], now = Date.now(), ctx?: ExecutionContextLike, slotsFull = false): Promise<{ requeued: number; moved: number }> {
 	let requeued = 0;
 	let moved = 0;
-	for (const id of ids.slice(0, 200)) {
+	for (const { video_id: id, job_id: jobId } of jobs.slice(0, 200)) {
 		const video = await repo(env).getObject(id);
-		if (!video) continue;
+		if (!video || video.isDeleted) {
+			// A newer job or an already-finished one may have replaced the candidate during the read.
+			await env.SEARCH_DB?.prepare(
+				`UPDATE media_jobs SET status = 'cancelled', error = 'cancelled', failed_at = ?3, updated_at = ?3
+				 WHERE video_id = ?1 AND job_id = ?2 AND status IN ('queued', 'transcoding')`,
+			)
+				.bind(id, jobId, new Date(now).toISOString())
+				.run();
+			continue;
+		}
 		const verdict = sweepVerdict(video, now, slotsFull);
 		if (verdict === 'requeue' && (await enqueueTranscode(env, id, 'sweep', { force: true })).queued) {
 			requeued++;
@@ -1146,12 +1157,12 @@ export async function onVideoWritten(env: MediaEnv, decoded: unknown): Promise<v
 export async function sweepMediaJobs(env: MediaEnv, now = Date.now(), ctx?: ExecutionContextLike): Promise<{ requeued: number; moved: number }> {
 	if (!env.SEARCH_DB || !env.TRANSCODE_QUEUE) return { requeued: 0, moved: 0 };
 	const { results } = await env.SEARCH_DB.prepare(
-		`SELECT video_id FROM media_jobs WHERE (status = 'queued' AND queued_at < ?1) OR (status = 'transcoding' AND updated_at < ?2) ORDER BY updated_at LIMIT 50`,
+		`SELECT video_id, job_id FROM media_jobs WHERE (status = 'queued' AND queued_at < ?1) OR (status = 'transcoding' AND updated_at < ?2) ORDER BY updated_at LIMIT 50`,
 	)
 		.bind(new Date(now - STUCK_QUEUED_MS).toISOString(), new Date(now - STUCK_TRANSCODING_MS).toISOString())
-		.all<{ video_id: string }>();
+		.all<SweepCandidate>();
 	if (!results?.length) return { requeued: 0, moved: 0 };
-	return sweepMedia(env, results.map((r) => r.video_id), now, ctx, await transcodeSlotsFull(env, now));
+	return sweepMedia(env, results, now, ctx, await transcodeSlotsFull(env, now));
 }
 
 /**
