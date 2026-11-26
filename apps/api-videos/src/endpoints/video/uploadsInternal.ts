@@ -56,7 +56,9 @@ export function createUploadsInternalRouter() {
 	app.get('/stale', async (c) => {
 		const status = c.req.query('status');
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '200', 10) || 200, 1), 500);
-		let items = await listItems(c.env, 2000);
+		// hide: videos the reader may not see (admin-api): not listed, not counted
+		const hide = new Set((c.req.query('hide') ?? '').split(',').filter(Boolean));
+		let items = (await listItems(c.env, 2000)).filter((i) => !hide.has(i.videoId));
 		if (status && STATUSES.has(status)) items = items.filter((i) => i.status === status);
 		else if (status === 'open') items = items.filter((i) => i.status !== 'deleted' && i.status !== 'skipped');
 		items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));

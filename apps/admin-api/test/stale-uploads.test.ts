@@ -12,10 +12,10 @@ import { sqliteD1 } from './d1-sqlite';
 
 const ID = '912859ed-e618-4d04-8438-874a74a251dd';
 
-function setup(roles: string[], answer: (path: string, body: any) => { status: number; json: unknown } = () => ({ status: 200, json: { success: true, result: { ok: true } } })) {
+function setup(roles: string[], answer: (path: string, body: any) => { status: number; json: unknown } = () => ({ status: 200, json: { success: true, result: { ok: true } } }), reports: unknown = undefined) {
   const calls: { path: string; method: string; body: any; key: string | null }[] = [];
   const env = {
-    REPORTS_DB: sqliteD1(),
+    REPORTS_DB: (reports ?? sqliteD1()) as ReturnType<typeof sqliteD1>,
     INTERNAL_API_KEY: 'k',
     VIDEOS: {
       async fetch(input: string, init?: RequestInit) {
@@ -51,19 +51,56 @@ describe('/api/uploads/stale', () => {
     assert.ok(!permissionsFor(['Moderator']).includes('videos:uploads'));
   });
 
-  it('lists only the videos the reader\'s lists show', async () => {
-    const OTHER = '00000000-0000-4000-8000-000000000002';
-    const stale = { items: [{ videoId: ID }, { videoId: OTHER }], audit: [{ videoId: ID }, { videoId: OTHER }], deadLetters: [{ videoId: ID }, { videoId: OTHER }, {}], counts: {} };
+  const OTHER = '00000000-0000-4000-8000-000000000002';
+  const CASE = "INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)";
+  /** api-videos' answers: the lists, and each action's per id */
+  const answer = (path: string, body: any) => {
+    if (path.endsWith('/stale')) return { status: 200, json: { success: true, result: { items: [{ videoId: ID }, { videoId: OTHER }], audit: [{ videoId: ID }, { videoId: OTHER }], deadLetters: [{ videoId: ID }, { videoId: OTHER }, {}], counts: {} } } };
+    if (path.endsWith('/test-library-purge')) return { status: 200, json: { success: true, result: { allowed: true, state: { recent: [{ videoId: ID }, { videoId: OTHER }] } } } };
+    if (path.endsWith('/keep')) return { status: 200, json: { success: true, result: { results: body.ids.map((videoId: string) => ({ videoId, kept: true })) } } };
+    return { status: 200, json: { success: true, result: { results: (body?.ids ?? []).map((videoId: string) => ({ videoId, started: true })) } } };
+  };
+
+  it('lists, counts and its logs only the videos the reader\'s lists show', async () => {
     for (const [roles, shown] of [[['Admin'], [OTHER]], [['super_admin'], [ID, OTHER]]] as const) {
-      const { req, db, audit } = setup([...roles], () => ({ status: 200, json: { success: true, result: stale } }));
-      await db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)").bind(ID).run();
+      const { req, db, audit, calls } = setup([...roles], answer);
+      await db.prepare(CASE).bind(ID).run();
       const r = ((await (await req('/api/uploads/stale')).json()) as any).result;
       assert.deepEqual([r.items.map((i: any) => i.videoId), r.audit.map((i: any) => i.videoId), r.deadLetters.map((i: any) => i.videoId ?? null)], [shown, shown, [...shown, null]], roles.join());
+      // api-videos neither lists nor counts the hidden one for this reader
+      assert.equal(new URL(calls[0].path, 'https://x').searchParams.get('hide'), shown.length === 1 ? ID : null);
+      const purge = ((await (await req('/api/uploads/stale/test-library-purge')).json()) as any).result;
+      assert.deepEqual(purge.state.recent.map((i: any) => i.videoId), shown);
       for (const id of [ID, OTHER]) await req('/api/uploads/stale/keep', post({ ids: [id] }));
       const entries = ((await (await req('/api/uploads/stale/audit')).json()) as any).result.entries;
       assert.deepEqual(entries.map((e: any) => e.videoId).sort(), [...shown].sort(), `audit ${roles.join()}`);
-      assert.equal((await audit()).length, 2);
+      assert.equal((await audit()).length, shown.length);
     }
+  });
+
+  it('an action on a video the reader may not see answers as for an unknown one, and does nothing', async () => {
+    const { req, db, audit, calls } = setup(['Admin'], answer);
+    await db.prepare(CASE).bind(ID).run();
+    for (const [route, unknown] of [['delete', { videoId: ID, started: false, why: 'not a stale upload' }], ['retry', { videoId: ID, started: false, why: 'not a stale upload' }], ['keep', { videoId: ID, kept: false }]] as const) {
+      calls.length = 0;
+      const alone = ((await (await req(`/api/uploads/stale/${route}`, post({ ids: [ID] }))).json()) as any).result.results;
+      assert.deepEqual(alone, [unknown], route);
+      assert.equal(calls.length, 0, `${route}: nothing sent`);
+      const mixed = ((await (await req(`/api/uploads/stale/${route}`, post({ ids: [ID, OTHER] }))).json()) as any).result.results;
+      assert.deepEqual(mixed.map((r: any) => r.videoId), [ID, OTHER], route);
+      assert.deepEqual(mixed[0], unknown, route);
+      assert.deepEqual(calls.map((c) => c.body.ids), [[OTHER]], `${route}: only the shown one`);
+    }
+    // Audit rows for the shown video only
+    assert.ok((await audit()).every((r: any) => r.key === `${STALE_UPLOAD_AUDIT_PREFIX}${OTHER}`));
+    assert.equal((await audit()).length, 3);
+  });
+
+  it('fails closed: when what the reader may see cannot be read, nothing is listed or done', async () => {
+    const { req, calls } = setup(['Admin'], answer, { prepare: () => { throw new Error('D1 down'); } });
+    assert.equal((await req('/api/uploads/stale')).status, 500);
+    assert.equal((await req('/api/uploads/stale/delete', post({ ids: [OTHER] }))).status, 500);
+    assert.equal(calls.length, 0);
   });
 
   it('lists through the VIDEOS binding with the internal key', async () => {

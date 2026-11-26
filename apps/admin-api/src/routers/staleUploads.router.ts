@@ -19,7 +19,7 @@ import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callUploads, UploadsApiError, type UploadsClientEnv } from '../lib/uploads/videosUploads';
 import { logger } from '../lib/logger';
-import { withoutHiddenVideos } from '../lib/moderation/takedown';
+import { hiddenFrom, hiddenVideoIds, isHiddenItem, withoutHiddenVideos } from '../lib/moderation/takedown';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
 
@@ -100,7 +100,11 @@ const itemKeys = (ids: string[]) => ids.map((id) => `${STALE_UPLOAD_AUDIT_PREFIX
 
 /** Abandoned placeholders and orphans with Bunny status and age; reaper mode, last sweep, recent deletes, dead letters. */
 app.get('/', async (c) => {
-  const result = await callUploads<{ items?: { videoId: string }[]; audit?: { videoId: string }[]; deadLetters?: { videoId?: string }[] }>(c.env, '/stale', { query: { status: c.req.query('status'), limit: c.req.query('limit') } });
+  // The tab counts leave out what the reader may not see, as the list does
+  const hide = await hiddenVideoIds(c.env.REPORTS_DB, c.get('auth')?.roles);
+  const result = await callUploads<{ items?: { videoId: string }[]; audit?: { videoId: string }[]; deadLetters?: { videoId?: string }[] }>(c.env, '/stale', {
+    query: { status: c.req.query('status'), limit: c.req.query('limit'), ...(hide.length ? { hide: hide.join(',') } : {}) },
+  });
   // Only the videos the reader's lists show (fails closed: an unreadable check is an error, not everything)
   const shown = <T>(rows: T[] | undefined, id: (row: T) => string | null | undefined) => withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, rows ?? [], id);
   const [items, audit, deadLetters] = await Promise.all([shown(result.items, (i) => i.videoId), shown(result.audit, (a) => a.videoId), shown(result.deadLetters, (d) => d.videoId)]);
@@ -135,28 +139,36 @@ app.post('/scan', async (c) => {
   return c.json({ success: true, result });
 });
 
+/**
+ * An action on the ids the reader may see; one they may not answers as an unknown one does (api-videos' own
+ * answer) and nothing is written or started for it. Fails closed: an unreadable check is an error.
+ */
+async function onShown<R extends { videoId: string }>(c: C, ids: string[], unknown: (id: string) => R, run: (shown: string[]) => Promise<{ results?: R[] }>): Promise<{ results: R[] }> {
+  const hidden = await hiddenFrom(c.env.REPORTS_DB, c.get('auth')?.roles, ids.map((id) => ({ type: 'video' as const, id })));
+  const shown = ids.filter((id) => !isHiddenItem(hidden, 'video', id));
+  const answered = new Map((shown.length ? ((await run(shown)).results ?? []) : []).map((r) => [r.videoId, r]));
+  return { results: ids.map((id) => answered.get(id) ?? unknown(id)) };
+}
+
 /** Delete now: queue a forced check (still never deletes a ready video). */
 app.post('/delete', async (c) => {
   const ids = parseIds(await body(c));
   if (!ids) return badIds(c);
-  const result = await audited(c, itemKeys(ids), 'delete_now', {}, () => callUploads(c.env, '/delete', { method: 'POST', json: { ids, actor: actorLabel(c) } }));
-  return c.json({ success: true, result });
+  return c.json({ success: true, result: await onShown(c, ids, (id) => ({ videoId: id, started: false, why: 'not a stale upload' }), (shown) => audited(c, itemKeys(shown), 'delete_now', {}, () => callUploads(c.env, '/delete', { method: 'POST', json: { ids: shown, actor: actorLabel(c) } }))) });
 });
 
 /** Keep: the reaper never picks these again (until Retry). */
 app.post('/keep', async (c) => {
   const ids = parseIds(await body(c));
   if (!ids) return badIds(c);
-  const result = await audited(c, itemKeys(ids), 'keep', {}, () => callUploads(c.env, '/keep', { method: 'POST', json: { ids, actor: actorLabel(c) } }));
-  return c.json({ success: true, result });
+  return c.json({ success: true, result: await onShown(c, ids, (id) => ({ videoId: id, kept: false }), (shown) => audited(c, itemKeys(shown), 'keep', {}, () => callUploads(c.env, '/keep', { method: 'POST', json: { ids: shown, actor: actorLabel(c) } }))) });
 });
 
 /** Retry: restart the item's check (a failed or kept item). */
 app.post('/retry', async (c) => {
   const ids = parseIds(await body(c));
   if (!ids) return badIds(c);
-  const result = await audited(c, itemKeys(ids), 'retry', {}, () => callUploads(c.env, '/retry', { method: 'POST', json: { ids, actor: actorLabel(c) } }));
-  return c.json({ success: true, result });
+  return c.json({ success: true, result: await onShown(c, ids, (id) => ({ videoId: id, started: false, why: 'not a stale upload' }), (shown) => audited(c, itemKeys(shown), 'retry', {}, () => callUploads(c.env, '/retry', { method: 'POST', json: { ids: shown, actor: actorLabel(c) } }))) });
 });
 
 /** Automatic deletion: dry-run (records "would delete") or live. */
@@ -173,7 +185,9 @@ app.post('/mode', async (c) => {
  * environment that has no record. api-videos refuses it on production.
  */
 app.get('/test-library-purge', async (c) => {
-  const result = await callUploads(c.env, '/test-library-purge');
+  const result = await callUploads<{ state?: { recent?: { videoId: string }[] } | null }>(c.env, '/test-library-purge');
+  // Its recent deletions name videos too: only those the reader's lists show
+  if (result?.state?.recent) result.state = { ...result.state, recent: await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, result.state.recent, (r) => r.videoId) };
   return c.json({ success: true, result });
 });
 
