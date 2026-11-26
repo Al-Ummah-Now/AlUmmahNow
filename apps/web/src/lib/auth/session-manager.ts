@@ -36,7 +36,8 @@ import {
 async function requestHost(): Promise<string | null> {
   try {
     return (await headers()).get('host');
-  } catch {
+  } catch (error) {
+    if (isNextControlFlowError(error) || error instanceof SessionInfrastructureError) throw error;
     return null;
   }
 }
@@ -414,13 +415,17 @@ export class SessionManager {
 
       // Save new structure (only possible outside a Server Component render;
       // the session is valid for this request either way)
-      await this.persistIfWritable(sessionData);
       try {
+        await this.setSessionData(sessionData);
         cookieStore.delete('access_token');
         cookieStore.delete('refresh_token');
-      } catch {
-        // Read-only cookies: the legacy cookies are migrated on a later write
-        return sessionData;
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith(
+          'Cookies can only be modified in a Server Action or Route Handler.',
+        )) {
+          return sessionData;
+        }
+        throw error;
       }
 
       // Load profile and channels in background (don't await to speed up migration)
@@ -433,8 +438,11 @@ export class SessionManager {
 
       return sessionData;
     } catch (error) {
-      logger.error('[SessionManager] Migration failed:', error);
-      return null;
+      if (isNextControlFlowError(error)) throw error;
+      if (error instanceof SessionInfrastructureError) throw error;
+      logger.error('[SessionManager] Legacy migration failed', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:session-manager', extra: { stage: 'legacy_migration' } });
+      throw new SessionInfrastructureError('Failed to migrate legacy session', error);
     }
   }
 

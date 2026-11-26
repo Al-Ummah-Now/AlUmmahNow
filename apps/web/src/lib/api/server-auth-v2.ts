@@ -87,48 +87,43 @@ export async function getAuthContextForUser(userId: string): Promise<AuthContext
  * This is a temporary function during the migration period
  */
 async function migrateLegacyAuth(): Promise<boolean> {
-  try {
-    const { cookies } = await import('next/headers');
-    const { authenticated } = await import('@/lib/actions');
+  const { cookies } = await import('next/headers');
+  const { authenticated } = await import('@/lib/actions');
 
-    const auth = await authenticated();
-    if (!auth) {
-      return false;
-    }
-
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('access_token');
-    const refreshToken = cookieStore.get('refresh_token');
-
-    if (!accessToken?.value || !refreshToken?.value) {
-      return false;
-    }
-
-    // Add account to SessionManager
-    // Note: OpenAuth JWT only includes id and email (see subjects.ts)
-    await SessionManager.addAccount(
-      {
-        accessToken: accessToken.value,
-        refreshToken: refreshToken.value,
-      },
-      {
-        id: auth.properties.id,
-        email: auth.properties.email,
-        displayName: auth.properties.email, // Use email as fallback, profile API will provide actual displayName
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-    );
-
-    // Clean up legacy cookies
-    cookieStore.delete('access_token');
-    cookieStore.delete('refresh_token');
-
-    return true;
-  } catch (error) {
-    logger.error('[migrateLegacyAuth] Migration failed:', error);
+  const auth = await authenticated();
+  if (!auth) {
     return false;
   }
+
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('access_token');
+  const refreshToken = cookieStore.get('refresh_token');
+
+  if (!accessToken?.value || !refreshToken?.value) {
+    return false;
+  }
+
+  // Add account to SessionManager
+  // Note: OpenAuth JWT only includes id and email (see subjects.ts)
+  await SessionManager.addAccount(
+    {
+      accessToken: accessToken.value,
+      refreshToken: refreshToken.value,
+    },
+    {
+      id: auth.properties.id,
+      email: auth.properties.email,
+      displayName: auth.properties.email, // Use email as fallback, profile API will provide actual displayName
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+  );
+
+  // Clean up legacy cookies
+  cookieStore.delete('access_token');
+  cookieStore.delete('refresh_token');
+
+  return true;
 }
 
 /**

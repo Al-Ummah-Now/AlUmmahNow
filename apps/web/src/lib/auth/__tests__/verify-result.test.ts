@@ -25,6 +25,7 @@ jest.mock("../../auth", () => ({ subjects: {}, setTokens: jest.fn() }));
 
 import { verificationFailed, verifiedUserId } from "../verify-result";
 import { authenticated } from "../../actions";
+import { SessionInfrastructureError } from "../../errors/server-report";
 
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
 /** A token anyone can write: a Super Admin payload with no valid signature. */
@@ -59,10 +60,10 @@ describe("authenticated() with a legacy access_token cookie", () => {
     await expect(authenticated()).resolves.toBe(false);
   });
 
-  it("refuses when verify throws", async () => {
+  it("propagates a verification outage without using the unverified payload", async () => {
     mockCookies.set("access_token", forged);
-    mockVerify.mockRejectedValue(new Error("bad signature"));
-    await expect(authenticated()).resolves.toBe(false);
+    mockVerify.mockRejectedValue(new TypeError("JWKS fetch failed"));
+    await expect(authenticated()).rejects.toBeInstanceOf(SessionInfrastructureError);
   });
 
   it("returns the verified subject, not the token payload", async () => {
