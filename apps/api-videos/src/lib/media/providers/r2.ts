@@ -4,15 +4,13 @@
  * record's `r2` field (lib/media/r2-delivery.ts); the provider-side id is our video id.
  */
 import { MEDIA_THUMBNAIL, type VideoProviderRecord } from '@al-ummah/shared-types';
-import { r2Urls, shownR2 } from '../r2-delivery';
+import { r2Urls } from '../r2-delivery';
 import type { MediaProvider, ProbeResult, ProviderPlayback, ProviderVideo, ProvidersEnv } from './types';
 
 const PROBE_KEY = 'pub/_health/probe.txt';
 const PROBE_TIMEOUT_MS = 5_000;
 
 function status(video: ProviderVideo): VideoProviderRecord['status'] {
-	// Encoded again, or that failed: the kept rendition still plays
-	if (shownR2(video as never)) return 'ready';
 	switch (video.r2?.status) {
 		case 'ready':
 			return 'ready';
@@ -38,7 +36,7 @@ export const r2Provider: MediaProvider = {
 			provider: 'r2',
 			ref: video.id,
 			status: status(video),
-			renditions: (shownR2(video as never)?.result ?? r2?.result)?.rungs.map((r) => r.name) ?? [],
+			renditions: r2?.result?.rungs.map((r) => r.name) ?? [],
 			...(r2?.readyAt ? { readyAt: r2.readyAt } : {}),
 			...(r2?.error ? { error: r2.error } : {}),
 			...(video.media ? {} : { legacy: true }),
@@ -46,7 +44,7 @@ export const r2Provider: MediaProvider = {
 	},
 
 	async playback(env, video): Promise<ProviderPlayback | null> {
-		const urls = await r2Urls(env, video as never);
+		const urls = await r2Urls(env, { id: video.id, r2: video.r2, audioTracks: video.audioTracks, audioPackage: video.audioPackage } as never);
 		return urls ? { playUrl: urls.playUrl, thumbnailUrl: urls.thumbnailUrl } : null;
 	},
 

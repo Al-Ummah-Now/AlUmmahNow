@@ -4666,7 +4666,7 @@ const en = {
   },
   hdrCheck: {
     title: 'Videos with HDR colors',
-    intro: 'Videos encoded before every quality became standard color can look washed out or blown out. The check only reads; it changes nothing. Re-encoding makes the chosen videos again from their kept originals, and they keep playing meanwhile.',
+    intro: 'Videos encoded before every quality became standard color can look washed out or blown out. The check only reads; it changes nothing. Re-encoding makes the chosen videos again from their kept originals.',
     start: 'Check now',
     running: 'Checking…',
     never: 'Not checked yet.',
@@ -4677,7 +4677,7 @@ const en = {
     select: 'Select {video}',
     reencode: 'Re-encode selected ({count})',
     confirmTitle: 'Re-encode the selected videos ({count})?',
-    confirmBody: 'Each is encoded again in standard color from its kept original. The current video plays until the new one is ready.',
+    confirmBody: 'Each is encoded again in standard color from its kept original. Until the new one is ready, a video plays from its other source if it has one; otherwise it cannot be watched for those minutes.',
     confirm: 'Re-encode',
     queued: 'Queued to re-encode: {count}.',
     notQueued: 'Not queued: {count} ({videos}). They are being encoded already, or are gone.',

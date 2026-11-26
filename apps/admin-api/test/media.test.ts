@@ -42,7 +42,7 @@ function setup(roles: string[], answer: Answer = (path, method, body) => (path.e
   app.route('/api/media', mediaRouter);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
   const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log').all<any>()).results ?? [];
-  return { req, calls, audit };
+  return { req, calls, audit, db: env.REPORTS_DB };
 }
 
 const send = (method: string, json: unknown): RequestInit => ({ method, body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } });
@@ -103,6 +103,19 @@ describe('/api/media', () => {
     const failing = setup(['admin'], () => ({ status: 500, json: { success: false, error: 'boom' } }));
     assert.equal((await failing.req('/api/media/hdr-check', send('POST', {}))).status, 500);
     assert.equal((await failing.audit()).length, 0);
+  });
+
+  it('HDR check: a video under a takedown is listed for super admins only', async () => {
+    const taken = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const run = { status: 'done', counts: {}, items: [{ id: ID, title: 'Lesson', kind: 'hlg', rev: 'r', now: 'same' }, { id: taken, title: 'Held', kind: 'hlg', rev: 'r', now: 'same' }] };
+    for (const [roles, ids] of [[['admin'], [ID]], [['super_admin'], [ID, taken]]] as const) {
+      const s = setup([...roles], () => ok({ run, started: true }));
+      await s.db.prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, detected_at, created_by, created_at, updated_at, item_type, item_id) VALUES ('case-1', 'u', 'k', 'paste', 'contained', 'x', 'a', 'x', 'x', 'video', ?)").bind(taken).run();
+      const read = (await (await s.req('/api/media/hdr-check')).json()) as any;
+      assert.deepEqual(read.result.run.items.map((i: { id: string }) => i.id), ids, roles[0]);
+      const started = (await (await s.req('/api/media/hdr-check', send('POST', {}))).json()) as any;
+      assert.deepEqual(started.result.run.items.map((i: { id: string }) => i.id), ids, `${roles[0]} start`);
+    }
   });
 
   it('jobs forwards the status filter and refuses unknown ones', async () => {

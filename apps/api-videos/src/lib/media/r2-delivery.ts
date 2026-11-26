@@ -216,20 +216,6 @@ export function desiredAccess(video: VideoVisibilityFields): MediaAccess {
 	return isVideoMediaPublic(video) ? 'pub' : 'priv';
 }
 
-/**
- * The rendition viewers get: the ready one, else the earlier one kept while the video is encoded again
- * (or after that failed). The kept one only while it sits under the prefix the video's visibility asks
- * for: nothing moves it, so a video made private meanwhile never plays it from the public bucket.
- */
-export function shownR2(video: VideoVisibilityFields & { r2?: VideoR2State }): { rev: string; access: MediaAccess; result?: TranscodeResult; readyAt?: string; current: boolean } | null {
-	const r2 = video.r2;
-	if (!r2) return null;
-	if (r2.status === 'ready') return { rev: r2.rev, access: r2.access, ...(r2.result ? { result: r2.result } : {}), ...(r2.readyAt ? { readyAt: r2.readyAt } : {}), current: true };
-	const kept = r2.previous;
-	if (!kept?.result || kept.access !== desiredAccess(video)) return null;
-	return { rev: kept.rev, access: kept.access, result: kept.result, ...(kept.readyAt ? { readyAt: kept.readyAt } : {}), current: false };
-}
-
 /** A ready rendition set sits under the wrong prefix and no move is running. */
 export function accessDrift(video: MediaVideo | null | undefined): MediaAccess | null {
 	const r2 = video?.r2;
@@ -306,13 +292,7 @@ export async function enqueueTranscode(
 				attempts: 0,
 				queuedAt: job.queuedAt,
 				// A rendition that was ready keeps playing until the new one is (its keys stay)
-				// A rendition that was ready keeps playing until the new one is, and if the new one fails. Asked
-				// again before that: the one that plays is still the one kept
-				...(r2?.status === 'ready' && r2.result
-					? { previous: { rev: r2.rev, access: r2.access, result: r2.result, ...(r2.readyAt ? { readyAt: r2.readyAt } : {}) } }
-					: r2?.previous
-						? { previous: r2.previous }
-						: {}),
+				...(r2?.status === 'ready' && r2.result ? { previous: { rev: r2.rev, access: r2.access } } : {}),
 			};
 			message = job;
 			return true;
@@ -758,13 +738,13 @@ export async function sourceUrl(env: MediaEnv, videoId: string, record?: Library
 }
 
 /** Playable R2 URLs of a ready video (private ones signed), or null. */
-export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'> & VideoVisibilityFields): Promise<{ playUrl: string; thumbnailUrl: string } | null> {
-	const r2 = shownR2(video);
-	if (!r2 || !env.MEDIA_PUBLIC_HOST) return null;
+export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>): Promise<{ playUrl: string; thumbnailUrl: string } | null> {
+	const r2 = video.r2;
+	if (!r2 || r2.status !== 'ready' || !env.MEDIA_PUBLIC_HOST) return null;
 	const sign = r2.access === 'priv' ? { key: await getSecret(env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY') } : undefined;
 	if (r2.access === 'priv' && !sign?.key) return null;
 	// A video with extra audio tracks plays its demuxed package (wiki AUN-MULTI-AUDIO MA1, MA3)
-	const master = (r2.current ? audioPackageMaster(video as never) : null) ?? MEDIA_MASTER;
+	const master = audioPackageMaster(video as never) ?? MEDIA_MASTER;
 	return {
 		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, master, sign),
 		// The frame alone: a file token (it may be shown where the playlist is not)
