@@ -634,5 +634,5 @@ html[dir=rtl] .aun-start-text [dir=auto]:not(input,textarea){text-align:right}ht
 /* Focus: a light ring around a dark one, so one of them stands out on any cover (.b-secondary drops the page's halo) */
 .media-cover .b-secondary:focus-visible{outline:2px solid var(--fanous-player-icon);outline-offset:2px;box-shadow:0 0 0 4px var(--fanous-player-cue)!important}
 
-.watch-sources { margin-block-start: 8px; color: var(--fanous-color-text-primary); font-size: 14px; }
+.watch-sources { width: 100%; padding-inline: 12px; text-align: start; margin-block-start: 8px; color: var(--fanous-color-text-primary); font-size: 14px; }
 .watch-sources a { color: inherit; text-decoration: underline; text-underline-offset: 0.15em; }

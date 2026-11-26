@@ -1,4 +1,4 @@
-import type { SubtitleTrack } from '@al-ummah/shared-types';
+import { featureGate, type SubtitleTrack } from '@al-ummah/shared-types';
 import { publishedCaptionSources } from '../../lib/captions/sources';
 import { privateAnswer } from '../../lib/private-answer';
 import { kidsRulesApply } from '../../lib/contentFlags';
@@ -183,7 +183,10 @@ export class VideoFetch extends OptionalAuthRoute {
 			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
 
 		if (!forEdit && video.subtitles?.length) {
-			videoView.captionSources = await publishedCaptionSources(c.env.subtitles, id, video.subtitles);
+			const sources = await publishedCaptionSources(c.env.subtitles, id, video.subtitles);
+			if (sources && (await featureGate(c.env, 'quranText').catch(() => ({ on: false }))).on) {
+				videoView.captionSources = sources;
+			}
 		}
 
 		// Match download resolution and leave the stored override intact for the editor.

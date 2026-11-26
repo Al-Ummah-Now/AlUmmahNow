@@ -118,7 +118,7 @@ export class SubtitlesGet extends OptionalAuthRoute {
       // edition for its language, fetched live (O7): the edition is part of the ETag too
       const translatedTrack = quranTrack && subtitleObject.customMetadata?.qtr === '1';
       let edition: Awaited<ReturnType<typeof editionFor>> = null;
-      if (quranTrack) cacheControl = 'private, no-store';
+      if (quranTrack) cacheControl = 'private, no-cache';
       if (quranOn && translatedTrack) {
         edition = await editionFor(c.env as never, video?.channelId ?? null, language);
       }

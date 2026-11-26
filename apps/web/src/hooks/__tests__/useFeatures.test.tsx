@@ -59,16 +59,17 @@ describe('useFeatures', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/me/features?channelId=ch%201');
   });
 
-  it('fails closed: an error or an unknown key shows nothing', async () => {
+  it('fails closed except for player credits', async () => {
     fetchMock.mockImplementation(() => answer({ live: 'yes', somethingNew: true }));
     render(<Probe />);
     await waitFor(() => expect(screen.getByTestId('ready').textContent).toBe('true'));
     expect(screen.queryByTestId('live')).toBeNull();
     fetchMock.mockImplementation(() => Promise.reject(new Error('offline')));
-    const features = await fetchFeatures(null);
+    const { playerCredits, ...features } = await fetchFeatures(null);
+    expect(playerCredits).toBe(true);
     expect(Object.values(features).every((v) => v === false)).toBe(true);
     fetchMock.mockImplementation(() => answer({}, 500));
-    expect((await fetchFeatures(null)).live).toBe(false);
+    expect(await fetchFeatures(null)).toMatchObject({ live: false, playerCredits: true });
   });
 
   it('signed out: asks without a token (viewer-facing features only)', async () => {
