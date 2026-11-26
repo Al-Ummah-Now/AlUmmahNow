@@ -340,7 +340,7 @@
   --fanous-color-on-error-fill: #ffffff;
   --fanous-color-live: #ffa037;
   --fanous-color-on-live: #290d06;
-  --fanous-color-accent: #a85600;
+  --fanous-color-accent: #7b3f00;
   --fanous-color-focus-ring: #824825;
   --fanous-color-focus-glow: #824825;
   --fanous-color-verified-icon: #0f5a2c;
@@ -427,9 +427,9 @@
   --fanous-c-form-focus-ring: #824825;
   --fanous-c-form-error: #930019;
   --fanous-c-form-success: #0f5a2c;
-  --fanous-c-form-check-on: #a85600;
+  --fanous-c-form-check-on: #7b3f00;
   --fanous-c-form-check-mark: #fdeedb;
-  --fanous-c-form-switch-on: #a85600;
+  --fanous-c-form-switch-on: #7b3f00;
   --fanous-c-form-switch-off: #83593a;
   --fanous-c-form-switch-thumb: #fdeedb;
   --fanous-c-card-video-bg: #fdeedb;
@@ -442,7 +442,7 @@
   --fanous-c-tabs-bg: #fdeedb;
   --fanous-c-tabs-text: #4f260f;
   --fanous-c-tabs-active-text: #6d3412;
-  --fanous-c-tabs-indicator: #a85600;
+  --fanous-c-tabs-indicator: #7b3f00;
   --fanous-c-tabs-border: #dca877;
   --fanous-c-segment-bg: #fff7ec;
   --fanous-c-segment-text: #2e1206;
@@ -470,7 +470,7 @@
   --fanous-c-badge-status-text: #ffffff;
   --fanous-c-player-control: #2e1206;
   --fanous-c-player-control-bg: #fdeedb;
-  --fanous-c-player-progress: #a85600;
+  --fanous-c-player-progress: #7b3f00;
   --fanous-c-player-buffered: #83593a;
   --fanous-c-player-track: #fff7ec;
   --fanous-c-footer-bg: #fdeedb;

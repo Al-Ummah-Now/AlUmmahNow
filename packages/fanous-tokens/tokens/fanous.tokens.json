@@ -376,10 +376,10 @@
         }
       },
       "accent": {
-        "$description": "Progress bars and selected indicators",
+        "$description": "Accent text, progress bars and selected indicators",
         "$extensions": {
           "fanous": {
-            "role": "nontext"
+            "role": "text"
           }
         }
       },

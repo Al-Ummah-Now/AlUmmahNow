@@ -108,6 +108,22 @@ test('contrast: a text colour that fails WCAG AA names the pair and the ratio', 
   assert.ok(messages(validatePackage(u)).some((e) => e.startsWith('components.header.colors.light.text: nav.text')));
 });
 
+test('contrast: accent must reach 4.5:1 on the background and surfaces in both modes', () => {
+  const { theme } = fawanees();
+  const t = clone(theme);
+  t.tokens.color.light.accent = '#8f8279';
+  t.tokens.color.dark.accent = '#607a8a';
+  const { errors } = validatePackage(t);
+  for (const mode of ['light', 'dark']) {
+    for (const background of ['background', 'surface']) {
+      const hit = errors.find((issue) => issue.path === `tokens.color.${mode}.accent` && issue.params?.background === background);
+      assert.equal(hit?.code, 'contrast', `${mode} accent on ${background}`);
+      assert.equal(hit.params?.min, 4.5);
+      assert.ok(Number(hit.params?.ratio) >= 3 && Number(hit.params?.ratio) < 4.5, hit.message);
+    }
+  }
+});
+
 test('compile: references become custom properties, assets become URLs, all scoped to the theme', () => {
   assert.deepEqual(parseRefs('a {color.primary} {asset:assets/x.svg}').map((r) => r.kind), ['color', 'asset']);
   assert.equal(toCss('0 0 4px {material.glow},{component.nav.activeBg} {radius.md}', (p) => p), '0 0 4px var(--m-glow),var(--fanous-c-nav-active-bg) var(--r-md)');

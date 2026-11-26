@@ -136,7 +136,7 @@ public enum Fanous {
         onErrorFill: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
         live: Color(.sRGB, red: 1, green: 0.6275, blue: 0.2157, opacity: 1),
         onLive: Color(.sRGB, red: 0.1608, green: 0.051, blue: 0.0235, opacity: 1),
-        accent: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
+        accent: Color(.sRGB, red: 0.4824, green: 0.2471, blue: 0, opacity: 1),
         focusRing: Color(.sRGB, red: 0.5098, green: 0.2824, blue: 0.1451, opacity: 1),
         focusGlow: Color(.sRGB, red: 0.5098, green: 0.2824, blue: 0.1451, opacity: 1),
         verifiedIcon: Color(.sRGB, red: 0.0588, green: 0.3529, blue: 0.1725, opacity: 1),
