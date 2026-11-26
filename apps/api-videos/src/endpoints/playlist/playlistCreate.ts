@@ -1,3 +1,5 @@
+import { apiError } from '../../lib/api-error';
+import { invalidImageField } from '../../lib/image-write-urls';
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
@@ -92,6 +94,9 @@ export class PlaylistCreate extends AuthenticatedRoute {
             return c.json({ success: false, error: "You do not have permission to manage this channel's playlists" }, 403);
         }
         const { ownerId, uploadedBy } = uploadIdentity(c, userId);
+        const invalidImage = await invalidImageField(c.env, userId, playlistInput);
+        if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
+
         const videoIds = uniqueVideoIds(playlistInput.videos || []);
         if (videoIds.length > PLAYLIST_BULK_MAX) {
             return c.json({ success: false, error: `At most ${PLAYLIST_BULK_MAX} videos can be added at once` }, 400);

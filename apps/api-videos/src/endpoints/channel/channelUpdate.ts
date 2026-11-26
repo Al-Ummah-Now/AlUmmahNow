@@ -1,3 +1,4 @@
+import { invalidImageField } from '../../lib/image-write-urls';
 import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -124,6 +125,9 @@ export class ChannelUpdate extends AuthenticatedRoute {
                 error: "You do not have permission to update this channel",
             }, 403);
         }
+
+        const invalidImage = await invalidImageField(c.env, userId, channelUpdateInput, existingChannel);
+        if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
 
         const { handle: requestedHandle, contactEmail, location, isMain: requestedIsMain, ...restInput } = channelUpdateInput;
         // The @handle and which channel is the owner's main one are the owner's alone

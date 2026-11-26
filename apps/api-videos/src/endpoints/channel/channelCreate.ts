@@ -1,3 +1,5 @@
+import { apiError } from '../../lib/api-error';
+import { invalidImageField } from '../../lib/image-write-urls';
 import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -108,6 +110,9 @@ export class ChannelCreate extends AuthenticatedRoute {
 		// Retrieve the validated request body
 		const channelInput = request.body;
 		const userId = this.getUserId(c);
+		const invalidImage = await invalidImageField(c.env, userId, channelInput);
+		if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
+
 
 		// The user must have a profile
 		const profileBucket = c.env.profiles;

@@ -9,6 +9,7 @@
  * to it first; anything else is refused with 422 `thumbnail_shape`.
  */
 
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -139,6 +140,10 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			if (saved.status === 'missing' || !saved.changed) {
 				return c.json({ success: false, error: "Video not found" }, 404);
 			}
+
+			await recordImageOwner(c.env.SEARCH_DB, thumbnailUrl, {
+				kind: 'video_thumbnail', ownerId: userId, mediaHost: c.env.MEDIA_PUBLIC_HOST,
+			});
 
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoEdit, {

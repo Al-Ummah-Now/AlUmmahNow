@@ -1,3 +1,5 @@
+import { apiError } from '../../lib/api-error';
+import { invalidImageField } from '../../lib/image-write-urls';
 import { nameLocale } from "../../lib/name-locale";
 import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
@@ -81,6 +83,9 @@ export class ProfileUpdate extends AuthenticatedRoute {
                 error: "Profile not found",
             }, 404);
         }
+
+        const invalidImage = await invalidImageField(c.env, userId, profileUpdateInput, existingProfile);
+        if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
 
         // Update the profile on the fresh copy with a conditional write
         // (SCALABILITY-AUDIT AV-6), so a concurrent change (watch history,

@@ -1,3 +1,5 @@
+import { apiError } from '../../lib/api-error';
+import { invalidImageField } from '../../lib/image-write-urls';
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
@@ -109,6 +111,9 @@ export class PlaylistUpdate extends AuthenticatedRoute {
                 error: "Unauthorized - you can only update your own playlists",
             }, 403);
         }
+
+        const invalidImage = await invalidImageField(c.env, userId, updateData, existingPlaylist);
+        if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
 
         // The order: manual, or automatic by a field and direction. Switching
         // to automatic sorts now; switching back to manual keeps the current

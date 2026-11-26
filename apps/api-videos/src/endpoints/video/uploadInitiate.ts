@@ -1,3 +1,4 @@
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 import { uploadIdentity } from "../../lib/channelAccess";
 import { categoryRefusal } from "../../lib/categories";
 import { reportServerError, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
@@ -321,7 +322,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				return { guid: bunnyVideo.guid, libraryId };
 			});
 			const videoId = plan.videoId;
-			const thumb = await processThumbnail(c, videoId, thumbnail, plan.bunny?.guid);
+			const thumb = await processThumbnail(c, userId, videoId, thumbnail, plan.bunny?.guid);
 			const now = new Date().toISOString();
 			// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
 			// stored thumbnail there is no thumbnail URL until Bunny's exists.
@@ -433,7 +434,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 		let sameUploader = true;
 		if (reused) {
 			// Same video again: latest metadata (and thumbnail, when one was sent)
-			const thumb = thumbnail?.data ? await processThumbnail(c, videoId, thumbnail) : null;
+			const thumb = thumbnail?.data ? await processThumbnail(c, userId, videoId, thumbnail) : null;
 			const nowIso = new Date().toISOString();
 			const result = await patchVideo(repository, videoId, (fresh) => {
 				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso, { adminImport: who.adminImport });
@@ -565,6 +566,7 @@ async function scheduleImported(c: AppContext, repository: R2Repository<any>, vi
  */
 async function processThumbnail(
 	c: AppContext,
+	userId: string,
 	videoId: string,
 	thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width?: number; height?: number } } | undefined,
 	bunnyGuid?: string | null,
@@ -582,6 +584,9 @@ async function processThumbnail(
 			return fallback;
 		}
 		const stored = await storeCustomThumbnail(c.env as never, videoId, processed.original, { type: 'image/jpeg', extension: 'jpg' });
+		await recordImageOwner(c.env.SEARCH_DB, stored.thumbnailUrl, {
+			kind: 'video_thumbnail', ownerId: userId, mediaHost: c.env.MEDIA_PUBLIC_HOST,
+		});
 		logger.debug('[UploadInitiate] Thumbnail stored', { videoId, store: stored.store, sizes: Object.keys(stored.thumbnailSizes) });
 		return { thumbnailUrl: stored.thumbnailUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: stored.thumbnailSizes, custom: true };
 	} catch (error) {

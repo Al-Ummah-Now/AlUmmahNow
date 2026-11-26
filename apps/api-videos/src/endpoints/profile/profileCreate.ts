@@ -1,3 +1,5 @@
+import { apiError } from '../../lib/api-error';
+import { invalidImageField } from '../../lib/image-write-urls';
 import { nameLocale } from "../../lib/name-locale";
 import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -71,6 +73,15 @@ export class ProfileCreate extends AuthenticatedRoute {
 		// The validated request body, with the signed-in account's email (a submitted one is ignored)
 		const profileInput = withAccountEmail(request.body, this.getAuth(c));
 
+		const repository = new R2Repository<z.infer<typeof BusinessProfile>>(c.env.profiles);
+		// This endpoint also updates existing profiles. Only look one up when a non-empty image was sent.
+		const existing = profileInput.avatarUrl?.trim() || profileInput.coverUrl?.trim()
+			? await repository.getObject(userId)
+			: null;
+		const invalidImage = await invalidImageField(c.env, userId, profileInput, existing);
+		if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
+		type ProfileType = z.infer<typeof BusinessProfile>;
+
 		// Create business profile object
 		const entityDefaults = createEntityDefaults();
 		
@@ -81,10 +92,6 @@ export class ProfileCreate extends AuthenticatedRoute {
 			channels: [],
 		};
 
-		// Implement your own object insertion here
-        const bucket = c.env.profiles;
-		type ProfileType = z.infer<typeof BusinessProfile>;
-		const repository = new R2Repository<ProfileType>(bucket);
 		// Create-only for a new profile; an existing one (made by an earlier
 		// create, a watch-history add or a subscribe) keeps its channels,
 		// history and consent and only takes the submitted fields

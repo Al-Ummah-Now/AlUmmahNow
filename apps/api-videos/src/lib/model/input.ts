@@ -5,6 +5,10 @@ import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
 
 // Input validation schemas - only fields that users can submit
 
+const imageUrlInput = (description: string) => z.string().nullable().optional()
+    .transform((url) => url === null ? '' : url)
+    .describe(`${description}. Null or an empty string clears it`);
+
 export const CommentInput = z.object({
     text: Str({ description: "Comment text content" }),
 });
@@ -34,7 +38,7 @@ export const PlaylistInput = z.object({
     description: Str({ required: false, description: "Playlist description (defaults to descriptionLocalized's English, else Arabic, value)" }),
     titleLocalized: z.record(z.string(), z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
     descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"),
-    thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
+    thumbnailUrl: imageUrlInput("Playlist thumbnail URL"),
     videos: z.array(Str()).optional().describe("Videos to add, in order: the channel's own for a channel playlist, any public video for a personal one (validated; above 200 the rest is added by a background job)"),
     isPublic: z.boolean().optional(),
     visibility: z.enum(["public", "unlisted", "private"]).optional().describe("public: listed everywhere; unlisted: anyone with the link, never listed, searched or in sitemaps; private: the owner (and the channel's playlist managers) only. Wins over isPublic"),
@@ -54,8 +58,8 @@ export const ProfileInput = z.object({
     lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     bio: Str({ required: false, description: "User bio" }),
     bioLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language bios"),
-    avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
-    coverUrl: Str({ required: false, description: "Profile cover image URL" }),
+    avatarUrl: imageUrlInput("Profile avatar URL"),
+    coverUrl: imageUrlInput("Profile cover image URL"),
     timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
 });
 
@@ -65,8 +69,8 @@ export const ChannelInput = z.object({
     description: Str({ required: false, description: "Channel description" }),
     descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: Bool().optional(),
-    avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
-    coverUrl: Str({ required: false, description: "Channel cover image URL" }),
+    avatarUrl: imageUrlInput("Channel avatar URL"),
+    coverUrl: imageUrlInput("Channel cover image URL"),
 });
 
 // Update operations (for PATCH endpoints) - defined explicitly to preserve OpenAPI metadata
@@ -98,7 +102,7 @@ export const PlaylistUpdateInput = z.object({
     description: Str({ required: false, description: "Playlist description" }),
     titleLocalized: z.record(z.string(), z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it) (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
     descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"),
-    thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
+    thumbnailUrl: imageUrlInput("Playlist thumbnail URL"),
     isPublic: z.boolean().optional(),
     visibility: z.enum(["public", "unlisted", "private"]).optional().describe("public: listed everywhere; unlisted: anyone with the link, never listed, searched or in sitemaps; private: the owner (and the channel's playlist managers) only. Wins over isPublic"),
     videos: z.array(Str()).optional().describe("Reorder videos: the playlist's current video IDs in the new order (manual order only)"),
@@ -119,8 +123,8 @@ export const ProfileUpdateInput = z.object({
     lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     bio: Str({ required: false, description: "User bio" }),
     bioLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language bios"),
-    avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
-    coverUrl: Str({ required: false, description: "Profile cover image URL" }),
+    avatarUrl: imageUrlInput("Profile avatar URL"),
+    coverUrl: imageUrlInput("Profile cover image URL"),
     timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
 });
 
@@ -138,8 +142,8 @@ export const ChannelUpdateInput = z.object({
     description: Str({ required: false, description: "Channel description" }),
     descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: z.boolean().optional(),
-    avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
-    coverUrl: Str({ required: false, description: "Channel cover image URL" }),
+    avatarUrl: imageUrlInput("Channel avatar URL"),
+    coverUrl: imageUrlInput("Channel cover image URL"),
     handle: z.string().trim().max(31).optional().describe("Claim/change the channel @handle (3-30 chars: letters, digits, . _ -)"),
     links: z.array(ChannelLinkInput).max(MAX_CHANNEL_LINKS).optional().describe("About links (replaces the list)"),
     contactEmail: z.union([z.literal(''), z.string().trim().email().max(254)]).optional().describe("Public contact email; empty string clears it"),
