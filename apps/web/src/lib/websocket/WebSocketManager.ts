@@ -355,8 +355,13 @@ export class WebSocketManager {
     const errorCode = messageType === 'error' || messageType === 'auth_error'
       ? ((message as { code?: string }).code ?? (message.data as { code?: string } | undefined)?.code)
       : undefined;
-    if (messageType === 'auth_error' || errorCode === 'AUTH_EXPIRED' || errorCode === 'AUTH_FAILED' || errorCode === 'AUTH_REQUIRED') {
-      logger.warn('🔐 Authentication failed:', { code: errorCode });
+    const unexpectedAuthError = errorCode === 'AUTH_ERROR';
+    if (unexpectedAuthError || messageType === 'auth_error' || errorCode === 'AUTH_EXPIRED' || errorCode === 'AUTH_FAILED' || errorCode === 'AUTH_REQUIRED') {
+      if (unexpectedAuthError) {
+        logger.error('🔐 Unexpected WebSocket authentication error:', { code: errorCode });
+      } else {
+        logger.warn('🔐 Authentication failed:', { code: errorCode ?? messageType });
+      }
       const wasAuthenticated = this.authenticated;
       this.authenticated = false;
       [...this.joined].forEach((channel) => this.setJoined(channel, false));
@@ -366,7 +371,7 @@ export class WebSocketManager {
         void this.authenticate();
       } else if (this.config.getAuthToken && errorCode !== 'AUTH_REQUIRED') {
         this.ws?.close(AUTH_RETRY_CLOSE_CODE, 'Retry authentication');
-      } else if (!this.config.getAuthToken) {
+      } else if (!unexpectedAuthError && errorCode !== 'AUTH_REQUIRED') {
         // A static token cannot be refreshed here. Wait for the caller to supply a new one.
         this.config.authToken = undefined;
       }
