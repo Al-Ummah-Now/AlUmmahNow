@@ -90,8 +90,8 @@ export function ListenMiniBar() {
     >
       <div
         style={{
-          backgroundColor: 'var(--fanous-c-drawer-bg, var(--fanous-color-surface, #ffffff))',
-          borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+          backgroundColor: 'var(--fanous-c-drawer-bg, var(--fanous-color-surface))',
+          borderColor: 'var(--fanous-color-outline)',
         }}
         className="w-full border-t"
       >
@@ -102,12 +102,12 @@ export function ListenMiniBar() {
           aria-label={labels.sleepTimer}
           data-testid="listen-sleep-popover"
           style={{
-            backgroundColor: 'var(--fanous-color-surface, #ffffff)',
-            borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+            backgroundColor: 'var(--fanous-color-surface)',
+            borderColor: 'var(--fanous-color-outline)',
           }}
           className="absolute bottom-full end-4 mb-2 w-56 rounded-lg border shadow-xl p-2"
         >
-          <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{labels.sleepTimer}</div>
+          <div className="px-2 py-1 text-xs font-semibold text-[var(--fanous-color-text-secondary)]">{labels.sleepTimer}</div>
           <div className="flex flex-col gap-1">
             {SLEEP_PRESETS.map((preset) => {
               const active = sleepTimer === preset;
@@ -122,8 +122,8 @@ export function ListenMiniBar() {
                   }}
                   className={`text-start px-2.5 py-1.5 rounded text-sm transition-colors ${
                     active
-                      ? 'bg-emerald-600 text-white font-medium'
-                      : 'text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-brand text-on-brand font-medium'
+                      : 'text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]'
                   }`}
                 >
                   {sleepLabel(preset, lang, { off: labels.sleepOff, end: labels.sleepEndOfEpisode, mins: labels.sleepMinutes })}
@@ -141,13 +141,13 @@ export function ListenMiniBar() {
           aria-label={labels.queue}
           data-testid="listen-queue-drawer"
           style={{
-            backgroundColor: 'var(--fanous-color-surface, #ffffff)',
-            borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+            backgroundColor: 'var(--fanous-color-surface)',
+            borderColor: 'var(--fanous-color-outline)',
           }}
           className="absolute bottom-full end-4 mb-2 w-80 max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto rounded-lg border shadow-xl p-3"
         >
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--fanous-color-divider)]">
+            <span className="text-sm font-semibold text-[var(--fanous-color-text-primary)]">
               {labels.queue} ({localizeDigits(lang, queue.length)})
             </span>
             {queue.length > 0 && (
@@ -155,14 +155,14 @@ export function ListenMiniBar() {
                 type="button"
                 data-testid="listen-queue-clear"
                 onClick={clearQueue}
-                className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                className="text-xs text-[var(--fanous-color-error-text)] hover:underline"
               >
                 {labels.clearQueue}
               </button>
             )}
           </div>
           {queue.length === 0 ? (
-            <p className="text-xs text-gray-500 dark:text-gray-400 py-3 text-center" data-testid="listen-queue-empty">
+            <p className="text-xs text-[var(--fanous-color-text-secondary)] py-3 text-center" data-testid="listen-queue-empty">
               {labels.queueEmpty}
             </p>
           ) : (
@@ -171,7 +171,7 @@ export function ListenMiniBar() {
                 <li
                   key={item.videoId}
                   data-testid={`listen-queue-item-${item.videoId}`}
-                  className="flex items-center justify-between gap-2 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className="flex items-center justify-between gap-2 p-1.5 rounded hover:bg-[var(--fanous-color-surface-raised)]"
                 >
                   <button
                     type="button"
@@ -180,15 +180,15 @@ export function ListenMiniBar() {
                     }}
                     className="min-w-0 flex-1 text-start"
                   >
-                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.channelName}</div>
+                    <div className="text-sm font-medium text-[var(--fanous-color-text-primary)] truncate">{item.title}</div>
+                    <div className="text-xs text-[var(--fanous-color-text-secondary)] truncate">{item.channelName}</div>
                   </button>
                   <button
                     type="button"
                     aria-label={labels.removeFromQueue}
                     data-testid={`listen-queue-remove-${item.videoId}`}
                     onClick={() => removeFromQueue(item.videoId)}
-                    className="p-1.5 rounded text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                    className="p-1.5 rounded text-[var(--fanous-color-text-secondary)] hover:text-[var(--fanous-color-error-text)]"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -204,7 +204,7 @@ export function ListenMiniBar() {
         <div
           role="alert"
           data-testid="listen-mini-bar-error"
-          className="px-3 py-1.5 text-xs bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-b border-red-200 dark:border-red-800"
+          className="px-3 py-1.5 text-xs bg-[var(--fanous-color-surface-raised)] text-[var(--fanous-color-error-text)] border-b border-[var(--fanous-color-outline)]"
         >
           {error}
         </div>
@@ -220,7 +220,7 @@ export function ListenMiniBar() {
           onChange={(e) => seek(Number(e.target.value))}
           aria-label={labels.listenMode}
           data-testid="listen-progress"
-          className="w-full h-1.5 accent-emerald-600 cursor-pointer"
+          className="w-full h-1.5 accent-brand cursor-pointer"
         />
       </div>
 
@@ -238,18 +238,18 @@ export function ListenMiniBar() {
             <img
               src={current.thumbnailUrl}
               alt=""
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-800"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0 bg-[var(--fanous-color-surface-raised)]"
             />
           ) : (
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
-              <Headphones className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded bg-brand-soft flex items-center justify-center flex-shrink-0">
+              <Headphones className="w-5 h-5 text-brand-ink" />
             </div>
           )}
           <div className="min-w-0">
-            <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate" data-testid="listen-track-title">
+            <div className="text-xs sm:text-sm font-semibold text-[var(--fanous-color-text-primary)] truncate" data-testid="listen-track-title">
               {current.title}
             </div>
-            <div className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 truncate">
+            <div className="text-[11px] sm:text-xs text-[var(--fanous-color-text-secondary)] truncate">
               {current.channelName}{isRTL ? '، ' : ' · '}{formatClock(currentTime, lang)} / {formatClock(duration, lang)}
             </div>
           </div>
@@ -262,7 +262,7 @@ export function ListenMiniBar() {
             aria-label={labels.back15}
             data-testid="listen-back-15"
             onClick={() => skipBy(-15)}
-            className="hidden sm:inline-flex p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden sm:inline-flex p-2 rounded-full text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -271,7 +271,7 @@ export function ListenMiniBar() {
             aria-label={isPlaying ? labels.pause : labels.play}
             data-testid="listen-play-toggle"
             onClick={togglePlay}
-            className="p-2 sm:p-2.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            className="p-2 sm:p-2.5 rounded-full bg-brand text-on-brand hover:bg-brand-hover hover:text-[var(--fanous-color-on-primary-hover)] transition-colors"
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           </button>
@@ -280,7 +280,7 @@ export function ListenMiniBar() {
             aria-label={labels.forward30}
             data-testid="listen-forward-30"
             onClick={() => skipBy(30)}
-            className="hidden sm:inline-flex p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden sm:inline-flex p-2 rounded-full text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]"
           >
             <RotateCw className="w-4 h-4" />
           </button>
@@ -293,7 +293,7 @@ export function ListenMiniBar() {
             aria-label={labels.speed}
             data-testid="listen-speed-button"
             onClick={nextSpeed}
-            className="px-1.5 sm:px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="px-1.5 sm:px-2 py-1 rounded text-xs font-semibold border border-[var(--fanous-color-outline)] text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]"
           >
             {localizeDigits(lang, `${playbackRate}×`)}
           </button>
@@ -307,8 +307,8 @@ export function ListenMiniBar() {
             }}
             className={`p-1.5 sm:px-2 sm:py-1.5 rounded flex items-center gap-1 text-xs ${
               sleepTimer !== 'off'
-                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 font-medium'
-                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
+                ? 'bg-brand-soft text-brand-ink font-medium'
+                : 'text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]'
             }`}
           >
             <Moon className="w-4 h-4" />
@@ -322,7 +322,7 @@ export function ListenMiniBar() {
               setShowQueue((v) => !v);
               setShowSleep(false);
             }}
-            className="p-1.5 sm:px-2 sm:py-1.5 rounded flex items-center gap-1 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="p-1.5 sm:px-2 sm:py-1.5 rounded flex items-center gap-1 text-xs text-[var(--fanous-color-text-primary)] hover:bg-[var(--fanous-color-surface-raised)]"
           >
             <ListMusic className="w-4 h-4" />
             {queue.length > 0 && <span>{localizeDigits(lang, queue.length)}</span>}
@@ -332,7 +332,7 @@ export function ListenMiniBar() {
             aria-label={labels.closeMiniPlayer}
             data-testid="listen-close-button"
             onClick={stopListening}
-            className="p-1.5 rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="p-1.5 rounded text-[var(--fanous-color-text-secondary)] hover:bg-[var(--fanous-color-surface-raised)]"
           >
             <X className="w-4 h-4" />
           </button>
