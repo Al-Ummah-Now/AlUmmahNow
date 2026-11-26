@@ -57,7 +57,7 @@ describe('web token revocation (#437, #762)', () => {
     const token = makeJwt({ properties: { id: 'usr_1' }, sid: 'sid_abc', auth_time: nowS - 30, iat: nowS - 30, exp: nowS + 870 });
     const { kv, writes } = fakeKv();
 
-    // Warm the isolate negative cache first (simulates a page load right before sign-out)
+    // Read the token before sign-out to simulate a signed-in page load.
     expect(await isWebTokenRevoked(token, 'usr_1', { kv, now })).toBe(false);
 
     // Sign out revokes the verified access token
@@ -75,8 +75,7 @@ describe('web token revocation (#437, #762)', () => {
 
     expect(writes).toHaveLength(1);
     expect(writes[0].key).toBe('s:sid_abc');
-    expect(writes[0].expirationTtl).toBeGreaterThanOrEqual(60);
-    expect(writes[0].expirationTtl).toBeLessThanOrEqual(1800);
+    expect(writes[0].expirationTtl).toBe(400 * 24 * 60 * 60);
 
     // Immediately rejected in the same isolate (no waiting for CACHE_MS)
     expect(await isWebTokenRevoked(token, 'usr_1', { kv, now: now + 100 })).toBe(true);
@@ -117,11 +116,27 @@ describe('web token revocation (#437, #762)', () => {
     expect(await isWebTokenRevoked(forged, 'usr_victim', { kv, now })).toBe(false);
   });
 
-  it('does not overwrite an existing revocation entry with a later before timestamp', async () => {
+  it('keeps a shared session revoked when a second app signs out with an older token', async () => {
     const now = 1_800_000_000_000;
-    const nowS = Math.floor(now / 1000);
+    const nowS = now / 1000;
+    const claims = { properties: { id: 'usr_1' }, sid: 'sid_shared', auth_time: nowS - 870 };
+    const fresh = makeJwt({ ...claims, iat: nowS - 30, exp: nowS + 870 });
+    const old = makeJwt({ ...claims, iat: nowS - 870, exp: nowS + 30 });
+    const { kv, writes, store } = fakeKv();
+
+    expect(await revokeVerifiedAccessToken(kv, fresh, 'single_sign_out', now)).toBe(true);
+    expect(await revokeVerifiedAccessToken(kv, old, 'single_sign_out', now + 1000)).toBe(true);
+    const saved = store.get('s:sid_shared');
+    expect(saved?.value).toMatchObject({ before: nowS + 1 });
+    expect(saved?.expirationTtl).toBe(writes[0].expirationTtl);
+    expect(saved?.expirationTtl).toBe(400 * 24 * 60 * 60);
+  });
+
+  it('preserves an Auth cutoff that already covers the sign-in even if it predates this logout', async () => {
+    const now = 1_800_000_000_000;
+    const nowS = now / 1000;
     const token = makeJwt({ properties: { id: 'usr_1' }, sid: 'sid_keep', auth_time: nowS - 100, exp: nowS + 800 });
-    const { kv, writes } = fakeKv({ 's:sid_keep': { v: 1, before: nowS + 50, reason: 'admin_session_terminated' } });
+    const { kv, writes } = fakeKv({ 's:sid_keep': { v: 1, before: nowS - 1, reason: 'admin_session_terminated' } });
 
     expect(await revokeVerifiedAccessToken(kv, token, 'single_sign_out', now)).toBe(true);
     expect(writes).toHaveLength(0);

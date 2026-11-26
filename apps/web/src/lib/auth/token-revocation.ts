@@ -36,6 +36,8 @@ export interface TokenTimes {
 export const CACHE_MS = 10_000;
 export const KV_CACHE_TTL_S = 30;
 const MAX_CACHED = 5_000;
+// Match Auth's scoped s: revocation policy, which outlives refresh tokens.
+const SESSION_REVOCATION_TTL_S = 400 * 24 * 60 * 60;
 const SINGLE_SIGN_OUT_MAX_TTL_S = 30 * 60;
 const MIN_KV_TTL_S = 60;
 
@@ -130,7 +132,11 @@ export async function revokeVerifiedAccessToken(
   if (claims.exp !== undefined && claims.exp <= nowS) return false;
 
   const remainingS = claims.exp !== undefined ? claims.exp - nowS : 15 * 60;
-  const expirationTtl = Math.max(MIN_KV_TTL_S, Math.min(SINGLE_SIGN_OUT_MAX_TTL_S, remainingS + 60));
+  // A sibling app may hold a fresher token with this sid. Use the full
+  // session TTL even if this token is about to expire or an Auth write is unseen.
+  const expirationTtl = claims.sid
+    ? SESSION_REVOCATION_TTL_S
+    : Math.max(MIN_KV_TTL_S, Math.min(SINGLE_SIGN_OUT_MAX_TTL_S, remainingS + 60));
   const signedInAt = claims.auth_time ?? claims.iat ?? nowS;
   const before = claims.sid ? Math.max(signedInAt + 1, nowS) : Math.max(signedInAt + 1, nowS + 1);
   const key = claims.sid ? `s:${claims.sid}` : await tokenHashKey(rawToken);
@@ -138,8 +144,11 @@ export async function revokeVerifiedAccessToken(
 
   try {
     const existing = await kv.get<RevocationEntry>(key, { type: 'json' });
-    if (existing?.before !== undefined && existing.before >= before) {
-      // Keep the existing entry (e.g. a 400-day Auth entry) without shortening its TTL
+    if (existing?.before !== undefined && (
+      existing.before >= before
+      || (claims.sid && existing.reason !== 'single_sign_out' && signedInAt < existing.before)
+    )) {
+      // Preserve a stronger cutoff or an Auth revocation that already covers this token.
       recordLocalRevocation(key, existing, now);
       return true;
     }

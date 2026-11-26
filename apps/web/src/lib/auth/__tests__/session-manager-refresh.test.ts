@@ -35,6 +35,9 @@ jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.
 const revokeTokensOnSignOut = jest.fn(async () => undefined);
 jest.mock('../revoke-on-sign-out', () => ({ revokeTokensOnSignOut: (...args: unknown[]) => revokeTokensOnSignOut(...(args as [])) }));
 
+jest.mock('../token-revocation', () => ({ isWebTokenRevoked: jest.fn() }));
+
+import { isWebTokenRevoked } from '../token-revocation';
 import { SessionManager, type SessionData, type UserSession } from '../session-manager';
 import { LEGACY_TOKEN_ISSUED_BEFORE_MS, __resetTokenRefreshStateForTests, latestRotation } from '../token-refresh';
 import { DAY, MINUTE, fakeIssuer, jwt } from './token-fixtures';
@@ -67,6 +70,7 @@ beforeEach(() => {
   jar.clear();
   readOnly = false;
   apiRequestServer.mockReset();
+  jest.mocked(isWebTokenRevoked).mockReset().mockResolvedValue(false);
   revokeTokensOnSignOut.mockClear();
   __resetTokenRefreshStateForTests();
   process.env.Issuer = 'https://auth.example';
@@ -112,6 +116,32 @@ describe('existing cookies on deploy (no expiresAt)', () => {
     expect(session?.accessToken).toBe(fresh);
     expect(stored().accounts.u1).toMatchObject({ accessToken: fresh, refreshToken: 'r2' });
     expect(stored().accounts.u1.expiresAt).toBeGreaterThan(Date.now());
+  });
+});
+
+describe('session revocation checks during refresh', () => {
+  it.each([
+    ['active session', async () => (await SessionManager.ensureFreshActiveSession())?.accessToken],
+    ['access token', () => SessionManager.getValidAccessToken('u1')],
+  ])('checks the unchanged token once when returning the %s', async (_label, read) => {
+    const token = jwt('u1', Date.now(), 15 * MINUTE);
+    writeAccount({ accessToken: token, refreshToken: 'r1' });
+
+    expect(await read()).toBe(token);
+    expect(isWebTokenRevoked).toHaveBeenCalledTimes(1);
+    expect(isWebTokenRevoked).toHaveBeenCalledWith(token, 'u1');
+  });
+
+  it('checks a rotated token before returning it and rejects it if revoked', async () => {
+    const stale = jwt('u1', Date.now() - 14 * MINUTE, 15 * MINUTE);
+    const rotated = jwt('u1', Date.now(), 15 * MINUTE);
+    useIssuer({ r1: { access: rotated, refresh: 'r2' } });
+    writeAccount({ accessToken: stale, refreshToken: 'r1' });
+    jest.mocked(isWebTokenRevoked).mockImplementation(async (token) => token === rotated);
+
+    expect(await SessionManager.getValidAccessToken('u1')).toBeNull();
+    expect(jest.mocked(isWebTokenRevoked).mock.calls).toEqual([[stale, 'u1'], [rotated, 'u1']]);
+    expect(stored().accounts.u1.needsSignIn).toBe(true);
   });
 });
 

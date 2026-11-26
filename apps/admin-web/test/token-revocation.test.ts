@@ -82,6 +82,29 @@ describe('admin-web token revocation (#437, #762)', () => {
     assert.equal(await isAdminTokenRevoked(token, 'usr_a', { kv, now: NOW_MS + 100 }), true);
   });
 
+  it('uses the full session TTL even if the first logout hop has an older token', async () => {
+    const claims = { properties: { id: 'usr_a' }, sid: 'sid_shared', auth_time: NOW - 870 };
+    const old = makeJwt({ ...claims, iat: NOW - 870, exp: NOW + 30 });
+    const fresh = makeJwt({ ...claims, iat: NOW - 30, exp: NOW + 870 });
+    const { kv, writes } = fakeKv();
+
+    assert.equal(await revokeVerifiedAccessToken(kv, old, 'single_sign_out', NOW_MS), true);
+    assert.equal(await revokeVerifiedAccessToken(kv, fresh, 'single_sign_out', NOW_MS), true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].expirationTtl, 400 * 24 * 60 * 60);
+    assert.equal(await isAdminTokenRevoked(fresh, 'usr_a', { kv, now: NOW_MS + 120_000 }), true);
+  });
+
+  it('keeps the existing Auth revocation for a session it already covers', async () => {
+    const token = makeJwt({ properties: { id: 'usr_a' }, sid: 'sid_keep', auth_time: NOW - 60, exp: NOW + 840 });
+    const existing = { v: 1, before: NOW - 1, reason: 'admin_session_terminated' };
+    const { kv, writes, store } = fakeKv({ 's:sid_keep': existing });
+
+    assert.equal(await revokeVerifiedAccessToken(kv, token, 'single_sign_out', NOW_MS), true);
+    assert.equal(writes.length, 0);
+    assert.deepEqual(store.get('s:sid_keep')?.value, existing);
+  });
+
   it('refuses to write to KV when the access token does not verify (forged cookie)', async () => {
     const forged = makeJwt({ properties: { id: 'usr_victim' }, sid: 'sid_victim', auth_time: NOW - 10, exp: NOW + 890 });
     const { kv, writes } = fakeKv();

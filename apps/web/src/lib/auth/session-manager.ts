@@ -611,6 +611,12 @@ export class SessionManager {
    * Get the active session context
    */
   static async getActiveSession(): Promise<SessionContext | null> {
+    return this.resolveActiveSession();
+  }
+
+  private static async resolveActiveSession(
+    checkedAccount?: Pick<UserSession, 'userId' | 'accessToken'>,
+  ): Promise<SessionContext | null> {
     const sessionData = await this.getSessionData();
     if (!sessionData) return null;
 
@@ -627,7 +633,9 @@ export class SessionManager {
     }
 
     // Revoked sign-in (single sign-out, sign-out-all, account deletion, password reset, suspend: #437, #762)
-    if (await isWebTokenRevoked(activeAccount.accessToken, activeAccount.userId)) {
+    const alreadyChecked = checkedAccount && checkedAccount.userId === activeAccount.userId
+      && checkedAccount.accessToken === activeAccount.accessToken;
+    if (!alreadyChecked && await isWebTokenRevoked(activeAccount.accessToken, activeAccount.userId)) {
       logger.debug('[SessionManager.getActiveSession] Active account token revoked', {
         userId: activeAccount.userId,
       });
@@ -893,7 +901,8 @@ export class SessionManager {
     const account = sessionData ? ownAccount(sessionData.accounts, userId) : null;
     if (!sessionData || !account) return { result: 'missing', account: null };
     if (account.needsSignIn) return { result: 'needs-sign-in', account };
-    if (await isWebTokenRevoked(account.accessToken, account.userId)) {
+    const checkedToken = account.accessToken;
+    if (await isWebTokenRevoked(checkedToken, account.userId)) {
       account.needsSignIn = true;
       await this.persistIfWritable(sessionData);
       return { result: 'needs-sign-in', account };
@@ -924,7 +933,15 @@ export class SessionManager {
       logger.warn('[SessionManager.refreshAccount] Token refresh failed temporarily; keeping current token', { userId });
     }
 
-    return { result, account: ownAccount(sessionData.accounts, userId) };
+    // A refresh or concurrent rotation can replace the token checked above.
+    if (!account.needsSignIn && account.accessToken !== checkedToken
+      && await isWebTokenRevoked(account.accessToken, account.userId)) {
+      account.needsSignIn = true;
+      await this.persistIfWritable(sessionData);
+      return { result: 'needs-sign-in', account };
+    }
+
+    return { result, account };
   }
 
   /**
@@ -934,11 +951,10 @@ export class SessionManager {
    */
   static async ensureFreshActiveSession(): Promise<SessionContext | null> {
     const sessionData = await this.getSessionData();
-    if (sessionData?.accounts[sessionData.activeUserId]) {
-      const { result } = await this.refreshAccount(sessionData.activeUserId);
-      if (result === 'needs-sign-in') return null;
-    }
-    return this.getActiveSession();
+    if (!sessionData?.accounts[sessionData.activeUserId]) return this.resolveActiveSession();
+    const { result, account } = await this.refreshAccount(sessionData.activeUserId);
+    if (result === 'needs-sign-in') return null;
+    return this.resolveActiveSession(account ?? undefined);
   }
 
   /**
@@ -981,9 +997,8 @@ export class SessionManager {
    */
   static async getValidAccessToken(userId: string): Promise<string | null> {
     try {
-      const { account } = await this.refreshAccount(userId);
-      if (!account || account.needsSignIn) return null;
-      if (await isWebTokenRevoked(account.accessToken, account.userId)) return null;
+      const { result, account } = await this.refreshAccount(userId);
+      if (result === 'needs-sign-in' || !account || account.needsSignIn) return null;
       return account.accessToken;
     } catch (error) {
       logger.error('[SessionManager.getValidAccessToken] Failed', { userId, error });

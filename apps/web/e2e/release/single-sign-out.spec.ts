@@ -144,10 +144,15 @@ test.describe('Release: single sign-out', () => {
     }).toPass({ timeout: 30000 });
     expect(await webSignedIn(page)).toBe(false);
 
-    // A copied al_ummah_session cookie stops working immediately on web (#762)
-    await page.context().addCookies(copiedCookies);
-    expect(await webSignedIn(page)).toBe(false);
-    await page.context().clearCookies({ name: /^al_ummah_session/ });
+    // The pre-logout request can leave a cached KV miss at the edge.
+    try {
+      await expect.poll(async () => {
+        await page.context().addCookies(copiedCookies);
+        return webSignedIn(page);
+      }, { timeout: 75_000, intervals: [500, 1000, 2000] }).toBe(false);
+    } finally {
+      await page.context().clearCookies({ name: /^al_ummah_session/ });
+    }
 
     // The API can have a cached miss from the pre-logout request.
     await expect.poll(profileStatus, { timeout: 75_000, intervals: [500, 1000, 2000] }).toBe(401);
