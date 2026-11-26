@@ -120,17 +120,19 @@ for (const lang of ['en', 'ar'] as const) {
     expect(Math.abs(after.currentTime - before.currentTime)).toBeLessThan(0.5);
   });
 
-  test(`${lang}: reachable by keyboard, and listed in the captions menu while the track has Quran text`, async ({ page }) => {
+  test(`${lang}: reachable by keyboard, and listed in the captions menu while the track has Quran text`, async ({ page, browserName }) => {
     const player = await openHarness(page, { lang, captions: { en: EN, ar: AR } });
     await startPlayback(page, player);
     await pauseAt(page, player, 5);
     await showTrack(page, player, '1');
     await pauseAt(page, player, 20);
+    // On macOS, WebKit uses Option+Tab for links when full keyboard navigation is disabled.
+    const tab = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
     // Tab from the video element reaches the credit before leaving the player
     await page.locator('.video-js video').focus();
     let reached = false;
     for (let i = 0; i < 25 && !reached; i++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press(tab);
       reached = await credit(page).evaluate((el) => el === document.activeElement).catch(() => false);
     }
     expect(reached).toBe(true);
