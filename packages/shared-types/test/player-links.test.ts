@@ -17,9 +17,11 @@ test('the super-admin player credits switch defaults on and controls Quran text'
 
 test('the system credit registry contains the bilingual Quran Foundation credit', () => {
   const credits: readonly SystemCredit[] = SYSTEM_CREDITS;
-  assert.deepEqual(credits.map(({ id, href, name }) => ({ id, href, name })), [{
+  assert.deepEqual(credits.map(({ id, url, name, when, required }) => ({ id, url, name, when, required })), [{
     id: 'quranFoundation',
-    href: 'https://quran.foundation/',
+    url: 'https://quran.foundation/',
+    when: { cueCredit: 'quran' },
+    required: true,
     name: { en: 'Quran Foundation', ar: 'مؤسسة القرآن' },
   }]);
 });

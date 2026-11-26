@@ -49,8 +49,8 @@ export function quranPlayerCredit(language: string) {
   const lang = language.split('-')[0]?.toLowerCase() === 'ar' ? 'ar' : 'en';
   return {
     label: QURAN_FOUNDATION_CREDIT.label[lang],
-    ariaLabel: QURAN_FOUNDATION_CREDIT.ariaLabel[lang],
-    href: QURAN_FOUNDATION_CREDIT.href,
+    ariaLabel: QURAN_FOUNDATION_CREDIT.linkLabel[lang],
+    href: QURAN_FOUNDATION_CREDIT.url,
     lang,
   };
 }
