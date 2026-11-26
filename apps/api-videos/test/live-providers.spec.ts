@@ -16,6 +16,7 @@ import {
 	type LiveProviderUsage,
 	type LiveRoutingSettings,
 } from '@al-ummah/shared-types';
+import { MemoryBucket } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import {
 	estimateCost,
@@ -34,7 +35,8 @@ import {
 import { parseMediaPlaylist } from '../src/lib/live/edge';
 import { vodMaster, vodMediaPlaylist } from '../src/lib/live/finalize';
 import { compareProviders, parseBeacon, QoeRejected, recordBeacon } from '../src/lib/live/qoe';
-import { selfHostedKey, verifySelfHostedKey, selfHostedFfmpeg } from '../src/lib/live/providers';
+import { provisionSession } from '../src/lib/live/service';
+import { LIVE_ADAPTERS, selfHostedKey, verifySelfHostedKey, selfHostedFfmpeg } from '../src/lib/live/providers';
 
 const usage = (over: Partial<Record<LiveProviderId, Partial<LiveProviderUsage>>> = {}): Record<LiveProviderId, LiveProviderUsage> => ({
 	bunny: { active: 0, monthSpendUsd: 0, available: true, ...over.bunny },
@@ -159,6 +161,17 @@ describe('settings, counter and overrides (D1)', () => {
 		await (db as unknown as SqliteD1).db.prepare("UPDATE live_settings SET value = '{\"mode\":\"only_bunny\"}'").run();
 		assert.equal((await readLiveRouting(db, 10_000)).mode, 'weighted');
 		assert.equal((await readLiveRouting(db, 20_000)).mode, 'only_bunny');
+	});
+
+	it('files a new Bunny recording under the current channel owner', async (t) => {
+		const channels = new MemoryBucket({ ch1: { id: 'ch1', userId: 'current-owner' } });
+		await writeLiveRouting(db, { mode: 'only_bunny' }, 'usr_admin');
+		t.mock.method(LIVE_ADAPTERS.bunny, 'available', async () => true);
+		t.mock.method(LIVE_ADAPTERS.selfhosted, 'available', async () => false);
+		const provision = t.mock.method(LIVE_ADAPTERS.bunny, 'provision', async () => ({ providerRef: 'b1', playbackUrl: 'https://live.test/b1' }));
+		await provisionSession({ SEARCH_DB: db, channels: channels as never }, { id: 's1', title: 'Live', userId: 'previous-owner', channelId: 'ch1' });
+		assert.equal(provision.mock.callCount(), 1);
+		assert.equal(provision.mock.calls[0].arguments[1].ownerId, 'current-owner');
 	});
 
 	it('the round-robin counter hands out consecutive numbers', async () => {

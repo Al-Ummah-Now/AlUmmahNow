@@ -1,4 +1,4 @@
-import { isShort } from "@al-ummah/shared-types";
+import { can, channelRoleOf, isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
@@ -19,7 +19,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Shorts",
-		description: "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts when authenticated as the channel owner.",
+		description: "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts for channel roles with permission to view them.",
 		request: {
 			params: z.object({
 				id: Str({
@@ -108,8 +108,9 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				}, 404);
 			}
 
+			const role = channelRoleOf(channel, userId);
 			// Same visibility rules as the Videos tab (deleted, hidden and private channels are not listed)
-			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
+			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && !can(role, 'channel.view_private'))) {
 				logger.debug('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
 				return c.json({
 					success: false,
@@ -120,7 +121,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
-			const isOwner = Boolean(userId && channel.userId === userId);
+			const canViewPrivate = can(role, 'video.view_private');
 
 			const isListed = (video: VideoType | null): video is VideoType => {
 				if (!video) return false;
@@ -129,8 +130,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				// Shared rule: ≤ 3 min and vertical/square, or the uploader's choice; never live
 				if (!isShort(video)) return false;
 				if (video.isLive) return false;
-				// Not ready, private or scheduled: only the channel owner (lib/visibility.ts)
-				return isVideoPubliclyVisible(video) || isOwner;
+				return canViewPrivate || isVideoPubliclyVisible(video);
 			};
 
 			const byDate = (a: VideoType, b: VideoType) =>
@@ -158,7 +158,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				limit,
 				query: {
 					sort: (sort || "latest") as "latest" | "popular" | "oldest",
-					privateFor: isOwner,
+					privateFor: canViewPrivate,
 					shortsOnly: true,
 				},
 				load: id => repository.getObject(id),

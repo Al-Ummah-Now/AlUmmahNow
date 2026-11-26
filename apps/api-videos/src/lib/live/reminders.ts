@@ -4,6 +4,7 @@
  * hours and the one-per-person dedupe are its. The start itself is announced with the channel's bell.
  */
 import { LIVE_METADATA_TABLE, featureGate } from '@al-ummah/shared-types';
+import { ownerOfRecord } from '../channelAccess';
 import { logger } from '../logger';
 import { channelNameParamsOf } from '../notification-events';
 import { enqueueFanout } from '../notifications';
@@ -86,7 +87,10 @@ export async function runHeadsUps(env: HeadsUpEnv, now = Date.now()): Promise<{ 
 			// The count as it really is, while we are here
 			const people = Number((await ndb.prepare('SELECT COUNT(*) AS n FROM live_reminders WHERE stream_id = ?').bind(id).first<{ n: number }>())?.n) || 0;
 			await db.prepare(`UPDATE ${LIVE_METADATA_TABLE} SET reminder_count = ? WHERE stream_id = ? AND reminder_count != ?`).bind(people, id, people).run();
-			const params = { ...(await channelNameParamsOf(env as never, stream.channelId)), streamTitle: stream.title || '' };
+			const [names, ownerId] = await Promise.all([
+				channelNameParamsOf(env as never, stream.channelId),
+				ownerOfRecord(env, stream).catch(() => null),
+			]);
 			// Claimed only now that everything is read: what can still fail is the queue, and that gives the claim back
 			const claimed = await db.prepare(`UPDATE ${LIVE_METADATA_TABLE} SET heads_up_for = ?1 WHERE stream_id = ?2 AND status = 'scheduled' AND scheduled_start_at = ?1 AND heads_up_for IS NOT ?1`).bind(startsAt, id).run();
 			if (changes(claimed) === 0 || people === 0) continue;
@@ -97,9 +101,9 @@ export async function runHeadsUps(env: HeadsUpEnv, now = Date.now()): Promise<{ 
 				entityId: id,
 				startsAt,
 				isHighlight: true,
-				params,
+				params: { ...names, streamTitle: stream.title || '' },
 				actionUrl: `/live/${id}`,
-				actorUserId: stream.userId,
+				actorUserId: ownerId ?? undefined,
 			});
 			if (queued) out.sent++;
 			else {

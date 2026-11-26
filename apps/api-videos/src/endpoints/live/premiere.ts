@@ -42,7 +42,8 @@ async function scheduleable(c: AppContext, videoId: string, userId: string): Pro
 	let video = await repo.getObject(videoId);
 	if (!video || !(await canOnVideo(c.env as never, video, userId, 'video.schedule')) || !(await canManageLiveStream(c.env as never, { userId: video.userId, channelId: video.channelId }, userId))) return apiError(c, 404, 'video_not_found');
 	if (video.premiereHold && !(await heldForPremiere(envOf(c), { ...video, id: videoId }))) video = (await repo.getObject(videoId)) ?? video;
-	const tier = await channelOwnerTier((c.env as { SEARCH_DB: D1Database }).SEARCH_DB, (await ownerOfRecord(c.env as never, video)) ?? video.userId);
+	const ownerId = await ownerOfRecord(c.env as never, video);
+	const tier = ownerId ? await channelOwnerTier((c.env as { SEARCH_DB: D1Database }).SEARCH_DB, ownerId) : null;
 	if (!tierAllowsLiveCapability(tier, 'livePremieres')) return featureOff(c, 'livePremieres');
 	if (await liveStreamIsFrozen(c.env, { userId: video.userId, channelId: video.channelId })) return apiError(c, 403, CHANNEL_SUSPENDED_CODE);
 	return { ...video, id: videoId };
@@ -71,8 +72,11 @@ export class VideoPremiereCreate extends AuthenticatedRoute {
 		if (termsRefused) return termsRefused;
 		const problem = premiereProblem(video);
 		if (problem) return refuse(c, problem);
-		const tagRefused = await eventTagRefused(c, await ownerOfRecord(c.env as never, video), body.eventType);
-		if (tagRefused) return tagRefused;
+		if (body.eventType) {
+			const ownerId = await ownerOfRecord(c.env as never, video);
+			const tagRefused = await eventTagRefused(c, ownerId, body.eventType);
+			if (tagRefused) return tagRefused;
+		}
 		const { scheduledStartTime, ...fields } = body;
 		const made = await createPremiere(envOf(c), { video, scheduledStartTime, actorId: userId, fields: Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) }, now);
 		if ('problem' in made) return refuse(c, made.problem);

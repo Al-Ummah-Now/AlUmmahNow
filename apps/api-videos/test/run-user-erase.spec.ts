@@ -87,6 +87,42 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.deepEqual([...env.ADMIN_BACKUPS.store.keys()].sort(), [backupPointerKey('other', 'job1', 'v1'), backupKey('job1', 'other', 'v1')].sort());
 	});
 
+	it('preserves a transferred channel and its content when the ownership index and video still name the run account', async () => {
+		const db = new SqliteD1();
+		const { env, scans } = buckets();
+		const subtitles = new MemoryBucket({ 'v1/en.vtt': 'private captions', 'v2/en.vtt': 'private captions', 'v4/en.vtt': 'run captions' });
+		const full = { ...env, subtitles, SEARCH_DB: db };
+		await env.videos.put('v4', JSON.stringify(videoFixture({ id: 'v4', userId: 'run1', channelId: '' })));
+		await env.playlists.put('p1', JSON.stringify({ id: 'p1', channelId: 'ch1', userId: 'run1' }));
+		db.db.prepare("INSERT INTO search_playlists (id, channel_id, payload) VALUES ('p1', 'ch1', '{}')").run();
+		db.db.prepare("INSERT INTO privacy_footprints (user_id, kind, target_id) VALUES ('run1', 'playlist', 'p1')").run();
+		for (const kind of ['channel', 'video'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		await env.channels.put('ch1', JSON.stringify(channel('ch1', 'other', { handle: 'RunOne' })));
+		// v1 is found through owner_id and v2 only through the stale channel candidate.
+		db.db.prepare("UPDATE content_ownership SET owner_id = 'other' WHERE kind = 'video' AND id = 'v2'").run();
+		scans.length = 0;
+
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900), {
+			onVideoDeleted: async (id) => assert.equal(id, 'v4'),
+			onChannelDeleted: async () => assert.fail('the transferred channel must survive'),
+			onPostDeleted: async () => assert.fail('the transferred post must survive'),
+		});
+
+		assert.equal(result.complete, true);
+		assert.deepEqual(result.deletedVideoIds, ['v4']);
+		assert.deepEqual(scans, []);
+		assert.deepEqual([...env.videos.store.keys()], ['v1', 'v2', 'v3']);
+		assert.deepEqual([...subtitles.store.keys()], ['v1/en.vtt', 'v2/en.vtt']);
+		assert.ok(env.channels.store.has('ch1'));
+		assert.ok(env.playlists.store.has('p1'));
+		assert.ok(env.channel_sections.store.has('ch1/s1'));
+		assert.ok(env.channel_tabs.store.has('channel-tabs/ch1'));
+		assert.ok(env.channel_tabs.store.has('channel-handles/runone'));
+		assert.ok(env.community_posts.store.has('posts/ch1/p1.json'));
+		assert.ok(env.community_posts.store.has('post-locations/p1'));
+		assert.equal(env.profiles.store.has('run1'), false);
+	});
+
 	it('erases its playlists without a channel (Watch later, personal) and its footprints, not someone else\'s', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();

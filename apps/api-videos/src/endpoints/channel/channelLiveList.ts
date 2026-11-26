@@ -1,4 +1,5 @@
-import { isShort } from "@al-ummah/shared-types";
+import { can, channelRoleOf, isShort } from "@al-ummah/shared-types";
+import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields } from '../../lib/transformations';
 import { string, z } from "zod";
@@ -18,7 +19,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Live Streams",
-		description: "🔓 **Authentication Optional**: Get all live streams from a specific channel. Returns additional private streams when authenticated as the channel owner.",
+		description: "🔓 **Authentication Optional**: Get all live streams from a specific channel. Returns additional private streams for channel roles with permission to view them.",
 		request: {
 			params: z.object({
 				id: Str({
@@ -107,8 +108,9 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				}, 404);
 			}
 
+			const role = channelRoleOf(channel, userId);
 			// Same channel visibility rules as the Videos and Shorts tabs
-			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
+			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && !can(role, 'channel.view_private'))) {
 				logger.debug('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
 				return c.json({
 					success: false,
@@ -119,7 +121,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
-			const isOwner = Boolean(userId && channel.userId === userId);
+			const canViewPrivate = can(role, 'video.view_private');
 
 			// `active` is accepted for compatibility: there is no live status field,
 			// so every isLive video counts as active.
@@ -128,8 +130,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				if (video.channelId !== channelId) return false;
 				if (video.isDeleted || video.isHidden) return false;
 				if (!video.isLive) return false;
-				if (video.isPublic === false) return isOwner;
-				return true;
+				return canViewPrivate || isVideoPubliclyVisible(video);
 			};
 
 			let limitedStreams: VideoType[];
@@ -141,7 +142,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				channelId,
 				cursor,
 				limit,
-				query: { sort: "latest", privateFor: isOwner, liveOnly: true },
+				query: { sort: "latest", privateFor: canViewPrivate, liveOnly: true },
 				load: id => repository.getObject(id),
 				isListed,
 				waitUntil: waitUntilOf(c as never),

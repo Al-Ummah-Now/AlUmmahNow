@@ -1,4 +1,4 @@
-import { isShort } from "@al-ummah/shared-types";
+import { can, channelRoleOf, isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
@@ -19,7 +19,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Videos",
-		description: "🔓 **Authentication Optional**: Get all videos from a specific channel. Returns additional private videos when authenticated as the channel owner.",
+		description: "🔓 **Authentication Optional**: Get all videos from a specific channel. Returns additional private videos for channel roles with permission to view them.",
 		request: {
 			params: z.object({
 				id: Str({
@@ -126,8 +126,8 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				}, 404);
 			}
 
-			// Check if channel is private - only owner can access
-			if (channel.isPrivate && channel.userId !== userId) {
+			const role = channelRoleOf(channel, userId);
+			if (channel.isPrivate && !can(role, 'channel.view_private')) {
 				logger.debug('Private channel access denied', { channelId, userId });
 				return c.json({
 					success: false,
@@ -139,7 +139,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 			const bucket = c.env.videos;
 			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
-			const isOwner = Boolean(userId && channel.userId === userId);
+			const canViewPrivate = can(role, 'video.view_private');
 
 			const isListed = (video: VideoType | null): video is VideoType => {
 				if (!video) return false;
@@ -158,12 +158,6 @@ export class ChannelVideosList extends OptionalAuthRoute {
 					return false;
 				}
 
-				// Not ready (uploading, processing, failed), private or scheduled: only the
-				// channel owner sees it, with its status (lib/visibility.ts, one rule for every list)
-				if (!isVideoPubliclyVisible(video)) {
-					return isOwner;
-				}
-
 				// Exclude Shorts (shared rule: ≤ 3 min and vertical/square, or the uploader's choice) and live streams
 				if (isShort(video)) {
 					return false;
@@ -172,8 +166,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 					return false;
 				}
 
-				// If video is public (true) or undefined/null (default to public), show it
-				return true;
+				return canViewPrivate || isVideoPubliclyVisible(video);
 			};
 
 			let limitedVideos: VideoType[];
@@ -189,7 +182,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				limit,
 				query: {
 					sort: (sort || "latest") as "latest" | "popular" | "oldest",
-					privateFor: isOwner,
+					privateFor: canViewPrivate,
 					longFormOnly: true,
 				},
 				load: id => repository.getObject(id),
