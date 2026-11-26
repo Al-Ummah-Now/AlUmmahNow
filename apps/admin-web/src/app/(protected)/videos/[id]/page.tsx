@@ -19,23 +19,26 @@ import { VideoPlayer } from './VideoPlayer';
 import { ProcessingCard } from './ProcessingCard';
 import { VideoProvidersPanel } from './VideoProvidersPanel';
 import { LIST_RETURN_PARAM, videosBackHref } from '../list-spec';
-import { numberFormat } from '@al-ummah/shared-types';
+import { formatBytes, intlLocale, localizeDigits } from '@al-ummah/shared-types';
+import type { Locale } from '@/i18n/config';
+import { categoryLabel } from '@/lib/category-label';
 
 import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const HOLD_LABEL: Record<string, MessageKey> = { channel: 'videos.holdChannel', user: 'videos.holdUser', admin: 'videos.holdUnpublished' };
 
-function bytes(n: number | null, locale: string): string | null {
-  if (!n) return null;
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
+function bytes(n: number | null, locale: Locale): string | null {
+  return n ? formatBytes(locale, n) : null;
+}
+
+/** A language code as the reader's language names it ("ar" → «العربية», "Arabic"); an unknown one stays a code. */
+function languageName(code: string, locale: Locale): string {
+  try {
+    return new Intl.DisplayNames([intlLocale(locale)], { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
   }
-  return `${numberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${units[i]}`;
 }
 
 /**
@@ -189,10 +192,10 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
               </div>
               <div><dt className="text-fg-muted">{t('content.created')}</dt><dd className="text-fg">{v.createdAt ? <LocalTime value={v.createdAt} withTime /> : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{v.updatedAt ? <LocalTime value={v.updatedAt} withTime /> : t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('videos.dimensions')}</dt><dd className="text-fg" dir="ltr">{v.width && v.height ? `${v.width}×${v.height}` : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('videos.dimensions')}</dt><dd className="text-fg">{v.width && v.height ? <bdi dir="ltr">{localizeDigits(locale, `${v.width}×${v.height}`)}</bdi> : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.size')}</dt><dd className="text-fg">{bytes(v.fileSize, locale) ?? t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('videos.category')}</dt><dd className="text-fg">{v.category ?? t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('videos.language')}</dt><dd className="text-fg">{v.language ?? t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('videos.category')}</dt><dd className="text-fg">{(v.category && categoryLabel(v.category, locale)) || v.category || t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('videos.language')}</dt><dd className="text-fg">{v.language ? languageName(v.language, locale) : t('content.none')}</dd></div>
             </dl>
             {v.tags.length > 0 && (
               <div className="mt-4">

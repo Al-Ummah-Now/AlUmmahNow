@@ -10,6 +10,8 @@ const ar: Messages = {
     legend: 'لغة الرسالة',
   },
   common: {
+    resolution: '{n} بكسل',
+    listSep: '، ',
     /** The mark between two values in a line of facts; Arabic uses the Arabic comma (a dot next to Arabic digits reads as zero, O38) */
     sep: '، ',
     /** The overflow menu at the end of a tab row that does not fit (#1669) */
@@ -943,7 +945,7 @@ const ar: Messages = {
     markFailed: 'وضع علامة فشل',
     markFailedReason: 'سبب يظهر لصاحب المرئي (اختياري)',
     previewTitle: 'معاينة المزامنة',
-    previewIntro: 'لم يتغيّر شيء بعد. هذا ما تُبلغ عنه Bunny وما ستفعله المزامنة:',
+    previewIntro: 'لم يتغيّر شيء بعد. هذا ما يُبلغ عنه Bunny وما ستفعله المزامنة:',
     previewApply: 'تطبيق المزامنة',
     previewCancel: 'إلغاء',
     outcomeReady: 'يصبح جاهزًا',
@@ -2311,7 +2313,7 @@ const ar: Messages = {
       post_not_found: 'المنشور غير موجود.',
       not_on_bunny: 'لا يحتفظ Bunny Stream بنسخة من هذا المرئي، فلا يمكنه ترميزه مجددًا. استخدم «إعادة التحويل» لنسخة R2.',
       processor_unavailable: 'معالجة المرئيات غير متاحة الآن.',
-      reprocess_refused: 'رفضت Bunny إعادة معالجة هذا المرئي.',
+      reprocess_refused: 'رفض Bunny إعادة معالجة هذا المرئي.',
       user_not_found: 'مستخدم المرئيات غير موجود.',
       video_not_found: 'المرئي غير موجود.',
       thumbnail_shape: "يجب أن تكون الصورة المصغّرة بأبعاد المرئي. قصّها بأبعاد المرئي أولًا.",
@@ -4197,7 +4199,7 @@ const ar: Messages = {
     title: 'لماذا فشل هذا المرئي',
     reasons: {
       upload_missing: 'لم يصل الملف كاملًا.',
-      stalled: 'لم تنتهِ Bunny منه منذ مدة طويلة.',
+      stalled: 'لم ينتهِ Bunny منه منذ مدة طويلة.',
       bunny_failed: 'تعذّر على Bunny معالجة الملف.',
       unknown: 'فشل، ولا شيء يبيّن السبب.',
     },
