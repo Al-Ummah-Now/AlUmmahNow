@@ -37,7 +37,9 @@ type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;
 
-function unavailable(c: Context) {
+function unavailable(c: Context, operation: 'terms_acceptance' | 'access_lookup' | 'channel_create_gate', error: unknown) {
+	// The shared logger redacts sensitive fields and preserves Error causes.
+	logger.warn('[Creator] Access unavailable', { operation, error });
 	return c.json({ success: false, code: 'creator_access_unavailable', error: 'This is briefly unavailable; try again shortly', retryAfter: 30 }, 503, {
 		'Retry-After': '30',
 	});
@@ -179,8 +181,7 @@ export async function handleAcceptCreatorTerms(c: Context) {
 			},
 		});
 	} catch (error) {
-		logger.error('[Creator] Terms acceptance failed', { userId, error: error instanceof Error ? error.message : String(error) });
-		return unavailable(c);
+		return unavailable(c, 'terms_acceptance', error);
 	}
 }
 
@@ -203,8 +204,7 @@ export async function handleCreatorAccess(c: Context) {
 			: { ...access, ...(mode ? { upgradeMode: mode } : {}) };
 		return c.json({ success: true, result });
 	} catch (error) {
-		logger.error('[Creator] Access lookup failed', { userId, error: error instanceof Error ? error.message : String(error) });
-		return unavailable(c);
+		return unavailable(c, 'access_lookup', error);
 	}
 }
 
@@ -235,8 +235,7 @@ export async function channelCreateGate(c: Context, next: Next) {
 			}
 		}
 	} catch (error) {
-		logger.error('[Creator] Channel create gate failed; refusing', { userId, error: error instanceof Error ? error.message : String(error) });
-		return unavailable(c);
+		return unavailable(c, 'channel_create_gate', error);
 	}
 	if (!reservation) return next();
 
