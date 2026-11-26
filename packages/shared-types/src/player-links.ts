@@ -4,18 +4,22 @@ export type SystemCreditId = 'quranFoundation';
 
 export interface SystemCredit {
   id: SystemCreditId;
-  href: string;
+  url: string;
   name: Readonly<Record<'en' | 'ar', string>>;
   label: Readonly<Record<'en' | 'ar', string>>;
-  ariaLabel: Readonly<Record<'en' | 'ar', string>>;
+  linkLabel: Readonly<Record<'en' | 'ar', string>>;
+  when: { cueCredit: 'quran' };
+  required: true;
 }
 
 const quranFoundation = {
   id: 'quranFoundation',
-  href: QURAN_FOUNDATION_URL,
+  url: QURAN_FOUNDATION_URL,
   name: { en: 'Quran Foundation', ar: 'مؤسسة القرآن' },
   label: QURAN_CREDIT,
-  ariaLabel: QURAN_CREDIT_LINK_LABEL,
+  linkLabel: QURAN_CREDIT_LINK_LABEL,
+  when: { cueCredit: 'quran' },
+  required: true,
 } as const satisfies SystemCredit;
 
 export const SYSTEM_CREDITS = [quranFoundation] as const;

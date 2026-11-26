@@ -137,11 +137,13 @@ export class QuranCreditsGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const env = c.env as never;
-		const [text, editionsConfigured, editionsGate] = await Promise.all([
+		const [freshText, textGate, editionsConfigured, editionsGate] = await Promise.all([
 			quranTextAvailable(env),
+			featureGate(env, 'quranText'),
 			quranEditionsConfigured(env),
 			featureGate(env, 'quranEditions').catch(() => ({ on: true as const })),
 		]);
+		const text = freshText && textGate.on;
 		const editionsOn = editionsConfigured && editionsGate.on;
 		if (!text && !editionsOn) return featureOff(c);
 		let editions: QuranTranslationEdition[] = [];
