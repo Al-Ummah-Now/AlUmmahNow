@@ -75,7 +75,7 @@ jobs:
           done
           echo "::error::a release or rollback was still running after 90 minutes"; exit 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The job token can write refs (the lock): keep it out of .git/config
           persist-credentials: false
@@ -83,7 +83,7 @@ jobs:
       # The artifact scanner and the teardown scripts come from this workflow's own commit: they run
       # with the secrets in their env.
       - name: Check out the artifact scanner (trusted)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .ci-trusted
           sparse-checkout: |
