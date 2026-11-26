@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { naturalCompare, UploadQueueItem, VideoUploadMetadata, formatNumber, fillTemplate } from '@al-ummah/shared-types';
+import { naturalCompare, UploadQueueItem, VideoUploadMetadata, formatNumber, fillTemplate, isolateText } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
@@ -180,6 +180,11 @@ export function useBatchUpload({
   const addFiles = useCallback(async (pickedFiles: File[]) => {
     if (!batchManagerRef.current || !optimizerRef.current) return;
     termsRefusedRef.current = [];
+    const empty = pickedFiles.find((file) => file.size === 0);
+    if (empty) {
+      onError?.(fillTemplate(lang, t.batch.errors.emptyFile, { filename: isolateText(empty.name) }));
+      return;
+    }
     // Natural file name order ("Lesson 2" before "Lesson 10"), not the order the OS handed them over in
     const selectedFiles = [...pickedFiles].sort((a, b) => naturalCompare(a.name, b.name, langRef.current === 'ar' ? 'ar' : 'en'));
 
@@ -376,7 +381,7 @@ export function useBatchUpload({
     } finally {
       setIsInitiating(false);
     }
-  }, [channelId, sharedMetadata, onError, t, failUpload]);
+  }, [channelId, sharedMetadata, onError, t, lang, failUpload]);
   useEffect(() => {
     addFilesRef.current = addFiles;
   }, [addFiles]);

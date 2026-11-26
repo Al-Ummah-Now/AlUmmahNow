@@ -21,7 +21,7 @@ import {
 	type YoutubeImportSettings,
 	type YoutubeImportSettingsView,
 } from '@al-ummah/shared-types';
-import { getSecret } from '../env-helpers';
+import { getCachedSecret, getSecret } from '../env-helpers';
 import { logger } from '../logger';
 import { overlaySwitch } from '../features/switches';
 
@@ -112,8 +112,8 @@ const toB64 = (bytes: Uint8Array) => {
 };
 const fromB64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 
-async function sealMaster(env: YtSettingsEnv): Promise<string | null> {
-	const master = (await getSecret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY')).trim();
+async function sealMaster(env: YtSettingsEnv, readSecret = getSecret): Promise<string | null> {
+	const master = (await readSecret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY')).trim();
 	return master.length >= 16 ? master : null;
 }
 
@@ -168,24 +168,28 @@ export interface YtSecretState {
 }
 
 /** The secret in use: the admin-set one first, then the Secrets Store binding (unless it still holds the placeholder). */
-export async function ytSecretState(env: YtSettingsEnv): Promise<YtSecretState> {
+async function readYtSecretState(env: YtSettingsEnv, readSecret: typeof getSecret): Promise<YtSecretState> {
 	const sealed = await readSealedYtSecret(env);
 	let unreadable = false;
 	if (sealed) {
-		const master = await sealMaster(env);
+		const master = await sealMaster(env, readSecret);
 		const value = master ? ((await openYtSecret(master, sealed)) ?? '').trim() : '';
 		if (value) return { value, source: 'admin', updatedAt: sealed.updatedAt || null, updatedBy: sealed.updatedBy || null, unreadable: false };
 		unreadable = true;
 		logger.warn('[YouTubeImport] The admin-set client secret no longer opens; set it again', { updatedAt: sealed.updatedAt });
 	}
-	const bound = (await getSecret(env.GOOGLE_OAUTH_CLIENT_SECRET, 'GOOGLE_OAUTH_CLIENT_SECRET')).trim();
+	const bound = (await readSecret(env.GOOGLE_OAUTH_CLIENT_SECRET, 'GOOGLE_OAUTH_CLIENT_SECRET')).trim();
 	const value = bound && bound !== UNSET_SECRET ? bound : '';
 	return { value, source: value ? 'binding' : null, updatedAt: sealed?.updatedAt || null, updatedBy: sealed?.updatedBy || null, unreadable };
 }
 
+export function ytSecretState(env: YtSettingsEnv): Promise<YtSecretState> {
+	return readYtSecretState(env, getSecret);
+}
+
 /** The Google client secret, or '' when there is none. */
-export async function googleClientSecret(env: YtSettingsEnv): Promise<string> {
-	return (await ytSecretState(env)).value;
+export async function googleClientSecret(env: YtSettingsEnv, opts: { cacheBindings?: boolean } = {}): Promise<string> {
+	return (await readYtSecretState(env, opts.cacheBindings ? getCachedSecret : getSecret)).value;
 }
 
 /**

@@ -48,6 +48,24 @@ export async function getSecret(
     return '';
 }
 
+const SECRET_TTL_MS = 5 * 60_000;
+const secretCache = new WeakMap<object, { value: string; expiresAt: number }>();
+
+/** Opt in for configuration reads that can tolerate a short secret rotation delay. */
+export async function getCachedSecret(binding: unknown, secretName: string): Promise<string> {
+    if (typeof binding !== 'object' || binding === null) return getSecret(binding, secretName);
+    const now = Date.now();
+    const cached = secretCache.get(binding);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const value = await getSecret(binding, secretName);
+    // An unreadable binding can recover on the next request.
+    if (value) {
+        const expiresAt = now + SECRET_TTL_MS;
+        if ((secretCache.get(binding)?.expiresAt ?? 0) <= expiresAt) secretCache.set(binding, { value, expiresAt });
+    }
+    return value;
+}
+
 /**
  * Extract a secret and throw an error if missing
  *

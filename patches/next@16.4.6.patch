@@ -1,0 +1,102 @@
+diff --git a/dist/client/components/render-tree.js b/dist/client/components/render-tree.js
+--- a/dist/client/components/render-tree.js
++++ b/dist/client/components/render-tree.js
+@@ -1083,6 +1083,15 @@
+     (0, _useactionqueue.dispatchAppRouterAction)(retryAction);
+ }
+ async function fetchMissingDynamicData(tree, head, dynamicRequestTree, url, nextUrl, freshnessPolicy, routeCacheEntry, navigationLock, map, signal) {
++    // WebKit can cancel the refresh fetch before pagehide. Abort it at
++    // beforeunload so Next does not hard-navigate back to the departing URL.
++    const refresh = freshnessPolicy === FreshnessPolicy.RefreshAll ? new AbortController() : null;
++    const abortRefresh = () => refresh?.abort();
++    if (refresh !== null) {
++        window.addEventListener('beforeunload', abortRefresh);
++        window.addEventListener('pagehide', abortRefresh);
++        signal = refresh.signal;
++    }
+     try {
+         const result = await (0, _fetchserverresponse.fetchServerResponse)(url, {
+             flightRouterState: dynamicRequestTree,
+@@ -1090,6 +1099,7 @@
+             isHmrRefresh: freshnessPolicy === 4,
+             signal
+         });
++        signal?.throwIfAborted();
+         if (typeof result === 'string') {
+             // fetchServerResponse will return an href to indicate that the SPA
+             // navigation failed. For example, if the server triggered a hard
+@@ -1158,9 +1168,8 @@
+         };
+     } catch  {
+         if (signal?.aborted) {
+-            // A newer HMR refresh superseded this one and aborted its request. Treat
+-            // it as canceled rather than a failure, so we don't retry or
+-            // hard-navigate.
++            // A document navigation or newer HMR refresh superseded this
++            // request. Do not retry or hard-navigate.
+             return {
+                 exitStatus: -1,
+                 url,
+@@ -1175,6 +1184,11 @@
+             url: url,
+             seed: null
+         };
++    } finally {
++        if (refresh !== null) {
++            window.removeEventListener('beforeunload', abortRefresh);
++            window.removeEventListener('pagehide', abortRefresh);
++        }
+     }
+ }
+ function writeDynamicDataIntoNavigationTask(task, serverRouteTree, dynamicStaleAt, debugInfo, revealAfter) {
+diff --git a/dist/esm/client/components/render-tree.js b/dist/esm/client/components/render-tree.js
+--- a/dist/esm/client/components/render-tree.js
++++ b/dist/esm/client/components/render-tree.js
+@@ -1077,6 +1077,15 @@
+     dispatchAppRouterAction(retryAction);
+ }
+ async function fetchMissingDynamicData(tree, head, dynamicRequestTree, url, nextUrl, freshnessPolicy, routeCacheEntry, navigationLock, map, signal) {
++    // WebKit can cancel the refresh fetch before pagehide. Abort it at
++    // beforeunload so Next does not hard-navigate back to the departing URL.
++    const refresh = freshnessPolicy === FreshnessPolicy.RefreshAll ? new AbortController() : null;
++    const abortRefresh = () => refresh?.abort();
++    if (refresh !== null) {
++        window.addEventListener('beforeunload', abortRefresh);
++        window.addEventListener('pagehide', abortRefresh);
++        signal = refresh.signal;
++    }
+     try {
+         const result = await fetchServerResponse(url, {
+             flightRouterState: dynamicRequestTree,
+@@ -1084,6 +1093,7 @@
+             isHmrRefresh: freshnessPolicy === 4,
+             signal
+         });
++        signal?.throwIfAborted();
+         if (typeof result === 'string') {
+             // fetchServerResponse will return an href to indicate that the SPA
+             // navigation failed. For example, if the server triggered a hard
+@@ -1152,9 +1162,8 @@
+         };
+     } catch  {
+         if (signal?.aborted) {
+-            // A newer HMR refresh superseded this one and aborted its request. Treat
+-            // it as canceled rather than a failure, so we don't retry or
+-            // hard-navigate.
++            // A document navigation or newer HMR refresh superseded this
++            // request. Do not retry or hard-navigate.
+             return {
+                 exitStatus: -1,
+                 url,
+@@ -1169,6 +1178,11 @@
+             url: url,
+             seed: null
+         };
++    } finally {
++        if (refresh !== null) {
++            window.removeEventListener('beforeunload', abortRefresh);
++            window.removeEventListener('pagehide', abortRefresh);
++        }
+     }
+ }
+ function writeDynamicDataIntoNavigationTask(task, serverRouteTree, dynamicStaleAt, debugInfo, revealAfter) {

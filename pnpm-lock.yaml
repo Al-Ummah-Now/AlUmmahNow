@@ -54,6 +54,9 @@ patchedDependencies:
   miniflare@4.20260706.0:
     hash: 4rsnn7e6tml6ujv3dc44iagez4
     path: patches/miniflare@4.20260706.0.patch
+  next@16.4.6:
+    hash: rjcvrymyhc5zmkok6o556mivhe
+    path: patches/next@16.4.6.patch
 
 importers:
 
@@ -134,13 +137,13 @@ importers:
         version: link:../../packages/theme-packages
       '@opennextjs/cloudflare':
         specifier: 1.20.18
-        version: 1.20.18(next@16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@22.19.1))
+        version: 1.20.18(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@22.19.1))
       '@tanstack/react-query':
         specifier: ^5.90.11
         version: 5.90.11(react@19.3.1)
       next:
         specifier: '>=16.4.6'
-        version: 16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -560,13 +563,13 @@ importers:
         version: 2.31.0
       next:
         specifier: '>=16.4.6'
-        version: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       nuqs:
         specifier: ^2.7.2
-        version: 2.7.3(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
+        version: 2.7.3(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -615,7 +618,7 @@ importers:
         version: 3.3.1
       '@opennextjs/cloudflare':
         specifier: 1.20.18
-        version: 1.20.18(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@24.10.0))
+        version: 1.20.18(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@24.10.0))
       '@playwright/test':
         specifier: ^1.56.1
         version: 1.56.1
@@ -7897,7 +7900,7 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
-  '@opennextjs/aws@4.2.0(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
+  '@opennextjs/aws@4.2.0(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -7913,14 +7916,14 @@ snapshots:
       cookie: 1.1.1
       esbuild: 0.25.12
       express: 5.2.1
-      next: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      next: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.9.1
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/aws@4.2.0(next@16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
+  '@opennextjs/aws@4.2.0(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -7936,25 +7939,25 @@ snapshots:
       cookie: 1.1.1
       esbuild: 0.25.12
       express: 5.2.1
-      next: 16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      next: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.9.1
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.18(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@24.10.0))':
+  '@opennextjs/cloudflare@1.20.18(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@24.10.0))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@dotenvx/dotenvx': 2.38.2
-      '@opennextjs/aws': 4.2.0(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
+      '@opennextjs/aws': 4.2.0(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
       ci-info: 4.3.1
       cloudflare: 4.5.0
       comment-json: 4.6.2
       enquirer: 2.4.1
       esbuild: 0.25.12
       glob: 14.0.6
-      next: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      next: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       resolve.exports: 2.0.4
       ts-tqdm: 0.8.6
       wrangler: 4.108.0(@cloudflare/workers-types@4.20251115.0)(@types/node@24.10.0)
@@ -7966,18 +7969,18 @@ snapshots:
       - encoding
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.18(next@16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@22.19.1))':
+  '@opennextjs/cloudflare@1.20.18(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(rclone.js@0.6.6)(wrangler@4.108.0(@types/node@22.19.1))':
     dependencies:
       '@ast-grep/napi': 0.45.3
       '@dotenvx/dotenvx': 2.38.2
-      '@opennextjs/aws': 4.2.0(next@16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
+      '@opennextjs/aws': 4.2.0(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
       ci-info: 4.3.1
       cloudflare: 4.5.0
       comment-json: 4.6.2
       enquirer: 2.4.1
       esbuild: 0.25.12
       glob: 14.0.6
-      next: 16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      next: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       resolve.exports: 2.0.4
       ts-tqdm: 0.8.6
       wrangler: 4.108.0(@cloudflare/workers-types@4.20251115.0)(@types/node@22.19.1)
@@ -11592,7 +11595,7 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@next/env': 16.4.6
       '@swc/helpers': 0.5.23
@@ -11618,7 +11621,7 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  next@16.4.6(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@playwright/test@1.56.1)(@types/node@22.19.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@next/env': 16.4.6
       '@swc/helpers': 0.5.23
@@ -11660,12 +11663,12 @@ snapshots:
     dependencies:
       path-key: 3.1.1
 
-  nuqs@2.7.3(next@16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1):
+  nuqs@2.7.3(next@16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1):
     dependencies:
       '@standard-schema/spec': 1.0.0
       react: 19.3.1
     optionalDependencies:
-      next: 16.4.6(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      next: 16.4.6(patch_hash=rjcvrymyhc5zmkok6o556mivhe)(@babel/core@7.29.13)(@playwright/test@1.56.1)(@types/node@24.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
 
   nwsapi@2.2.22: {}
 

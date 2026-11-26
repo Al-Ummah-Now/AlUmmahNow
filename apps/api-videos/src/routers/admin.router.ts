@@ -76,7 +76,7 @@ import { SubtitleService } from '../lib/subtitles';
 import { PREBUILT_LIMITS, ingestTargets, type VideoMediaProviders, type VideoObject } from '@al-ummah/shared-types';
 import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltEnv, type PrebuiltOutcome, type StagePlan, type WithPrebuilt } from '../lib/media/prebuiltUploads';
 import { readMediaSettings } from '../lib/media/settings';
-import { featureSwitchState } from '../lib/features';
+import { featureSwitchState, forgetFeatureSettings } from '../lib/features';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -887,7 +887,11 @@ app.get('/captions/settings', async (c) => {
 	]);
 	return ok(c, { settings, deeplKeyBound: await deeplKeyBound(c), editions, translations30d: translations.results ?? [] });
 });
-app.put('/captions/settings', async (c) => ok(c, { settings: await writeCaptionSettings(c.env as never, await body(c)), deeplKeyBound: await deeplKeyBound(c) }));
+app.put('/captions/settings', async (c) => {
+	const settings = await writeCaptionSettings(c.env as never, await body(c));
+	forgetFeatureSettings();
+	return ok(c, { settings, deeplKeyBound: await deeplKeyBound(c) });
+});
 app.get('/captions/quran-translations/editions', async (c) => {
 	const lang = (c.req.query('language') ?? '').toLowerCase();
 	if (!/^[a-z]{2,3}$/.test(lang)) throw new admin.AdminError(400, 'invalid_language', 'a language code is required');

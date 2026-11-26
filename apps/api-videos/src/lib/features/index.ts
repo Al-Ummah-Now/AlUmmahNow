@@ -10,9 +10,8 @@
  * Quotas (live hours, caption minutes left, channel limit) never hide a
  * feature: they are said plainly at the moment of the action.
  *
- * Cheap: settings reads are cached per isolate (live routing, Bunny
- * availability, caption settings here, SaaS readiness), tier reads are
- * indexed single-row lookups. No list or scan.
+ * Shared settings snapshots are cached per isolate. Channel roles, billing
+ * history, and tier eligibility are evaluated for each request.
  *
  * The same `*Configured` readers gate the APIs (404 feature_off), so a hidden
  * entry point and its API always agree.
@@ -40,8 +39,8 @@ import {
 	type LiveProviderId,
 	type UserFeatures,
 } from '@al-ummah/shared-types';
-import { loadChannelRecord } from '../channelAccess';
-import { getSecret } from '../env-helpers';
+import { loadChannelRecord, type AccessChannel } from '../channelAccess';
+import { getCachedSecret } from '../env-helpers';
 import { channelOwnerTier, resolveCreator } from '../creatorTiers';
 import { cachedPendingUserDeletion } from '../admin/pendingUserDeletion';
 import { memberUploadChannelIds } from '../../endpoints/creator/creatorAccess';
@@ -62,8 +61,6 @@ import { supportFeatureKeys } from '../support/eligibility';
 
 export { featureOff } from './off';
 
-type SecretLike = string | { get(): Promise<string> } | undefined | unknown;
-
 export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
 	SEARCH_DB?: D1Database;
 	NOTIFICATIONS_DB?: D1Database;
@@ -74,8 +71,8 @@ export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
 	PROCESSOR?: unknown;
 	MEDIA_ORIGINALS?: unknown;
 	TRANSCODE_QUEUE?: CaptionJobsEnv['TRANSCODE_QUEUE'];
-	QF_CLIENT_ID?: SecretLike;
-	QF_CLIENT_SECRET?: SecretLike;
+	QF_CLIENT_ID?: unknown;
+	QF_CLIENT_SECRET?: unknown;
 	QURAN_PROVIDER?: string;
 	AI_CATEGORIZE_ENABLED?: string;
 	ADMIN_API_URL?: string;
@@ -86,8 +83,8 @@ export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
 }
 
 /** A secret's value; '' while it is not bound, can't be read, or holds the release's placeholder. */
-async function secretValue(binding: SecretLike, name: string): Promise<string> {
-	const value = (await getSecret(binding, name)).trim();
+async function secretValue(binding: unknown, name: string): Promise<string> {
+	const value = (await getCachedSecret(binding, name)).trim();
 	return value === UNSET_SECRET ? '' : value;
 }
 
@@ -111,6 +108,44 @@ function memo<T>(ttlMs: number) {
 		},
 	};
 }
+
+const FEATURE_SETTINGS_TTL_MS = 10_000;
+
+/** Only settled settings are shared across requests. Replacing the map also
+ * prevents a read started before invalidation from repopulating the cache. */
+function settingsSnapshot<T>(load: (env: FeaturesEnv) => Promise<T>) {
+	let entries = new WeakMap<FeaturesEnv, { value: T; expiresAt: number }>();
+	return {
+		async get(env: FeaturesEnv): Promise<T> {
+			const snapshot = entries;
+			const now = Date.now();
+			const entry = snapshot.get(env);
+			if (entry && now < entry.expiresAt) return entry.value;
+			const value = await load(env);
+			const expiresAt = now + FEATURE_SETTINGS_TTL_MS;
+			if ((snapshot.get(env)?.expiresAt ?? 0) <= expiresAt) snapshot.set(env, { value, expiresAt });
+			return value;
+		},
+		forget() {
+			entries = new WeakMap();
+		},
+	};
+}
+
+const captionSnapshot = settingsSnapshot((env) => readCaptionSettings(env, { raw: true }));
+const youtubeSecretSnapshot = settingsSnapshot(async (env) => !!(await googleClientSecret(env, { cacheBindings: true })));
+const creatorSnapshot = settingsSnapshot(async (env) => {
+	const [billing, social, youtube, categorize] = await Promise.all([
+		enabledProviders(env).then((providers) => providers.length > 0).catch((error: unknown) => {
+			logger.warn('[features] Payment providers not read', { error: error instanceof Error ? error.message : String(error) });
+			return false;
+		}),
+		readSocialConfiguration(env, { raw: true }),
+		readYtSettings(env, { raw: true }),
+		categorizeVisibilityStored(env),
+	]);
+	return { billing, social, youtube, categorize };
+});
 
 // ---------------------------------------------------------------------------
 // Config: switched on and configured
@@ -140,8 +175,15 @@ export function liveConfigured(env: FeaturesEnv, now = Date.now()): Promise<bool
 	}, now);
 }
 
-/** Tests and the admin settings write: the next read looks again. */
+/** The writing isolate sees settings changes immediately. Other isolates use the TTL. */
+export function forgetFeatureSettings(): void {
+	captionSnapshot.forget();
+	creatorSnapshot.forget();
+	youtubeSecretSnapshot.forget();
+}
+
 export function forgetFeatureCaches(): void {
+	forgetFeatureSettings();
 	liveMemo.forget();
 	saasMemo.forget();
 	forgetFeatureSwitches();
@@ -192,15 +234,27 @@ export async function quranTextAvailable(env: FeaturesEnv): Promise<boolean> {
 	}
 }
 
-/** Social auto-post: switched on, and at least one network configured and switched on. */
-export async function socialConfigured(env: FeaturesEnv): Promise<boolean> {
+async function readSocialConfiguration(env: FeaturesEnv, opts: { raw?: boolean } = {}) {
 	try {
-		const [settings, readiness] = await Promise.all([readPlatformSettings(env as never), networkReadiness(env as unknown as SocialEnv)]);
-		return settings.enabled && SOCIAL_NETWORKS.some((n) => readiness[n].configured && settings.networks[n].enabled);
+		const socialEnv = env as unknown as SocialEnv;
+		const [settings, readiness] = await Promise.all([
+			readPlatformSettings(socialEnv, opts),
+			opts.raw
+				? getCachedSecret(env.SOCIAL_TOKEN_KEK, 'SOCIAL_TOKEN_KEK').then((key) =>
+					networkReadiness({ ...socialEnv, SOCIAL_TOKEN_KEK: key }))
+				: networkReadiness(socialEnv),
+		]);
+		return { enabled: settings.enabled, ready: SOCIAL_NETWORKS.some((n) => readiness[n].configured && settings.networks[n].enabled) };
 	} catch (error) {
 		logger.warn('[Features] Social settings unreadable; hidden', { error: error instanceof Error ? error.message : String(error) });
-		return false;
+		return { enabled: false, ready: false };
 	}
+}
+
+/** Social auto-post: switched on, and at least one network configured and switched on. */
+export async function socialConfigured(env: FeaturesEnv): Promise<boolean> {
+	const { enabled, ready } = await readSocialConfiguration(env);
+	return enabled && ready;
 }
 
 /** Move from YouTube: switched on, with a Google client id and secret. */
@@ -295,10 +349,18 @@ const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[
  * the caller's role there; a caller without a role sees none of it.
  */
 export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null, request: FeaturesRequest = {}): Promise<UserFeatures> {
-	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
-	// Creator support (wiki AUN-MEMBERS §9.5): computed only while its switch is on, for viewers too
-	// (the Support button sits on the channel page), so nothing is read while support is off
-	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, request));
+	let channel: Promise<AccessChannel | null> | undefined;
+	const readChannel = () => channel ??= channelId ? loadChannelRecord(env, channelId) : Promise.resolve(null);
+	const switchesPromise = readFeatureSwitches(env, NEUTRAL_LEGACY);
+	const [features, switches, support] = await Promise.all([
+		computeConfiguredFeatures(env, who, channelId, readChannel, switchesPromise),
+		switchesPromise,
+		// The Support button is also visible to viewers while its switch is on.
+		switchesPromise.then(({ effective }) => effective.creatorSupport
+			? supportKeysFor(env, who, channelId ?? null, request, readChannel)
+			: null),
+	]);
+	if (support) Object.assign(features, support);
 	// The Features page switches (FEAT-4): a switch that is off, or blocked by one, hides its keys
 	return applySwitchesToUserFeatures(features, switches.effective);
 }
@@ -313,11 +375,11 @@ export interface FeaturesRequest {
 	storefront?: string | null;
 }
 
-async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: string | null, request: FeaturesRequest): Promise<{ support: boolean; supportReceive: boolean }> {
+async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: string | null, request: FeaturesRequest, readChannel: () => Promise<AccessChannel | null>): Promise<{ support: boolean; supportReceive: boolean }> {
 	try {
 		const db = env.SEARCH_DB;
 		if (!db) return { support: false, supportReceive: false };
-		const record = channelId ? await loadChannelRecord(env as never, channelId) : null;
+		const record = await readChannel();
 		const channel = channelId && record
 			? {
 					channelId,
@@ -343,9 +405,27 @@ const NEUTRAL_LEGACY: Partial<Record<FeatureKey, boolean>> = Object.fromEntries(
 	FEATURE_REGISTRY.filter((d) => d.legacy).map((d) => [d.key, true]),
 );
 
-async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
-	const settings = await readCaptionSettings(env);
-	const [quran, quranText] = await Promise.all([quranEditionsConfigured(env), quranTextAvailable(env)]);
+async function computeConfiguredFeatures(
+	env: FeaturesEnv,
+	who: FeaturesWho,
+	channelId: string | null | undefined,
+	readChannel: () => Promise<AccessChannel | null>,
+	switchesPromise: ReturnType<typeof readFeatureSwitches>,
+): Promise<UserFeatures> {
+	const userId = who.userId ?? null;
+	const db = env.SEARCH_DB;
+	const [raw, quran, quranText, switches, channel] = await Promise.all([
+		captionSnapshot.get(env), quranEditionsConfigured(env), quranTextAvailable(env), switchesPromise,
+		userId && db && channelId ? readChannel() : null,
+	]);
+	const enabled = (key: FeatureKey, legacy: boolean) => switches.effective[key] && (switches.rows.has(key) || legacy);
+	const settings: CaptionSettings = {
+		...raw,
+		translation: { ...raw.translation, enabled: enabled('captionsTranslate', raw.translation.enabled) },
+		inline: { ...raw.inline, enabled: enabled('inlineTranslate', raw.inline.enabled) },
+		viewerTitles: { ...raw.viewerTitles, enabled: enabled('viewerTranslatedTitles', raw.viewerTitles.enabled) },
+		viewerDownload: { ...raw.viewerDownload, enabled: enabled('viewerCaptionDownload', raw.viewerDownload.enabled) },
+	};
 	const features: UserFeatures = {
 		...NO_FEATURES,
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
@@ -370,56 +450,44 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		// Seasons are public; with no published season the season route answers season: null
 		ramadanMode: true,
 	};
-	const userId = who.userId ?? null;
-	const db = env.SEARCH_DB;
 	if (!userId || !db) return features;
 	// Moving one's own channel is open to every tier once its switch is on (wiki AUN-CHANNEL-CLAIM CC-D2)
 	features.channelMove = true;
 
 	let scope: ChannelScope | null = null;
 	if (channelId) {
-		const channel = await loadChannelRecord(env as never, channelId);
-		if (!channel || (channel as { isDeleted?: boolean }).isDeleted) return features;
+		if (!channel || channel.isDeleted) return features;
 		scope = { channelId, ownerId: channel.userId ?? null, role: channelRoleOf(channel, userId) };
 		// Not on this channel's team: none of its Studio features
 		if (!scope.role) return features;
 	}
 
-	// Billing (Settings › Billing): payments are on, or the account has records to see. Both reads are indexed.
-	const [payProviders, billingRecord] = await Promise.all([
-		enabledProviders(env as never).catch((error: unknown) => {
-			logger.warn('[features] Payment providers not read', { error: error instanceof Error ? error.message : String(error) });
-			return [];
-		}),
-		db
-			.prepare('SELECT 1 AS x FROM billing_subscriptions WHERE user_id = ? UNION ALL SELECT 1 AS x FROM billing_payments WHERE user_id = ? LIMIT 1')
-			.bind(userId, userId)
-			.first()
-			.catch(() => null),
-	]);
-	features.billing = payProviders.length > 0 || !!billingRecord;
-
 	const roles = who.roles ?? null;
-	const [creator, deletion] = await Promise.all([
-		resolveCreator(db, { userId, roles, channelOwnerId: scope?.ownerId ?? null }),
+	const configPromise = creatorSnapshot.get(env);
+	const eligibility = resolveCreator(db, { userId, roles, channelOwnerId: scope?.ownerId ?? null }).then(async ({ tier, via, subjectId }) => {
+		const unlimited = via === 'super_admin' || !!tier?.unlimited;
+		const [live, minutes, uploadElsewhere] = await Promise.all([
+			tierAllowsLive(tier) && roleMay(scope, 'live.manage', 'live.moderate') ? liveConfigured(env) : false,
+			roleMay(scope, 'video.edit') ? hasCaptionMinutes(db, subjectId, tier, unlimited) : false,
+			// Without a channel: channels whose owner's tier lets this member upload.
+			!scope && !tierAllowsUploads(tier) ? memberUploadChannelIds(db, userId, roles).then((ids) => ids.length > 0) : false,
+		]);
+		return { tier, unlimited, live, minutes, uploadElsewhere };
+	});
+	const [config, billingRecord, { tier, unlimited, live, minutes, uploadElsewhere }, deletion, bulk, siteDomains, youtube] = await Promise.all([
+		configPromise,
+		// Billing records belong to the caller even while there are no enabled providers.
+		db.prepare('SELECT 1 AS x FROM billing_subscriptions WHERE user_id = ? UNION ALL SELECT 1 AS x FROM billing_payments WHERE user_id = ? LIMIT 1')
+			.bind(userId, userId).first().catch(() => null),
+		eligibility,
 		cachedPendingUserDeletion(db, userId),
+		roleMay(scope, 'video.schedule') ? checkBulkScheduleAllowed(env, userId).then((refusal) => refusal === null) : false,
+		scope && can(scope.role, 'channel.edit') ? siteDomainsFor(env, scope.channelId) : false,
+		configPromise.then(({ youtube }) =>
+			!!youtube.clientId && enabled('youtubeImport', youtube.enabled) ? youtubeSecretSnapshot.get(env).catch(() => false) : false),
 	]);
-	const tier = creator.tier;
-	const unlimited = creator.via === 'super_admin' || !!tier?.unlimited;
+	features.billing = config.billing || !!billingRecord;
 	const pending = !!deletion;
-
-	const [live, minutes, translate, social, youtube, aiCategory, bulk, uploadElsewhere, siteDomains] = await Promise.all([
-		tierAllowsLive(tier) && roleMay(scope, 'live.manage', 'live.moderate') ? liveConfigured(env) : false,
-		roleMay(scope, 'video.edit') ? hasCaptionMinutes(db, creator.subjectId, tier, unlimited) : false,
-		Promise.resolve(captionTranslateConfigured(env, settings)),
-		socialConfigured(env),
-		youtubeImportConfigured(env).catch(() => false),
-		aiCategoryConfigured(env),
-		checkBulkScheduleAllowed(env, userId).then((refusal) => refusal === null),
-		// Without a channel: channels whose owner's tier lets this member upload
-		!scope && !tierAllowsUploads(tier) ? memberUploadChannelIds(db, userId, roles).then((ids) => ids.length > 0) : Promise.resolve(false),
-		scope && can(scope.role, 'channel.edit') ? siteDomainsFor(env, scope.channelId) : Promise.resolve(false),
-	]);
 
 	// The tier's own flags: Free (where accounts without a stored tier land) has neither uploads nor channels
 	features.upload = !pending && (scope ? tierAllowsUploads(tier) && can(scope.role, 'video.upload') : tierAllowsUploads(tier) || uploadElsewhere);
@@ -432,15 +500,15 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		features.liveEvents = !pending && tierAllowsLiveCapability(tier, 'liveEvents') && roleMay(scope, 'live.manage');
 	}
 	features.captionsTranscribe = transcribeConfigured(env, settings) && minutes;
-	features.captionsTranslate = translate && minutes;
+	features.captionsTranslate = captionTranslateConfigured(env, settings) && minutes;
 	features.inlineTranslate = inlineTranslateConfigured(env, settings);
 	features.audioTracks = !!env.MEDIA_ORIGINALS && !!env.TRANSCODE_QUEUE && roleMay(scope, 'video.edit') && (unlimited || (tier?.audioTracksPerVideo ?? 0) > 0);
 	features.recitationMetadata = (unlimited || tier?.recitationMetadata === true) && roleMay(scope, 'video.edit');
 	features.siteDomains = siteDomains;
-	features.socialAutopost = social && roleMay(scope, 'channel.edit');
+	features.socialAutopost = config.social.ready && enabled('socialAutopost', config.social.enabled) && roleMay(scope, 'channel.edit');
 	features.youtubeImport = youtube;
-	features.aiCategorySuggest = aiCategory;
-	features.bulkSchedule = bulk && roleMay(scope, 'video.schedule');
+	features.aiCategorySuggest = env.AI_CATEGORIZE_ENABLED !== 'false' && !!env.queue && enabled('aiCategorySuggest', config.categorize);
+	features.bulkSchedule = bulk;
 	// Signed-in viewers get Listen mode and Downloads equally regardless of tier (wiki E14-D2, E14-D3)
 	features.listenMode = !pending;
 	features.offlineDownloads = !pending;

@@ -230,9 +230,58 @@ describe('feature answer', () => {
 		// The placeholder secret is no secret; the admin switch off hides AI categories
 		on.env.GOOGLE_OAUTH_CLIENT_SECRET = 'unset';
 		await on.global.put(CATEGORIZE_VISIBILITY_KEY, JSON.stringify({ enabled: false }));
+		forgetFeatureCaches();
 		f = await computeFeatures(on.env, { userId: 'alice', roles: ROLES_NONE });
 		assert.equal(f.youtubeImport, false);
 		assert.equal(f.aiCategorySuggest, false);
+	});
+
+	it('reuses shared settings and Secrets Store reads while resolving each caller’s permissions', async (t) => {
+		t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+		let secretCalls = 0;
+		const secret = (value: string) => ({ get: async () => { secretCalls++; return value; } });
+		const { env, d1, global } = await setup({
+			QF_CLIENT_ID: secret('id'),
+			QF_CLIENT_SECRET: secret('secret'),
+			SOCIAL_TOKEN_KEK: secret(KEK),
+			GOOGLE_OAUTH_CLIENT_SECRET: secret('google-secret'),
+		});
+		await global.put(YT_SETTINGS_KEY, JSON.stringify({ enabled: true, clientId: CLIENT_ID }));
+		const traced = d1 as unknown as SqliteD1;
+		const reads = () => traced.trace!.filter(({ sql }) => /FROM (feature_switches|billing_providers|social_settings)\b/i.test(sql));
+		const forUser = (userId: string) => computeFeatures(env, { userId, roles: [] });
+		traced.trace = [];
+
+		const alice = await forUser('alice');
+		assert.equal(alice.upload, true);
+		assert.equal(alice.socialAutopost, true);
+		assert.equal(alice.youtubeImport, true);
+		assert.equal(alice.quranEditions, true);
+		assert.equal(reads().filter(({ sql }) => sql.includes('FROM feature_switches')).length, 1);
+		assert.equal(secretCalls, 4);
+		const coldBucketCalls = global.calls;
+		const coldConfigQueries = reads().length;
+
+		const other = await forUser('nobody');
+		assert.equal(other.upload, false);
+		assert.equal(other.captionsTranscribe, false);
+		assert.equal(other.youtubeImport, true);
+		assert.equal(global.calls, coldBucketCalls);
+		assert.equal(reads().length, coldConfigQueries);
+		assert.equal(secretCalls, 4);
+
+		await global.put(CATEGORIZE_VISIBILITY_KEY, JSON.stringify({ enabled: false }));
+		assert.equal((await forUser('alice')).aiCategorySuggest, true);
+		t.mock.timers.tick(10_000);
+		assert.equal((await forUser('alice')).aiCategorySuggest, false);
+		assert.equal(secretCalls, 4);
+
+		// A stored switch takes precedence without waiting for the settings TTL.
+		await writeFeatureSwitch(env as never, { key: 'youtubeImport', enabled: false, expectedVersion: 0, actorId: 'admin-1' });
+		assert.equal((await forUser('alice')).youtubeImport, false);
+		t.mock.timers.tick(5 * 60_000);
+		await forUser('alice');
+		assert.equal(secretCalls, 7); // YouTube stays off.
 	});
 
 	it('own domains: the channel\'s site must allow one and SaaS must be ready (admin-api, cached)', async () => {
