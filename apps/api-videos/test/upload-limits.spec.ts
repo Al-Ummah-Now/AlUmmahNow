@@ -536,6 +536,47 @@ describe('creator tiers: channels, access and admin', () => {
     Date.now = realNow;
   });
 
+  it('logs the redacted cause of a failed tier lookup and returns a retryable 503', async (t) => {
+    const email = 'private@example.test';
+    const token = 'sensitive-test-token';
+    const cause = new Error(`database timed out for ${email} (Bearer ${token})`);
+    const error = new Error('D1_ERROR', { cause });
+    const db = {
+      prepare: () => ({ bind: () => ({ first: async () => { throw error; } }) }),
+    };
+    const warn = t.mock.method(console, 'warn', () => {});
+    const app = new Hono<{ Variables: { userId: string } }>();
+    app.use('*', async (c, next) => {
+      c.set('userId', email);
+      await next();
+    });
+    app.post('/api/channels', channelCreateGate, (c) => c.json({ success: true }));
+
+    const response = await app.request('/api/channels', { method: 'POST' }, { SEARCH_DB: db });
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Retry-After'), '30');
+    assert.deepEqual(await response.json(), {
+      success: false,
+      code: 'creator_access_unavailable',
+      error: 'This is briefly unavailable; try again shortly',
+      retryAfter: 30,
+    });
+    assert.equal(warn.mock.callCount(), 1);
+    const [entry] = warn.mock.calls[0].arguments as unknown as [{
+      level: string;
+      operation: string;
+      error: { message: string; cause: { name: string; message: string } };
+    }];
+    assert.equal(entry.level, 'warn');
+    assert.equal(entry.operation, 'channel_create_gate');
+    assert.equal(entry.error.message, 'D1_ERROR');
+    assert.equal(entry.error.cause.name, 'Error');
+    assert.match(entry.error.cause.message, /database timed out/);
+    const logged = JSON.stringify(entry);
+    assert.ok(!logged.includes(email));
+    assert.ok(!logged.includes(token));
+  });
+
   it('no tier: channel create answers 403 uploads_by_invitation; a tier allows up to its channel limit', async () => {
     const h = await harness();
     const none = await h.createChannel('nobody');
