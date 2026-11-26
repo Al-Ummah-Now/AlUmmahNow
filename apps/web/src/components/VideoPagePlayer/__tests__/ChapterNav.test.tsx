@@ -34,7 +34,8 @@ describe('ChapterNav', () => {
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(onPrevious).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('chapter-next')).toHaveTextContent('الفصل التالي');
-    expect(screen.getByTestId('chapter-next')).toHaveAttribute('aria-keyshortcuts', 'Control+ArrowLeft Alt+ArrowLeft');
+    expect(screen.getByTestId('chapter-previous')).toHaveAttribute('aria-keyshortcuts', 'Control+ArrowLeft Alt+ArrowLeft');
+    expect(screen.getByTestId('chapter-next')).toHaveAttribute('aria-keyshortcuts', 'Control+ArrowRight Alt+ArrowRight');
   });
 
   it('disables next on the last chapter and previous before the first', () => {

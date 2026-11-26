@@ -119,6 +119,7 @@ export interface VideoError {
 export interface VideoAnalyticsData {
   videoId: string;
   title: string;
+  titleLocalized?: Record<string, string>;
   views: number;
   likes: number;
   dislikes: number;

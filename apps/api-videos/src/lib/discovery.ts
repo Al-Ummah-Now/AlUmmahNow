@@ -73,6 +73,7 @@ export type SuggestionType = 'query' | 'channel' | 'category' | 'video';
 
 export interface Suggestion {
   text: string;
+  titleLocalized?: Record<string, string>;
   type: SuggestionType;
   count?: number;
   metadata?: Record<string, unknown>;
@@ -163,6 +164,7 @@ export function buildSuggestions(
     if (titleScore > 0) {
       add({
         text: title,
+        titleLocalized: video.titleLocalized,
         type: 'video',
         score: titleScore,
         popularity: video.views || 0,

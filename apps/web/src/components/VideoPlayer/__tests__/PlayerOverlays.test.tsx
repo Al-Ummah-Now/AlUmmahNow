@@ -5,6 +5,7 @@
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { AUTO_ADVANCE_SECONDS, EndScreen } from '../PlayerOverlays';
+import { AR_TRANSLATIONS as ar } from '@/lib/video/i18n/translations/ar';
 import { EN_TRANSLATIONS as en } from '@/lib/video/i18n/translations/en';
 
 let clock = 0;
@@ -31,16 +32,17 @@ function elapse(ms: number) {
   }
 }
 
-function renderEnd(opts: { upNext?: boolean } = {}) {
+function renderEnd(opts: { upNext?: boolean; lang?: 'en' | 'ar' } = {}) {
+  const arabic = opts.lang === 'ar';
   const go = jest.fn();
   const onReplay = jest.fn();
   const upNext = opts.upNext === false ? null : { title: 'Next talk', channel: 'Channel', go };
   const view = render(
     <div className="video-js">
-      <EndScreen upNext={upNext} onReplay={onReplay} t={en} dir="ltr" />
+      <EndScreen upNext={upNext} onReplay={onReplay} t={arabic ? ar : en} dir={arabic ? "rtl" : "ltr"} />
     </div>,
   );
-  const seconds = () => screen.queryByText(/^[0-9]$/)?.textContent ?? null;
+  const seconds = () => screen.queryByText(/^[0-9٠-٩]$/)?.textContent ?? null;
   return { go, onReplay, seconds, ...view };
 }
 
@@ -112,6 +114,16 @@ describe('EndScreen', () => {
     elapse(1_000);
     expect(seconds()).toBe('2');
     expect(status).toHaveTextContent('Next video in 3 seconds');
+  });
+
+  it('shows Arabic digits in the countdown and its one-time announcement', () => {
+    const { seconds } = renderEnd({ lang: 'ar' });
+    const status = screen.getByRole('status');
+    expect(seconds()).toBe('٣');
+    expect(status).toHaveTextContent('المرئي التالي بعد ٣ ثوانٍ');
+    elapse(1_000);
+    expect(seconds()).toBe('٢');
+    expect(status).toHaveTextContent('المرئي التالي بعد ٣ ثوانٍ');
   });
 
   it('leaves focus alone when the viewer is elsewhere on the page', () => {

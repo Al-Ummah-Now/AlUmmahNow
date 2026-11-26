@@ -21,7 +21,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 
 import AnalyticsDashboard, { seriesTotal, toHours, periodChange } from '..';
 import AnalyticsDashboardRTL from '../rtl';
-import type { AnalyticsMetrics, AnalyticsSummary } from '@/lib/api/types';
+import type { AnalyticsMetrics, AnalyticsSummary, ChannelAnalyticsData, VideoAnalyticsData } from '@/lib/api/types';
 
 const day = (date: string, watchTime: number, subscribers: number): AnalyticsMetrics =>
   ({ date, views: 3, likes: 1, comments: 0, shares: 0, subscribers, watchTime } as AnalyticsMetrics);
@@ -32,6 +32,31 @@ const summary = {
   totalViews: 12, totalLikes: 4, totalComments: 0, totalSubscribers: 9, totalVideos: 2,
   avgViewsPerVideo: 6, engagementRate: 33.3, topVideo: null,
 } as unknown as AnalyticsSummary;
+
+describe('AnalyticsDashboard localized titles', () => {
+  it('localizes ranked titles in Arabic and falls back to the original title', () => {
+    mockLang = 'ar';
+    const topVideo: VideoAnalyticsData = {
+      videoId: 'v1', title: 'Introduction', titleLocalized: { ar: 'مقدمة' },
+      views: 12, likes: 4, dislikes: 0, comments: 0, shares: 0, watchTime: 0,
+      avgViewDuration: 0, clickThroughRate: 0, engagementRate: 33.3, dateCreated: '',
+    };
+    const channelData: ChannelAnalyticsData = {
+      ...summary,
+      channelId: 'c1',
+      avgEngagementRate: 33.3,
+      topPerformingVideos: [
+        topVideo,
+        { ...topVideo, videoId: 'v2', title: 'Another talk', titleLocalized: undefined },
+      ],
+      recentMetrics: [],
+    };
+    render(<AnalyticsDashboardRTL summary={{ ...summary, topVideo }} channelData={channelData} metrics={null} />);
+    expect(screen.getAllByText('مقدمة')).toHaveLength(2);
+    expect(screen.getByText('Another talk')).toBeInTheDocument();
+    expect(screen.queryByText('Introduction')).toBeNull();
+  });
+});
 
 describe('AnalyticsDashboard growth (#241)', () => {
   beforeEach(() => {

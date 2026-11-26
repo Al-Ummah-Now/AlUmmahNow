@@ -45,8 +45,6 @@ export function ChapterNav({ chapters, currentChapterIndex, currentChapter, onPr
   // Before the first chapter there is no current one; "next" still goes to the first
   const hasNext = currentChapterIndex < chapters.length - 1;
   const hasPrevious = currentChapterIndex >= 0;
-  const prevKeys = isRTL ? 'Control+ArrowRight Alt+ArrowRight' : 'Control+ArrowLeft Alt+ArrowLeft';
-  const nextKeys = isRTL ? 'Control+ArrowLeft Alt+ArrowLeft' : 'Control+ArrowRight Alt+ArrowRight';
   const buttonClass =
     'inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-sm font-medium ' +
     'text-gray-800 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-100 dark:hover:bg-gray-800 ' +
@@ -63,7 +61,7 @@ export function ChapterNav({ chapters, currentChapterIndex, currentChapter, onPr
         type="button"
         onClick={onPrevious}
         disabled={!hasPrevious}
-        aria-keyshortcuts={prevKeys}
+        aria-keyshortcuts="Control+ArrowLeft Alt+ArrowLeft"
         data-testid="chapter-previous"
         className={buttonClass}
       >
@@ -83,7 +81,7 @@ export function ChapterNav({ chapters, currentChapterIndex, currentChapter, onPr
         type="button"
         onClick={onNext}
         disabled={!hasNext}
-        aria-keyshortcuts={nextKeys}
+        aria-keyshortcuts="Control+ArrowRight Alt+ArrowRight"
         data-testid="chapter-next"
         className={buttonClass}
       >

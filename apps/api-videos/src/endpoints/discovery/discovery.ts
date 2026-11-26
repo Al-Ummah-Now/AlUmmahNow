@@ -36,6 +36,7 @@ const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
 const SuggestionSchema = z.object({
   text: z.string(),
+  titleLocalized: z.record(z.string(), z.string()).optional().describe("Video or playlist title per language (e.g. { en, ar }); fall back to text"),
   type: z.enum(["query", "channel", "category", "video", "playlist"]),
   id: z.string().optional(),
   thumbnailUrl: z.string().optional(),

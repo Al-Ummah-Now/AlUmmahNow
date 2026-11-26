@@ -29,20 +29,15 @@ describe('adjacentChapter (Epic 8.1 previous/next)', () => {
 });
 
 describe('chapterShortcut', () => {
-  it('Ctrl/Alt + arrows navigate chapters in LTR', () => {
-    expect(chapterShortcut(key('ArrowRight', { ctrlKey: true }), false)).toBe('next');
-    expect(chapterShortcut(key('ArrowLeft', { altKey: true }), false)).toBe('previous');
-  });
-
-  it('swaps arrows in RTL', () => {
-    expect(chapterShortcut(key('ArrowLeft', { ctrlKey: true }), true)).toBe('next');
-    expect(chapterShortcut(key('ArrowRight', { ctrlKey: true }), true)).toBe('previous');
+  it.each(['ctrlKey', 'altKey'] as const)('%s + arrows follow seek direction in every locale', (modifier) => {
+    expect(chapterShortcut(key('ArrowRight', { [modifier]: true }))).toBe('next');
+    expect(chapterShortcut(key('ArrowLeft', { [modifier]: true }))).toBe('previous');
   });
 
   it('ignores plain arrows (seek), Meta and Shift combinations and other keys', () => {
-    expect(chapterShortcut(key('ArrowRight'), false)).toBeNull();
-    expect(chapterShortcut(key('ArrowRight', { metaKey: true, ctrlKey: true }), false)).toBeNull();
-    expect(chapterShortcut(key('ArrowRight', { shiftKey: true, altKey: true }), false)).toBeNull();
-    expect(chapterShortcut(key('k', { ctrlKey: true }), false)).toBeNull();
+    expect(chapterShortcut(key('ArrowRight'))).toBeNull();
+    expect(chapterShortcut(key('ArrowRight', { metaKey: true, ctrlKey: true }))).toBeNull();
+    expect(chapterShortcut(key('ArrowRight', { shiftKey: true, altKey: true }))).toBeNull();
+    expect(chapterShortcut(key('k', { ctrlKey: true }))).toBeNull();
   });
 });
