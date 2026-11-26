@@ -40,6 +40,8 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
   const vhsPlayerRef = useRef<VhsAudioPlayer | null>(null);
   const activeBackendRef = useRef<'native' | 'vhs'>('native');
   const loadSeqRef = useRef(0);
+  const pauseSeqRef = useRef(0);
+  const sleepEndsAtRef = useRef<number | null>(null);
 
   const [current, setCurrent] = useState<ListenTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -55,8 +57,7 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
   queueRef.current = queue;
   const playbackRateRef = useRef(playbackRate);
   playbackRateRef.current = playbackRate;
-  const sleepTimerRef = useRef(sleepTimer);
-  sleepTimerRef.current = sleepTimer;
+  const sleepTimerRef = useRef<SleepTimerSetting>('off');
   const currentTimeRef = useRef(currentTime);
   currentTimeRef.current = currentTime;
   const unavailableMsgRef = useRef(
@@ -65,11 +66,13 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
   unavailableMsgRef.current =
     t.listen?.audioUnavailable ?? 'Audio-only playback is not available for this video right now.';
 
-  const pendingSeekRef = useRef<{ time: number; rate: number; autoPlay: boolean } | null>(null);
+  const pendingSeekRef = useRef<{ time: number; rate: number } | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
   const pause = useCallback(() => {
+    // A pending queue fetch or VHS initialization may finish after playback is paused.
+    pauseSeqRef.current += 1;
     if (activeBackendRef.current === 'vhs') {
       const vp = vhsPlayerRef.current;
       if (vp && !vp.isDisposed?.()) vp.pause();
@@ -86,6 +89,14 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     activeBackendRef.current = 'native';
   }, []);
 
+  const setSleepTimer = useCallback((setting: SleepTimerSetting) => {
+    const seconds = typeof setting === 'number' ? setting * 60 : null;
+    sleepEndsAtRef.current = seconds === null ? null : Date.now() + seconds * 1000;
+    sleepTimerRef.current = setting;
+    setSleepTimerState(setting);
+    setSleepRemainingSec(seconds);
+  }, []);
+
   const stopListening = useCallback(() => {
     loadSeqRef.current += 1;
     pendingSeekRef.current = null;
@@ -99,13 +110,14 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    setSleepTimerState('off');
-    setSleepRemainingSec(null);
+    setSleepTimer('off');
     setError(null);
-  }, [teardownVhs]);
+  }, [setSleepTimer, teardownVhs]);
 
-  // Dispose VHS player cleanly on unmount
-  useEffect(() => () => teardownVhs(), [teardownVhs]);
+  useEffect(() => () => {
+    loadSeqRef.current += 1;
+    teardownVhs();
+  }, [teardownVhs]);
 
   // Fail closed when the admin switch turns off or user signs out
   useEffect(() => {
@@ -128,10 +140,11 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     (track: ListenTrack, opts?: { startTime?: number; playbackRate?: number; autoPlay?: boolean }) => {
       if (!enabled) return;
       const seq = ++loadSeqRef.current;
+      const pauseSeq = pauseSeqRef.current;
       const startTime = Math.max(0, opts?.startTime ?? 0);
       const rate = opts?.playbackRate ?? playbackRateRef.current;
       const autoPlay = opts?.autoPlay ?? true;
-      pendingSeekRef.current = { time: startTime, rate, autoPlay };
+      pendingSeekRef.current = { time: startTime, rate };
       setError(null);
       setCurrent(track);
       setCurrentTime(startTime);
@@ -173,7 +186,7 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
                 // Applied on loadedmetadata once stream metadata arrives
               }
             }
-            if (autoPlay) {
+            if (autoPlay && pauseSeqRef.current === pauseSeq) {
               const p = player.play() as Promise<void> | undefined;
               if (p && typeof p.catch === 'function') p.catch(() => undefined);
               setIsPlaying(true);
@@ -211,32 +224,31 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     [enabled, teardownVhs],
   );
 
-  const togglePlay = useCallback(() => {
+  const play = useCallback(() => {
     if (!current) return;
     if (activeBackendRef.current === 'vhs') {
       const vp = vhsPlayerRef.current;
-      if (!vp || vp.isDisposed?.()) return;
-      if (vp.paused()) {
-        const p = vp.play() as Promise<void> | undefined;
-        if (p && typeof p.catch === 'function') p.catch(() => undefined);
-        setIsPlaying(true);
-      } else {
-        vp.pause();
-        setIsPlaying(false);
-      }
+      if (!vp || vp.isDisposed?.() || !vp.paused()) return;
+      const p = vp.play() as Promise<void> | undefined;
+      if (p && typeof p.catch === 'function') p.catch(() => undefined);
+      setIsPlaying(true);
       return;
     }
     const el = audioRef.current;
-    if (!el) return;
-    if (el.paused) {
-      const p = el.play();
-      if (p && typeof p.catch === 'function') p.catch(() => undefined);
-      setIsPlaying(true);
-    } else {
-      el.pause();
-      setIsPlaying(false);
-    }
+    if (!el?.paused) return;
+    void el.play()?.catch(() => undefined);
+    setIsPlaying(true);
   }, [current]);
+
+  const togglePlay = useCallback(() => {
+    if (!current) return;
+    const vp = vhsPlayerRef.current;
+    const paused = activeBackendRef.current === 'vhs'
+      ? !vp || vp.isDisposed?.() || vp.paused()
+      : audioRef.current?.paused;
+    if (paused) play();
+    else pause();
+  }, [current, pause, play]);
 
   const seek = useCallback((seconds: number) => {
     const clamped = Math.max(0, seconds);
@@ -284,15 +296,6 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  const setSleepTimer = useCallback((setting: SleepTimerSetting) => {
-    setSleepTimerState(setting);
-    if (typeof setting === 'number') {
-      setSleepRemainingSec(setting * 60);
-    } else {
-      setSleepRemainingSec(null);
-    }
-  }, []);
-
   const addToQueue = useCallback(
     (item: ListenQueueItem) => {
       if (!enabled) return;
@@ -319,9 +322,10 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     async (item: ListenQueueItem) => {
       if (!enabled) return;
       const seq = ++loadSeqRef.current;
+      const pauseSeq = pauseSeqRef.current;
       setError(null);
       const resolved = await fetchVideoAudio(item.videoId);
-      if (loadSeqRef.current !== seq) return;
+      if (loadSeqRef.current !== seq || pauseSeqRef.current !== pauseSeq) return;
       if (!resolved?.url) {
         pause();
         setError(unavailableMsgRef.current);
@@ -371,11 +375,11 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
   const handleTrackEnded = useCallback(() => {
     if (sleepTimerRef.current === 'end') {
       pause();
-      setSleepTimerState('off');
+      setSleepTimer('off');
     } else {
       playNext();
     }
-  }, [pause, playNext]);
+  }, [pause, playNext, setSleepTimer]);
 
   // Keep VHS callbacks pointing at the latest handlers
   vhsCallbacksRef.current = {
@@ -399,25 +403,32 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
     },
   };
 
-  // Sleep timer countdown (1s tick while playing; side effects stay outside state updaters)
+  const hasSleepDeadline = typeof sleepTimer === 'number';
   useEffect(() => {
-    if (typeof sleepTimer !== 'number' || sleepRemainingSec === null || !isPlaying) return;
-    if (sleepRemainingSec <= 0) {
-      pause();
-      setSleepTimerState('off');
-      setSleepRemainingSec(null);
-      return;
-    }
-    const id = window.setInterval(() => {
-      setSleepRemainingSec((prev) => (prev === null ? null : Math.max(0, prev - 1)));
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [sleepTimer, sleepRemainingSec, isPlaying, pause]);
+    if (!hasSleepDeadline) return;
+    const checkDeadline = () => {
+      const deadline = sleepEndsAtRef.current;
+      if (deadline === null) return;
+      const millisecondsLeft = deadline - Date.now();
+      if (millisecondsLeft <= 0) {
+        pause();
+        setSleepTimer('off');
+        return;
+      }
+      setSleepRemainingSec(Math.max(0, Math.ceil(millisecondsLeft / 1000)));
+    };
+    const id = window.setInterval(checkDeadline, 1000);
+    document.addEventListener('visibilitychange', checkDeadline);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', checkDeadline);
+    };
+  }, [hasSleepDeadline, pause, setSleepTimer]);
 
   // Media Session handlers: bind ONCE when active session starts, delegating through refs so
   // timeupdate ticks never rebind action handlers.
-  const mediaActionsRef = useRef({ togglePlay, pause, skipBy, seek, playNext });
-  mediaActionsRef.current = { togglePlay, pause, skipBy, seek, playNext };
+  const mediaActionsRef = useRef({ play, pause, skipBy, seek, playNext });
+  mediaActionsRef.current = { play, pause, skipBy, seek, playNext };
   const hasActiveTrack = enabled && Boolean(current);
 
   useEffect(() => {
@@ -443,7 +454,7 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
       for (const a of actions) setHandler(a, null);
       return;
     }
-    setHandler('play', () => mediaActionsRef.current.togglePlay());
+    setHandler('play', () => mediaActionsRef.current.play());
     setHandler('pause', () => mediaActionsRef.current.pause());
     setHandler('seekbackward', () => mediaActionsRef.current.skipBy(-15));
     setHandler('seekforward', () => mediaActionsRef.current.skipBy(30));

@@ -53,6 +53,10 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
 }));
 jest.mock('@/components/VideoPagePlayer/VideoDetails', () => ({ VideoDetails: () => null }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: null }) }));
+const mockPauseListen = jest.fn();
+jest.mock('@/components/listen/listen-context', () => ({
+  useListenAudio: () => ({ pause: mockPauseListen }),
+}));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/ar').AR_TRANSLATIONS, lang: 'ar', locale: 'ar', dir: 'rtl', isRTL: true }),
 }));
@@ -89,6 +93,7 @@ describe.each([
     seen.length = 0;
     player = new FakePlayer();
     fetchFallbackPlayback.mockReset();
+    mockPauseListen.mockClear();
     askPlayer = undefined;
     errorAtReady = null;
     heldAtReady = undefined;
@@ -99,6 +104,17 @@ describe.each([
     render(<Player options={options(R2, R2_THUMB, 'r2')} />);
     expect(seen.at(-1)?.sources).toEqual([{ src: R2, type: 'application/x-mpegURL' }]);
     expect(seen.at(-1)?.poster).toBe(R2_THUMB);
+  });
+
+  it.each(['unmount', 'dispose'])('pauses Listen on video play and detaches on %s', (cleanup) => {
+    const view = render(<Player options={options(R2, R2_THUMB, 'r2')} />);
+    act(() => player.emit('play'));
+    expect(mockPauseListen).toHaveBeenCalledTimes(1);
+
+    if (cleanup === 'unmount') view.unmount();
+    else act(() => player.emit('dispose'));
+    act(() => player.emit('play'));
+    expect(mockPauseListen).toHaveBeenCalledTimes(1);
   });
 
   it('a lone source that fails is reported once; with nothing left it stays where it is', async () => {
