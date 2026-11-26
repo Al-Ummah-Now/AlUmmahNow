@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { SYSTEM_CREDITS, type SystemCreditId } from '@al-ummah/shared-types';
 
 export function WatchSources({ sources, lang, enabled = true }: {
@@ -12,11 +13,14 @@ export function WatchSources({ sources, lang, enabled = true }: {
   return (
     <p className="watch-sources aun-start-text" lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       {locale === 'ar' ? 'المصادر: ' : 'Sources: '}
-      {credits.map((credit) => (
-        <a key={credit.id} href={credit.url} target="_blank" rel="noopener"
-          aria-label={locale === 'ar' ? `${credit.name.ar} (يفتح في علامة تبويب جديدة)` : `${credit.name.en} (opens in a new tab)`}>
-          {credit.name[locale]}
-        </a>
+      {credits.map((credit, index) => (
+        <Fragment key={credit.id}>
+          {index > 0 && (locale === 'ar' ? '، ' : ', ')}
+          <a href={credit.url} target="_blank" rel="noopener"
+            aria-label={locale === 'ar' ? `${credit.name.ar} (يفتح في علامة تبويب جديدة)` : `${credit.name.en} (opens in a new tab)`}>
+            {credit.name[locale]}
+          </a>
+        </Fragment>
       ))}
     </p>
   );

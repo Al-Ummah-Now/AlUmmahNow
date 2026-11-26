@@ -98,8 +98,8 @@ describe('caption drafts', () => {
 	it('reports Quran Foundation only for published captions containing Quran text', async () => {
 		const e = env();
 		const router = app();
-		const watch = async () => {
-			const response = await router.request('/api/videos/v1', {}, e as never);
+		const watch = async (forceOff?: string) => {
+			const response = await router.request('/api/videos/v1', {}, { ...e, FEATURES_FORCE_OFF: forceOff } as never);
 			assert.equal(response.status, 200);
 			return await response.json() as { captionSources?: string[] };
 		};
@@ -115,6 +115,7 @@ describe('caption drafts', () => {
 		e.subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(source));
 		await publish();
 		assert.deepEqual((await watch()).captionSources, ['quranFoundation']);
+		assert.equal((await watch('playerCredits')).captionSources, undefined);
 		const original = draft();
 		e.subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(draft({ cues: [original.cues[2]] })));
 		await publish();
@@ -202,6 +203,7 @@ describe('caption drafts', () => {
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');
 		assert.ok(!vtt.includes(HEARD));
 		assert.ok(!/[]/.test(vtt));
+		assert.equal(served.headers.get('cache-control'), 'private, no-cache');
 		assert.match(served.headers.get('etag')!, new RegExp(`-${VERSION}"$`));
 		const again = await app().request('/api/videos/v1/subtitles/ar', { headers: { 'If-None-Match': served.headers.get('etag')! } }, e as never);
 		assert.equal(again.status, 304);

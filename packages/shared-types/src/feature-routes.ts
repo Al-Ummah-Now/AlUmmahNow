@@ -305,6 +305,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportDormantTransfer: 'no route: the monthly support.dormant job reads it',
+  playerCredits: 'Video and subtitle handlers apply the switch to caption content and attribution while keeping playback routes available',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',
   parentsGuide: 'the Help topic page of apps/web reads GET /api/me/features and is a 404 while off (E20-S1)',
