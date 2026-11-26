@@ -523,6 +523,26 @@ describe('reports queue: decisions', () => {
     assert.equal(revokeCalls[0]!.body.eventId, revokeCalls[1]!.body.eventId, 'retry on same reopened reports must reuse eventId');
   });
 
+  it('keeps reports open when the video service is unavailable for a permanent takedown', async () => {
+    const t = setup(BASE);
+    const binding = t.env.VIDEOS;
+    Reflect.deleteProperty(t.env, 'VIDEOS');
+    const rows = () => t.rows("SELECT id, status, action FROM reports WHERE id IN ('r1', 'r2', 'r3') ORDER BY id");
+    const before = await rows();
+    const decide = () => t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted' } });
+
+    const failed = await decide();
+    assert.equal(failed.status, 503);
+    assert.equal(failed.body.code, 'not_applied');
+    assert.deepEqual(await rows(), before);
+    assert.equal(t.sent.length, 0);
+    assert.equal(t.videos.read('v_1').isHidden, true);
+
+    t.env.VIDEOS = binding;
+    assert.equal((await decide()).status, 200);
+    assert.equal(t.calls.filter((call) => call.path === '/videos/v_1/revoke-downloads').length, 1);
+  });
+
   it('the per-report action keeps its values and takes the same ban path and permission', async () => {
     const t = setup(BASE);
     const denied = await t.call('/api/moderation/reports/r1/action', { method: 'POST', roles: 'moderator', json: { action: 'banned' } });

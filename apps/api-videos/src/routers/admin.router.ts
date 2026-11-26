@@ -407,14 +407,14 @@ const RevokeDownloadsBody = z
 app.post('/videos/:id/revoke-downloads', async (c) => {
 	const input = parse(RevokeDownloadsBody, await body(c));
 	const eventId = input.eventId ?? `admin:${input.actionId ?? crypto.randomUUID()}`;
+	const waitUntil = waitUntilOf(c);
 	return ok(
 		c,
-		await revokeVideoDownloads(c.env as unknown as DownloadRevokeEnv, {
-			videoId: c.req.param('id'),
-			eventId,
-			actorId: actor(c),
-			reason: input.reason,
-		}),
+		await revokeVideoDownloads(
+			c.env as unknown as DownloadRevokeEnv,
+			{ videoId: c.req.param('id'), eventId, actorId: actor(c), reason: input.reason },
+			waitUntil && { waitUntil },
+		),
 	);
 });
 app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
