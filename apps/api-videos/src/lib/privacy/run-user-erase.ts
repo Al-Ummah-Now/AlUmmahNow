@@ -40,7 +40,7 @@ import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
 import { BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, type BucketLike } from './scan';
-import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-data';
+import { DELETED_USER_ID, eraseWorkflowText, type ErasureHooks, type PrivacyBuckets } from './user-data';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 import { eraseMoveOffers } from '../channelMoveData';
 import { eraseImageOwners } from '../csam/imageOwners';
@@ -300,6 +300,10 @@ export async function eraseRunUserData(
 			if (again || !env.NOTIFICATIONS_DB) return;
 			spend(1);
 			bump('subscriptions', await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId));
+		},
+		async () => {
+			budget.spend();
+			await eraseWorkflowText(db, userId);
 		},
 	];
 

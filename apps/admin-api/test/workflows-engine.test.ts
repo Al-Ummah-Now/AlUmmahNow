@@ -29,6 +29,7 @@ import {
   WorkflowError,
 } from '../src/lib/workflows/engine';
 import { createWorkflowDirectory } from '../src/lib/workflows/directory';
+import { purgeWorkflowHistory } from '../src/lib/workflows/retention';
 import { ruleChangeExecutor } from '../src/lib/workflows/rule-change';
 import type { WorkflowCtx, WorkflowEvent } from '../src/lib/workflows/types';
 import { sqliteD1 } from './d1-sqlite';
@@ -41,7 +42,7 @@ function searchD1() {
   const exec = (sql: string, args: unknown[]) => {
     const stmt = raw.prepare(sql);
     const params = args.map((a) => (a === undefined ? null : typeof a === 'boolean' ? (a ? 1 : 0) : a)) as never[];
-    if (/^\s*(SELECT|WITH)/i.test(sql)) return { results: stmt.all(...params).map((r) => ({ ...r })), success: true, meta: { changes: 0 } };
+    if (/^\s*(SELECT|WITH)/i.test(sql) || /\bRETURNING\b/i.test(sql)) return { results: stmt.all(...params).map((r) => ({ ...r })), success: true, meta: { changes: 0 } };
     const info = stmt.run(...params);
     return { results: [], success: true, meta: { changes: Number(info.changes) } };
   };
@@ -349,6 +350,57 @@ describe('rules and storage', () => {
     assert.throws(() => search.raw.exec('DELETE FROM workflow_rules'), /append-only/);
   });
 
+  it('purges whole closed requests in bounded batches according to WF-D7', async () => {
+    const insert = search.raw.prepare(`INSERT INTO workflow_requests
+      (id, action_type, domain, rule, target_kind, target_id, payload, diff, base_version, reason,
+       proposed_by, proposed_at, expires_at, status, approvals_needed, updated_at)
+      VALUES (?, 'features.set', ?, '{}', 'feature', ?, '{}', '{}', '0', 'reason',
+              'u-sa1', '2000-01-01T00:00:00.000Z', '2000-01-02T00:00:00.000Z', ?, 1,
+              strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))`);
+    const step = search.raw.prepare(`INSERT INTO workflow_steps (request_id, seq, actor, kind, note, at)
+      VALUES (?, 1, 'u-sa1', 'comment', 'note', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))`);
+    for (const [id, domain, status, age, lastStep] of [
+      ['old', 'platform', 'applied', '-3 years', '-3 years'],
+      ['old-money', 'money', 'rejected', '-8 years', '-8 years'],
+      ['recent', 'people', 'applied', '-1 year', '-1 year'],
+      ['recent-money', 'money', 'applied', '-6 years', '-6 years'],
+      ['open', 'platform', 'pending', '-3 years', '-3 years'],
+      ['applying', 'platform', 'applying', '-3 years', '-3 years'],
+      ['retryable', 'platform', 'failed', '-3 years', '-3 years'],
+      ['commented', 'platform', 'applied', '-3 years', '-1 year'],
+    ]) {
+      insert.run(id, domain, id, status, age);
+      step.run(id, lastStep);
+      search.raw.prepare("INSERT INTO workflow_inbox VALUES ('u-sa1', ?, '2000')").run(id);
+    }
+    assert.throws(() => search.raw.exec("DELETE FROM workflow_steps WHERE request_id = 'old'"), /append-only/);
+    assert.throws(() => search.raw.exec("DELETE FROM workflow_requests WHERE id = 'old'"), /retention/);
+    assert.throws(() => search.raw.exec("INSERT INTO workflow_retention_purges VALUES ('recent-money')"), /retention/);
+    assert.equal(await purgeWorkflowHistory(ctx().db, 1), 1);
+    assert.equal(await purgeWorkflowHistory(ctx().db, 1), 1);
+    assert.equal(await purgeWorkflowHistory(ctx().db, 1), 0);
+    const remaining = ['applying', 'commented', 'open', 'recent', 'recent-money', 'retryable'];
+    assert.deepEqual(search.raw.prepare('SELECT id FROM workflow_requests ORDER BY id').all().map((row) => row.id), remaining);
+    for (const table of ['workflow_steps', 'workflow_inbox']) {
+      assert.deepEqual(search.raw.prepare(`SELECT request_id FROM ${table} ORDER BY request_id`).all().map((row) => row.request_id), remaining);
+    }
+    assert.throws(() => step.run('old', '-3 years'), /unknown workflow request/);
+  });
+
+  it('guards notes, step identity and approval rows even on replace', async () => {
+    const { requestId } = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), {
+      type: 'features.set', payload: { key: 'a', value: '1' }, reason: 'reason',
+    }) as { requestId: string };
+    const insert = search.raw.prepare("INSERT INTO workflow_steps (request_id, seq, actor, kind, note, at) VALUES (?, 3, 'u-sa1', 'approve', 'note', '2026-11-23T12:00:00Z')");
+    insert.run(requestId);
+    assert.throws(() => search.raw.exec("UPDATE workflow_steps SET note = 'Removed' WHERE seq = 3"), /append-only/);
+    assert.throws(() => search.raw.exec("UPDATE workflow_steps SET note = NULL WHERE seq = 3"), /append-only/);
+    const replace = search.raw.prepare("INSERT OR REPLACE INTO workflow_steps (request_id, seq, actor, kind, at) VALUES (?, ?, 'u-sa1', ?, '2026-11-23T12:00:00Z')");
+    assert.throws(() => replace.run(requestId, 3, 'comment'), /append-only/);
+    assert.throws(() => replace.run(requestId, 4, 'approve'), /append-only/);
+    assert.throws(() => search.raw.exec("UPDATE workflow_steps SET actor = 'other', note = 'Removed' WHERE seq = 3"), /append-only/);
+  });
+
   it('lists: waiting, mine, open and history, paged', async () => {
     await setRule('features.set', '', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] });
     const sa1 = await actor('u-sa1', ['super_admin']);
@@ -525,6 +577,27 @@ describe('creatorSupport no longer under the money floor (owner 2026-11-24, WF-D
     const inForce = await ruleInForce(ctx(), 'features.set', 'creatorSupport');
     assert.equal(inForce.version, 2);
     assert.equal(inForce.config.approvalsNeeded, 1, 'an admin may still give it approvers');
+  });
+
+  it('retention preserves rule provenance and leaves the latest active version in force', async () => {
+    ruleChange('historical-request', '');
+    ruleChange('active-request', '');
+    ruleChange('superseded-money-request', 'money');
+    ruleChange('unreferenced-request', 'money');
+    ruleRow('historical-rule', 1, 1, 'historical-request');
+    ruleRow('active-rule', 2, 2, 'active-request');
+    ruleRow('superseded-money-rule', 3, 3, 'superseded-money-request');
+    search.raw.exec("UPDATE workflow_requests SET updated_at = '2000-01-02T00:00:00.000Z'");
+    const currentRule = () => ruleInForce(ctx(), 'features.set', 'creatorSupport');
+    assert.equal((await currentRule()).id, 'active-rule');
+
+    assert.equal(await purgeWorkflowHistory(ctx().db), 1);
+    assert.deepEqual(search.raw.prepare('SELECT id, scope FROM workflow_requests ORDER BY id').all().map(Object.values), [
+      ['active-request', ''], ['historical-request', ''], ['superseded-money-request', 'money'],
+    ]);
+    assert.equal((await currentRule()).version, 2);
+    assert.equal((await currentRule()).id, 'active-rule');
+    assert.throws(() => search.raw.exec("INSERT INTO workflow_retention_purges VALUES ('superseded-money-request')"), /ineligible/);
   });
 
   it('the cron closes open creatorSupport requests opened under the money floor, once, with the reason; newer ones stay', async () => {

@@ -80,6 +80,7 @@
 --   apps/api-videos/migrations/search/0126_content_ownership_category.sql
 --   apps/api-videos/migrations/search/0127_media_source_facts.sql
 --   apps/api-videos/migrations/search/0128_unfinished_videos.sql
+--   apps/api-videos/migrations/search/0129_workflow_history_maintenance.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -244,7 +245,9 @@ CREATE TABLE video_categories (value TEXT PRIMARY KEY, label_en TEXT NOT NULL, l
 CREATE TABLE video_notes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, video_id TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER, body TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
 CREATE TABLE videos_bans (user_id TEXT PRIMARY KEY, reason TEXT, banned_by TEXT NOT NULL, banned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE workflow_inbox (user_id TEXT NOT NULL, request_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (user_id, request_id)) WITHOUT ROWID;
+CREATE TABLE workflow_note_erasures (actor TEXT PRIMARY KEY CHECK (actor <> '' AND actor <> 'system')) WITHOUT ROWID;
 CREATE TABLE workflow_requests (id TEXT PRIMARY KEY, action_type TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL CHECK (domain IN ('money', 'platform', 'people', 'governance')), rule_id TEXT, rule TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, open_key TEXT, subject_user_id TEXT, payload TEXT NOT NULL, diff TEXT NOT NULL, base_version TEXT NOT NULL, reason TEXT NOT NULL, proposed_by TEXT NOT NULL, proposed_at TEXT NOT NULL, expires_at TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale')), approvals_needed INTEGER NOT NULL CHECK (approvals_needed >= 0), approvals_count INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, applied_at TEXT, result TEXT, error TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE workflow_retention_purges (request_id TEXT PRIMARY KEY) WITHOUT ROWID;
 CREATE TABLE workflow_rules (id TEXT PRIMARY KEY, action_type TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK (version >= 1), config TEXT NOT NULL, request_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE workflow_steps (request_id TEXT NOT NULL, seq INTEGER NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('propose', 'approve', 'reject', 'withdraw', 'comment', 'apply', 'fail', 'expire', 'stale', 'retry')), note TEXT, step_up INTEGER NOT NULL DEFAULT 0, origin TEXT, at TEXT NOT NULL, PRIMARY KEY (request_id, seq)) WITHOUT ROWID;
 CREATE TABLE yt_import_items (id TEXT PRIMARY KEY, import_id TEXT NOT NULL, channel_id TEXT NOT NULL, yt_video_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', title_localized TEXT, description_localized TEXT, tags TEXT, language TEXT, published_at TEXT, publish_at TEXT, duration_seconds INTEGER, yt_visibility TEXT NOT NULL, made_for_kids INTEGER NOT NULL DEFAULT 0, thumbnail_url TEXT, selected INTEGER NOT NULL DEFAULT 0, match_json TEXT, video_id TEXT, state TEXT NOT NULL DEFAULT 'available', thumbnail_state TEXT NOT NULL DEFAULT 'none', captions_state TEXT NOT NULL DEFAULT 'none', caption_languages TEXT, captions_attached TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, UNIQUE (import_id, yt_video_id));
@@ -478,11 +481,14 @@ CREATE INDEX idx_workflow_requests_expiry ON workflow_requests (status, expires_
 CREATE UNIQUE INDEX idx_workflow_requests_open ON workflow_requests (open_key) WHERE open_key IS NOT NULL;
 CREATE INDEX idx_workflow_requests_proposed ON workflow_requests (proposed_at);
 CREATE INDEX idx_workflow_requests_proposer ON workflow_requests (proposed_by, proposed_at);
+CREATE INDEX idx_workflow_requests_retention ON workflow_requests (domain, updated_at) WHERE open_key IS NULL AND status IN ('applied', 'rejected', 'withdrawn', 'expired', 'stale');
 CREATE INDEX idx_workflow_requests_status ON workflow_requests (status, proposed_at);
 CREATE INDEX idx_workflow_requests_target ON workflow_requests (target_kind, target_id, proposed_at);
+CREATE INDEX idx_workflow_rules_request ON workflow_rules (request_id) WHERE request_id IS NOT NULL;
 CREATE UNIQUE INDEX idx_workflow_rules_version ON workflow_rules (action_type, scope, version);
 CREATE INDEX idx_workflow_steps_actor ON workflow_steps (actor, at);
 CREATE UNIQUE INDEX idx_workflow_steps_one_approval ON workflow_steps (request_id, actor) WHERE kind = 'approve';
+CREATE INDEX idx_workflow_steps_retention ON workflow_steps (request_id, at);
 CREATE INDEX idx_yt_import_items_channel_video ON yt_import_items (channel_id, yt_video_id);
 CREATE INDEX idx_yt_import_items_import ON yt_import_items (import_id, published_at);
 CREATE INDEX idx_yt_import_items_video ON yt_import_items (video_id) WHERE video_id IS NOT NULL;
@@ -491,6 +497,7 @@ CREATE INDEX idx_yt_imports_status ON yt_imports (status, updated_at);
 CREATE INDEX idx_yt_imports_user_channel ON yt_imports (user_id, channel_id, created_at);
 CREATE UNIQUE INDEX idx_yt_oauth_states_connect ON yt_oauth_states (connect_hash);
 CREATE INDEX idx_yt_oauth_states_expires ON yt_oauth_states (expires_at);
+CREATE VIEW workflow_retention_candidates AS WITH candidates AS (SELECT id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 years') AS cutoff FROM workflow_requests WHERE open_key IS NULL AND status IN ('applied', 'rejected', 'withdrawn', 'expired', 'stale') AND domain = 'money' AND updated_at < cutoff UNION ALL SELECT id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 years') AS cutoff FROM workflow_requests WHERE open_key IS NULL AND status IN ('applied', 'rejected', 'withdrawn', 'expired', 'stale') AND domain IN ('platform', 'people', 'governance') AND updated_at < cutoff) SELECT id FROM candidates c WHERE NOT EXISTS (SELECT 1 FROM workflow_steps s WHERE s.request_id = c.id AND s.at >= c.cutoff) AND NOT EXISTS (SELECT 1 FROM workflow_rules r WHERE r.request_id = c.id);
 CREATE TRIGGER indexnow_video_added AFTER INSERT ON search_videos WHEN NEW.visible = 1 BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (NEW.id, NEW.is_short, julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
 CREATE TRIGGER indexnow_video_changed AFTER UPDATE OF content_hash, visible, is_short ON search_videos WHEN OLD.content_hash IS NOT NEW.content_hash OR OLD.visible IS NOT NEW.visible OR OLD.is_short IS NOT NEW.is_short BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (NEW.id, max(OLD.is_short, NEW.is_short), julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
 CREATE TRIGGER indexnow_video_removed AFTER DELETE ON search_videos WHEN OLD.visible = 1 BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (OLD.id, OLD.is_short, julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
@@ -500,7 +507,11 @@ CREATE TRIGGER support_ledger_no_delete BEFORE DELETE ON support_ledger BEGIN SE
 CREATE TRIGGER support_ledger_no_update BEFORE UPDATE ON support_ledger BEGIN SELECT RAISE(ABORT, 'support_ledger is append-only'); END;
 CREATE TRIGGER support_ledger_entries_no_delete BEFORE DELETE ON support_ledger_entries BEGIN SELECT RAISE(ABORT, 'support_ledger_entries is append-only'); END;
 CREATE TRIGGER support_ledger_entries_no_update BEFORE UPDATE ON support_ledger_entries BEGIN SELECT RAISE(ABORT, 'support_ledger_entries is append-only'); END;
+CREATE TRIGGER workflow_note_erase AFTER INSERT ON workflow_note_erasures BEGIN UPDATE workflow_steps SET note = 'Removed' WHERE actor = NEW.actor AND note IS NOT NULL AND note <> 'Removed'; UPDATE workflow_requests SET reason = 'Removed' WHERE proposed_by = NEW.actor AND reason <> 'Removed'; DELETE FROM workflow_note_erasures WHERE actor = NEW.actor; END;
+CREATE TRIGGER workflow_requests_guard_delete BEFORE DELETE ON workflow_requests WHEN NOT EXISTS (SELECT 1 FROM workflow_retention_purges WHERE request_id = OLD.id) BEGIN SELECT RAISE(ABORT, 'workflow_requests can only be deleted by retention'); END;
+CREATE TRIGGER workflow_retention_purge AFTER INSERT ON workflow_retention_purges BEGIN SELECT RAISE(ABORT, 'workflow request is ineligible for retention purge') WHERE NOT EXISTS (SELECT 1 FROM workflow_retention_candidates WHERE id = NEW.request_id); DELETE FROM workflow_steps WHERE request_id = NEW.request_id; DELETE FROM workflow_inbox WHERE request_id = NEW.request_id; DELETE FROM workflow_requests WHERE id = NEW.request_id; DELETE FROM workflow_retention_purges WHERE request_id = NEW.request_id; END;
 CREATE TRIGGER workflow_rules_no_delete BEFORE DELETE ON workflow_rules BEGIN SELECT RAISE(ABORT, 'workflow_rules is append-only'); END;
 CREATE TRIGGER workflow_rules_no_update BEFORE UPDATE ON workflow_rules BEGIN SELECT RAISE(ABORT, 'workflow_rules is append-only'); END;
-CREATE TRIGGER workflow_steps_no_delete BEFORE DELETE ON workflow_steps BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;
-CREATE TRIGGER workflow_steps_no_update BEFORE UPDATE ON workflow_steps BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;
+CREATE TRIGGER workflow_steps_guard_insert BEFORE INSERT ON workflow_steps BEGIN SELECT RAISE(ABORT, 'unknown workflow request') WHERE NOT EXISTS (SELECT 1 FROM workflow_requests WHERE id = NEW.request_id); SELECT RAISE(ABORT, 'workflow_steps is append-only') WHERE EXISTS (SELECT 1 FROM workflow_steps WHERE request_id = NEW.request_id AND seq = NEW.seq) OR (NEW.kind = 'approve' AND EXISTS (SELECT 1 FROM workflow_steps WHERE request_id = NEW.request_id AND actor = NEW.actor AND kind = 'approve')); END;
+CREATE TRIGGER workflow_steps_no_delete BEFORE DELETE ON workflow_steps WHEN NOT EXISTS (SELECT 1 FROM workflow_retention_purges WHERE request_id = OLD.request_id) BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;
+CREATE TRIGGER workflow_steps_no_update BEFORE UPDATE ON workflow_steps WHEN NOT (EXISTS (SELECT 1 FROM workflow_note_erasures WHERE actor = OLD.actor) AND OLD.note IS NOT NULL AND NEW.note IS 'Removed' AND NEW.request_id IS OLD.request_id AND NEW.seq IS OLD.seq AND NEW.actor IS OLD.actor AND NEW.kind IS OLD.kind AND NEW.step_up IS OLD.step_up AND NEW.origin IS OLD.origin AND NEW.at IS OLD.at) BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;

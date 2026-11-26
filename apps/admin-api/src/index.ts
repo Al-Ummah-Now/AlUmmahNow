@@ -75,6 +75,7 @@ import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from '
 import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoints/errors/ErrorsIngest';
 import { statusNotifyConsumer } from './lib/status-notify';
 import { runErrorRetention } from './lib/errors-retention';
+import { purgeWorkflowHistory } from './lib/workflows/retention';
 import { purgeE2eReports } from './lib/report-stats';
 import { errorEnvelope } from './middleware/error-envelope';
 import featuresRouter from './routers/features.router';
@@ -369,7 +370,7 @@ app.get('/health', (c) => {
  * Cron (wrangler triggers.crons):
  *   - every 5 minutes: queue status reads of open requests to auth (lib/authModerationQueue.ts)
  *     and of open invites (lib/invites.ts); fill the name copies of new reports (lib/moderation/reportMeta.ts)
- *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
+ *   - 03:17 UTC daily: retention of error data, old source maps and workflow history
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
  *     delete of contact messages, themes and creator tiers (lib/trash.ts); on QA/stage also the
  *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports); spend alerts: the configured monthly budget
@@ -378,6 +379,13 @@ app.get('/health', (c) => {
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
   if (controller.cron === '17 3 * * *') {
     ctx.waitUntil(runErrorRetention(env as never));
+    if (env.SEARCH_DB) {
+      ctx.waitUntil(
+        purgeWorkflowHistory(env.SEARCH_DB)
+          .then((purged) => { if (purged) logger.info('[Workflows] Purged expired history', { purged }); })
+          .catch((error) => logger.error('[Workflows] Retention sweep failed', { error: String(error) })),
+      );
+    }
     // Pre-publication review retention (VR12): media 30 days after the decision, findings 12 months
     ctx.waitUntil(
       purgeReviewMedia(env as never)
