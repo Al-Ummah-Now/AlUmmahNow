@@ -19,7 +19,7 @@
 
 import { logger } from '@/lib/logger-client';
 import { getApiUrl } from '@/lib/runtime-config';
-import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import { clearClientAuthToken, fetchClientAuthToken } from '@/lib/auth/client-token';
 import type {
   ChannelBellLevel,
   NotificationCounts,
@@ -46,9 +46,15 @@ async function request<T>(path: string, init: RequestInit = {}, label: string): 
   try {
     // The inbox belongs to the signed-in account, including after its active channel moves.
     const token = await fetchClientAuthToken();
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    if (!token || init.signal?.aborted) return null;
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     if (init.body) headers['Content-Type'] = 'application/json';
     const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
+    if (init.signal?.aborted) return null;
+    if (response.status === 401) {
+      clearClientAuthToken();
+      return null;
+    }
     if (!response.ok) {
       logger.warn(`[NotificationsService] ${label} failed`, { status: response.status, path });
       return null;
@@ -56,6 +62,7 @@ async function request<T>(path: string, init: RequestInit = {}, label: string): 
     const body = (await response.json()) as { result?: T };
     return (body.result ?? null) as T | null;
   } catch (error) {
+    if (init.signal?.aborted) return null;
     logger.error(`[NotificationsService] ${label} error`, { path, error });
     return null;
   }
@@ -69,8 +76,8 @@ export const NotificationsService = {
     return request<NotificationPage>(`/api/notifications?${q.toString()}`, {}, 'List');
   },
 
-  counts() {
-    return request<NotificationCounts & { menuOpen: NotificationMenuOpenMode }>('/api/notifications/unread-count', {}, 'Counts');
+  counts(signal?: AbortSignal) {
+    return request<NotificationCounts & { menuOpen: NotificationMenuOpenMode }>('/api/notifications/unread-count', { signal }, 'Counts');
   },
 
   /** The menu was opened: clears the badge; in `read` mode the server also marks `ids` read. */

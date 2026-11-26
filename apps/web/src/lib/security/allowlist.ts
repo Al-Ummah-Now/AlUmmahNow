@@ -54,7 +54,7 @@ export const REACT_ROOT_EVENT_TYPES: ReadonlyArray<string> = [
   'pointerdown', 'pointermove', 'pointerout', 'pointerover', 'pointerup', 'progress', 'ratechange',
   'reset', 'resize', 'seeked', 'seeking', 'stalled', 'submit', 'suspend', 'timeupdate', 'touchcancel',
   'touchend', 'touchstart', 'volumechange', 'scroll', 'scrollend', 'toggle', 'touchmove', 'waiting',
-  'wheel', 'animationend', 'animationiteration', 'animationstart', 'dblclick', 'focusin', 'focusout',
+  'wheel', 'animationend', 'animationcancel', 'animationiteration', 'animationstart', 'dblclick', 'focusin', 'focusout',
   'transitionrun', 'transitionstart', 'transitioncancel', 'transitionend', 'change', 'selectionchange',
   'compositionend', 'compositionstart', 'compositionupdate', 'textInput', 'beforeinput', 'select',
 ];
@@ -170,6 +170,7 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'dragend',
   // Animation / transitions (Radix presence)
   'animationend',
+  'animationcancel',
   'transitionend',
   // React root event delegation. Next.js hydrates the whole `document`, so React
   // registers one listener per supported event on it. When this chunk evaluates

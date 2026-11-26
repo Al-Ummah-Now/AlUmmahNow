@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger-client';
 import { resolveNotificationText } from '../notification-text';
 import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '@/lib/i18n/translations';
 import { WebSocketManager } from '../WebSocketManager';
@@ -228,7 +229,12 @@ describe('WebSocketManager subscriptions', () => {
     });
   });
 
-  it('backs off and gets a fresh ticket after AUTH_FAILED, with a retry limit', async () => {
+  it.each([
+    { type: 'error', code: 'AUTH_FAILED' },
+    { type: 'error', code: 'AUTH_EXPIRED' },
+    { type: 'auth_error' },
+  ])('backs off after $type $code and gets fresh tickets up to the retry limit', async (rejection) => {
+    jest.clearAllMocks();
     const real = globalThis.WebSocket;
     const sockets: TestSocket[] = [];
     class TestSocket {
@@ -259,7 +265,7 @@ describe('WebSocketManager subscriptions', () => {
         sockets[attempt].onopen();
         await Promise.resolve();
         expect(sockets[attempt].send).toHaveBeenCalledWith(JSON.stringify({ type: 'authenticate', token: `wst_${attempt + 1}` }));
-        deliver(manager, { type: 'error', code: 'AUTH_FAILED' });
+        deliver(manager, rejection);
 
         const delay = 1000 * 2 ** attempt;
         jest.advanceTimersByTime(delay - 1);
@@ -268,6 +274,8 @@ describe('WebSocketManager subscriptions', () => {
       }
       expect(sockets).toHaveLength(3);
       expect(manager.getState().reconnectAttempts).toBe(2);
+      expect(logger.warn).toHaveBeenCalledTimes(3);
+      expect(logger.error).not.toHaveBeenCalled();
     } finally {
       manager.disconnect();
       globalThis.WebSocket = real;
@@ -285,6 +293,20 @@ describe('WebSocketManager subscriptions', () => {
     function deliver(manager: WebSocketManager, message: unknown) {
       (manager as unknown as { handleMessage: (m: unknown) => void }).handleMessage(message);
     }
+
+    it('discards a rejected static token and waits for a replacement', () => {
+      jest.clearAllMocks();
+      const manager = new WebSocketManager({ url: 'wss://example/ws', authToken: 'stale' });
+      const sent = attachSocket(manager);
+      deliver(manager, { type: 'error', code: 'AUTH_FAILED' });
+      deliver(manager, { type: 'error', code: 'AUTH_EXPIRED' });
+      expect(sent).toEqual([]);
+      expect(logger.warn).toHaveBeenCalledTimes(2);
+      expect(logger.error).not.toHaveBeenCalled();
+
+      manager.setAuthToken('fresh');
+      expect(sent).toEqual([{ type: 'authenticate', token: 'fresh' }]);
+    });
 
     it('re-authenticates with a fresh token on AUTH_EXPIRED and resubscribes', async () => {
       let n = 0;
