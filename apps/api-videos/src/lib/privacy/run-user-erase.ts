@@ -145,6 +145,17 @@ export async function eraseRunUserData(
 		// Let a read or parse failure retry the job. Only a missing object can use a fallback.
 		return stored ? (await stored.json<Json>()) ?? {} : null;
 	};
+	// Read channel ownership anew for each step, once per channel in that step.
+	const channelReaderForStep = () => {
+		const reads = new Map<string, Promise<Json | null>>();
+		return (channelId: string) => {
+			const cached = reads.get(channelId);
+			if (cached) return cached;
+			const read = readChannel(channelId);
+			reads.set(channelId, read);
+			return read;
+		};
+	};
 	let again = false;
 
 	const steps: Array<() => Promise<void>> = [
@@ -157,7 +168,7 @@ export async function eraseRunUserData(
 		// Videos (subtitles, streaming media through the hook, then the record)
 		async () => {
 			const bucket = asBucket(env.videos);
-			const channelRecords = new Map<string, Json | null>();
+			const readVideoChannel = channelReaderForStep();
 			for (const candidate of videos) {
 				const videoId = candidate.id;
 				budget.spend();
@@ -167,11 +178,7 @@ export async function eraseRunUserData(
 				const record = stored ? (await stored.json<Json>()) ?? {} : undefined;
 				const channelId = record ? record.channelId : candidate.channel_id;
 				const recordOwner = record ? record.userId : candidate.owner_id;
-				let channel: Json | null | undefined;
-				if (typeof channelId === 'string' && channelId) {
-					if (!channelRecords.has(channelId)) channelRecords.set(channelId, await readChannel(channelId));
-					channel = channelRecords.get(channelId);
-				}
+				const channel = typeof channelId === 'string' && channelId ? await readVideoChannel(channelId) : null;
 				if ((channel ? channel.userId : recordOwner) !== userId) continue;
 				if (stored) {
 					// Under an open takedown case: its own job copies the evidence, then deletes the record (lib/csam/contain.ts)
@@ -230,16 +237,22 @@ export async function eraseRunUserData(
 				.all<{ id: string }>();
 			bump('playlists', await deleteKeys(asBucket(env.playlists), (results ?? []).map((r) => r.id), budget));
 		},
-		// Its playlists without a channel (Watch later, personal playlists, #1183): the footprints name
-		// them; only the account's own are deleted
+		// Footprints also name personal playlists and channel playlists absent from search
+		// (private, empty, or soft-deleted). Watch later is personal even with a legacy channelId.
 		async () => {
 			const playlists = asBucket(env.playlists);
 			budget.spend();
 			const named = await footprintTargets(db as never, userId, 'playlist');
+			const readPlaylistChannel = channelReaderForStep();
 			const mine: string[] = [];
 			for (const key of new Set([...named, watchLaterId(userId)])) {
 				const playlist = await readJson<Json>(playlists, key, budget);
-				if (playlist?.userId === userId && (!playlist.channelId || playlist.channelId === userId || isSystemPlaylist(playlist))) mine.push(key);
+				if (!playlist) continue;
+				const channelId = playlist.channelId;
+				const channel = typeof channelId === 'string' && channelId && channelId !== userId && !isSystemPlaylist(playlist)
+					? await readPlaylistChannel(channelId)
+					: null;
+				if ((channel ? channel.userId : playlist.userId) === userId) mine.push(key);
 			}
 			bump('playlists', await deleteKeys(playlists, mine, budget));
 		},

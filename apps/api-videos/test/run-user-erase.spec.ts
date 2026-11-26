@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { projectPlaylist } from '@al-ummah/shared-types';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { eraseRunUserData, OwnershipIndexIncomplete } from '../src/lib/privacy/run-user-erase';
 import { OperationBudget } from '../src/lib/privacy/scan';
@@ -138,6 +139,40 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal(result.complete, true);
 		assert.deepEqual([...env.playlists.store.keys()], ['pl-other']);
 		assert.deepEqual(db.db.prepare('SELECT user_id, target_id FROM privacy_footprints').all().map((r) => ({ ...(r as object) })), [{ user_id: 'other', target_id: 'pl-other' }]);
+	});
+
+	it('erases unindexed channel playlists only when they still belong to the run account', async () => {
+		const db = new SqliteD1();
+		const { env, scans } = buckets();
+		await env.channels.put('chMoved', JSON.stringify(channel('chMoved', 'run1')));
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		await env.channels.put('chMoved', JSON.stringify(channel('chMoved', 'other')));
+
+		const addFootprint = db.db.prepare("INSERT INTO privacy_footprints (user_id, kind, target_id) VALUES ('run1', 'playlist', ?)");
+		const states = {
+			private: { isPublic: false, videos: ['v1'] },
+			empty: { isPublic: true, videos: [] },
+			deleted: { isPublic: true, isDeleted: true, videos: ['v1'] },
+		};
+		for (const channelId of ['ch1', 'chMoved', 'chGone']) {
+			for (const [state, fields] of Object.entries(states)) {
+				const id = `${channelId}-${state}`;
+				const playlist = { id, title: id, userId: 'run1', channelId, ...fields };
+				assert.equal(projectPlaylist(playlist), null, id);
+				await env.playlists.put(id, JSON.stringify(playlist));
+				addFootprint.run(id);
+			}
+		}
+		scans.length = 0;
+
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+
+		assert.equal(result.complete, true);
+		assert.equal(result.deleted.playlists, 6);
+		assert.deepEqual([...env.playlists.store.keys()], ['chMoved-private', 'chMoved-empty', 'chMoved-deleted']);
+		assert.equal(db.count('privacy_footprints'), 0);
+		assert.deepEqual(scans, []);
 	});
 
 	it('cancels its channel invitations and takes its id out of the team activity log', async () => {
