@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { VideoFailure } from '@al-ummah/shared-types';
 import { markProcessingFailed, syncProcessing } from '@/lib/api/admin';
 import { retryFailed } from '@/lib/retry-failed';
+import { resolutionsLabel } from '@/lib/resolution-label';
 import { FailureWhy } from '@/components/content/failure';
 import { useRetryConfirm } from '@/components/content/failure-retry';
 import { R2Badge } from '@/components/content/r2';
@@ -209,7 +210,7 @@ export function ProcessingTable({ rows, failures }: { rows: ProcessingVideoRow[]
                 <td className={tdClass} data-bunny-status={row.bunny === null ? 'missing' : row.bunny?.status ?? ''}>
                   <div className="text-fg">{bunnyLabel(t, row.bunny)}</div>
                   {row.bunny?.availableResolutions && (
-                    <div className="text-fg-muted text-xs" dir="ltr">{row.bunny.availableResolutions}</div>
+                    <div className="text-fg-muted text-xs">{resolutionsLabel(row.bunny.availableResolutions, t)}</div>
                   )}
                 </td>
                 <td className={tdClass} data-r2-status={row.r2Status ?? 'none'}>

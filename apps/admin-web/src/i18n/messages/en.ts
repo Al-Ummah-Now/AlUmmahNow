@@ -11,6 +11,9 @@ const en = {
     legend: 'Email language',
   },
   common: {
+    /** A video resolution, 720 → 720p */
+    resolution: '{n}p',
+    listSep: ', ',
     /** The mark between two values in a line of facts; Arabic uses the Arabic comma (a dot next to Arabic digits reads as zero, O38) */
     sep: ' • ',
     /** The overflow menu at the end of a tab row that does not fit (#1669) */

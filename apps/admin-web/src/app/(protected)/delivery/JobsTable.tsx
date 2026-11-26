@@ -4,7 +4,9 @@ import { useState } from 'react';
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import { retryMediaJobs } from '@/lib/api/admin';
-import type { VideoFailure } from '@al-ummah/shared-types';
+import { transcodeErrorReason, type VideoFailure } from '@al-ummah/shared-types';
+import { resolutionsLabel } from '@/lib/resolution-label';
+import { REASON_LABEL } from './troubleshoot-view';
 import type { MediaJob } from '@/lib/api/types';
 import { FailureWhy } from '@/components/content/failure';
 import { useRetryConfirm } from '@/components/content/failure-retry';
@@ -97,9 +99,22 @@ export function JobsTable({ jobs, failures }: { jobs: MediaJob[]; /** Why the fa
                     {why && <FailureWhy failure={why} t={t} className="mt-1" />}
                   </td>
                   <td className={`${tdClass} tabular-nums whitespace-nowrap`}>{seconds === null ? '—' : f.duration(seconds)}</td>
-                  <td className={tdClass}>{job.rungs ? job.rungs.split(',').join(', ') : '—'}</td>
+                  <td className={tdClass}>{job.rungs ? resolutionsLabel(job.rungs, t) : '—'}</td>
                   <td className={`${tdClass} tabular-nums`}>{job.container_seconds == null ? '—' : f.integer(job.container_seconds)}</td>
-                  <td className={`${tdClass} max-w-xs break-words text-danger-fg`}>{job.error ?? ''}</td>
+                  <td className={`${tdClass} max-w-xs break-words`} data-testid="delivery-job-error">
+                    {/* Why, in the reader's words, with the transcoder's own code beside it (small, Latin) for searching the logs */}
+                    {job.error && (() => {
+                      const reason = transcodeErrorReason(job.error);
+                      return reason && reason !== 'unknown' ? (
+                        <>
+                          <span className="text-danger-fg">{t(REASON_LABEL[reason])}</span>
+                          <code className="ms-1 text-xs text-fg-muted" dir="ltr">{reason}</code>
+                        </>
+                      ) : (
+                        <code className="text-xs text-danger-fg break-all" dir="ltr">{job.error}</code>
+                      );
+                    })()}
+                  </td>
                   <td className={tdClass}>
                     {(job.status === 'failed' || job.status === 'cancelled') && (
                       <button
