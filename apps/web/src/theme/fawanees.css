@@ -35,7 +35,7 @@ html[data-theme='fawanees'] div:has(> #video-player),
 html[data-theme='fawanees'] .watch-skeleton { padding-block-end: 14px; }
 html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }
-html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc(100% - 28px); }
+html[data-theme='fawanees'] div:has(> #video-player) > :is(.watch-desc, .watch-download-error) { width: calc(100% - 28px); }
 html[data-theme='fawanees'] #comments { padding-block: 16px; }
 /* Inner padding on both sides (logical, so English and Arabic alike): the heading and each row's
    hover band sit inside the card, never on its edge (AUDIT-2 2026-11-21). The heading lines up with

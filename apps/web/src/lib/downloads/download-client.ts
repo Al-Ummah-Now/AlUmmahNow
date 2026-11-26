@@ -40,25 +40,30 @@ function isSafeHttpUrl(raw: unknown): raw is string {
  */
 export async function requestWebVideoDownload(
   videoId: string,
-  opts: { locale?: string; fetchImpl?: typeof fetch } = {},
+  opts: { locale?: string; fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
 ): Promise<WebDownloadResult> {
   const fetchFn = opts.fetchImpl ?? fetch;
-  const auth = await fetchClientAuthInfo().catch(() => ({ accessToken: null as string | null }));
-  const url = `${getApiUrl()}/api/v1/videos/${encodeURIComponent(videoId)}/downloads`;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(opts.locale ? { 'X-App-Locale': opts.locale } : {}),
-    ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
-  };
+  const { signal } = opts;
 
   try {
+    signal?.throwIfAborted();
+    const auth = await fetchClientAuthInfo().catch(() => ({ accessToken: null as string | null }));
+    signal?.throwIfAborted();
+    const url = `${getApiUrl()}/api/v1/videos/${encodeURIComponent(videoId)}/downloads`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(opts.locale ? { 'X-App-Locale': opts.locale } : {}),
+      ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+    };
     const res = await fetchFn(url, {
       method: 'POST',
       headers,
       credentials: 'include',
       body: JSON.stringify({ disposition: 'attachment' }),
+      signal,
     });
     const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    signal?.throwIfAborted();
     if (!res.ok) {
       const retryHeader = res.headers?.get('Retry-After');
       const retryFromHeader = retryHeader ? Number.parseInt(retryHeader, 10) : NaN;
@@ -95,6 +100,6 @@ export async function requestWebVideoDownload(
     }
     return { ok: false, status: 502, code: 'invalid_response' };
   } catch {
-    return { ok: false, status: 0, code: 'network_error' };
+    return { ok: false, status: 0, code: signal?.aborted ? 'aborted' : 'network_error' };
   }
 }

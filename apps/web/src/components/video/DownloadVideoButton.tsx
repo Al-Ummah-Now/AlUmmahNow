@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useFeatures } from '@/hooks/useFeatures';
@@ -72,6 +72,20 @@ export function DownloadVideoButton({
   const { t, lang } = useLanguage();
   const [busy, setBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [previousVideoId, setPreviousVideoId] = useState(videoId);
+  const requestRef = useRef<AbortController | null>(null);
+
+  if (previousVideoId !== videoId) {
+    setPreviousVideoId(videoId);
+    setBusy(false);
+    setStatusMessage('');
+  }
+
+  // Cancel at commit so an old request cannot trigger a download after navigation.
+  useLayoutEffect(() => () => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+  }, [videoId]);
 
   const eligible =
     Boolean(user) &&
@@ -84,12 +98,17 @@ export function DownloadVideoButton({
   const busyLabel = t.video.downloadingVideo ?? 'Preparing download…';
 
   const handleClick = async () => {
-    if (busy) return;
+    if (requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
     setBusy(true);
     setStatusMessage('');
     onError?.(null);
 
-    const res = await requestWebVideoDownload(videoId, { locale: lang });
+    const res = await requestWebVideoDownload(videoId, { locale: lang, signal: controller.signal });
+    if (controller.signal.aborted) return;
+
+    requestRef.current = null;
     setBusy(false);
 
     if (res.ok) {

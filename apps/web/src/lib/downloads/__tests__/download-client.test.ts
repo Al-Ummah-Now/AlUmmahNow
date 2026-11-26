@@ -82,6 +82,25 @@ describe('requestWebVideoDownload (E14-S6b)', () => {
     });
   });
 
+  it('forwards the abort signal and reports cancellation separately from network errors', async () => {
+    const controller = new AbortController();
+    const fetchMock = jest.fn(async (_url: string, init: RequestInit) => {
+      controller.abort();
+      init.signal?.throwIfAborted();
+      return mockResponse(null);
+    });
+
+    const result = await requestWebVideoDownload('vid-1', {
+      signal: controller.signal,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      signal: controller.signal,
+    }));
+    expect(result).toEqual({ ok: false, status: 0, code: 'aborted' });
+  });
+
   it('rejects non-HTTP(S) download URLs defensively', async () => {
     const fetchMock = jest.fn(async () =>
       mockResponse({
