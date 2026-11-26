@@ -85,6 +85,8 @@ test.describe('moderation actions', () => {
     await expect(closed.getByTestId('action-taken')).toHaveAttribute('data-action', 'dismissed');
     await expect(closed.getByTestId('report-closed')).toContainText('Report Closed');
     await expect(closed.getByTestId('report-actions')).toHaveCount(0);
+    // Not in a finally: a failed check keeps the tab for the screenshot; the context closes it
+    await closed.close();
 
     // The queue consumer mirrors the decision asynchronously; it used to flip
     // dismissals to "resolved" and wipe the notes a second later.
@@ -106,6 +108,7 @@ test.describe('moderation actions', () => {
       const resolved = await openReport(page, warned.id);
       await expect(resolved.getByTestId('status-chip')).toHaveText('Resolved');
       await expect(resolved.getByTestId('action-taken')).toHaveText('Warning');
+      await resolved.close();
     } finally {
       await video.remove();
     }
