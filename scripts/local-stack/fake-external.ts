@@ -569,7 +569,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     try {
       return json({ results: await stackSql(decodeURIComponent(url.pathname.slice('/__stack/d1/'.length)), await readBody(req)) });
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      console.error('[local-stack] D1 control error:', error);
+      return json({ error: 'D1 query failed' }, 400);
     }
   }
   if (url.pathname.startsWith('/__stack/r2/')) {
@@ -587,9 +588,10 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
         : await stackR2(bucket, '', 'LIST', JSON.stringify({ prefix: url.searchParams.get('prefix') ?? '', cursor: url.searchParams.get('cursor') ?? undefined }));
       return out.body === undefined ? json({}, out.status) : new Response(out.body, { status: out.status, headers: { 'content-type': 'application/json' } });
     } catch (error) {
-      const status = error instanceof StackR2BadRequest ? 400 : 500;
+      const isBadRequest = error instanceof StackR2BadRequest;
+      const status = isBadRequest ? 400 : 500;
       console.error(`[local-stack] R2 ${method} ${url.pathname} -> HTTP ${status}`, error);
-      return json({ error: error instanceof Error ? error.message : String(error) }, status);
+      return json({ error: isBadRequest ? 'Invalid R2 control request' : 'R2 operation failed' }, status);
     }
   }
   if (url.pathname.startsWith('/__stack/kv/')) {
@@ -605,7 +607,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
       await hooks.kvDelete(decodeURIComponent(binding), key);
       return json({ deleted: key });
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      console.error('[local-stack] KV control error:', error);
+      return json({ error: 'KV control request failed' }, 400);
     }
   }
   if (url.pathname === '/__stack/leftovers') {
@@ -623,7 +626,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
       await hooks.queue(app, binding, JSON.parse(await readBody(req)));
       return json({ sent: true });
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      console.error('[local-stack] Queue control error:', error);
+      return json({ error: 'Queue control request failed' }, 400);
     }
   }
   if (url.pathname.startsWith('/__stack/scheduled/')) {
@@ -633,7 +637,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
       if (Number.isNaN(time.getTime())) return json({ error: 'time must be an ISO date' }, 400);
       return json(await hooks.scheduled(decodeURIComponent(url.pathname.slice('/__stack/scheduled/'.length)), url.searchParams.get('cron') ?? '* * * * *', time));
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      console.error('[local-stack] Scheduled control error:', error);
+      return json({ error: 'Scheduled control request failed' }, 400);
     }
   }
   // A spec seeds or checks one stored image (PUT stores the body; GET answers 200 or 404)
@@ -676,7 +681,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
       try {
         return await fakeTranscode(decodeURIComponent(videoId), url.searchParams.get('outcome') ?? 'ready');
       } catch (error) {
-        return json({ error: (error as Error).message }, 502);
+        console.error('[local-stack] Transcode control error:', error);
+        return json({ error: 'Transcode control request failed' }, 502);
       }
     }
     return json({ error: 'unknown media control path' }, 404);
@@ -703,7 +709,8 @@ export function createFakeCdnServer() {
       else if (url.pathname.startsWith('/images/')) response = await images(new Request(`https://${IMAGE_HOST}${url.pathname.slice(7)}`, { method: req.method }), new URL(`https://${IMAGE_HOST}${url.pathname.slice(7)}`));
       else response = cdn(req.method ?? 'GET', url.pathname, req.headers.range);
     } catch (error) {
-      response = json({ error: (error as Error).message }, 500);
+      console.error('[local-stack] Fake CDN server error:', error);
+      response = json({ error: 'Internal server error' }, 500);
     }
     res.writeHead(response.status, Object.fromEntries(response.headers));
     res.end(Buffer.from(await response.arrayBuffer()));
