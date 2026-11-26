@@ -436,6 +436,7 @@ async function computeConfiguredFeatures(
 		viewerCaptionDownload: viewerCaptionDownloadConfigured(settings),
 		quranEditions: quran,
 		quranText,
+		playerCredits: true,
 		eventCalendar: true,
 		parentsGuide: true,
 		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)

@@ -52,6 +52,7 @@ export const USER_FEATURE_KEYS = [
   'quranEditions',
   /** Our Quran Foundation copy of the official text is synced and fresh (quran/current.json) */
   'quranText',
+  'playerCredits',
   /** The (channel owner's) tier allows extra audio tracks */
   'audioTracks',
   /** Own domains: Cloudflare for SaaS is set up, and the channel's site allows at least one */
@@ -117,7 +118,7 @@ export const NO_FEATURES: UserFeatures = Object.freeze(
 export function parseUserFeatures(raw: unknown): UserFeatures {
   const source = raw && typeof raw === 'object' ? ((raw as { features?: unknown }).features ?? raw) : null;
   const value = (source && typeof source === 'object' ? source : {}) as Record<string, unknown>;
-  return Object.fromEntries(USER_FEATURE_KEYS.map((key) => [key, value[key] === true])) as UserFeatures;
+  return Object.fromEntries(USER_FEATURE_KEYS.map((key) => [key, key === 'playerCredits' ? value[key] !== false : value[key] === true])) as UserFeatures;
 }
 
 /** The code a gated API answers (404) while its feature is off for the caller. */

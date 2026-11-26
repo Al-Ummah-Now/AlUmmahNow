@@ -243,7 +243,8 @@ export type FeatureGateResult = { on: true } | { on: false; reason: 'switched_of
  * consumers, crons and Durable Objects call it directly. Switches with an old setting count as on
  * while they have no row: the old reader (api-videos overlaySwitch) still decides those.
  */
-export async function featureGate(env: SwitchesEnv, key: FeatureKey): Promise<FeatureGateResult> {
+export async function featureGate(env: SwitchesEnv, feature: FeatureKey | 'quranText'): Promise<FeatureGateResult> {
+  const key = feature === 'quranText' ? 'playerCredits' : feature;
   if (forcedOff(env).has(key)) return { on: false, reason: 'env_override' };
   const rows = await readSwitchRows(env);
   const stored = { ...DEFAULT_FEATURE_SWITCHES };

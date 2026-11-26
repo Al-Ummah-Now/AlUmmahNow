@@ -1049,6 +1049,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             id: video.id,
             title: video.title,
             titleLocalized: video.titleLocalized,
+            captionSources: video.captionSources,
             description: video.description || '',
             channel: video.channel,
             channelName: video.channelName,

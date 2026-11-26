@@ -4,7 +4,7 @@
 
 import { Str, Enumeration } from '../../lib/chanfana-params';
 import { z } from 'zod';
-import { captionMarkerRanges } from '@al-ummah/shared-types';
+import { captionMarkerRanges, featureGate } from '@al-ummah/shared-types';
 import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';
 import { editionFor } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
@@ -80,7 +80,7 @@ export class SubtitlesGet extends OptionalAuthRoute {
       if (!access) return c.json(VIDEO_NOT_FOUND, 404);
       // Only a video open to anyone may be cached publicly or revalidated (304); the owner's or a
       // channel member's read of a private, scheduled or held video is never stored anywhere
-      const cacheControl = access === 'anyone' ? 'public, max-age=3600, stale-while-revalidate=86400' : 'private, no-store';
+      let cacheControl = access === 'anyone' ? 'public, max-age=3600, stale-while-revalidate=86400' : 'private, no-store';
 
       const subtitleBucket = c.env.subtitles;
 
@@ -113,15 +113,17 @@ export class SubtitlesGet extends OptionalAuthRoute {
       // A published caption draft carries Quran markers (AUN-CAPTIONS), filled from our Quran
       // Foundation copy as it is served: the copy version is part of the ETag
       const quranTrack = key.endsWith('.vtt') && subtitleObject.customMetadata?.quran === '1';
+      const quranOn = quranTrack && (await featureGate(c.env, 'quranText')).on;
       // A translated track (customMetadata.qtr) shows the official translation of the channel's
       // edition for its language, fetched live (O7): the edition is part of the ETag too
       const translatedTrack = quranTrack && subtitleObject.customMetadata?.qtr === '1';
       let edition: Awaited<ReturnType<typeof editionFor>> = null;
-      if (translatedTrack) {
+      if (quranTrack) cacheControl = 'private, no-store';
+      if (quranOn && translatedTrack) {
         edition = await editionFor(c.env as never, video?.channelId ?? null, language);
       }
       const etag = quranTrack
-        ? `"${subtitleObject.etag.replace(/"/g, '')}-${await quranCopyTag(c.env.MEDIA_PRIVATE)}${translatedTrack ? `-e${edition?.id ?? 0}` : ''}"`
+        ? `"${subtitleObject.etag.replace(/"/g, '')}-${quranOn ? await quranCopyTag(c.env.MEDIA_PRIVATE) : 'references'}${quranOn && translatedTrack ? `-e${edition?.id ?? 0}` : ''}"`
         : subtitleObject.etag;
 
       // Check If-None-Match header for conditional request
@@ -139,7 +141,7 @@ export class SubtitlesGet extends OptionalAuthRoute {
 
       const raw = await subtitleObject.text();
       const content = quranTrack
-        ? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined)
+        ? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, quranOn && translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined, quranOn)
         : raw;
 
       // Return raw subtitle content with ETag for cache validation

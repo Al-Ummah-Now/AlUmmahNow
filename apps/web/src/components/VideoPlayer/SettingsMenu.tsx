@@ -17,7 +17,7 @@ import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
 import { isLivePlayback } from '@/lib/video/live-state';
 import { usePlayerLayerHost } from './usePlayerLayerHost';
 import { useVideoPlayerI18n, type SupportedLanguage } from '@/lib/video/i18n';
-import { QURAN_CREDIT_LINK_LABEL, QURAN_FOUNDATION_URL, quranCreditFor } from '@al-ummah/shared-types';
+import { quranPlayerCredit } from './useQuranCaptionCredit';
 import { showingCaptionTrack, trackHasQuranCredit, type CreditTrackLike } from '@/lib/video/quran-credit';
 import {
   audioOptions,
@@ -122,10 +122,11 @@ export interface SettingsMenuProps {
    * The download URL of a caption language (the API fills Quran text at download time, with the
    * attribution inside the file; QF 2026-11-22). Without it the captions panel offers no download.
    */
+  playerCredits?: boolean;
   captionDownloadUrl?: (language: string) => string | null;
 }
 
-export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, captionDownloadUrl }: SettingsMenuProps) {
+export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, captionDownloadUrl, playerCredits = true }: SettingsMenuProps) {
   const p = player as unknown as PlayerApi;
   const { t, dir } = useVideoPlayerI18n(lang);
   const [open, setOpen] = useState(false);
@@ -313,8 +314,8 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
   const shownLanguage = currentCaptionLanguage(text);
   const downloadHref = shownLanguage && captionDownloadUrl ? captionDownloadUrl(shownLanguage) : null;
   // QF's short credit, linked, while the shown track has Quran text from QF (QF 2026-11-23)
-  const credit = trackHasQuranCredit(showingCaptionTrack(text as unknown as ArrayLike<CreditTrackLike>))
-    ? { label: quranCreditFor(lang), ariaLabel: lang === 'ar' ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, href: QURAN_FOUNDATION_URL }
+  const credit = playerCredits && trackHasQuranCredit(showingCaptionTrack(text as unknown as ArrayLike<CreditTrackLike>))
+    ? quranPlayerCredit(lang)
     : undefined;
   const playerAudio = p.audioTracks?.();
   const audioMeta = playerAudio ? matchTracks(playerAudio, audioTracks) : [];

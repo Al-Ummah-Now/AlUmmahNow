@@ -1,4 +1,4 @@
-import type { UploadIssueCode, VideoCategory } from '@al-ummah/shared-types';
+import type { SystemCreditId, UploadIssueCode, VideoCategory } from '@al-ummah/shared-types';
 export type PaginationResponse<T> = {
     cursor: string;
     limit: number;
@@ -10,6 +10,7 @@ export interface VideoObject {
     title: string;
     titleLocalized?: Record<string, string>; // Multi-language titles
     description: string | null;
+    captionSources?: SystemCreditId[];
     descriptionLocalized?: Record<string, string>; // Multi-language descriptions
     thumbnailUrl: string;
     videoUrl: string;

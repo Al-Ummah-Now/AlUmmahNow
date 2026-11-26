@@ -47,7 +47,6 @@ import { logger } from '@/lib/logger-client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import type { AudioTrackView } from '@al-ummah/shared-types';
-import { QURAN_CREDIT_LINK_LABEL, QURAN_FOUNDATION_URL, quranCreditFor } from '@al-ummah/shared-types';
 import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
@@ -79,7 +78,7 @@ import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { SettingsMenu } from './SettingsMenu';
 import { PlayerLinkOverlay, type PlayerOverlayLink } from './PlayerLinkOverlay';
-import { useQuranCaptionCredit, type CreditPlayerLike } from './useQuranCaptionCredit';
+import { quranPlayerCredit, useQuranCaptionCredit, type CreditPlayerLike } from './useQuranCaptionCredit';
 import { ProgressTooltip } from './ProgressTooltip';
 import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
@@ -220,11 +219,12 @@ export default function CustomVideoPlayer({
   const [playerReady, setPlayerReady] = useState(false);
   useAudioTrackChoice(playerReady ? (playerRef.current as unknown as Parameters<typeof useAudioTrackChoice>[0]) : null, audioTracks, lang);
   // QF's short credit, linked, next to Quran captions while they show (QF 2026-11-23)
-  const quranCredit = useQuranCaptionCredit(playerReady ? (playerRef.current as unknown as CreditPlayerLike) : null, playerReady);
+  const { features } = useFeatures();
+  const playerCredits = features.playerCredits !== false;
+  const quranCredit = useQuranCaptionCredit(playerReady ? (playerRef.current as unknown as CreditPlayerLike) : null, playerReady, playerCredits);
   // In the cue's language and direction, not the page's (wiki AUN-PLAYER-LINKS §6.2)
-  const creditAr = quranCredit.language.split('-')[0] === 'ar';
   const playerLinks: PlayerOverlayLink[] = quranCredit.showing
-    ? [{ id: 'quran-foundation', label: quranCreditFor(quranCredit.language), ariaLabel: creditAr ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, lang: creditAr ? 'ar' : 'en', dir: quranCredit.dir, href: QURAN_FOUNDATION_URL, placement: 'caption-end', testId: 'player-quran-credit' }]
+    ? [{ id: 'quran-foundation', ...quranPlayerCredit(quranCredit.language), dir: quranCredit.dir, placement: 'caption-end', testId: 'player-quran-credit' }]
     : [];
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -549,7 +549,6 @@ export default function CustomVideoPlayer({
   }, [playerReady, textTracks, videoId]);
 
   // Viewer caption download is an admin switch, off by default (owner decision 2026-11-22): off, the menu has no Download row
-  const { features } = useFeatures();
   /** The shown caption language's download link (our API's tracks only). */
   const captionDownloadUrl = useCallback(
     (language: string) => {
@@ -1419,7 +1418,7 @@ export default function CustomVideoPlayer({
             autoAdvanceSeconds={playerUi.autoplayNext ? AUTO_ADVANCE_SECONDS : 0}
           />
         )}
-        <PlayerLinkOverlay links={ended ? [] : playerLinks} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />
+        {playerCredits && <PlayerLinkOverlay links={ended ? [] : playerLinks} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
         {mini && <MiniPlayerButtons onClose={closeMini} onReturn={returnFromMini} t={t} />}
 
         {/* Real-time viewer count (WebSocket) */}
@@ -1436,7 +1435,7 @@ export default function CustomVideoPlayer({
       </div>
 
       {playerReady && playerRef.current && (
-        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} captionDownloadUrl={features.viewerCaptionDownload ? captionDownloadUrl : undefined} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
+        <SettingsMenu playerCredits={playerCredits} player={playerRef.current} lang={lang} audioTracks={audioTracks} captionDownloadUrl={features.viewerCaptionDownload ? captionDownloadUrl : undefined} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
       )}
       {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} lang={lang} />}
 

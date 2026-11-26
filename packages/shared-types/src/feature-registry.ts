@@ -94,6 +94,7 @@ export const FEATURE_KEYS = [
   'creatorSupport',
   'charityDonations',
   'supportDormantTransfer',
+  'playerCredits',
   'prayerTimes',
   'qibla',
   'hijriCalendar',
@@ -118,7 +119,6 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
 /** `/api/me/features` keys that follow something other than a switch, and why (registry test). */
 export const AUTOMATIC_FEATURE_KEYS: Readonly<Partial<Record<UserFeatureKey, string>>> = Object.freeze({
-  quranText: 'On while our Quran Foundation copy is synced and less than 7 days old (QF1).',
   billing: 'On while a payment provider is on, or the account has subscriptions or payments (O37).',
 });
 
@@ -503,6 +503,21 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'both',
     requires: ['creatorSupport'],
     userFeatureKeys: [],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'playerCredits',
+    group: 'grow',
+    name: { en: 'Source credits in the player', ar: 'ذكر المصادر في المشغّل' },
+    help: {
+      en: "The player stops showing source credits, such as Quran Foundation’s. Quran text in captions is switched off with it, because its source must be credited.",
+      ar: 'يتوقف المشغّل عن عرض ذكر المصادر، مثل مؤسسة القرآن. ويتوقف معه نص القرآن في الترجمة النصية، لأن ذكر مصدره شرط لعرضه.',
+    },
+    default: true,
+    toggle: 'superAdmin',
+    confirm: 'off',
+    requires: [],
+    userFeatureKeys: ['playerCredits', 'quranText'],
     offline: 'lastKnownElseHidden',
   },
   // --- Islamic experience (E21; all off until the owner enables them) --------

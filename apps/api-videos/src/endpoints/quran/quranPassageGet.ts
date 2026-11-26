@@ -3,6 +3,7 @@
  * text of a Quran range from our Quran Foundation copy, with its attribution and quran.com link.
  * Used by Studio's caption editor and the Quran passage card. Public and cacheable.
  */
+import { featureGate } from '@al-ummah/shared-types';
 import { z } from 'zod';
 import { QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type QuranRange } from '@al-ummah/shared-types';
 import { PublicRoute } from '../../base';
@@ -74,6 +75,7 @@ export class QuranPassageGet extends PublicRoute {
 	};
 
 	async handle(c: AppContext) {
+		if (!(await featureGate(c.env, 'quranText')).on) return textUnavailable(c);
 		const { query } = await this.getValidatedData<typeof this.schema>();
 		let range = parseQuranRange(query.range.trim());
 		if (!range && SHORT_RANGE.test(query.range.trim())) {

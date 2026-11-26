@@ -82,7 +82,8 @@ describe('feature answer', () => {
 		const f = await computeFeatures(env, { userId: null });
 		assert.deepEqual(Object.keys(f).sort(), [...USER_FEATURE_KEYS].sort());
 		assert.equal(f.viewerTranslatedTitles, true);
-		for (const key of USER_FEATURE_KEYS.filter((k) => k !== 'viewerTranslatedTitles')) assert.equal(f[key], false, key);
+		assert.equal(f.playerCredits, true);
+		for (const key of USER_FEATURE_KEYS.filter((k) => k !== 'viewerTranslatedTitles' && k !== 'playerCredits')) assert.equal(f[key], false, key);
 	});
 
 	it('config on + tier on: the tier\'s features show', async () => {
@@ -166,7 +167,7 @@ describe('feature answer', () => {
 		assert.equal(aliceOnBob.audioTracks, false);
 		// Not on the team: nothing of that channel's Studio
 		const stranger = await computeFeatures(env, { userId: 'carol', roles: ROLES_NONE }, 'ch1');
-		assert.deepEqual({ ...stranger, viewerTranslatedTitles: false }, NO_FEATURES);
+		assert.deepEqual({ ...stranger, viewerTranslatedTitles: false }, { ...NO_FEATURES, playerCredits: true });
 	});
 
 	it('caption minutes from an admin grant count as a plan', async () => {
@@ -188,6 +189,9 @@ describe('feature answer', () => {
 		await bucket.put('quran/current.json', JSON.stringify({ v: 1, version: 'v1', syncedAt: new Date().toISOString(), builtAt: new Date().toISOString(), surahs: 114, words: 77429 }));
 		clearQuranCopyCache();
 		assert.equal((await computeFeatures(env, { userId: null })).quranText, true);
+		const disabled = await computeFeatures({ ...env, FEATURES_FORCE_OFF: 'playerCredits' }, { userId: null });
+		assert.equal(disabled.playerCredits, false);
+		assert.equal(disabled.quranText, false);
 		await bucket.put('quran/current.json', JSON.stringify({ v: 1, version: 'v1', syncedAt: new Date(Date.now() - 8 * 86400_000).toISOString(), builtAt: 'x', surahs: 114, words: 1 }));
 		clearQuranCopyCache();
 		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).quranText, false, 'older than 7 days');

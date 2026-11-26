@@ -78,6 +78,7 @@ export const VideoView = z.object({
         src: Str().describe("Signed HLS master playlist"),
         type: z.literal('application/x-mpegURL'),
     })).optional().describe("Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"),
+    captionSources: z.array(z.literal('quranFoundation')).optional().describe('Sources of text in published caption tracks'),
     delivery: z.object({ source: z.enum(MEDIA_PROVIDER_IDS) }).optional().describe("The provider that plays first (a label)"),
     userId: Str(),
     channelId: Str(),

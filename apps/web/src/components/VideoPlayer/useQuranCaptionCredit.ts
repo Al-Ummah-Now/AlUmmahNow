@@ -14,7 +14,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RTL_CAPTION_LANGUAGES } from '@al-ummah/shared-types';
+import { QURAN_FOUNDATION_CREDIT, RTL_CAPTION_LANGUAGES } from '@al-ummah/shared-types';
 import { activeCueCredited, liftQuranCredits, showingCaptionTrack, type CreditTrackLike } from '@/lib/video/quran-credit';
 
 type Listener = () => void;
@@ -43,6 +43,18 @@ export interface CaptionCredit {
 }
 
 export const CAPTION_CREDIT_CLASS = 'vjs-fanous-caption-credit';
+const SUPPRESSED_CLASS = 'vjs-fanous-caption-credit-off';
+
+export function quranPlayerCredit(language: string) {
+  const lang = language.split('-')[0]?.toLowerCase() === 'ar' ? 'ar' : 'en';
+  return {
+    label: QURAN_FOUNDATION_CREDIT.label[lang],
+    ariaLabel: QURAN_FOUNDATION_CREDIT.ariaLabel[lang],
+    href: QURAN_FOUNDATION_CREDIT.href,
+    lang,
+  };
+}
+
 const OFF: CaptionCredit = { showing: false, language: 'en', dir: 'ltr' };
 const RESIZE_EVENTS = ['playerresize', 'fullscreenchange', 'resize'];
 
@@ -72,7 +84,7 @@ export function placeCredit(playerEl: HTMLElement, dir: 'ltr' | 'rtl'): void {
   if (css.backgroundColor) playerEl.style.setProperty('--fanous-credit-bg', css.backgroundColor);
 }
 
-export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefined, ready: boolean): CaptionCredit {
+export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefined, ready: boolean, enabled = true): CaptionCredit {
   const [credit, setCredit] = useState<CaptionCredit>(OFF);
 
   useEffect(() => {
@@ -99,7 +111,10 @@ export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefine
         if (t && liftQuranCredits(t) && t.mode === 'showing') redraw = true;
       }
       const track = showingCaptionTrack(list);
-      const on = activeCueCredited(track);
+      const credited = activeCueCredited(track);
+      const on = enabled && credited;
+      if (!enabled && credited) player.addClass?.(SUPPRESSED_CLASS);
+      else player.removeClass?.(SUPPRESSED_CLASS);
       const language = track?.language || 'en';
       const dir = captionDir(language);
       if (on) player.addClass?.(CAPTION_CREDIT_CLASS);
@@ -150,9 +165,10 @@ export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefine
         t.removeEventListener?.('cuechange', update);
       }
       player.removeClass?.(CAPTION_CREDIT_CLASS);
+      player.removeClass?.(SUPPRESSED_CLASS);
       setCredit(OFF);
     };
-  }, [player, ready]);
+  }, [player, ready, enabled]);
 
   return credit;
 }

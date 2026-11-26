@@ -17,6 +17,8 @@ export interface SubtitleTrack {
   origin?: 'upload' | 'machine' | 'machine_edited';
   /** Machine tracks: the caption draft version that was published (captions.ts) */
   version?: number;
+  /** The published track has Quran text or translation markers. */
+  hasQuranText?: boolean;
   /** AUN-CAPTIONS §3.2: a machine translation of another track (the player labels it so) */
   machineTranslation?: boolean;
   /** Machine translations: the language translated from */
