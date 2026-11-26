@@ -1614,6 +1614,11 @@ export async function eraseUserData(
 			}
 		},
 		moveOffers(false),
+		async (ctx) => {
+			if (!db) return;
+			ctx.budget.spend();
+			await eraseWorkflowText(db, userId);
+		},
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, env, { purpose: 'erase', userId, version: ERASE_STATE_VERSION });
@@ -1621,6 +1626,11 @@ export async function eraseUserData(
 	if (result.resumeToken) summary.resumeToken = result.resumeToken;
 	if (result.restarted) summary.restarted = true;
 	return result.unavailable ? { ...summary, unavailable: result.unavailable } : summary;
+}
+
+/** WF-D7 keeps the audit IDs and removes the erased account's notes and reasons. */
+export async function eraseWorkflowText(db: Pick<SearchDb, 'prepare'>, userId: string): Promise<void> {
+	await db.prepare('INSERT INTO workflow_note_erasures (actor) VALUES (?)').bind(userId).run();
 }
 
 export type { BucketLike };

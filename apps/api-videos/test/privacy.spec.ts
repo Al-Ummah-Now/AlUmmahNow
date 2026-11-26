@@ -396,6 +396,19 @@ describe('privacy endpoints', () => {
 	it('DELETE /api/privacy/data erases and queues follow-up messages', async () => {
 		const app = buildApp(privacyRoutes, { userId: ME });
 		const env = { ...seed(), SEARCH_DB: new SqliteD1() };
+		const seedWorkflow = env.SEARCH_DB.db.prepare(`INSERT INTO workflow_requests
+			(id, action_type, domain, rule, target_kind, target_id, payload, diff, base_version, reason, proposed_by,
+			 proposed_at, expires_at, status, approvals_needed, updated_at)
+			VALUES (?, 'features.set', 'platform', '{}', 'feature', 'test', '{}', '{}', '0', 'private reason', ?,
+			        '2026-01-01', '2026-01-02', 'applied', 0, '2026-01-02')`);
+		seedWorkflow.run('mine', ME);
+		seedWorkflow.run('theirs', 'other-admin');
+		const step = env.SEARCH_DB.db.prepare(`INSERT INTO workflow_steps (request_id, seq, actor, kind, note, step_up, origin, at)
+			VALUES (?, ?, ?, 'comment', ?, 1, '{}', '2026-01-02')`);
+		step.run('mine', 1, ME, 'private note');
+		step.run('mine', 2, 'other-admin', 'another note');
+		step.run('theirs', 1, ME, 'my note on another request');
+		step.run('theirs', 2, ME, null);
 		const res = await app.request(
 			'/api/privacy/data',
 			{ method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }), headers: { 'content-type': 'application/json' } },
@@ -405,6 +418,18 @@ describe('privacy endpoints', () => {
 		const body = await res.json();
 		assert.equal(body.complete, true);
 		assert.equal(env.profiles.read(ME), null);
+		const requests = env.SEARCH_DB.db.prepare('SELECT id, reason, proposed_by, version FROM workflow_requests ORDER BY id').all();
+		assert.deepEqual(requests.map(Object.values), [
+			['mine', 'Removed', ME, 1],
+			['theirs', 'private reason', 'other-admin', 1],
+		]);
+		const steps = env.SEARCH_DB.db.prepare('SELECT request_id, seq, actor, kind, note, step_up, origin, at FROM workflow_steps ORDER BY request_id, seq').all();
+		assert.deepEqual(steps.map(Object.values), [
+			['mine', 1, ME, 'comment', 'Removed', 1, '{}', '2026-01-02'],
+			['mine', 2, 'other-admin', 'comment', 'another note', 1, '{}', '2026-01-02'],
+			['theirs', 1, ME, 'comment', 'Removed', 1, '{}', '2026-01-02'],
+			['theirs', 2, ME, 'comment', null, 1, '{}', '2026-01-02'],
+		]);
 		const types = env.queue.messages.map((m: any) => m.type);
 		assert.ok(types.includes(MessageType.UserDataErased));
 		assert.ok(types.includes(MessageType.VideoDelete));
