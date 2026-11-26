@@ -39,7 +39,7 @@ const DAY_MS = 86_400_000;
  */
 export const ANALYTICS_DEDUPE_TTL_DAYS = 8;
 export const ANALYTICS_DEDUPE_TTL_MS = ANALYTICS_DEDUPE_TTL_DAYS * DAY_MS;
-/** Rows deleted per purge statement (gentle on the single D1 writer; 1 row written per deleted row). */
+/** Rows deleted per purge statement (gentle on the single D1 writer). */
 export const ANALYTICS_DEDUPE_PURGE_BATCH = 1000;
 /** Max rounds per hourly run (200k rows/hour = 4.8M rows/day). */
 export const ANALYTICS_DEDUPE_PURGE_MAX_ROUNDS = 200;
@@ -116,9 +116,19 @@ const BOUNDED_UPSERT_UNLESS = boundedUpsert(unlessClause(9));
 const MARKER_INSERT = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (entity_type, entity_id, day, metric, dim) DO NOTHING`;
 const markerKey = (m: CounterMarker) => [m.entityType, m.entityId, m.day, m.metric, m.dim] as const;
 
+// Probe the (day_bucket, message_id) primary key once per candidate day. A date range
+// predicate on day_bucket would scan unrelated markers before testing message_id.
+function unseenMessage(idIndex: number, bucketsIndex: number): string {
+	return `NOT EXISTS (
+    SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE}
+    WHERE day_bucket IN (SELECT value FROM json_each(j.value, '$[${bucketsIndex}]'))
+      AND message_id = json_extract(j.value, '$[${idIndex}]')
+  )`;
+}
+
 /**
  * Per-message deduplicated bulk upsert: ?1 is a JSON array of
- * [entity_type, entity_id, day, metric, dim, value, message_id, bucket0, bucket1, bucket2].
+ * [entity_type, entity_id, day, metric, dim, value, message_id, lookup_buckets].
  * Rows whose (day_bucket, message_id) already exists in analytics_dedupe (PK seek)
  * are skipped; the rest are summed per counter key so a hot batch still writes one row per key.
  */
@@ -132,11 +142,7 @@ FROM (
          json_extract(j.value, '$[4]') AS dim,
          json_extract(j.value, '$[5]') AS val
   FROM json_each(?1) AS j
-  WHERE NOT EXISTS (
-    SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE}
-    WHERE day_bucket IN (json_extract(j.value, '$[7]'), json_extract(j.value, '$[8]'), json_extract(j.value, '$[9]'))
-      AND message_id = json_extract(j.value, '$[6]')
-  )
+  WHERE ${unseenMessage(6, 7)}
 )
 GROUP BY entity_type, entity_id, day, metric, dim
 HAVING SUM(val) <> 0
@@ -156,50 +162,43 @@ SELECT ?1, ?2, ?3, ?4,
 FROM (
   SELECT SUM(json_extract(j.value, '$[1]')) AS total
   FROM json_each(?8) AS j
-  WHERE NOT EXISTS (
-    SELECT 1 FROM ${ANALYTICS_DEDUPE_TABLE}
-    WHERE day_bucket IN (json_extract(j.value, '$[2]'), json_extract(j.value, '$[3]'), json_extract(j.value, '$[4]'))
-      AND message_id = json_extract(j.value, '$[0]')
-  )
+  WHERE ${unseenMessage(0, 2)}
 ) AS s
 WHERE s.total IS NOT NULL AND s.total <> 0
 ${ADD_ON_CONFLICT}`;
 
-/** Records every processed (day_bucket, message_id) of the batch last in the same transaction (1 row/msg, no secondary index). */
+/** Records the batch's unseen messages last in the same transaction (no secondary index). */
 export const DEDUPE_INSERT = `INSERT OR IGNORE INTO ${ANALYTICS_DEDUPE_TABLE} (day_bucket, message_id)
 SELECT json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]')
-FROM json_each(?1) AS j`;
+FROM json_each(?1) AS j
+WHERE ${unseenMessage(1, 2)}`;
 
 function utcDayOf(ms: number): string {
 	return new Date(ms).toISOString().slice(0, 10);
 }
 
-function prevUtcDay(day: string): string {
-	return utcDayOf(Date.parse(`${day}T00:00:00Z`) - DAY_MS);
-}
-
 /**
- * Resolves the write day_bucket and the PK lookup buckets for one message.
- * Normal messages use their timestamp's UTC day (invariant across midnight on
- * redelivery); stale/future/invalid timestamps clamp to today, and lookup checks
- * the neighbouring day bucket so a midnight-straddling redelivery still hits.
+ * Normal messages write under their timestamp's UTC day. Clamped messages write under
+ * today's UTC day and look back through the retained window, including the purge cutoff.
+ * An in-window timestamp can also have an earlier marker if it was future on first
+ * delivery, so check the retained days through its write bucket in that case too.
  */
 export function resolveMessageBuckets(
 	timestamp: number | string | undefined,
 	now = Date.now(),
 	ttlDays = ANALYTICS_DEDUPE_TTL_DAYS,
-): { writeBucket: string; lookupBuckets: readonly [string, string, string] } {
+): { writeBucket: string; lookupBuckets: string[] } {
 	const today = utcDayOf(now);
-	const minDay = utcDayOf(now - Math.max(1, ttlDays - 1) * DAY_MS);
-	let rawDay: string | null = null;
-	if (timestamp !== undefined) {
-		const parsed = new Date(timestamp);
-		if (Number.isFinite(parsed.getTime())) rawDay = parsed.toISOString().slice(0, 10);
+	const cutoffMs = Date.parse(`${utcDayOf(now - ttlDays * DAY_MS)}T00:00:00Z`);
+	const minWriteDay = utcDayOf(now - Math.max(1, ttlDays - 1) * DAY_MS);
+	const parsed = timestamp === undefined ? Number.NaN : new Date(timestamp).getTime();
+	const rawDay = Number.isFinite(parsed) ? utcDayOf(parsed) : null;
+	const writeBucket = rawDay && rawDay >= minWriteDay && rawDay <= today ? rawDay : today;
+	const lookupBuckets: string[] = [];
+	for (let ms = Date.parse(`${writeBucket}T00:00:00Z`); ms >= cutoffMs; ms -= DAY_MS) {
+		lookupBuckets.push(utcDayOf(ms));
 	}
-	const writeBucket = rawDay && rawDay >= minDay && rawDay <= today ? rawDay : today;
-	const prev = prevUtcDay(writeBucket);
-	const third = rawDay && rawDay !== writeBucket && rawDay !== prev ? rawDay : writeBucket;
-	return { writeBucket, lookupBuckets: [writeBucket, prev, third] };
+	return { writeBucket, lookupBuckets };
 }
 
 /** Why CounterBatch.add refused an increment (a caller bug: logged, never silent). */
@@ -336,26 +335,26 @@ export class CounterBatch {
 		if (this.dedupedRows.size > 0) {
 			const now = opts.now ?? Date.now();
 			const ttlDays = opts.ttlDays ?? ANALYTICS_DEDUPE_TTL_DAYS;
-			const bucketsByMessage = new Map<string, { writeBucket: string; lookupBuckets: readonly [string, string, string] }>();
+			const bucketsByMessage = new Map<string, ReturnType<typeof resolveMessageBuckets>>();
 			for (const [messageId, ts] of this.messageTimestamps) {
 				bucketsByMessage.set(messageId, resolveMessageBuckets(ts, now, ttlDays));
 			}
 
-			const plainTuples: Array<[EntityType, string, string, string, string, number, string, string, string, string]> = [];
-			const boundedEntries: Array<{ inc: CounterIncrement; entries: Array<[string, number, string, string, string]> }> = [];
+			const plainTuples: Array<[EntityType, string, string, string, string, number, string, string[]]> = [];
+			const boundedEntries: Array<{ inc: CounterIncrement; entries: Array<[string, number, string[]]> }> = [];
 
 			for (const { inc, byMessage } of this.dedupedRows.values()) {
 				if (inc.maxDims && inc.dim !== OTHER_DIM) {
-					const entries: Array<[string, number, string, string, string]> = [];
+					const entries: Array<[string, number, string[]]> = [];
 					for (const [messageId, value] of byMessage) {
-						const [b0, b1, b2] = bucketsByMessage.get(messageId)!.lookupBuckets;
-						entries.push([messageId, value, b0, b1, b2]);
+						const { lookupBuckets } = bucketsByMessage.get(messageId)!;
+						entries.push([messageId, value, lookupBuckets]);
 					}
 					boundedEntries.push({ inc, entries });
 				} else {
 					for (const [messageId, value] of byMessage) {
-						const [b0, b1, b2] = bucketsByMessage.get(messageId)!.lookupBuckets;
-						plainTuples.push([inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim ?? '', value, messageId, b0, b1, b2]);
+						const { lookupBuckets } = bucketsByMessage.get(messageId)!;
+						plainTuples.push([inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim ?? '', value, messageId, lookupBuckets]);
 					}
 				}
 			}
@@ -375,7 +374,7 @@ export class CounterBatch {
 			}
 
 			// Dedupe markers must be inserted AFTER all counter upserts in the same batch (1 row/message, no secondary index)
-			const markers: Array<[string, string]> = [...bucketsByMessage.entries()].map(([id, b]) => [b.writeBucket, id]);
+			const markers = [...bucketsByMessage.entries()].map(([id, b]) => [b.writeBucket, id, b.lookupBuckets]);
 			for (let i = 0; i < markers.length; i += ROWS_PER_STATEMENT) {
 				out.push(db.prepare(DEDUPE_INSERT).bind(JSON.stringify(markers.slice(i, i + ROWS_PER_STATEMENT))));
 			}
@@ -429,6 +428,8 @@ export class CounterBatch {
 
 export interface AnalyticsDedupePurgeResult {
 	deleted: number;
+	/** Sum of D1's reported rows_written, or null if any chunk omitted the metric. */
+	rowsWritten: number | null;
 	rounds: number;
 	/** True when no expired rows remain; false when maxRounds or timeBoxMs stopped the run. */
 	caughtUp: boolean;
@@ -446,7 +447,7 @@ export interface AnalyticsDedupePurgeOptions {
 
 /**
  * Deletes expired analytics_dedupe rows in bounded PK-prefix chunks (1,000 rows per
- * statement, 1 row written per deleted row, no secondary index, no full table scan).
+ * statement, no secondary index, no full table scan).
  * Runs hourly and stops at maxRounds or timeBoxMs, resuming on the next hour if a
  * backlog remains.
  */
@@ -472,6 +473,7 @@ WHERE (day_bucket, message_id) IN (
 )`;
 
 	let deleted = 0;
+	let rowsWritten: number | null = 0;
 	let rounds = 0;
 	let caughtUp = false;
 	let timedOut = false;
@@ -482,7 +484,10 @@ WHERE (day_bucket, message_id) IN (
 			break;
 		}
 		const result = await db.prepare(sql).bind(cutoffDay, batchSize).run();
-		const n = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0);
+		if (!result.success) throw new Error(result.error ?? 'Analytics dedupe purge failed');
+		const meta = result.meta as { changes?: number; rows_written?: number } | undefined;
+		const n = meta?.changes ?? 0;
+		rowsWritten = rowsWritten !== null && meta?.rows_written !== undefined ? rowsWritten + meta.rows_written : null;
 		deleted += n;
 		rounds++;
 		if (n < batchSize) {
@@ -491,7 +496,7 @@ WHERE (day_bucket, message_id) IN (
 		}
 	}
 
-	return { deleted, rounds, caughtUp, timedOut, cutoffDay };
+	return { deleted, rowsWritten, rounds, caughtUp, timedOut, cutoffDay };
 }
 
 /** One-shot helper: add these increments atomically per row. */

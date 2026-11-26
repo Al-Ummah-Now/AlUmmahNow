@@ -3,7 +3,8 @@
  * (ar) translate → Llama Guard → (opt) extension classifier → decide → signal + audit.
  *
  * Fail safe: an AI failure never touches the content. Transient errors are retried by
- * the queue; on the last attempt a `skipped:error` signal is written and the message acked.
+ * the queue; on the last attempt the error is logged and the message acked. Live chat
+ * persists signals only for policy matches or scores eligible for a creator-configured hold.
  */
 import type { Logger } from '@al-ummah/logger';
 import type { D1Database, ModerationScanPayload } from '@al-ummah/shared-types';
@@ -77,6 +78,7 @@ export async function handleModerationScan(
   if ((chat && !chatReserved) || !(await reserveBudget(db, config.dailyNeuronCap, estimate, now))) {
     if (chatReserved) await settleBudget(db, estimate, 0, now, LIVE_CHAT_FEATURE);
     logger.warn('[Moderation] Daily neuron cap reached, scan skipped', { cap: config.dailyNeuronCap, surface: payload.surface, subjectId: payload.subjectId });
+    if (chat) return { status: 'done', decision: 'skipped:budget' };
     const signalId = await writeSignal(db, { ...base, decision: 'skipped', skipReason: 'budget' }, now);
     return { status: 'done', signalId, decision: 'skipped:budget' };
   }
@@ -125,6 +127,7 @@ export async function handleModerationScan(
       return { status: 'retry', error: message };
     }
     logger.error('[Moderation] AI call failed on last attempt, scan skipped', { subjectId: payload.subjectId, error: message });
+    if (chat) return { status: 'done', decision: 'skipped:error' };
     const signalId = await writeSignal(db, { ...base, models, decision: 'skipped', skipReason: 'error' }, now);
     return { status: 'done', signalId, decision: 'skipped:error' };
   }
@@ -133,25 +136,27 @@ export async function handleModerationScan(
 
   // Trust score arrives with story 28.2; until then nobody is "low trust", so charity_scam can only flag.
   const result = decide(scores, config.policies, { lowTrust: false, autoHideAvailable: false });
-  const signalId = await writeSignal(
-    db,
-    {
-      ...base,
-      scores,
-      topCategory: result.topCategory,
-      topScore: result.topScore,
-      models,
-      decision: result.decision,
-      priority: result.priority,
-      translation,
-      rationale,
-      note: result.note,
-    },
-    now
-  );
-  // The creator's choice for this chat (E17-D4). The signal above stands whatever happens here: a hold that fails
-  // leaves the message where it was, for a person
   const level = chat && payload.parentId ? holdLevel(scores, config.policies) : null;
+  // Keep an audit signal for strict hold candidates even below the policy's flag threshold.
+  const signalId = !chat || result.decision !== 'none' || level
+    ? await writeSignal(
+        db,
+        {
+          ...base,
+          scores,
+          topCategory: result.topCategory,
+          topScore: result.topScore,
+          models,
+          decision: result.decision,
+          priority: result.priority,
+          translation,
+          rationale,
+          note: result.note,
+        },
+        now
+      )
+    : undefined;
+  // The signal stays available for review if a hold fails.
   if (level) {
     try {
       const held = await holdLiveChatMessage(env, payload.subjectId, payload.parentId!, level, now);
@@ -170,5 +175,5 @@ export async function handleModerationScan(
     neurons: Math.round(ctx.spent * 1000) / 1000,
     signalId,
   });
-  return { status: 'done', signalId, decision: result.decision };
+  return { status: 'done', ...(signalId ? { signalId } : {}), decision: result.decision };
 }

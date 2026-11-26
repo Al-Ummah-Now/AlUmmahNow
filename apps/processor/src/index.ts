@@ -669,6 +669,20 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   // Everything else is for our own Workers (service bindings)
   if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
 
+  // #1928: QA can measure the billed writes of one 1,000-row purge chunk.
+  if (url.pathname === '/internal/qa/analytics-dedupe/purge' && env.ENVIRONMENT === 'qa') {
+    if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    if (!env.NOTIFICATIONS_DB) return json({ error: 'NOTIFICATIONS_DB not bound' }, 503);
+    try {
+      const result = await purgeExpiredAnalyticsDedupe(env.NOTIFICATIONS_DB, Date.now(), { maxRounds: 1 });
+      logger.info('[Retention] QA analytics dedupe purge chunk', { ...result });
+      return json(result);
+    } catch (error) {
+      logger.error('[Retention] QA analytics dedupe purge failed', error);
+      return json({ error: 'Analytics dedupe purge failed' }, 500);
+    }
+  }
+
   // Queue status endpoint
   if (url.pathname === '/queue/status') {
     logger.debug('Queue status requested');
