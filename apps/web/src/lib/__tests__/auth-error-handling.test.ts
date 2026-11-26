@@ -35,6 +35,7 @@ jest.mock('@/lib/auth', () => ({
 
 import { authenticated } from '@/lib/actions';
 import { getServerAuthContext } from '@/lib/api/server-auth';
+import { getServerAuthContext as getServerAuthContextV2 } from '@/lib/api/server-auth-v2';
 import { SessionManager } from '@/lib/auth/session-manager';
 import { SessionInfrastructureError } from '@/lib/errors/server-report';
 import { logger as mockLogger } from '@/lib/logger-server';
@@ -53,6 +54,7 @@ const origKey = process.env.INTERNAL_API_KEY;
 beforeEach(() => {
   jest.clearAllMocks();
   jest.restoreAllMocks();
+  mockVerify.mockReset();
   process.env.ERRORS_INGEST_URL = 'https://admin.api.test/internal/errors';
   process.env.INTERNAL_API_KEY = 'internal-test-key';
   cookiesImpl = jarCookies({});
@@ -114,17 +116,126 @@ describe('web auth error handling (#302)', () => {
     expect(mockVerify).not.toHaveBeenCalled();
   });
 
-  it('logs, reports, and refuses when legacy token verification throws, and returns false quietly on invalid token', async () => {
-    cookiesImpl = jarCookies({ access_token: 'legacy-jwt' });
+  it('returns signed-out quietly when OpenAuth rejects the legacy credentials', async () => {
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' });
     mockVerify.mockResolvedValue({ err: new Error('InvalidAccessTokenError') });
-    expect(await authenticated()).toBe(false);
-    expect(mockReportServerError).not.toHaveBeenCalled();
 
-    // When verify() throws (e.g. bad signature or JWKS failure): log, report, and refuse
-    mockVerify.mockRejectedValue(new TypeError('fetch failed'));
-    expect(await authenticated()).toBe(false);
-    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    await expect(SessionManager.getActiveSession()).resolves.toBeNull();
+    await expect(authenticated()).resolves.toBe(false);
+    await expect(getServerAuthContextV2()).resolves.toBeNull();
+    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+    expect(mockReportServerError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['authenticated', authenticated],
+    ['server auth', getServerAuthContext],
+    ['server auth v2 fallback', getServerAuthContextV2],
+  ] as const)('reports and propagates a legacy verification outage through %s', async (_name, resolveAuth) => {
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt' });
+    const outage = new TypeError('JWKS fetch failed');
+    mockVerify.mockRejectedValue(outage);
+
+    await expect(resolveAuth()).rejects.toMatchObject({
+      name: 'SessionInfrastructureError',
+      cause: outage,
+    });
+    expect(mockLogger.error).toHaveBeenCalledTimes(1);
     expect(mockReportServerError).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports and propagates verification failures during SessionManager legacy migration', async () => {
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' });
+    const outage = new TypeError('refresh fetch failed');
+    mockVerify.mockRejectedValue(outage);
+
+    await expect(authenticated()).rejects.toMatchObject({
+      name: 'SessionInfrastructureError',
+      cause: outage,
+    });
+    expect(mockVerify).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).toHaveBeenCalledTimes(1);
+    expect(mockReportServerError).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports and propagates cookie read failures during legacy migration', async () => {
+    const outage = new Error('legacy cookie store unavailable');
+    cookiesImpl = jest.fn(jarCookies({}))
+      .mockImplementationOnce(jarCookies({}))
+      .mockRejectedValueOnce(outage);
+
+    await expect(getServerAuthContextV2()).rejects.toMatchObject({
+      name: 'SessionInfrastructureError',
+      cause: outage,
+    });
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(mockReportServerError).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a verified legacy session available when cookies are read-only', async () => {
+    const cookieStore = await jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' })();
+    cookieStore.set.mockImplementation(() => {
+      throw new Error('Cookies can only be modified in a Server Action or Route Handler.');
+    });
+    cookiesImpl = async () => cookieStore;
+    mockVerify.mockResolvedValue({ subject: { properties: { id: 'user-1', email: 'user@example.test' } } });
+
+    await expect(SessionManager.getActiveSession()).resolves.toMatchObject({ userId: 'user-1' });
+    expect(cookieStore.set).toHaveBeenCalled();
+    expect(cookieStore.delete).not.toHaveBeenCalled();
+    expect(mockReportServerError).not.toHaveBeenCalled();
+  });
+
+  it('propagates migration write failures and keeps the legacy cookies for a retry', async () => {
+    const cookieStore = await jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' })();
+    const outage = new Error('cookie write failed');
+    cookieStore.set.mockImplementation(() => { throw outage; });
+    cookiesImpl = async () => cookieStore;
+    mockVerify.mockResolvedValue({ subject: { properties: { id: 'user-1', email: 'user@example.test' } } });
+
+    await expect(SessionManager.getActiveSession()).rejects.toMatchObject({
+      name: 'SessionInfrastructureError',
+      cause: outage,
+    });
+    expect(cookieStore.delete).not.toHaveBeenCalled();
+    expect(mockReportServerError).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    'NEXT_REDIRECT;replace;/en;307;',
+    'NEXT_HTTP_ERROR_FALLBACK;404',
+    'DYNAMIC_SERVER_USAGE',
+    'NEXT_PRERENDER_INTERRUPTED',
+    'HANGING_PROMISE_REJECTION',
+    'BAILOUT_TO_CLIENT_SIDE_RENDERING',
+  ])('rethrows %s from both legacy migration paths without reporting', async (digest) => {
+    const controlFlowError = Object.assign(new Error(digest), { digest });
+    mockVerify.mockRejectedValue(controlFlowError);
+
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' });
+    await expect(SessionManager.getActiveSession()).rejects.toBe(controlFlowError);
+
+    // An access-only cookie skips SessionManager migration so V2 tries authenticated().
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt' });
+    await expect(getServerAuthContextV2()).rejects.toBe(controlFlowError);
+
+    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockReportServerError).not.toHaveBeenCalled();
+  });
+
+  it('rethrows a reported infrastructure error from both legacy migration paths without duplicate reporting', async () => {
+    const outage = new SessionInfrastructureError('session store unavailable');
+    mockVerify.mockRejectedValue(outage);
+
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt', refresh_token: 'legacy-refresh' });
+    await expect(SessionManager.getActiveSession()).rejects.toBe(outage);
+
+    cookiesImpl = jarCookies({ access_token: 'legacy-jwt' });
+    await expect(getServerAuthContextV2()).rejects.toBe(outage);
+
+    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockReportServerError).not.toHaveBeenCalled();
   });
 
   it('returns signed-out quietly when cookies() is called outside a Next.js request scope', async () => {

@@ -14,6 +14,8 @@ const NEXT_CONTROL_FLOW_PREFIXES = [
   'NEXT_HTTP_ERROR_FALLBACK',
   'DYNAMIC_SERVER_USAGE',
   'NEXT_PRERENDER_INTERRUPTED',
+  'BAILOUT_TO_CLIENT_SIDE_RENDERING',
+  'HANGING_PROMISE_REJECTION',
 ];
 
 export function isNextControlFlowError(error: unknown): boolean {
@@ -23,7 +25,7 @@ export function isNextControlFlowError(error: unknown): boolean {
     return true;
   }
   const code = (error as { code?: unknown }).code;
-  return code === 'DYNAMIC_SERVER_USAGE';
+  return code === 'DYNAMIC_SERVER_USAGE' || code === 'NEXT_STATIC_GEN_BAILOUT';
 }
 
 /**

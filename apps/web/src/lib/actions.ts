@@ -79,18 +79,18 @@ export async function authenticated(): Promise<AuthSubject | false> {
     return false;
   }
 
-  const client = await getClient();
-
   let verified;
   try {
+    const client = await getClient();
     verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
   } catch (verifyError) {
     if (isNextControlFlowError(verifyError)) throw verifyError;
-    // A forged/tampered legacy JWT can throw during signature verification: log
-    // and report, then refuse the token rather than returning any identity.
-    logger.warn('[authenticated] Legacy token verification threw', safeErrorMeta(verifyError));
+    // OpenAuth returns invalid credentials as { err }. JWKS and refresh
+    // network failures can throw.
+    if (verifyError instanceof SessionInfrastructureError) throw verifyError;
+    logger.error('[authenticated] Legacy token verification failed', safeErrorMeta(verifyError));
     await reportWebServerError(verifyError, { route: 'auth:authenticated', extra: { stage: 'legacy_verify' } });
-    return false;
+    throw new SessionInfrastructureError('Failed to verify legacy token', verifyError);
   }
 
   // Any error is a failed verification. (openauth's errors are Error subclasses with no
