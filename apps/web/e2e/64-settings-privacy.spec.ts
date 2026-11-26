@@ -71,13 +71,13 @@ test.describe('Settings - channel owner', () => {
 test.describe('Settings - no channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('SET-020 a user without a channel or creator tier sees no Upload Defaults and no channel settings', async ({ page }) => {
+  test('SET-020 a user without a channel or creator tier sees no Upload defaults and no channel settings', async ({ page }) => {
     await page.goto('/en/settings');
     // Channel invitations is for anyone: a user without a channel can be invited to a team
-    await expect(page.getByTestId('settings-section').filter({ hasText: 'Profile Settings' })).toBeVisible();
-    // Hidden when off: a Free account uploads nothing, so no Upload Defaults; Tier and Public profile are listed, Billing only while payments are on or the account has billing records (wiki "Hidden when off")
+    await expect(page.getByTestId('settings-section').filter({ hasText: 'Profile settings' })).toBeVisible();
+    // Hidden when off: a Free account uploads nothing, so no Upload defaults; Tier and Public profile are listed, Billing only while payments are on or the account has billing records (wiki "Hidden when off")
     await expect(page.getByTestId('settings-section')).toHaveCount(6);
-    await expect(page.getByTestId('settings-section').filter({ hasText: 'Upload Defaults' })).toHaveCount(0);
+    await expect(page.getByTestId('settings-section').filter({ hasText: 'Upload defaults' })).toHaveCount(0);
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Public profile' })).toHaveAttribute('href', '/en/settings/public-profile');
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' })).toHaveCount(0);
     await expect(page.getByText('Not available - requires an active channel')).toHaveCount(0);

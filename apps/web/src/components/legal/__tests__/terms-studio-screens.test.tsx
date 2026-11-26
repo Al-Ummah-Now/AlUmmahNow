@@ -185,7 +185,7 @@ describe('a channel', () => {
   });
 
   const refused = { data: null, status: 403, errorBody: { code: 'terms_required' } };
-  it.each([['English', ChannelManagementSection, 'Create Channel'], ['Arabic', ChannelManagementRtl, 'إنشاء القناة']] as const)('is created after accepting from the channels page (%s), and the next form is empty', async (_name, Section, label) => {
+  it.each([['English', ChannelManagementSection, 'Create channel'], ['Arabic', ChannelManagementRtl, 'إنشاء القناة']] as const)('is created after accepting from the channels page (%s), and the next form is empty', async (_name, Section, label) => {
     const openForm = async () => fireEvent.click((await screen.findAllByRole('button')).find((b) => b.textContent && /channel|قنا/i.test(b.textContent))!);
     const name = () => document.getElementById(_name === 'English' ? 'channel-name-en' : 'channel-name-ar') as HTMLInputElement;
     await asksOnceAndGoesOn({

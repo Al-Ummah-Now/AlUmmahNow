@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { EN_TRANSLATIONS } from '@al-ummah/shared-types';
 import {
   LOCALES,
   DEFAULT_LOCALE,
@@ -54,6 +55,20 @@ describe('Locale Configuration', () => {
     expect(ar?.isSupported).toBe(true);
     expect(ar?.isComplete).toBe(true);
   });
+});
+
+it('uses sentence case for the audited English navigation, upload and settings labels', () => {
+  const { navigation, channel, video, upload, errors, settings } = EN_TRANSLATIONS;
+  expect([
+    channel.myChannels, channel.manageChannels, channel.createChannel,
+    video.uploadVideo, upload.uploadTitle, upload.uploadVideo, upload.guidelines,
+    navigation.home, errors.notFoundGoHome, errors.notFoundGoBack,
+    settings?.uploadDefaults, settings?.profileSettings,
+  ]).toEqual([
+    'My channels', 'Manage channels', 'Create channel',
+    'Upload video', 'Upload video', 'Upload video', 'Upload guidelines',
+    'Go home', 'Go home', 'Go back', 'Upload defaults', 'Profile settings',
+  ]);
 });
 
 describe('getLocaleConfig', () => {

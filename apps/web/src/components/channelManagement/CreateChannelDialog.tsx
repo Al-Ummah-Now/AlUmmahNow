@@ -49,7 +49,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
       descriptionPlaceholder: 'Describe your channel and what viewers can expect',
       charactersCount: 'characters',
       cancel: 'Cancel',
-      create: 'Create Channel',
+      create: 'Create channel',
       creating: 'Creating...',
       required: 'Channel name is required',
       minLength: 'Channel name must be at least 3 characters',

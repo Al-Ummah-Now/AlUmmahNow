@@ -9,6 +9,8 @@
  * The sites Worker (AlUmmahNowUI apps/sites) reads `GET /api/sites/by-host/:host` (PublicSite).
  */
 
+import { metaSeparator } from './locale-format';
+
 export type SiteLocale = 'en' | 'ar';
 export const SITE_LOCALES: readonly SiteLocale[] = ['en', 'ar'];
 
@@ -666,10 +668,13 @@ function validRedirects(list: unknown): boolean {
   return true;
 }
 
-/** The page title for the browser tab: the site's template, else "page · site". */
-export function sitePageTitle(pageTitle: string, siteName: string, template?: string | null): string {
+/** The page title for the browser tab, with a localized separator when no template is set. */
+export function sitePageTitle(pageTitle: string, siteName: string, template?: string | null, locale?: SiteLocale): string {
   if (template && template.includes('%s')) return template.replace('%s', pageTitle);
-  return pageTitle && siteName && pageTitle !== siteName ? `${pageTitle} · ${siteName}` : pageTitle || siteName;
+  if (!pageTitle || !siteName || pageTitle === siteName) return pageTitle || siteName;
+  // Older callers omit the locale, so use the title's script to choose a separator.
+  const lang = locale ?? (/\p{Script=Arabic}/u.test(pageTitle + siteName) ? 'ar' : 'en');
+  return pageTitle + metaSeparator(lang) + siteName;
 }
 
 /** `/a/b//` → `/a/b`; `/` stays `/` (a linear scan, no regex over the input). */

@@ -578,7 +578,9 @@ const mdLink = (label: string, href: string) => `[${label.replace(/[[\]]/g, '')}
  * The meta-line separator: Arabic joins with «،» (the owner's number rule, 2026-11-21), English with «·».
  * A vendored copy of render's metaSeparator (this file has no imports).
  */
-const metaSep = (locale: 'en' | 'ar') => (locale === 'ar' ? '، ' : ' · ');
+const metaSep = (locale: 'en' | 'ar') => locale === 'ar'
+  ? '، '
+  : ' · ';
 /** Links on one markdown line; the body has no locale, so Arabic labels pick the Arabic separator. */
 const joinLinks = (xs: { label: string; url: string }[]) =>
    xs.map((x) => mdLink(x.label, x.url)).join(metaSep(xs.some((x) => /\p{Script=Arabic}/u.test(x.label)) ? 'ar' : 'en'));

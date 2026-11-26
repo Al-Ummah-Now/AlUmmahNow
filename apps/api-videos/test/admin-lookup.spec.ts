@@ -28,7 +28,11 @@ function seed() {
 		'posts/ch_1/post_1.json': { id: 'post_1', userId: 'usr_owner', channelId: 'ch_1', content: 'A  post', status: 'published' },
 		'comments/post_1/top-level/pc_1.json': { id: 'pc_1', postId: 'post_1', userId: 'usr_commenter', content: 'a post comment' },
 	});
-	const profiles = new MemoryBucket({ usr_commenter: { displayName: 'Commenter', email: 'commenter@example.com' } });
+	const profiles = new MemoryBucket({
+		usr_commenter: { displayName: 'Commenter', firstName: 'Other', email: 'commenter@example.com' },
+		usr_legacy: { displayName: '  ', firstName: '  Noor', lastName: 'Ali  ' },
+		usr_email: { userName: '@legacy', email: 'member@example.com' },
+	});
 	const playlists = new MemoryBucket({ p_1: { id: 'p_1', title: 'List', userId: 'usr_rep', channelId: 'ch_1' } });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter as never);
@@ -101,6 +105,15 @@ describe('admin lookup', () => {
 		assert.equal(users.usr_commenter.email, 'commenter@example.com');
 		assert.equal(users.usr_unknown.found, false);
 		assert.equal(users.usr_unknown.email, null);
+	});
+
+	it('returns resolved profile names and keeps the email available as a separate fallback', async () => {
+		const res = await seed()({ items: [], users: ['usr_legacy', 'usr_email'] });
+		assert.equal(res.status, 200);
+		const { result } = (await res.json()) as { result: { users: { displayName: string | null; email: string | null }[] } };
+		assert.equal(result.users[0].displayName, 'Noor Ali');
+		assert.equal(result.users[1].displayName, null);
+		assert.equal(result.users[1].email, 'member@example.com');
 	});
 
 	it('drops malformed and duplicate entries', () => {

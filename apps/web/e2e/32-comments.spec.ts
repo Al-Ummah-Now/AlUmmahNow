@@ -95,7 +95,7 @@ test.describe('comments - signed in without a channel', () => {
       await expect(identity).toHaveAccessibleName(/\S/);
       await expect(section.getByText(locale === 'en' ? 'Commenting as' : 'تعلّق باسم')).toHaveCount(0);
       await expect(identity).toHaveAttribute('data-as', 'member');
-      await expect(section.getByRole('link').filter({ hasText: locale === 'en' ? 'Create Channel' : 'إنشاء قناة' })).toHaveCount(0);
+      await expect(section.getByRole('link').filter({ hasText: locale === 'en' ? 'Create channel' : 'إنشاء قناة' })).toHaveCount(0);
     });
   }
 });

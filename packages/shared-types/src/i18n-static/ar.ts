@@ -503,6 +503,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     myPlaylists: 'قوائم التشغيل الخاصة بي',
     playlistsDescription: 'أنشئ وأدر قوائم تشغيل المرئيات الخاصة بك',
     newPlaylist: 'قائمة تشغيل جديدة',
+    noPlaylistsYet: 'لا توجد قوائم تشغيل بعد',
     firstPlaylistMessage: 'أنشئ قائمة التشغيل الأولى لتنظيم المرئيات المفضلة لديك',
     noPlaylistsAvailable: 'لا توجد قوائم تشغيل متاحة حاليًا',
     timezone: 'المنطقة الزمنية',

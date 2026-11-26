@@ -109,7 +109,7 @@ test.describe('Account menu - two accounts', () => {
     // The switch reloads the session and re-renders the header, which closes a menu opened too
     // early (#1260): wait until the header is on the new account (Upload follows its channel), then
     // open the menu again until the active channel row is there
-    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
+    const upload = page.getByRole('banner').getByRole('link', { name: /Upload video/ });
     await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`, { timeout: 30_000 });
     // The row is read inside the retry too: a late header re-render can close the menu between
     // seeing the row and reading its link, so both happen on the same open menu (#1260)

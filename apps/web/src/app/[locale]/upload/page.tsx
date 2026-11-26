@@ -927,7 +927,7 @@ const UploadPage: React.FC = () => {
         {!uploadComplete && (
           <div className="mt-8 bg-gray-100 dark:bg-gray-800 rounded-lg p-4 md:p-6">
             <h3 className="text-base md:text-lg font-medium text-gray-900 dark:text-white mb-4">
-              {t.upload.guidelines || 'Upload Guidelines'}
+              {t.upload.guidelines || 'Upload guidelines'}
             </h3>
             <ul className="space-y-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
               <li className="flex items-start">

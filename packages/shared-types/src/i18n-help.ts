@@ -315,7 +315,7 @@ export const HELP_EN: HelpTranslations = {
           feature: 'createChannel',
           heading: 'Create a channel',
           blocks: [
-            { type: 'p', text: 'Open the account menu and select **Create Channel**, give it a name, and it becomes the channel you are acting as.' },
+            { type: 'p', text: 'Open the account menu and select **Create channel**, give it a name, and it becomes the channel you are acting as.' },
           ],
         },
         {

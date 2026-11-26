@@ -18,10 +18,6 @@ import ar from '../src/i18n/messages/ar';
 const ROOT = join(process.cwd(), '..', '..');
 const DIRS = ['apps/web/src', 'apps/admin-web/src', 'packages/shared-types/src'];
 /** The Studio "page title" field's example pattern and its hint (a creator-editable template, not a separator we render) */
-/**
- * Text other apps send outside the web and admin pages (push notifications, scholar-site page
- * titles and blocks): their own fix, issue #1674 */
-const OUT_OF_SCOPE = ['packages/shared-types/src/review-alerts.ts', 'packages/shared-types/src/site.ts', 'packages/shared-types/src/page-blocks.ts'];
 const ALLOWED = [/placeholder="%s · …"/, /titleTemplateHint: .*%s · /];
 
 function files(dir: string): string[] {
@@ -38,7 +34,6 @@ describe('Arabic never separates values with a dot (it reads as an Arabic zero n
     const offenders: string[] = [];
     for (const dir of DIRS) {
       for (const file of files(join(ROOT, dir))) {
-        if (OUT_OF_SCOPE.includes(relative(ROOT, file))) continue;
         readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
           if (!line.includes('·') || !/[\u0600-\u06FF]/.test(line)) return;
           const code = line.trim();

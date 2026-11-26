@@ -39,7 +39,7 @@ const USERS: Record<string, any> = {
   usr_mod: { displayName: 'Maryam Moderator', isBanned: false },
 };
 
-interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean }; hold?: { status?: number; found?: boolean; changed?: boolean }; deleteStatus?: number; lookupDown?: boolean; revokeStatus?: number }
+interface FakeOptions { users?: typeof USERS; banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean }; hold?: { status?: number; found?: boolean; changed?: boolean }; deleteStatus?: number; lookupDown?: boolean; revokeStatus?: number }
 
 function fakeVideos(opts: FakeOptions = {}) {
   const calls: VideosCall[] = [];
@@ -65,7 +65,10 @@ function fakeVideos(opts: FakeOptions = {}) {
       if (call.path === '/lookup') {
         const items = call.body.items.map((i: { type: string; id: string }) => ({ type: i.type, id: i.id, ...(ITEMS[`${i.type}:${i.id}`] ?? { found: false, title: null, parentId: null, channelId: null, channelName: null, ownerId: null, isHidden: null, isDeleted: null }) }));
         const ids = [...new Set([...call.body.users, ...items.map((i: any) => i.ownerId).filter(Boolean)])] as string[];
-        const users = ids.map((id) => ({ id, found: !!USERS[id], displayName: USERS[id]?.displayName ?? null, userName: null, isBanned: USERS[id]?.isBanned ?? false }));
+        const users = ids.map((id) => {
+          const user = (opts.users ?? USERS)[id];
+          return { id, found: !!user, displayName: user?.displayName ?? null, userName: user?.userName ?? null, email: user?.email ?? null, isBanned: user?.isBanned ?? false };
+        });
         return json(200, { success: true, result: { items, users } });
       }
       if (/^\/users\/[^/]+\/ban$/.test(call.path)) {
@@ -217,6 +220,31 @@ describe('reports queue: Action needed', () => {
     assert.equal(copies[0].reporter_name, 'Rana Reporter');
     assert.equal(copies[0].channel_name, 'Sunrise Channel');
     assert.ok(copies[0].meta_synced_at);
+  });
+
+  it('uses a name or email for owners in the queue and in refreshed copies', async () => {
+    const t = setup(BASE, { users: {
+      ...USERS,
+      usr_owner: { displayName: '  ', userName: '@legacy-owner', email: 'owner@example.com' },
+      usr_commenter: { userName: '@legacy-commenter', isBanned: true },
+    } });
+    await syncReportMeta(t.env);
+    assert.deepEqual(await t.rows("SELECT owner_name FROM reports WHERE id IN ('r1', 'r4') ORDER BY id"), [
+      { owner_name: 'owner@example.com' }, { owner_name: null },
+    ]);
+
+    await t.db.prepare("UPDATE reports SET owner_name = '@old' WHERE owner_id = 'usr_owner'").run();
+    const { body } = await t.call('/api/moderation/queue');
+    assert.deepEqual(body.result.items.map((g: any) => g.item.owner), [
+      { id: 'usr_owner', name: 'owner@example.com', isBanned: false },
+      { id: 'usr_commenter', name: null, isBanned: true },
+    ]);
+    assert.deepEqual(await t.rows("SELECT owner_name FROM reports WHERE id = 'r1'"), [{ owner_name: 'owner@example.com' }]);
+
+    await t.db.prepare("UPDATE reports SET owner_name = '@old' WHERE owner_id = 'usr_commenter'").run();
+    (t.env as any).VIDEOS = { fetch: async () => new Response('down', { status: 503 }) };
+    const offline = (await t.call('/api/moderation/queue')).body.result.items;
+    assert.deepEqual(offline.map((g: any) => g.item.owner.name), ['owner@example.com', null]);
   });
 
   it('filters by type, reason and date range, sorts, pages, and counts both tabs under the shared filters', async () => {

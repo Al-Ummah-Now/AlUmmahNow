@@ -7,7 +7,7 @@
  * Items come from the search index (public rows of the channel, one indexed query) and are then read like a
  * post would be (loadSocialContent), so anything made private since it was indexed is left out.
  */
-import { type SocialEvent, type SocialFeedKind, type SocialLanguage, type SocialPreview } from '@al-ummah/shared-types';
+import { metaSeparator, type SocialEvent, type SocialFeedKind, type SocialLanguage, type SocialPreview } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { loadSocialContent, webOrigin, type SocialContent, type SocialContentEnv } from './content';
@@ -107,7 +107,7 @@ const localizedPath = (url: string, lang: SocialLanguage) => (lang === 'ar' ? ur
 export function buildRss(feed: { channel: SocialContent['channel']; items: FeedItem[] }, kind: SocialFeedKind, lang: SocialLanguage, feedUrl: string, now = Date.now()): string {
 	const label = KIND_LABEL[kind][lang];
 	const channelName = feed.channel.name[lang] || feed.channel.name.en;
-	const title = label ? `${channelName} · ${label}` : channelName;
+	const title = label ? `${channelName}${metaSeparator(lang, '·')}${label}` : channelName;
 	const lastBuild = feed.items[0]?.date ?? now;
 	const items = feed.items.map(({ content: c, date }) => {
 		const text = c.event === 'post' ? (c.text ?? c.title[lang]) : c.title[lang];

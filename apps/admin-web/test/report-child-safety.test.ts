@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { STEP_UP_REQUIRED_ERROR, type Report, type ReportedItemSummary } from '@al-ummah/shared-types';
 import { ChildSafetyCard, ReportedItem } from '../src/app/(protected)/moderation/reports/[id]/item';
 import { reportEvidenceResponse } from '../src/lib/report-evidence-proxy';
+import { I18nProvider } from '../src/i18n/I18nProvider';
 import { createTranslator } from '../src/i18n/translate';
 
 (globalThis as unknown as { React: unknown }).React = React;
@@ -49,6 +50,28 @@ describe('the child safety card', () => {
     for (const [locale, text] of [['en', 'Under review by the child safety team'], ['ar', 'قيد المراجعة لدى فريق سلامة الأطفال']] as const) {
       const html = renderToStaticMarkup(React.createElement(ReportedItem as React.FC<Record<string, unknown>>, { item, t: createTranslator(locale) }) as never);
       assert.ok(html.includes(text) && !html.includes('<a '), html);
+    }
+  });
+});
+
+describe('the reported item owner', () => {
+  it('shows Unknown user and a copyable id in both languages when the owner has no name', () => {
+    const item: ReportedItemSummary = {
+      type: 'video', id: 'vid-synth-01', title: 'Reported video', parentId: null, parentType: null, channel: null,
+      owner: { id: 'usr-synth-01', name: null, isBanned: null }, found: true, isHidden: false, isDeleted: false,
+    };
+    for (const locale of ['en', 'ar'] as const) {
+      const t = createTranslator(locale);
+      const markup = renderToStaticMarkup(
+        React.createElement(
+          I18nProvider,
+          { locale, theme: null } as React.ComponentProps<typeof I18nProvider>,
+          React.createElement(ReportedItem, { item, t }),
+        ),
+      );
+      assert.ok(markup.includes(t('auditLog.unknownUser')));
+      assert.match(markup, /data-testid="unknown-user-id-value">usr-synth-01<\/code>/);
+      assert.ok(markup.includes(t('auditLog.copyUserId')));
     }
   });
 });
