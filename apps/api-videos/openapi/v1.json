@@ -6917,7 +6917,7 @@
             }
           },
           "503": {
-            "description": "The index cannot be read right now; try again shortly",
+            "description": "The index is unavailable or the legacy analytics read budget was exceeded",
             "content": {
               "application/json": {
                 "schema": {
