@@ -113,17 +113,18 @@ const FEATURE_SETTINGS_TTL_MS = 10_000;
 
 /** Only settled settings are shared across requests. Replacing the map also
  * prevents a read started before invalidation from repopulating the cache. */
-function settingsSnapshot<T>(load: (env: FeaturesEnv) => Promise<T>) {
-	let entries = new WeakMap<FeaturesEnv, { value: T; expiresAt: number }>();
+function settingsSnapshot<T>(keyFor: (env: FeaturesEnv) => object, load: (env: FeaturesEnv) => Promise<T>) {
+	let entries = new WeakMap<object, { value: T; expiresAt: number }>();
 	return {
 		async get(env: FeaturesEnv): Promise<T> {
 			const snapshot = entries;
+			const key = keyFor(env);
 			const now = Date.now();
-			const entry = snapshot.get(env);
+			const entry = snapshot.get(key);
 			if (entry && now < entry.expiresAt) return entry.value;
 			const value = await load(env);
 			const expiresAt = now + FEATURE_SETTINGS_TTL_MS;
-			if ((snapshot.get(env)?.expiresAt ?? 0) <= expiresAt) snapshot.set(env, { value, expiresAt });
+			if ((snapshot.get(key)?.expiresAt ?? 0) <= expiresAt) snapshot.set(key, { value, expiresAt });
 			return value;
 		},
 		forget() {
@@ -132,9 +133,12 @@ function settingsSnapshot<T>(load: (env: FeaturesEnv) => Promise<T>) {
 	};
 }
 
-const captionSnapshot = settingsSnapshot((env) => readCaptionSettings(env, { raw: true }));
-const youtubeSecretSnapshot = settingsSnapshot(async (env) => !!(await googleClientSecret(env, { cacheBindings: true })));
-const creatorSnapshot = settingsSnapshot(async (env) => {
+// Request envelopes change with withSearchSync. The timed D1 and settings R2
+// bindings survive those copies and keep their identity across requests.
+const settingsBucketKey = (env: FeaturesEnv) => env.global_settings ?? env.SEARCH_DB ?? env;
+const captionSnapshot = settingsSnapshot(settingsBucketKey, (env) => readCaptionSettings(env, { raw: true }));
+const youtubeSecretSnapshot = settingsSnapshot(settingsBucketKey, async (env) => !!(await googleClientSecret(env, { cacheBindings: true })));
+const creatorSnapshot = settingsSnapshot((env) => env.SEARCH_DB ?? settingsBucketKey(env), async (env) => {
 	const [billing, social, youtube, categorize] = await Promise.all([
 		enabledProviders(env).then((providers) => providers.length > 0).catch((error: unknown) => {
 			logger.warn('[features] Payment providers not read', { error: error instanceof Error ? error.message : String(error) });

@@ -21,6 +21,7 @@ import {
 	type BillingSubscription,
 } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
+import { forgetFeatureSettings } from '../lib/features';
 import { getJob, retryJob } from '../lib/admin/jobs';
 import { readMany } from '../lib/admin/directory';
 import { readTiers } from '../lib/creatorTiers';
@@ -94,13 +95,19 @@ const ProviderBody = z
 		settings: z.record(z.string().max(60), z.string().max(200).nullable()).optional(),
 	})
 	.strict();
-app.put('/providers/:id', async (c) => ok(c, await updateProvider(c.env, assertProvider(c.env, c.req.param('id')), parse(ProviderBody, await body(c)), actor(c))));
+app.put('/providers/:id', async (c) => {
+	const updated = await updateProvider(c.env, assertProvider(c.env, c.req.param('id')), parse(ProviderBody, await body(c)), actor(c));
+	forgetFeatureSettings();
+	return ok(c, updated);
+});
 
 // admin-api wrote (or deleted) the value in Secrets Store; this records only that, never the value
 const CredentialBody = z.object({ field: z.enum(PAYMENT_CREDENTIAL_FIELDS), mode: z.enum(PAYMENT_MODES), cleared: z.boolean().optional(), last4: z.string().regex(/^[\x21-\x7e]{4}$/).nullable().optional() }).strict();
 app.post('/providers/:id/credentials', async (c) => {
 	const input = parse(CredentialBody, await body(c));
-	return ok(c, await markCredential(c.env, assertProvider(c.env, c.req.param('id')), input.field, input.mode, actor(c), input.cleared === true, undefined, input.last4 ?? null));
+	const updated = await markCredential(c.env, assertProvider(c.env, c.req.param('id')), input.field, input.mode, actor(c), input.cleared === true, undefined, input.last4 ?? null);
+	forgetFeatureSettings();
+	return ok(c, updated);
 });
 app.get('/providers/:id', async (c) => ok(c, await readProvider(c.env, assertProvider(c.env, c.req.param('id')))));
 app.post('/providers/:id/sync-prices', async (c) => ok(c, { job: await queuePriceSync(c.env, assertProvider(c.env, c.req.param('id')), actor(c)) }));

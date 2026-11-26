@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, QURAN_CURRENT_KEY, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { timedBindings } from '@al-ummah/shared-types/request-steps';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, buildApp, rpcSecret } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
@@ -18,19 +19,29 @@ import { captionFeatureFor, computeFeatures, forgetFeatureCaches, liveConfigured
 import { handleUserFeatures } from '../src/endpoints/creator/features';
 import { TranslateCreate, TranslateUsageGet } from '../src/endpoints/translate/translate';
 import { QuranTranslationsList } from '../src/endpoints/quran/quranTranslations';
-import { socialRouter } from '../src/routers/social.router';
+import billingInternalRouter from '../src/routers/billing.router';
+import { socialInternalRouter, socialRouter } from '../src/routers/social.router';
+import { withSearchSync } from '../src/lib/search/sync';
 import { YT_SETTINGS_KEY } from '../src/lib/youtube-import/settings';
 
 const KEK = `1:${Buffer.alloc(32, 5).toString('base64')}`;
 const CLIENT_ID = '123456789012-unittestclient.apps.googleusercontent.com';
 
+// Use the runtime class names so timedBindings wraps these test doubles too.
+const RuntimeD1 = class D1Database extends SqliteD1 {};
+const RuntimeR2 = class R2Bucket extends MemoryBucket {};
+
+function requestEnv(env: FeaturesEnv): FeaturesEnv {
+	return withSearchSync(timedBindings(env), { waitUntil() {} });
+}
+
 async function setup(over: Record<string, unknown> = {}) {
-	const d1 = new SqliteD1() as unknown as D1Database;
+	const d1 = new RuntimeD1() as unknown as D1Database;
 	await saveTier(d1, 'full', { name: 'Full', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 2, live: true, liveHoursMonth: 2, liveMaxConcurrent: 1, liveMaxStreamMinutes: 30, captionMinutesMonth: 60, audioTracksPerVideo: 2 }, 'admin-1', { create: true });
 	await saveTier(d1, 'bare', { name: 'Bare', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 1 }, 'admin-1', { create: true });
 	await assignTier(d1, 'alice', 'full', 'admin-1');
 	await assignTier(d1, 'bob', 'bare', 'admin-1');
-	const global = new MemoryBucket();
+	const global = new RuntimeR2();
 	const env: FeaturesEnv = {
 		SEARCH_DB: d1,
 		channels: new MemoryBucket({
@@ -249,10 +260,17 @@ describe('feature answer', () => {
 		await global.put(YT_SETTINGS_KEY, JSON.stringify({ enabled: true, clientId: CLIENT_ID }));
 		const traced = d1 as unknown as SqliteD1;
 		const reads = () => traced.trace!.filter(({ sql }) => /FROM (feature_switches|billing_providers|social_settings)\b/i.test(sql));
-		const forUser = (userId: string) => computeFeatures(env, { userId, roles: [] });
+		const first = requestEnv(env);
+		const second = requestEnv(env);
+		assert.notEqual(first, second);
+		assert.notEqual(first.SEARCH_DB, env.SEARCH_DB);
+		assert.notEqual(first.global_settings, env.global_settings);
+		assert.equal(first.SEARCH_DB, second.SEARCH_DB);
+		assert.equal(first.global_settings, second.global_settings);
+		const forUser = (userId: string) => computeFeatures(requestEnv(env), { userId, roles: [] });
 		traced.trace = [];
 
-		const alice = await forUser('alice');
+		const alice = await computeFeatures(first, { userId: 'alice', roles: [] });
 		assert.equal(alice.upload, true);
 		assert.equal(alice.socialAutopost, true);
 		assert.equal(alice.youtubeImport, true);
@@ -262,7 +280,7 @@ describe('feature answer', () => {
 		const coldBucketCalls = global.calls;
 		const coldConfigQueries = reads().length;
 
-		const other = await forUser('nobody');
+		const other = await computeFeatures(second, { userId: 'nobody', roles: [] });
 		assert.equal(other.upload, false);
 		assert.equal(other.captionsTranscribe, false);
 		assert.equal(other.youtubeImport, true);
@@ -282,6 +300,40 @@ describe('feature answer', () => {
 		t.mock.timers.tick(5 * 60_000);
 		await forUser('alice');
 		assert.equal(secretCalls, 7); // YouTube stays off.
+	});
+
+	it('invalidates the billing snapshot when an admin updates a provider or clears a credential', async (t) => {
+		t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+		const { env } = await setup({ PAYMENTS_FAKE_PROVIDER: '1' });
+		const features = () => computeFeatures(requestEnv(env), { userId: 'alice', roles: [] });
+		const write = (path: string, method: string, data: object) => billingInternalRouter.request(path, {
+			method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+		}, requestEnv(env));
+
+		assert.equal((await features()).billing, false);
+		assert.equal((await write('/providers/fake', 'PUT', { enabled: true })).status, 200);
+		assert.equal((await features()).billing, true);
+		assert.equal((await write('/providers/fake/credentials', 'POST', { field: 'apiKey', mode: 'test', cleared: true })).status, 200);
+		assert.equal((await features()).billing, false);
+	});
+
+	it('invalidates the social snapshot when an admin changes platform settings or credentials', async (t) => {
+		t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+		const { env } = await setup({ SOCIAL_TOKEN_KEK: KEK });
+		const features = () => computeFeatures(requestEnv(env), { userId: 'alice', roles: [] });
+		const write = (path: string, method: string, data?: object) => socialInternalRouter.request(path, {
+			method, headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined,
+		}, requestEnv(env));
+
+		assert.equal((await features()).socialAutopost, true);
+		assert.equal((await write('/admin/settings', 'PUT', {
+			networks: { x: { enabled: true }, telegram: { enabled: false }, bluesky: { enabled: false }, mastodon: { enabled: false } },
+		})).status, 200);
+		assert.equal((await features()).socialAutopost, false);
+		assert.equal((await write('/admin/credentials/x', 'PUT', { clientId: 'test-client', clientSecret: 'test-secret' })).status, 200);
+		assert.equal((await features()).socialAutopost, true);
+		assert.equal((await write('/admin/credentials/x', 'DELETE')).status, 200);
+		assert.equal((await features()).socialAutopost, false);
 	});
 
 	it('own domains: the channel\'s site must allow one and SaaS must be ready (admin-api, cached)', async () => {
