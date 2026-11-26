@@ -4,7 +4,9 @@ import {
   ALWAYS_ON_NOTIFICATION_CATEGORIES,
   DEFAULT_NOTIFICATION_QUIET_HOURS,
   NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CENTER_EN,
   type NotificationSettingsResult,
+  type NotificationSettingsUpdateRequest,
 } from '@al-ummah/shared-types';
 import { LOCAL_PRAYER_WINDOWS_STORAGE_KEY, formatMinuteOfDay } from '@/lib/notifications/prayer-quiet-windows';
 import { NotificationSettingsPanel } from '../NotificationSettingsPanel';
@@ -50,22 +52,23 @@ const initialResult = () => ({
 } satisfies NotificationSettingsResult);
 
 const mockSettings = jest.fn<Promise<NotificationSettingsResult | null>, []>();
-const mockUpdateSettings = jest.fn<Promise<NotificationSettingsResult | null>, [unknown]>();
+const mockUpdateSettings = jest.fn<Promise<NotificationSettingsResult | null>, [NotificationSettingsUpdateRequest]>();
 
 jest.mock('@/services/api/notifications', () => ({
   NotificationsService: {
     settings: () => mockSettings(),
-    updateSettings: (changes: unknown) => mockUpdateSettings(changes),
+    updateSettings: (changes: NotificationSettingsUpdateRequest) => mockUpdateSettings(changes),
   },
 }));
 
 describe('NotificationSettingsPanel — Quiet hours & prayer windows (E22-S5)', () => {
   beforeEach(() => {
     mockLang = 'en';
+    mockUpdateSettings.mockClear();
     window.localStorage.clear();
     const base = initialResult();
     mockSettings.mockResolvedValue(base);
-    mockUpdateSettings.mockImplementation(async (changes: any) => ({
+    mockUpdateSettings.mockImplementation(async (changes) => ({
       ...base,
       quietHours: {
         ...base.quietHours,
@@ -100,12 +103,60 @@ describe('NotificationSettingsPanel — Quiet hours & prayer windows (E22-S5)', 
     expect(mockUpdateSettings).toHaveBeenLastCalledWith({ quietHours: { startMinute: 1260 } });
   });
 
-  it('syncs locally cached prayer windows when toggling quiet during prayer times, and formats Eastern Arabic digits in Arabic', async () => {
+  it('rolls back an optimistic quiet-hours change and shows an error when saving fails', async () => {
+    mockUpdateSettings.mockResolvedValueOnce(null);
+    render(<NotificationSettingsPanel />);
+
+    const toggle = await screen.findByTestId('notification-quiet-enabled');
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+
+    expect(await screen.findByText(NOTIFICATION_CENTER_EN.settingsError)).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeEnabled();
+  });
+
+  it('ignores corrupt cached prayer windows when loading settings', async () => {
+    window.localStorage.setItem(LOCAL_PRAYER_WINDOWS_STORAGE_KEY, '{broken');
+    render(<NotificationSettingsPanel />);
+    expect(await screen.findByTestId('notification-quiet-hours')).toBeInTheDocument();
+    expect(screen.queryByTestId('notification-prayer-quiet-enabled')).not.toBeInTheDocument();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('omits cached windows when disabling the prayer schedule', async () => {
+    const base = initialResult();
+    mockSettings.mockResolvedValue({
+      ...base,
+      quietHours: { ...base.quietHours, prayerQuietEnabled: true },
+    });
+    render(<NotificationSettingsPanel />);
+
+    const toggle = await screen.findByTestId('notification-prayer-quiet-enabled');
+    expect(toggle).toBeChecked();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+
+    window.localStorage.setItem(
+      LOCAL_PRAYER_WINDOWS_STORAGE_KEY,
+      JSON.stringify([{ startMinute: 310, endMinute: 335 }]),
+    );
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      quietHours: { prayerQuietEnabled: false, timezone: base.quietHours.timezone },
+    });
+  });
+
+  it('sends only minute bounds from cached prayer windows and formats Arabic times', async () => {
     mockLang = 'ar';
     window.localStorage.setItem(
       LOCAL_PRAYER_WINDOWS_STORAGE_KEY,
       JSON.stringify([
-        { startMinute: 310, endMinute: 335 },
+        { startMinute: 310, endMinute: 335, lat: 40.7, lng: -74, city: 'New York' },
         { startMinute: 730, endMinute: 760 },
       ]),
     );
@@ -130,5 +181,9 @@ describe('NotificationSettingsPanel — Quiet hours & prayer windows (E22-S5)', 
         ],
       }),
     });
+  });
+
+  it.each([NaN, Infinity, -Infinity])('formats non-finite minute %s as midnight', (minute) => {
+    expect(formatMinuteOfDay('en', minute)).toBe(formatMinuteOfDay('en', 0));
   });
 });

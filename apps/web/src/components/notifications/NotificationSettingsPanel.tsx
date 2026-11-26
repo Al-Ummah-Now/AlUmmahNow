@@ -141,7 +141,7 @@ export function NotificationSettingsPanel() {
     updateQuiet('prayerQuiet', {
       prayerQuietEnabled,
       timezone: autoZone,
-      ...(localWindows.length > 0 ? { prayerWindows: localWindows } : {}),
+      ...(prayerQuietEnabled && localWindows.length > 0 ? { prayerWindows: localWindows } : {}),
     });
   };
 
