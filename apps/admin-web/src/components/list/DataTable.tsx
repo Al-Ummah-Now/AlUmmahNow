@@ -94,8 +94,8 @@ export interface DataTableProps<T extends { id: string }> {
   tableRef?: React.Ref<HTMLTableElement>;
 }
 
-/** Ends a phone card's label (U+200C ZERO WIDTH NON-JOINER). */
-export const CARD_LABEL_END = '\u200c';
+/** A phone card's label: its own box, so its letters never join the value's. */
+export const CARD_LABEL_CLASS = 'md:hidden inline-block me-2 text-xs text-fg-muted whitespace-nowrap';
 
 const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
 const td = 'px-3 sm:px-4 md:py-3 align-top';
@@ -168,9 +168,9 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                     role="cell"
                     className={`${td} p-0 ${columnWidthClass(c)} ${c.primary ? 'basis-[calc(100%-2.5rem)] md:basis-auto min-w-0' : 'basis-full md:basis-auto'} ${columnDisplayClass(c, true)} ${c.align === 'end' ? 'md:text-end tabular-nums' : ''} ${c.className ?? ''}`}
                   >
-                    {/* The label ends with a zero-width non-joiner: Arabic letters join across elements, so «مسندة إلى» would join
+                    {/* A box of its own (inline-block): Arabic letters join across inline elements, so «مسندة إلى» would join
                         the value's first letter («لا») and lose its last one */}
-                    {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted whitespace-nowrap" data-card-label>{c.cardLabel}{CARD_LABEL_END}</span>}
+                    {c.cardLabel && <span className={CARD_LABEL_CLASS} data-card-label>{c.cardLabel}</span>}
                     {c.cell(row)}
                   </td>
                 ))}

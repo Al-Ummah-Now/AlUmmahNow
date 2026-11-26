@@ -347,10 +347,10 @@ describe('content pass-through allowlist', () => {
 });
 
 describe('phone card labels', () => {
-  it('never join the value beside them (Arabic letters join across elements: «مسندة إلى» + «لا»)', async () => {
+  it('never join the value beside them (Arabic letters join across inline elements: «مسندة إلى» + «لا»)', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../src/components/list/DataTable.tsx', import.meta.url), 'utf8');
-    assert.match(src, /\{c\.cardLabel\}\{CARD_LABEL_END\}/);
-    assert.match(src, /export const CARD_LABEL_END = '\\u200c';/);
+    assert.match(src, /<span className=\{CARD_LABEL_CLASS\} data-card-label>\{c\.cardLabel\}<\/span>/);
+    assert.match(src, /export const CARD_LABEL_CLASS = '[^']*\binline-block\b[^']*\bme-2\b/);
   });
 });
