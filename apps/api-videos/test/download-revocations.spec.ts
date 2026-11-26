@@ -43,6 +43,7 @@ import {
 } from '../src/lib/downloads/revocations';
 import { runContainStep, type ContainEnv } from '../src/lib/csam/contain';
 import { forgetFeatureCaches } from '../src/lib/features';
+import adminRouter from '../src/routers/admin.router';
 
 class MemoryCache implements RevocationsCacheLike {
 	entries = new Map<string, { status: number; headers: Headers; body: string }>();
@@ -532,6 +533,73 @@ describe('E14-S11a download revocations feed & takedown hooks', () => {
 		await new Promise((r) => setTimeout(r, 20));
 		assert.ok(o26Alerts.length >= 1, 'metadata-block R2 failure without queue must raise an O26 alert');
 		assert.equal((await d1.prepare('SELECT * FROM download_revocations').all()).results?.length ?? 0, 0);
+	});
+
+	it('rejects an urgent takedown and raises O26 when the retry cannot be queued', async (t) => {
+		for (const failure of ['queue send failed', 'no such table: admin_jobs']) {
+			await t.test(failure, async () => {
+				const search = new SqliteD1();
+				search.db.exec(`
+					CREATE TRIGGER fail_revocation BEFORE INSERT ON download_revocations
+					BEGIN SELECT RAISE(ABORT, 'revocation store unavailable'); END
+				`);
+				if (failure === 'no such table: admin_jobs') search.db.exec('DROP TABLE admin_jobs');
+
+				const videos = new MemoryBucket();
+				const videoId = 'video-urgent';
+				const eventId = 'admin:retry-unavailable';
+				await videos.put(videoId, JSON.stringify({ id: videoId, isPublic: true }));
+				const alerts: { kind: string; message: string; action: { key: string } }[] = [];
+				globalThis.fetch = async (_input, init) => {
+					alerts.push(...JSON.parse(String(init?.body)).events);
+					return new Response(null, { status: 204 });
+				};
+				const env = {
+					SEARCH_DB: search,
+					videos,
+					ADMIN_JOBS_QUEUE: {
+						async send() { throw new Error('queue send failed'); },
+					},
+					ERRORS_INGEST_URL: 'https://admin.example.test/internal/errors',
+					INTERNAL_API_KEY: 'test-internal-key',
+				};
+				const pending: Promise<unknown>[] = [];
+				const app = new Hono().route('/internal/admin', adminRouter as never);
+				const res = await app.fetch(new Request(`http://test/internal/admin/videos/${videoId}/revoke-downloads`, {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ eventId }),
+				}), env, { waitUntil: (work) => pending.push(work), passThroughOnException() {} });
+				assert.equal(res.status, 500);
+				assert.equal(search.count('download_revocations'), 0);
+				assert.equal(pending.length, 1, 'the request must keep O26 delivery alive');
+				await Promise.all(pending);
+				assert.equal(alerts.length, 1);
+				assert.equal(alerts[0]!.kind, 'action');
+				assert.equal(alerts[0]!.action.key, `download-revoke:${eventId}`);
+				assert.ok(alerts[0]!.message.includes(failure));
+				if (failure === 'queue send failed') {
+					assert.equal((await search.prepare('SELECT status FROM admin_jobs').first())?.status, 'failed');
+				}
+			});
+		}
+	});
+
+	it('hides unlisted and private videos during a direct revocation', async () => {
+		const search = new SqliteD1();
+		const videos = new MemoryBucket();
+		const env = { SEARCH_DB: search as unknown as D1Database, videos };
+		await writeFeatureSwitch(env as never, { key: 'offlineDownloads', enabled: true, expectedVersion: 0, actorId: 'admin-1' });
+		const app = buildApp(() => ({ userId: 'viewer-1' }));
+		for (const [videoId, isUnlisted] of [['unlisted-video', true], ['private-video', false]] as const) {
+			await videos.put(videoId, JSON.stringify({ id: videoId, isPublic: false, isUnlisted, userId: 'creator-1' }));
+			const result = await revokeVideoDownloads(env as never, { videoId, eventId: `admin:${videoId}`, actorId: 'admin-1' });
+			assert.equal(result.status, 'revoked');
+			const video = await (await videos.get(videoId))?.json();
+			assert.deepEqual([video?.isHidden, video?.isPublic, video?.isUnlisted], [true, false, false]);
+			const response = await app.request(`http://test/api/videos/${videoId}/downloads`, { method: 'POST' }, env);
+			assert.equal(response.status, 404);
+		}
 	});
 
 	it('CSAM failure-order: failed CDN purge writes no revocation row, and failed copy-public stops before purge-public and raises O26', async () => {

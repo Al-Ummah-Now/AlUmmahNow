@@ -2,7 +2,7 @@
  * Urgent & CSAM offline download revocations (Epic 14, E14-D8 / E14-S11a).
  *
  * Mandatory 4-step order for every takedown:
- *   1. Block video metadata first (`isHidden` / `isDeleted` / `csamTakedown` / `isPublic = false`)
+ *   1. Block video metadata first (`isHidden` / `isDeleted` / `csamTakedown`)
  *      so `POST /api/v1/videos/:id/downloads` immediately returns `404 not_found` and
  *      `POST /api/v1/downloads/sync` returns `available: false`.
  *   2. (CSAM path) Finish encrypted evidence preservation BEFORE touching `pub/`.
@@ -11,9 +11,8 @@
  *   4. Append `(event_id, video_id, created_at)` to `download_revocations` LAST via
  *      `INSERT OR IGNORE` keyed on `UNIQUE(event_id)`.
  *
- * If step 3 or 4 fails on a manual admin takedown, the `downloads.revoke` admin job is queued on
- * `ADMIN_JOBS_QUEUE` with the exact same `eventId` for automatic retries, DLQ, and an Admin Errors
- * alert (`O26`) on final exhaustion so an urgent purge is never silently dropped.
+ * If an inline step fails on a manual admin takedown, a `downloads.revoke` job retries it with the
+ * same `eventId`. An Admin Errors alert (O26) is raised if enqueueing fails or retries are exhausted.
  */
 import {
 	ADMIN_JOB_MAX_RETRIES,
@@ -21,6 +20,7 @@ import {
 	resolveNeedsAction,
 	type AdminJob,
 	type ErrorReporterEnv,
+	type ExecutionContextLike,
 } from '@al-ummah/shared-types';
 import { createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { purgeVideoRenditions, type MediaEnv } from '../media/r2-delivery';
@@ -133,17 +133,17 @@ async function ensureVideoMetadataBlocked(
 	env: DownloadRevokeEnv,
 	videoId: string,
 	eventId: string,
-): Promise<boolean> {
+): Promise<void> {
 	if (!env.videos) {
 		throw new Error('videos R2 bucket is not bound');
 	}
 	const repo = new R2Repository<Record<string, unknown>>(env.videos);
-	const saved = await repo.updateObject(videoId, (video) => {
-		const alreadyBlocked = video.isDeleted === true || video.isHidden === true || video.isPublic === false;
-		if (alreadyBlocked) return false;
+	await repo.updateObject(videoId, (video) => {
+		if (video.isHidden === true && video.isPublic === false && video.isUnlisted !== true) return false;
 		const now = new Date().toISOString();
 		video.isHidden = true;
 		video.isPublic = false;
+		video.isUnlisted = false;
 		video.downloadRevocation = {
 			eventId,
 			at: now,
@@ -151,7 +151,6 @@ async function ensureVideoMetadataBlocked(
 		video.dateModified = now;
 		return true;
 	});
-	return !!saved;
 }
 
 async function executePurgeAndAppend(
@@ -176,12 +175,13 @@ async function executePurgeAndAppend(
  *   2. Delete `pub/<videoId>/` (+ `priv/<videoId>/`) and purge Cloudflare edge cache by prefix
  *   3. Append `event_id = "admin:<actionId>"` to `download_revocations`
  *
- * If step 2 or 3 fails, enqueues a resumable `'downloads.revoke'` admin job with the exact same
- * `eventId` so Cloudflare Queue retries, DLQ, and O26 Admin Errors alerting guarantee completion.
+ * If the inline attempt fails, enqueues a resumable `'downloads.revoke'` job with the same
+ * `eventId`. If it cannot enqueue the job, reports an O26 alert and propagates the failure.
  */
 export async function revokeVideoDownloads(
 	env: DownloadRevokeEnv,
 	input: { videoId: string; eventId: string; actorId: string; reason?: string },
+	ctx?: ExecutionContextLike,
 ): Promise<
 	| { status: 'revoked'; eventId: string; videoId: string; seq: number; inserted: boolean; renditionsDeleted: number }
 	| { status: 'queued'; eventId: string; videoId: string; jobId: string }
@@ -202,7 +202,7 @@ export async function revokeVideoDownloads(
 
 	try {
 		const res = await executePurgeAndAppend(env, params);
-		resolveNeedsAction(env, undefined, `download-revoke:${eventId}`);
+		resolveNeedsAction(env, ctx, `download-revoke:${eventId}`);
 		return {
 			status: 'revoked',
 			eventId,
@@ -213,26 +213,32 @@ export async function revokeVideoDownloads(
 		};
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		logger.warn('[Downloads] Urgent revocation inline step failed; queueing retry job', {
+		logger.warn('[Downloads] Urgent revocation inline step failed', {
 			videoId,
 			eventId,
 			error: msg,
 		});
+		let retryFailure = 'the retry queue or job store is unavailable';
 		if (env.SEARCH_DB && env.ADMIN_JOBS_QUEUE) {
-			const job = await createJob(env, {
-				kind: 'downloads.revoke',
-				targetKind: 'video',
-				targetId: videoId,
-				actorId: input.actorId,
-				params: params as unknown as Record<string, unknown>,
-			});
-			return { status: 'queued', eventId, videoId, jobId: job.id };
+			try {
+				const job = await createJob(env, {
+					kind: 'downloads.revoke',
+					targetKind: 'video',
+					targetId: videoId,
+					actorId: input.actorId,
+					params: params as unknown as Record<string, unknown>,
+				});
+				if (job.status === 'queued') return { status: 'queued', eventId, videoId, jobId: job.id };
+				retryFailure = job.lastError ?? `retry job ${job.id} ended in status ${job.status}`;
+			} catch (enqueueError) {
+				retryFailure = enqueueError instanceof Error ? enqueueError.message : String(enqueueError);
+			}
 		}
-		reportNeedsAction('api-videos', env, undefined, {
+		reportNeedsAction('api-videos', env, ctx, {
 			key: `download-revoke:${eventId}`,
 			source: 'admin-job',
 			title: 'Urgent download revocation did not finish',
-			message: `Video ${videoId} (${eventId}): urgent download revocation failed (${msg}) and no retry queue was available.`,
+			message: `Video ${videoId} (${eventId}): urgent download revocation failed (${msg}). Could not schedule a retry (${retryFailure}).`,
 			itemType: 'video',
 			itemId: videoId,
 			itemUrl: `/videos/${videoId}`,

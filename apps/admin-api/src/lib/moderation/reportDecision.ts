@@ -303,7 +303,7 @@ async function changeItem(
   if (!bucket) throw new Error(`Entity type ${p.entityType} has no store to change`);
   const updated = await applyContentModeration(bucket, p.entityId, p.action, { moderatorId: p.actorId, notes: p.notes ?? undefined });
   // A permanent video takedown purges the renditions and records the revocation after blocking metadata.
-  if (updated && p.entityType === 'video' && p.action === 'deleted' && (env.VIDEOS || env.VIDEOS_API_URL)) {
+  if (updated && p.entityType === 'video' && p.action === 'deleted') {
     const actionId = await deterministicRevocationActionId(p.entityId, p.reportIds);
     await callVideos(env, `/videos/${encodeURIComponent(p.entityId)}/revoke-downloads`, {
       method: 'POST',
