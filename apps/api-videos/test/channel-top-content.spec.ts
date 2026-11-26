@@ -139,7 +139,9 @@ describe('GET /api/channels/:id/analytics/top-content', () => {
 			`/api/channels/c1/analytics/top-content?${QUERY}`, {}, { ...e, analytics_rollups },
 		);
 		assert.equal(response.status, 503);
-		assert.equal(((await response.json()) as any).error, 'analytics_rollup_budget_exceeded');
+		const body = await response.json() as { code: string; error: string };
+		assert.equal(body.code, 'analytics_rollup_budget_exceeded');
+		assert.equal(body.error, body.code);
 		assert.equal(analytics_rollups.calls, 1, 'does not start reads it cannot finish');
 	});
 
@@ -152,7 +154,9 @@ describe('GET /api/channels/:id/analytics/top-content', () => {
 			`/api/channels/c1/analytics/top-content?${QUERY}`, {}, { ...e, analytics_rollups },
 		);
 		assert.equal(response.status, 503);
-		assert.equal(((await response.json()) as any).error, 'analytics_rollup_budget_exceeded');
+		const body = await response.json() as { code: string; error: string };
+		assert.equal(body.code, 'analytics_rollup_budget_exceeded');
+		assert.equal(body.error, body.code);
 		assert.equal(analytics_rollups.calls, 4, 'four list pages and no object reads');
 	});
 
