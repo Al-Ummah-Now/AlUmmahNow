@@ -30,7 +30,7 @@ export class VideoFetch extends OptionalAuthRoute {
 		},
 		responses: {
 			"200": {
-				description: "Returns a single video if found",
+				description: "Returns a single video if found. For playback, allowDownloads resolves the video override, then the channel default (true when both are omitted). With ?for=edit it returns the stored override, if set.",
 				content: {
 					"application/json": {
 						schema: VideoView,
@@ -142,6 +142,7 @@ export class VideoFetch extends OptionalAuthRoute {
 
 		// Fetch channel data to populate channelName, channelAvatarUrl, and channelCoverUrl
 		let channel = null;
+		let channelReadFailed = false;
 		if (video.channelId) {
 			try {
 				const channelBucket = c.env.channels;
@@ -162,6 +163,7 @@ export class VideoFetch extends OptionalAuthRoute {
 					});
 				}
 			} catch (error) {
+				channelReadFailed = true;
 				logger.error('[VideoFetch] Error fetching channel data', {
 					videoId: video.id,
 					channelId: video.channelId,
@@ -177,6 +179,9 @@ export class VideoFetch extends OptionalAuthRoute {
 		const videoView = forEdit
 			? Object.assign(transformVideoToView(video, channel), { delivery: { source: 'bunny' as const } })
 			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
+
+		// Match download resolution and leave the stored override intact for the editor.
+		if (!forEdit) videoView.allowDownloads = video.allowDownloads ?? channel?.defaultAllowDownloads ?? !channelReadFailed;
 
 		// The watch page shows no comments or composer on a video made for kids (wiki E20 §5.5); the editor keeps the stored choice
 		if (!forEdit && (await kidsRulesApply(c.env, video))) Object.assign(videoView, { commentSettings: 'off' as const, comments: [], commentsCount: 0 });

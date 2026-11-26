@@ -150,6 +150,7 @@ export class ChannelCreate extends AuthenticatedRoute {
 			isMain: channelInput.isMain || false,
 			avatarUrl: channelInput.avatarUrl,
 			coverUrl: channelInput.coverUrl,
+			defaultAllowDownloads: channelInput.defaultAllowDownloads,
 			playlists: [],
 			videos: [],
 			subscribers: [],

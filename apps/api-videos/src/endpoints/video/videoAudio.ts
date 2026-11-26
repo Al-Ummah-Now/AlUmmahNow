@@ -29,6 +29,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { apiError } from '../../lib/api-error';
 import { loadVideoRecord, videoReadAccess } from '../../lib/videoReadAccess';
 import { choosePlayback, logDecision } from '../../lib/media/playback';
+import { readMediaSettings } from '../../lib/media/settings';
 import { getSecret } from '../../lib/env-helpers';
 import type { VisibilityFields } from '../../lib/visibility';
 
@@ -84,7 +85,7 @@ export class VideoAudio extends AuthenticatedRoute {
 				'400': { description: 'Invalid trackId parameter' },
 				'401': { description: 'Authentication required' },
 				'404': { description: 'Video or audio track not found, or feature off' },
-				'409': { description: 'No playable HLS stream ready yet' },
+				'409': { description: 'No playable HLS stream available for the request' },
 			},
 		},
 		'required',
@@ -112,31 +113,32 @@ export class VideoAudio extends AuthenticatedRoute {
 		// 1. Prefer existing demuxed audio-only HLS rendition when a ready multi-audio package exists on R2
 		const host = (c.env as unknown as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST;
 		const tracks = packagedAudioTracks(video);
-		if (tracks.length > 0 && video.r2?.status === 'ready' && video.r2.rev && host) {
-			const selected = requestedTrackId
-				? tracks.find((t) => t.id === requestedTrackId)
-				: tracks.find((t) => t.isDefault) ?? tracks[0];
-			if (!selected) {
-				return apiError(c, 404, 'not_found');
-			}
-			const r2Access = video.r2.access;
-			const sign =
-				r2Access === 'priv'
-					? { key: await getSecret(c.env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY') }
-					: undefined;
-			const url = await mediaPlayUrl(host, r2Access, video.id, video.r2.rev, `a/${selected.id}/index.m3u8`, sign);
-			return c.json({
-				videoId: video.id,
-				format: 'hls' as const,
-				url,
-				contentType: 'application/vnd.apple.mpegurl' as const,
-				trackId: selected.id,
-				tracks,
-			});
+		const selected = requestedTrackId
+			? tracks.find((track) => track.id === requestedTrackId)
+			: tracks.find((track) => track.isDefault) ?? tracks[0];
+		if (requestedTrackId && !selected) {
+			return apiError(c, 404, 'not_found');
 		}
 
+		const r2 = video.r2;
+		if (selected && r2?.status === 'ready' && r2.rev && host && (await readMediaSettings(c.env)).providers.r2.enabled) {
+			const sign = r2.access === 'priv' ? { key: await getSecret(c.env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY') } : undefined;
+			if (r2.access === 'pub' || sign?.key) {
+				const url = await mediaPlayUrl(host, r2.access, video.id, r2.rev, `a/${selected.id}/index.m3u8`, sign);
+				return c.json({
+					videoId: video.id,
+					format: 'hls' as const,
+					url,
+					contentType: 'application/vnd.apple.mpegurl' as const,
+					trackId: selected.id,
+					tracks,
+				});
+			}
+		}
+
+		// Only the R2 package can serve an explicitly requested track.
 		if (requestedTrackId) {
-			return apiError(c, 404, 'not_found');
+			return apiError(c, 409, 'rendition_not_ready');
 		}
 
 		// 2. Single-track or Bunny-only video: reuse existing HLS master.m3u8 stream (never creates R2 objects)
