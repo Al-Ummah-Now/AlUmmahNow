@@ -955,24 +955,58 @@ async function deleteRendition(env: MediaEnv, videoId: string, access: MediaAcce
 
 // Cloudflare Queues accepts a delay of at most 12 hours per message.
 const MAX_RETIRE_QUEUE_DELAY = 12 * 60 * 60;
+const PUBLIC_REVOCATION_PREFIX = 'ops/media/public-revocations/';
+const PUBLIC_REVOCATION_CURSOR = 'ops/media/public-revocation-cursor';
 
 async function queueRetiredRendition(env: MediaEnv, video: MediaVideo, rendition: RetiredR2Rendition, now = Date.now()): Promise<void> {
-	const delay = rendition.access === 'pub' && desiredAccess(video) === 'priv' ? 0 : Math.ceil((rendition.deleteAfter - now) / 1000);
-	await env.PROCESSING_CHECK_QUEUE?.send({ kind: MEDIA_RETIRE_KIND, videoId: video.id, rev: rendition.rev } satisfies MediaRetireMessage, {
-		delaySeconds: Math.max(0, Math.min(MAX_RETIRE_QUEUE_DELAY, delay)),
-	});
+	const revoke = rendition.access === 'pub' && desiredAccess(video) === 'priv';
+	const delay = revoke ? 0 : Math.ceil((rendition.deleteAfter - now) / 1000);
+	const message: MediaRetireMessage = { kind: MEDIA_RETIRE_KIND, videoId: video.id, rev: rendition.rev };
+	try {
+		if (!env.PROCESSING_CHECK_QUEUE && revoke) throw new Error('processing check queue is not bound');
+		await env.PROCESSING_CHECK_QUEUE?.send(message, { delaySeconds: Math.max(0, Math.min(MAX_RETIRE_QUEUE_DELAY, delay)) });
+	} catch (error) {
+		if (!revoke) throw error;
+		logger.warn('[Media] Could not queue public rendition revocation; trying directly', { videoId: video.id, rev: rendition.rev });
+		// Track the retry before touching the objects, independently of a video record that can be deleted.
+		const pending = env.global_settings;
+		const key = `${PUBLIC_REVOCATION_PREFIX}${message.videoId}/${message.rev}`;
+		const saved = await pending?.put(key, '').catch(() => null);
+		try {
+			await revokeRetiredPublicRendition(env, message);
+			if (saved) await pending?.delete(key);
+		} catch (revocationError) {
+			if (!saved) throw revocationError;
+			logger.warn('[Media] Public rendition revocation will retry in the sweep', { videoId: video.id, rev: rendition.rev, error: String(revocationError) });
+		}
+	}
+}
+
+function isActiveRevision(video: MediaVideo, rev: string): boolean {
+	return video.r2?.rev === rev || video.r2?.previous?.rev === rev;
 }
 
 async function retireRendition(env: MediaEnv, msg: MediaRetireMessage, now: number): Promise<void> {
 	const video = await repo(env).getObject(msg.videoId);
 	const retired = video?.r2?.retired?.find((r) => r.rev === msg.rev);
-	if (!video || !retired || video.r2?.rev === msg.rev || video.r2?.previous?.rev === msg.rev) return;
+	if (!video || !retired || isActiveRevision(video, msg.rev)) return;
 	const revoke = retired.access === 'pub' && desiredAccess(video) === 'priv';
 	if (!revoke && now < retired.deleteAfter) {
 		await queueRetiredRendition(env, video, retired, now);
 		return;
 	}
-	await deleteRendition(env, msg.videoId, retired.access, retired.rev);
+	await removeRetiredRendition(env, msg, retired.access);
+}
+
+/** An immediate revocation can outlive the video record. A restored video keeps its normal grace period. */
+async function revokeRetiredPublicRendition(env: MediaEnv, msg: MediaRetireMessage): Promise<void> {
+	const video = await repo(env).getObject(msg.videoId);
+	if (video && (desiredAccess(video) === 'pub' || isActiveRevision(video, msg.rev))) return;
+	await removeRetiredRendition(env, msg, 'pub');
+}
+
+async function removeRetiredRendition(env: MediaEnv, msg: MediaRetireMessage, access: MediaAccess): Promise<void> {
+	await deleteRendition(env, msg.videoId, access, msg.rev);
 	await repo(env).updateObject(msg.videoId, (fresh) => {
 		const r2 = fresh.r2;
 		if (!r2?.retired?.some((r) => r.rev === msg.rev)) return false;
@@ -980,6 +1014,29 @@ async function retireRendition(env: MediaEnv, msg: MediaRetireMessage, now: numb
 		if (!r2.retired.length) delete r2.retired;
 		return true;
 	});
+}
+
+/** Retry public object deletion and CDN purge even during a queue outage. */
+export async function sweepPublicRenditionRevocations(env: MediaEnv): Promise<void> {
+	const pending = env.global_settings;
+	if (!pending) return;
+	const startAfter = await (await pending.get(PUBLIC_REVOCATION_CURSOR))?.text();
+	const page = await pending.list({ prefix: PUBLIC_REVOCATION_PREFIX, startAfter, limit: 25 });
+	for (const { key } of page.objects) {
+		const [videoId, rev] = key.slice(PUBLIC_REVOCATION_PREFIX.length).split('/');
+		const msg = { kind: MEDIA_RETIRE_KIND, videoId, rev };
+		if (!isMediaRetireMessage(msg)) continue;
+		try {
+			await revokeRetiredPublicRendition(env, msg);
+			await pending.delete(key);
+		} catch (error) {
+			logger.warn('[Media] Public rendition revocation still pending', { videoId, rev, error: String(error) });
+		}
+	}
+	// Advance past failures so one broken revision cannot block subsequent pages.
+	const last = page.objects.at(-1);
+	if (page.truncated && last) await pending.put(PUBLIC_REVOCATION_CURSOR, last.key);
+	else if (startAfter) await pending.delete(PUBLIC_REVOCATION_CURSOR);
 }
 
 /** A video's copies on the CDN (every rendition). `strict`: throws when the purge failed. */
