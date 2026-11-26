@@ -3,13 +3,16 @@
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, transcodeCeilingOf, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { MessageType, MEDIA_MAX_EDGE_TTL_SECONDS, publicMp4Path, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, transcodeCeilingOf, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import {
 	accessDrift,
 	applyJobEvent,
 	clearDeliverySettingsCache,
 	desiredAccess,
 	enqueueTranscode,
+	handleMediaRenditionBatch,
+	onVideoWritten,
+	queueMediaMove,
 	moveMedia,
 	ownerR2View,
 	purgeVideoMedia,
@@ -21,6 +24,8 @@ import {
 	writeDeliverySettings,
 	type MediaMoveMessage,
 } from '../src/lib/media/r2-delivery';
+import { choosePlayback, withPlayback } from '../src/lib/media/playback';
+import { videoProviderRecords } from '../src/lib/media/providers';
 import { createMediaInternalRouter, readMediaLive } from '../src/endpoints/media/mediaInternal';
 import { adminR2Badge, adminR2Detail } from '../src/lib/admin/directory';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -206,6 +211,189 @@ describe('R2 dual write', () => {
 	});
 });
 
+describe('re-encoding a published rendition', () => {
+	const rev = '0123456789abcdef';
+	const readyAt = '2026-11-10T10:00:00.000Z';
+	const result = { ...RESULT, mp4: { file: 'video.mp4', rung: '360p', width: 640, height: 360, bytes: 20 } };
+	const ready = { status: 'ready', rev, access: 'pub', result, readyAt, jobId: 'old', attempts: 1, queuedAt: readyAt };
+	const oldMaster = `pub/${ID}/${rev}/master.m3u8`;
+
+	function existing(overrides: Record<string, unknown> = {}) {
+		const state = setup({
+			uploadStatus: 'ready',
+			r2: ready,
+			media: { providers: { r2: { ref: ID, status: 'ready', readyAt } } },
+			thumbnailUrl: `https://media.qa.alummahnow.net/pub/${ID}/${rev}/thumb.jpg`,
+			...overrides,
+		});
+		state.raw.MEDIA.store.set(oldMaster, '#EXTM3U');
+		return state;
+	}
+
+	async function deliver(env: ReturnType<typeof existing>['env'], body: unknown, now: number) {
+		let acked = false;
+		await handleMediaRenditionBatch({
+			messages: [{ body, attempts: 1, ack() { acked = true; }, retry() { assert.fail('maintenance retried'); } }],
+		}, env, now);
+		assert.equal(acked, true);
+	}
+
+	it('keeps R2 playback, the automatic frame, the public MP4 and ready metadata while the new job runs', async () => {
+		const { env, raw, videos } = existing();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin');
+		assert.equal((await enqueueTranscode(env, ID, 'retry', { force: true })).queued, true);
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		for (const status of ['queued', 'transcoding']) {
+			if (status === 'transcoding') await applyJobEvent(env, undefined, ev(job, { type: 'started' }));
+			const video = videos.read(ID);
+			assert.equal(video.r2.status, status);
+			assert.equal((await choosePlayback(env, video)).sources[0]?.playUrl, `https://${env.MEDIA_PUBLIC_HOST}/${oldMaster}`);
+			const view = await withPlayback(env, video, { thumbnailUrl: video.thumbnailUrl, thumbnailSizes: { old: 'old' }, playUrl: undefined, contentUrl: undefined });
+			assert.equal(view.playUrl, `https://${env.MEDIA_PUBLIC_HOST}/${oldMaster}`);
+			assert.equal(view.contentUrl, `https://${env.MEDIA_PUBLIC_HOST}/pub/${ID}/${rev}/video.mp4`);
+			assert.equal(view.thumbnailSizes, undefined, 'recognizes the kept automatic frame');
+			assert.equal(publicMp4Path(video), `pub/${ID}/${rev}/video.mp4`);
+			assert.equal(videoProviderRecords(video)[0]?.readyAt, readyAt);
+			const owner = await ownerR2View(env, video);
+			assert.equal(owner?.status, status);
+			assert.equal(owner?.rev, rev);
+			assert.equal(owner?.readyAt, readyAt);
+			assert.deepEqual(owner?.renditions, ['360p']);
+		}
+	});
+
+	it('switches playback to the ready encode while keeping previously issued URLs alive', async () => {
+		const { env, raw, videos } = existing();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin');
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const newMaster = `pub/${ID}/${job.rev}/master.m3u8`;
+		raw.MEDIA.store.set(newMaster, '#EXTM3U');
+		const beforeCutover = Date.now();
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
+		assert.equal((await choosePlayback(env, videos.read(ID))).sources[0]?.playUrl, `https://${env.MEDIA_PUBLIC_HOST}/${newMaster}`);
+		assert.equal(videos.read(ID).r2.previous, undefined);
+		assert.equal(raw.MEDIA.store.has(oldMaster), true);
+		const { deleteAfter } = videos.read(ID).r2.retired[0];
+		assert.ok(deleteAfter >= beforeCutover + (MEDIA_MAX_EDGE_TTL_SECONDS + 3600) * 1000);
+		const retirement = raw.PROCESSING_CHECK_QUEUE.messages[0];
+		assert.equal(retirement.kind, 'media-retire');
+		await deliver(env, retirement, deleteAfter - 1);
+		assert.equal(raw.MEDIA.store.has(oldMaster), true);
+		assert.deepEqual(raw.PROCESSING_CHECK_QUEUE.messages[1], retirement);
+		await deliver(env, retirement, deleteAfter);
+		await deliver(env, retirement, deleteAfter);
+		assert.equal(videos.read(ID).r2.retired, undefined);
+		assert.equal(raw.MEDIA.store.has(oldMaster), false);
+		assert.equal(raw.MEDIA.store.has(newMaster), true);
+	});
+
+	it('keeps the private copy playing until the new public encode has moved under a hold', async () => {
+		const { env, raw, videos } = existing();
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await videos.put(ID, JSON.stringify({ ...videos.read(ID), isHidden: true }));
+		await onVideoWritten(env, videos.read(ID));
+		await moveMedia(env, raw.PROCESSING_CHECK_QUEUE.messages.shift());
+		const newPublic = `pub/${ID}/${job.rev}/master.m3u8`;
+		raw.MEDIA.store.set(newPublic, '#EXTM3U');
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
+		assert.match((await r2Urls(env, videos.read(ID)))!.playUrl, new RegExp(`/${rev}/master`));
+		assert.equal(videos.read(ID).r2.previous.access, 'priv');
+		await moveMedia(env, raw.PROCESSING_CHECK_QUEUE.messages.shift());
+		assert.match((await r2Urls(env, videos.read(ID)))!.playUrl, new RegExp(`/${job.rev}/master`));
+		assert.equal(videos.read(ID).r2.previous, undefined);
+		assert.equal(raw.MEDIA.store.has(newPublic), false);
+		assert.equal(raw.MEDIA_PRIVATE.store.has(`priv/${ID}/${rev}/master.m3u8`), true);
+	});
+
+	it('revokes the retired public copy immediately when the video goes private after cutover', async () => {
+		const { env, raw, videos } = existing();
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const newPublic = `pub/${ID}/${job.rev}/master.m3u8`;
+		raw.MEDIA.store.set(newPublic, '#EXTM3U');
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
+		const { deleteAfter } = videos.read(ID).r2.retired[0];
+		await videos.put(ID, JSON.stringify({ ...videos.read(ID), isPublic: false }));
+		await onVideoWritten(env, videos.read(ID));
+		const immediate = raw.PROCESSING_CHECK_QUEUE.messages.slice(1);
+		assert.deepEqual(immediate.map((msg) => msg.kind), ['media-move', 'media-retire']);
+		for (const msg of immediate) await deliver(env, msg, deleteAfter - 60_000);
+		assert.equal(raw.MEDIA.store.has(oldMaster), false);
+		assert.equal(raw.MEDIA.store.has(newPublic), false);
+		assert.equal(raw.MEDIA_PRIVATE.store.has(`priv/${ID}/${job.rev}/master.m3u8`), true);
+	});
+
+	it('keeps the audio package tied to the served revision and falls back to its old HLS master on legacy records', async () => {
+		const { env, raw, videos } = existing({
+			isPublic: false,
+			r2: { ...ready, access: 'priv' },
+			audioPackage: { rev, access: 'priv', master: 'master_a1.m3u8', trackIds: ['orig', 't123456'] },
+			audioTracks: [{ id: 'orig' }, { id: 't123456', status: 'ready' }],
+		});
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', final: true, error: 'encoder failed' }));
+		const video = videos.read(ID);
+		assert.match((await r2Urls(env, video))!.playUrl, /priv\/[^/]+\/[^/]+\/0123456789abcdef\/master_a1\.m3u8$/);
+		video.r2.previous = { rev, access: 'priv' };
+		delete video.audioPackage;
+		assert.match((await r2Urls(env, video))!.playUrl, /priv\/[^/]+\/[^/]+\/0123456789abcdef\/master\.m3u8$/);
+	});
+
+	it('keeps the old copy through a final failure and another retry', async () => {
+		const { env, raw, videos } = existing();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin');
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', final: true, error: 'encoder failed' }));
+		const video = videos.read(ID);
+		assert.equal(video.uploadStatus, 'ready');
+		assert.equal(video.media.providers.r2.status, 'ready');
+		assert.equal(adminR2Badge(video)?.status, 'failed');
+		assert.equal((await ownerR2View(env, video))?.error, 'encoder failed');
+		assert.equal((await choosePlayback(env, video)).sources[0]?.playUrl, `https://${env.MEDIA_PUBLIC_HOST}/${oldMaster}`);
+		assert.equal(raw.PROCESSING_CHECK_QUEUE.messages.length, 0);
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		assert.equal(videos.read(ID).r2.previous.rev, rev);
+		assert.equal((await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }))).why, 'stale job');
+		assert.equal(raw.MEDIA.store.has(oldMaster), true);
+	});
+
+	it('reports a failed re-encode with an admin Retry action', async (t) => {
+		const { env, raw } = existing();
+		Object.assign(env, { ERRORS_INGEST_URL: 'https://errors.example.com/ingest', INTERNAL_API_KEY: 'key' });
+		let report: unknown;
+		t.mock.method(globalThis, 'fetch', async (_url: string, init?: RequestInit) => {
+			if (init?.body) report = JSON.parse(String(init.body));
+			return new Response('{}');
+		});
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const waits: Promise<unknown>[] = [];
+		await applyJobEvent(env, { waitUntil: (p) => { waits.push(p); } }, ev(job, { type: 'failed', final: true, error: 'source_changed' }));
+		await Promise.all(waits);
+		assert.match(JSON.stringify(report), /"retry":.*"path":"\/internal\/media\/retry"/);
+	});
+
+	it('moves the kept rendition when a review hold arrives, including on a failed job', async () => {
+		const { env, raw, videos } = existing();
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await videos.put(ID, JSON.stringify({ ...videos.read(ID), review: { status: 'in_review' } }));
+		assert.equal(await r2Urls(env, videos.read(ID)), null, 'stops handing out the public URL immediately');
+		assert.equal(accessDrift(videos.read(ID)), 'priv');
+		assert.equal(await queueMediaMove(env, ID, 'priv'), true);
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', final: true, error: 'encoder failed' }));
+		assert.equal(await moveMedia(env, raw.PROCESSING_CHECK_QUEUE.messages[0]), 'moved');
+		assert.equal(raw.MEDIA.store.has(oldMaster), false);
+		assert.equal(raw.MEDIA_PRIVATE.store.has(`priv/${ID}/${rev}/master.m3u8`), true);
+		assert.match((await r2Urls(env, videos.read(ID)))!.playUrl, new RegExp(`/priv/\\d{10}\\.[A-Za-z0-9_-]{32}/${ID}/${rev}/master\\.m3u8$`));
+		assert.equal(publicMp4Path(videos.read(ID)), null);
+	});
+});
+
 describe('access follows visibility', () => {
 	it('private, draft, hidden, deleted and scheduled videos are never in the public bucket', () => {
 		assert.equal(desiredAccess({}), 'pub');
@@ -222,7 +410,6 @@ describe('access follows visibility', () => {
 		raw.MEDIA.store.set(`pub/${ID}/${rev}/master.m3u8`, '#EXTM3U');
 		raw.MEDIA.store.set(`pub/${ID}/${rev}/360p/seg_00000.m4s`, 'seg');
 		assert.equal(accessDrift(videos.read(ID)), 'priv');
-		const { queueMediaMove } = await import('../src/lib/media/r2-delivery');
 		assert.equal(await queueMediaMove(env, ID, 'priv'), true);
 		const msg = raw.PROCESSING_CHECK_QUEUE.messages[0] as MediaMoveMessage;
 		assert.equal(accessDrift(videos.read(ID)), null, 'a running move is not queued again');

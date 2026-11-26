@@ -3,7 +3,7 @@
  * when no original was kept), served from media.<env>.alummahnow.net. The copy's state is the
  * record's `r2` field (lib/media/r2-delivery.ts); the provider-side id is our video id.
  */
-import { MEDIA_THUMBNAIL, type VideoProviderRecord } from '@al-ummah/shared-types';
+import { MEDIA_THUMBNAIL, shownR2, type VideoProviderRecord } from '@al-ummah/shared-types';
 import { r2Urls } from '../r2-delivery';
 import type { MediaProvider, ProbeResult, ProviderPlayback, ProviderVideo, ProvidersEnv } from './types';
 
@@ -12,10 +12,9 @@ const PROBE_TIMEOUT_MS = 5_000;
 
 function status(video: ProviderVideo): VideoProviderRecord['status'] {
 	switch (video.r2?.status) {
-		case 'ready':
-			return 'ready';
 		case 'failed':
 			return 'failed';
+		case 'ready':
 		case 'queued':
 		case 'transcoding':
 			return 'processing';
@@ -32,27 +31,29 @@ export const r2Provider: MediaProvider = {
 		const r2 = video.r2;
 		// A new-style record that lists R2 but whose job has not been queued yet
 		if (!r2 && !video.media?.providers?.r2) return null;
+		const shown = shownR2(video);
 		return {
 			provider: 'r2',
 			ref: video.id,
-			status: status(video),
-			renditions: r2?.result?.rungs.map((r) => r.name) ?? [],
-			...(r2?.readyAt ? { readyAt: r2.readyAt } : {}),
-			...(r2?.error ? { error: r2.error } : {}),
+			status: shown ? 'ready' : status(video),
+			renditions: shown?.result?.rungs.map((r) => r.name) ?? [],
+			...(shown?.readyAt ? { readyAt: shown.readyAt } : {}),
+			...(!shown && r2?.error ? { error: r2.error } : {}),
 			...(video.media ? {} : { legacy: true }),
 		};
 	},
 
 	async playback(env, video): Promise<ProviderPlayback | null> {
-		const urls = await r2Urls(env, { id: video.id, r2: video.r2, audioTracks: video.audioTracks, audioPackage: video.audioPackage } as never);
+		const urls = await r2Urls(env, video);
 		return urls ? { playUrl: urls.playUrl, thumbnailUrl: urls.thumbnailUrl } : null;
 	},
 
 	isOwnAutoThumbnail(video, url) {
-		if (!url || video.thumbnailType === 'custom' || !video.r2) return false;
+		const shown = shownR2(video);
+		if (!url || video.thumbnailType === 'custom' || !shown) return false;
 		try {
 			const u = new URL(url);
-			return u.pathname.endsWith(`/${video.id}/${video.r2.rev}/${MEDIA_THUMBNAIL}`) && /^\/(pub|priv)\//.test(u.pathname);
+			return u.pathname.endsWith(`/${video.id}/${shown.rev}/${MEDIA_THUMBNAIL}`) && /^\/(pub|priv)\//.test(u.pathname);
 		} catch {
 			return false;
 		}

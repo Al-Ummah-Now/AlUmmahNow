@@ -49,6 +49,7 @@ import {
 	type ExecutionContextLike,
 	type VideoObject,
 	type VideoR2State,
+	shownR2,
 	FEATURE_OFF_CODE,
 	type CreatorTierVia,
 } from '@al-ummah/shared-types';
@@ -178,7 +179,8 @@ export function studioTrack(t: AudioTrack, uploadedBytes?: number): StudioAudioT
 export function packageView(video: Video): { status: 'none' | 'building' | 'ready' | 'failed'; playing: boolean } {
 	const pkg = video.audioPackage;
 	if (!pkg) return { status: 'none', playing: false };
-	const playing = !!pkg.master && video.r2?.status === 'ready' && video.r2.rev === pkg.rev && video.r2.access === pkg.access;
+	const shown = shownR2(video);
+	const playing = !!pkg.master && shown?.rev === pkg.rev && shown.access === pkg.access;
 	return { status: pkg.status === 'queued' || pkg.status === 'building' ? 'building' : pkg.status, playing };
 }
 
@@ -706,8 +708,8 @@ export async function queueAudioPackage(env: AudioTracksEnv, ctx: ExecutionConte
 				fresh.dateModified = now.toISOString();
 				return true;
 			}
-			const r2 = fresh.r2;
-			if (!r2 || r2.status !== 'ready' || !r2.result?.rungs?.length) {
+			const r2 = shownR2(fresh);
+			if (!r2?.result?.rungs?.length) {
 				why = 'waiting for the R2 rendition';
 				return false;
 			}
@@ -811,7 +813,7 @@ export async function onPackageReport(env: AudioTracksEnv, ctx: ExecutionContext
 			why = 'stale job';
 			return false;
 		}
-		const r2 = fresh.r2;
+		const r2 = shownR2(fresh);
 		if (!r2 || r2.rev !== report.rev || r2.access !== report.access || pkg.rev !== report.rev || pkg.access !== report.access) {
 			// The rendition moved or was replaced while the job ran: build again for the current one
 			why = 'stale rendition';

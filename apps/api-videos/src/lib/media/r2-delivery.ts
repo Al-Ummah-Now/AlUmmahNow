@@ -11,6 +11,7 @@
  * Bunny is never touched here: every Bunny path works exactly as before.
  */
 import { r2ThumbnailPrefix } from '../thumbnail/store';
+import { isR2FrameOf } from '../thumbnail/shape';
 import { isStale as isPrebuiltStale } from './prebuilt';
 import {
 	PREBUILT_REJECTIONS,
@@ -18,6 +19,9 @@ import {
 	type PrebuiltRejection,
 	type PrebuiltUploadState,
 	isVideoMediaPublic,
+	isMediaRev,
+	isMediaVideoId,
+	shownR2,
 	mediaFrameUrl,
 	mediaPlayUrl,
 	newMediaRev,
@@ -38,12 +42,17 @@ import {
 	sanitizeRungs,
 	scrubMediaText,
 	MEDIA_MASTER,
+	MEDIA_MAX_EDGE_TTL_SECONDS,
 	MEDIA_THUMBNAIL,
 	audioPackageMaster,
 	type DeliverySettings,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type MediaAccess,
+	type AudioPackageState,
+	type AudioTrack,
+	type R2Rendition,
+	type RetiredR2Rendition,
 	type Mp4JobEvent,
 	sanitizeMp4,
 	type TranscodeFailure,
@@ -107,14 +116,11 @@ export interface MediaEnv {
 }
 
 /** Fields of a video record this module reads or writes. */
-export interface MediaVideo {
+export interface MediaVideo extends VideoVisibilityFields {
 	id: string;
-	isPublic?: boolean;
-	isDraft?: boolean;
-	isHidden?: boolean;
-	isDeleted?: boolean;
-	scheduledPublishStatus?: string;
-	uploadStatus?: string;
+	media?: VideoMediaProviders;
+	audioPackage?: AudioPackageState;
+	audioTracks?: AudioTrack[];
 	r2?: VideoR2State;
 	dateModified?: string;
 	/** Bunny's first playable time (lib/processing/sync.ts) */
@@ -174,16 +180,34 @@ export async function recordJob(env: Pick<MediaEnv, 'SEARCH_DB'>, video: MediaVi
 	}
 }
 
+const MEDIA_RETIRE_KIND = 'media-retire';
 export const MEDIA_MOVE_KIND = 'media-move';
 export interface MediaMoveMessage {
 	kind: typeof MEDIA_MOVE_KIND;
 	videoId: string;
 	moveId: string;
 	to: MediaAccess;
+	rev?: string;
+	from?: MediaAccess;
 }
 export function isMediaMoveMessage(body: unknown): body is MediaMoveMessage {
 	const b = body as Partial<MediaMoveMessage> | null;
 	return !!b && b.kind === MEDIA_MOVE_KIND && typeof b.videoId === 'string' && (b.to === 'pub' || b.to === 'priv');
+}
+
+interface MediaRetireMessage {
+	kind: typeof MEDIA_RETIRE_KIND;
+	videoId: string;
+	rev: string;
+}
+
+function isMediaRetireMessage(body: unknown): body is MediaRetireMessage {
+	const b = body as Partial<MediaRetireMessage> | null;
+	return b?.kind === MEDIA_RETIRE_KIND && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.rev === 'string' && isMediaRev(b.rev);
+}
+
+export function isMediaRenditionMessage(body: unknown): body is MediaMoveMessage | MediaRetireMessage {
+	return isMediaMoveMessage(body) || isMediaRetireMessage(body);
 }
 
 export { SETTINGS_KEY } from './settings';
@@ -216,14 +240,35 @@ export function desiredAccess(video: VideoVisibilityFields): MediaAccess {
 	return isVideoMediaPublic(video) ? 'pub' : 'priv';
 }
 
-/** A ready rendition set sits under the wrong prefix and no move is running. */
+function completedRenditions(r2: VideoR2State | undefined): R2Rendition[] {
+	if (!r2) return [];
+	const renditions = r2.previous ? [r2.previous] : [];
+	if (r2.status === 'ready') renditions.push(r2);
+	return renditions;
+}
+
+function renditionToMove(video: MediaVideo, to: MediaAccess): R2Rendition | undefined {
+	return completedRenditions(video.r2).find((r) => r.access !== to &&
+		!(r.moving?.to === to && Date.now() - Date.parse(r.moving.at) < 30 * 60 * 1000));
+}
+
+/** A completed rendition is under the wrong prefix and has no move to the right one. */
 export function accessDrift(video: MediaVideo | null | undefined): MediaAccess | null {
-	const r2 = video?.r2;
-	if (!video || !r2 || r2.status !== 'ready') return null;
-	const want = desiredAccess(video);
-	if (want === r2.access) return null;
-	if (r2.moving && r2.moving.to === want && Date.now() - Date.parse(r2.moving.at) < 30 * 60 * 1000) return null;
-	return want;
+	if (!video) return null;
+	const to = desiredAccess(video);
+	return renditionToMove(video, to) ? to : null;
+}
+
+/** The cutover and the start of the grace period are part of the same record write. */
+function retirePrevious(video: MediaVideo): RetiredR2Rendition | undefined {
+	const r2 = video.r2;
+	if (!r2?.previous || r2.status !== 'ready' || r2.access !== desiredAccess(video)) return undefined;
+	const { rev, access } = r2.previous;
+	delete r2.previous;
+	if (rev === r2.rev) return undefined;
+	const retired = { rev, access, deleteAfter: Date.now() + (MEDIA_MAX_EDGE_TTL_SECONDS + 3600) * 1000 };
+	(r2.retired ??= []).push(retired);
+	return retired;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +291,7 @@ export async function enqueueTranscode(
 		if (!env.TRANSCODE_QUEUE) return { queued: false, why: 'transcode queue not bound' };
 		// A new video names its providers (lib/media/ingest.ts): R2 transcodes exactly when it holds one.
 		// Older rows follow the ingest settings (channel override included).
-		const current = (await repo(env).getObject(videoId)) as (MediaVideo & { channelId?: string; media?: VideoMediaProviders }) | null;
+		const current = (await repo(env).getObject(videoId)) as (MediaVideo & { channelId?: string }) | null;
 		if (!current) return { queued: false, why: 'video not found' };
 		const wantsR2 = current.media ? !!current.media.providers.r2 : ingestTargets(await readMediaSettings(env), current.channelId).includes('r2');
 		// Audio tracks (wiki AUN-MULTI-AUDIO MA4) play only from R2, so they ask for a rendition either way
@@ -258,15 +303,28 @@ export async function enqueueTranscode(
 		// Pre-publication review (docs/specs/VIDEO-REVIEW.md §5): the same pass extracts frames and audio
 		const review = reason === 'upload' ? await reviewExtractionFor(env as never) : undefined;
 		let message: TranscodeJobMessage | null = null;
+		let replacing = false;
 		let why: string | undefined;
 		await repo(env).updateObject(videoId, (video) => {
 			message = null;
+			replacing = false;
 			why = undefined;
 			const r2 = video.r2;
 			if (r2 && !opts.force && (r2.status === 'queued' || r2.status === 'transcoding' || r2.status === 'ready')) {
 				why = `already ${r2.status}`;
 				return false;
 			}
+			if (r2?.status === 'ready' && r2.previous) {
+				why = 'replacement is being moved';
+				return false;
+			}
+			if (video.isDeleted) {
+				why = 'video is deleted';
+				return false;
+			}
+			const previous = r2?.status === 'ready'
+				? { rev: r2.rev, access: r2.access, result: r2.result, readyAt: r2.readyAt, moving: r2.moving }
+				: r2?.previous;
 			const job: TranscodeJobMessage = {
 				kind: 'transcode',
 				videoId,
@@ -291,15 +349,24 @@ export async function enqueueTranscode(
 				access: job.access,
 				attempts: 0,
 				queuedAt: job.queuedAt,
-				// A rendition that was ready keeps playing until the new one is (its keys stay)
-				...(r2?.status === 'ready' && r2.result ? { previous: { rev: r2.rev, access: r2.access } } : {}),
+				...(previous ? { previous } : {}),
+				...(r2?.retired?.length ? { retired: r2.retired } : {}),
 			};
+			if (previous) refreshR2Provider(video);
 			message = job;
+			replacing = !!previous;
 			return true;
 		});
 		if (!message) return { queued: false, why: why ?? 'video not found' };
 		const sent: TranscodeJobMessage = message;
-		await env.TRANSCODE_QUEUE.send(sent);
+		try {
+			await env.TRANSCODE_QUEUE.send(sent);
+		} catch (error) {
+			if (replacing) await applyJobEvent(env, undefined, {
+				type: 'failed', videoId, jobId: sent.jobId, at: new Date().toISOString(), attempt: 0, final: true, error: 'Could not queue the R2 transcode',
+			});
+			throw error;
+		}
 		await recordJob(env, await repo(env).getObject(videoId));
 		return { queued: true, jobId: sent.jobId };
 	} catch (error) {
@@ -412,16 +479,13 @@ const needsActionKey = (videoId: string) => `media-transcode:${videoId}`;
  * path with a placeholder token (the signing middleware signs it per response for the video's
  * owner object only; lib/bunny-signing.ts). Null when there is no ready rendition.
  */
-export function storedR2Frame(host: string | undefined, video: { id: string; r2?: VideoR2State }): string | null {
-	const r2 = video.r2;
-	if (!host || !r2 || r2.status !== 'ready') return null;
+export function storedR2Frame(host: string | undefined, video: MediaVideo): string | null {
+	const r2 = shownR2(video);
+	if (!host || !r2) return null;
 	return r2.access === 'pub' ? `https://${host}/pub/${video.id}/${r2.rev}/${MEDIA_THUMBNAIL}` : `https://${host}/priv/-/${video.id}/${r2.rev}/${MEDIA_THUMBNAIL}`;
 }
 
 type SoleCopyVideo = MediaVideo & {
-	media?: VideoMediaProviders;
-	uploadStatus?: string;
-	playableAt?: string;
 	thumbnailUrl?: string;
 	thumbnailType?: string;
 	thumbnailSizes?: Record<string, string>;
@@ -445,13 +509,26 @@ function hasReadyCopy(video: SoleCopyVideo): boolean {
 	return video.uploadStatus === 'ready' || !!video.r2?.previous || Object.values(video.media?.providers ?? {}).some((p) => p?.status === 'ready');
 }
 
+/** The stored provider describes the available copy. Admin job views read r2.status directly. */
+export function refreshR2Provider(video: MediaVideo): void {
+	const ref = video.media?.providers.r2;
+	const job = video.r2;
+	if (!ref || !job) return;
+	const shown = shownR2(video);
+	ref.status = shown ? 'ready' : job.status === 'failed' || job.status === 'cancelled' ? 'failed' : 'processing';
+	if (shown?.readyAt) ref.readyAt = shown.readyAt;
+	else delete ref.readyAt;
+	if (ref.status === 'failed' && job.error) ref.error = job.error;
+	else delete ref.error;
+}
+
 /** Point a non-custom thumbnail that is (or should be) the R2 frame at the current rendition. */
 function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
 	if (video.thumbnailType === 'custom') return;
 	const frame = storedR2Frame(host, video);
 	if (!frame || video.thumbnailUrl === frame) return;
 	const current = video.thumbnailUrl;
-	const isR2Frame = !!current && /\/(pub|priv)\/.*\/thumb\.jpg$/.test(new URL(current, 'https://x').pathname) && current.includes(`/${video.id}/`);
+	const isR2Frame = !!current && isR2FrameOf(current, video.id, host);
 	if (!current || isR2Frame || r2DecidesState(video)) {
 		video.thumbnailUrl = frame;
 		video.thumbnailType = 'auto';
@@ -465,10 +542,10 @@ function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
  * sync makes it ready (lib/processing/sync.ts). Mutates; true when it turned ready now.
  */
 function readyFromR2(v: SoleCopyVideo, at: string, host: string | undefined): boolean {
-	if (!r2DecidesState(v) || v.r2?.status !== 'ready' || !v.r2.result) return false;
+	const result = shownR2(v)?.result ?? (v.r2?.status === 'ready' ? v.r2.result : undefined);
+	if (!r2DecidesState(v) || !result) return false;
 	refreshR2Frame(v, host);
 	if (v.uploadStatus === 'ready') return false;
-	const result = v.r2.result;
 	const before = { ...v };
 	v.uploadStatus = 'ready';
 	v.playableAt ??= at;
@@ -522,12 +599,13 @@ export async function applyJobEvent(
 	ev: TranscodeJobEvent,
 ): Promise<{ applied: boolean; why?: string }> {
 	let why: string | undefined;
-	let previous: { rev: string; access: MediaAccess } | undefined;
+	let retired: RetiredR2Rendition | undefined;
 	let transition: 'ready' | 'failed' | null = null;
 	let droppedGuid: string | undefined;
 	const saved = await repo(env).updateObject(ev.videoId, (video) => {
 		why = undefined;
 		transition = null;
+		retired = undefined;
 		droppedGuid = undefined;
 		const r2 = video.r2;
 		if (!r2 || r2.jobId !== ev.jobId) {
@@ -565,8 +643,8 @@ export async function applyJobEvent(
 			r2.rungs = ev.result.rungs.map((r) => ({ name: r.name, state: 'done' as const }));
 			delete r2.error;
 			delete r2.progress;
-			previous = r2.previous;
-			delete r2.previous;
+			retired = retirePrevious(video);
+			refreshR2Frame(video as SoleCopyVideo, env.MEDIA_PUBLIC_HOST);
 			// R2 is the video's playable copy (docs/media-delivery/PROVIDERS.md §R2 only): it makes the
 			// video ready the way Bunny's sync does (lib/processing/sync.ts planSync/applyPlan)
 			if (readyFromR2(video as SoleCopyVideo, ev.at, env.MEDIA_PUBLIC_HOST)) transition = 'ready';
@@ -595,7 +673,7 @@ export async function applyJobEvent(
 						const bunny = v.media?.providers.bunny;
 						if (bunny) Object.assign(bunny, { status: 'failed', error: SOURCE_CHANGED });
 					}
-				} else if (r2DecidesState(v) && v.uploadStatus !== 'ready' && (v.uploadStatus !== 'failed' || v.processingIssue?.kind === 'encode_failed')) {
+				} else if (r2DecidesState(v) && !r2.previous && v.uploadStatus !== 'ready' && (v.uploadStatus !== 'failed' || v.processingIssue?.kind === 'encode_failed')) {
 					// A retry that failed again: why it failed now (the uploader was told already)
 					if (v.uploadStatus !== 'failed') transition = 'failed';
 					v.uploadStatus = 'failed';
@@ -605,20 +683,18 @@ export async function applyJobEvent(
 		}
 		// D11: the job took the pre-encoded renditions (used or not); their staging is gone with it
 		if (ev.type === 'ready' || (ev.type === 'failed' && ev.final)) delete (video as { prebuilt?: unknown }).prebuilt;
-		// The video's provider record mirrors the job (docs/media-delivery/PROVIDERS.md)
-		const ref = (video as SoleCopyVideo).media?.providers.r2;
-		if (ref) {
-			ref.status = r2.status === 'ready' ? 'ready' : r2.status === 'failed' ? 'failed' : 'processing';
-			if (r2.status === 'ready') {
-				ref.readyAt = ev.at;
-				delete ref.error;
-			} else if (r2.status === 'failed') ref.error = r2.error;
-		}
+		refreshR2Provider(video);
 		video.dateModified = new Date().toISOString();
 		return true;
 	});
 	if (!saved) return { applied: false, why: 'video not found' };
-	if (why) return { applied: false, why };
+	if (why) {
+		if (why === 'already ready' && ev.type === 'ready') {
+			await Promise.all((saved.r2?.retired ?? []).map((r) => queueRetiredRendition(env, saved, r)));
+			await reconcileRenditions(env, saved);
+		}
+		return { applied: false, why };
+	}
 	if (transition) {
 		// Same downstream path as Bunny's: uploader notification, subscriber fan-out (lib/notification-events.ts)
 		const { announceAndRecordProcessingResult } = await import('../notification-events');
@@ -631,9 +707,9 @@ export async function applyJobEvent(
 
 	if (ev.type === 'ready') {
 		resolveNeedsAction(env, ctx, needsActionKey(ev.videoId));
-		// A re-transcode replaced an older rendition set: remove it
+		// The old revision stays available to clients holding URLs from before cutover.
 		if (droppedGuid) await enqueueBunnyDelete(env.PROCESSING_CHECK_QUEUE, droppedGuid, 'source-changed-replaced');
-		if (previous && previous.rev !== saved.r2?.rev) await deleteRendition(env, ev.videoId, previous.access, previous.rev).catch(() => undefined);
+		if (retired) await queueRetiredRendition(env, saved, retired);
 		// Visibility changed while it transcoded: move it now
 		const drift = accessDrift(saved);
 		if (drift) await queueMediaMove(env, ev.videoId, drift);
@@ -663,7 +739,8 @@ export async function applyJobEvent(
 			source: 'processing',
 			title: changed
 				? `${SOURCE_CHANGED_REASON}: ${(saved as SoleCopyVideo).uploadStatus === 'failed' ? 'import it again' : 'the copy that plays is kept'}`
-				: r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
+				: saved.r2?.previous ? 'R2 re-encode failed (the previous copy is kept)'
+					: r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
 			message: details.summary,
 			// The Errors page shows this as the item's details (expandable)
 			error: details.error,
@@ -672,7 +749,7 @@ export async function applyJobEvent(
 			// The one place that says why and what to do
 			itemUrl: `/delivery?video=${encodeURIComponent(ev.videoId)}#transcode-troubleshooting`,
 			// The same bytes fail the same way
-			...(changed || issueCodeOf(ev).code
+			...(!saved.r2?.previous && (changed || issueCodeOf(ev).code)
 				? {}
 				: { retry: { kind: 'service' as const, service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } }, retryLabel: 'Transcode again' }),
 			extra: details.extra,
@@ -738,13 +815,13 @@ export async function sourceUrl(env: MediaEnv, videoId: string, record?: Library
 }
 
 /** Playable R2 URLs of a ready video (private ones signed), or null. */
-export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>): Promise<{ playUrl: string; thumbnailUrl: string } | null> {
-	const r2 = video.r2;
-	if (!r2 || r2.status !== 'ready' || !env.MEDIA_PUBLIC_HOST) return null;
+export async function r2Urls(env: MediaEnv, video: MediaVideo): Promise<{ playUrl: string; thumbnailUrl: string } | null> {
+	const r2 = shownR2(video);
+	if (!r2 || !env.MEDIA_PUBLIC_HOST) return null;
 	const sign = r2.access === 'priv' ? { key: await getSecret(env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY') } : undefined;
 	if (r2.access === 'priv' && !sign?.key) return null;
 	// A video with extra audio tracks plays its demuxed package (wiki AUN-MULTI-AUDIO MA1, MA3)
-	const master = audioPackageMaster(video as never) ?? MEDIA_MASTER;
+	const master = audioPackageMaster(video) ?? MEDIA_MASTER;
 	return {
 		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, master, sign),
 		// The frame alone: a file token (it may be shown where the playlist is not)
@@ -758,15 +835,14 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
  * never for private, unlisted or removed videos (their media is under priv/ or gone), never signed,
  * and stable for the rendition's rev (cached immutable by the CDN). Bunny-only videos: null.
  */
-export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pick<MediaVideo, 'id' | 'r2'> & { isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean }): string | null {
+export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: MediaVideo): string | null {
 	const path = env.MEDIA_PUBLIC_HOST ? publicMp4Path(video) : null;
 	return path ? `https://${env.MEDIA_PUBLIC_HOST}/${path}` : null;
 }
 
 /**
  * A remux-only job's end (apps/media, the public MP4 backfill #1182). The MP4 is recorded only on
- * the rendition it was made from: still ready, same rev and same access (a re-transcode or a move
- * meanwhile makes it stale), and never over an MP4 the record already has.
+ * the served rendition it was made from: same rev and access, with no MP4 already recorded.
  */
 export async function applyMp4Event(env: Pick<MediaEnv, 'videos'>, ev: Mp4JobEvent): Promise<{ applied: boolean; why?: string }> {
 	if (ev.type === 'failed') {
@@ -778,8 +854,8 @@ export async function applyMp4Event(env: Pick<MediaEnv, 'videos'>, ev: Mp4JobEve
 	let why: string | undefined;
 	const saved = await repo(env as MediaEnv).updateObject(ev.videoId, (video) => {
 		why = undefined;
-		const r2 = video.r2;
-		if (!r2 || r2.status !== 'ready' || !r2.result) {
+		const r2 = shownR2(video);
+		if (!r2?.result) {
 			why = 'not ready';
 			return false;
 		}
@@ -816,13 +892,14 @@ export interface OwnerR2View {
 	error?: string;
 	/** Rungs the transcode wrote (720p, 480p, ...) */
 	renditions: string[];
-	/** Master playlist, signed when private; ready only */
+	/** Master playlist of the served rendition, signed when private */
 	playUrl?: string;
 }
 
-export async function ownerR2View(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'> | null | undefined): Promise<OwnerR2View | undefined> {
+export async function ownerR2View(env: MediaEnv, video: MediaVideo | null | undefined): Promise<OwnerR2View | undefined> {
 	const r2 = video?.r2;
 	if (!video || !r2) return undefined;
+	const shown = shownR2(video);
 	let playUrl: string | undefined;
 	try {
 		playUrl = (await r2Urls(env, video))?.playUrl;
@@ -831,15 +908,15 @@ export async function ownerR2View(env: MediaEnv, video: Pick<MediaVideo, 'id' | 
 	}
 	return {
 		status: r2.status === 'cancelled' ? 'failed' : r2.status,
-		access: r2.access,
-		rev: r2.rev,
+		access: shown?.access ?? r2.access,
+		rev: shown?.rev ?? r2.rev,
 		attempts: r2.attempts ?? 0,
 		queuedAt: r2.queuedAt,
 		...(r2.startedAt ? { startedAt: r2.startedAt } : {}),
-		...(r2.readyAt ? { readyAt: r2.readyAt } : {}),
+		...(shown?.readyAt ? { readyAt: shown.readyAt } : {}),
 		...(r2.failedAt ? { failedAt: r2.failedAt } : {}),
 		...(r2.error ? { error: r2.error } : {}),
-		renditions: r2.result?.rungs.map((rung) => rung.name) ?? [],
+		renditions: shown?.result?.rungs.map((rung) => rung.name) ?? [],
 		...(playUrl ? { playUrl } : {}),
 	};
 }
@@ -869,11 +946,40 @@ async function deleteKeys(bucket: R2Bucket, keys: string[]): Promise<void> {
 
 async function deleteRendition(env: MediaEnv, videoId: string, access: MediaAccess, rev: string): Promise<number> {
 	const bucket = bucketOf(env, access);
-	if (!bucket) return 0;
+	if (!bucket) throw new Error('media bucket is not bound');
 	const keys = await listKeys(bucket, `${access}/${videoId}/${rev}/`);
 	await deleteKeys(bucket, keys);
-	if (access === 'pub') await purgeCdnPrefix(env, `${videoId}/${rev}/`);
+	if (access === 'pub') await purgeRenditionCdn(env, videoId, rev);
 	return keys.length;
+}
+
+// Cloudflare Queues accepts a delay of at most 12 hours per message.
+const MAX_RETIRE_QUEUE_DELAY = 12 * 60 * 60;
+
+async function queueRetiredRendition(env: MediaEnv, video: MediaVideo, rendition: RetiredR2Rendition, now = Date.now()): Promise<void> {
+	const delay = rendition.access === 'pub' && desiredAccess(video) === 'priv' ? 0 : Math.ceil((rendition.deleteAfter - now) / 1000);
+	await env.PROCESSING_CHECK_QUEUE?.send({ kind: MEDIA_RETIRE_KIND, videoId: video.id, rev: rendition.rev } satisfies MediaRetireMessage, {
+		delaySeconds: Math.max(0, Math.min(MAX_RETIRE_QUEUE_DELAY, delay)),
+	});
+}
+
+async function retireRendition(env: MediaEnv, msg: MediaRetireMessage, now: number): Promise<void> {
+	const video = await repo(env).getObject(msg.videoId);
+	const retired = video?.r2?.retired?.find((r) => r.rev === msg.rev);
+	if (!video || !retired || video.r2?.rev === msg.rev || video.r2?.previous?.rev === msg.rev) return;
+	const revoke = retired.access === 'pub' && desiredAccess(video) === 'priv';
+	if (!revoke && now < retired.deleteAfter) {
+		await queueRetiredRendition(env, video, retired, now);
+		return;
+	}
+	await deleteRendition(env, msg.videoId, retired.access, retired.rev);
+	await repo(env).updateObject(msg.videoId, (fresh) => {
+		const r2 = fresh.r2;
+		if (!r2?.retired?.some((r) => r.rev === msg.rev)) return false;
+		r2.retired = r2.retired.filter((r) => r.rev !== msg.rev);
+		if (!r2.retired.length) delete r2.retired;
+		return true;
+	});
 }
 
 /** A video's copies on the CDN (every rendition). `strict`: throws when the purge failed. */
@@ -937,6 +1043,11 @@ export function cdnPurgeProblem(status: number | null): string {
 	return `Cloudflare cache purge failed${status === null ? '' : ` (${status})`}`;
 }
 
+async function purgeRenditionCdn(env: MediaEnv, videoId: string, rev: string): Promise<void> {
+	let status: number | null = null;
+	if (await purgeCdnPrefix(env, `${videoId}/${rev}/`, (s) => (status = s)) === 'failed') throw new Error(cdnPurgeProblem(status));
+}
+
 /** Drops cached copies of pub/<rest> from the CDN when a zone token with Cache Purge is set. */
 async function purgeCdnPrefix(env: MediaEnv, rest: string, onFailed?: PurgeFailed): Promise<CdnPurge> {
 	if (!env.MEDIA_PUBLIC_HOST) return 'not_configured';
@@ -988,81 +1099,115 @@ export async function purgeCdnOrThrow(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>
 export async function queueMediaMove(env: MediaEnv, videoId: string, to: MediaAccess): Promise<boolean> {
 	if (!env.PROCESSING_CHECK_QUEUE) return false;
 	const moveId = crypto.randomUUID();
-	let marked = false;
+	let message: MediaMoveMessage | undefined;
 	await repo(env).updateObject(videoId, (video) => {
-		marked = false;
-		if (accessDrift(video) !== to) return false;
-		video.r2!.moving = { to, jobId: moveId, at: new Date().toISOString() };
-		marked = true;
+		message = undefined;
+		if (desiredAccess(video) !== to) return false;
+		const rendition = renditionToMove(video, to);
+		if (!rendition) return false;
+		rendition.moving = { to, jobId: moveId, at: new Date().toISOString() };
+		message = { kind: MEDIA_MOVE_KIND, videoId, moveId, to, from: rendition.access, rev: rendition.rev };
 		return true;
 	});
-	if (!marked) return false;
-	await env.PROCESSING_CHECK_QUEUE.send({ kind: MEDIA_MOVE_KIND, videoId, moveId, to } satisfies MediaMoveMessage);
+	if (!message) return false;
+	try {
+		await env.PROCESSING_CHECK_QUEUE.send(message);
+	} catch (error) {
+		await repo(env).updateObject(videoId, (video) => {
+			const rendition = completedRenditions(video.r2).find((r) => r.moving?.jobId === moveId);
+			if (!rendition) return false;
+			delete rendition.moving;
+			return true;
+		});
+		throw error;
+	}
 	return true;
 }
 
-/**
- * Copy a ready rendition set to the other bucket, switch the record, then
- * delete the old copies (and purge them from the CDN). Players keep using
- * the old URLs until the record switches. Throws on transient errors (the
- * queue retries).
- */
+/** Copy a completed rendition, then switch its prefix and remove the old objects. */
 export async function moveMedia(env: MediaEnv, msg: MediaMoveMessage): Promise<'moved' | 'stale' | 'nothing'> {
 	const video = await repo(env).getObject(msg.videoId);
-	const r2 = video?.r2;
-	if (!video || !r2 || r2.status !== 'ready') return 'nothing';
-	if (r2.moving?.jobId !== msg.moveId) return 'stale';
-	const from = r2.access;
-	if (from === msg.to) return 'nothing';
+	if (!video?.r2) return 'nothing';
+	const rendition = completedRenditions(video.r2).find((r) => r.moving?.jobId === msg.moveId);
+	if (!rendition) {
+		// Redelivery after the record switched: finish any cleanup that failed after the write.
+		if (msg.rev && msg.from && msg.from !== msg.to && desiredAccess(video) === msg.to &&
+			[...completedRenditions(video.r2), ...(video.r2.retired ?? [])].some((r) => r.rev === msg.rev && r.access === msg.to)) {
+			await deleteRendition(env, msg.videoId, msg.from, msg.rev);
+		}
+		await Promise.all((video.r2.retired ?? []).map((r) => queueRetiredRendition(env, video, r)));
+		await reconcileRenditions(env, video);
+		return 'stale';
+	}
+	if (desiredAccess(video) !== msg.to || rendition.access === msg.to) return 'stale';
+	const { access: from, rev } = rendition;
 	const src = bucketOf(env, from);
 	const dst = bucketOf(env, msg.to);
 	if (!src || !dst) throw new Error('media buckets are not bound');
-	const fromPrefix = `${from}/${msg.videoId}/${r2.rev}/`;
-	const keys = await listKeys(src, fromPrefix);
+	const keys = await listKeys(src, `${from}/${msg.videoId}/${rev}/`);
 	for (let i = 0; i < keys.length; i += 8) {
 		await Promise.all(
 			keys.slice(i, i + 8).map(async (key) => {
 				const obj = await src.get(key);
-				if (!obj) return;
-				await dst.put(`${msg.to}/${key.slice(from.length + 1)}`, obj.body, { httpMetadata: obj.httpMetadata });
+				if (obj) await dst.put(`${msg.to}/${key.slice(from.length + 1)}`, obj.body, { httpMetadata: obj.httpMetadata });
 			}),
 		);
 	}
 	let switched = false;
-	await repo(env).updateObject(msg.videoId, (fresh) => {
+	let retired: RetiredR2Rendition | undefined;
+	const saved = await repo(env).updateObject(msg.videoId, (fresh) => {
 		switched = false;
-		if (!fresh.r2 || fresh.r2.rev !== r2.rev || fresh.r2.moving?.jobId !== msg.moveId) return false;
-		fresh.r2.access = msg.to;
-		delete fresh.r2.moving;
-		// The audio package's files moved with the prefix (wiki AUN-MULTI-AUDIO MA3)
-		const pkg = (fresh as { audioPackage?: { rev: string; access: MediaAccess } }).audioPackage;
-		if (pkg && pkg.rev === r2.rev) pkg.access = msg.to;
-		// The stored frame of an R2-only video follows its rendition to the other prefix
-		if (r2DecidesState(fresh as SoleCopyVideo)) refreshR2Frame(fresh as SoleCopyVideo, env.MEDIA_PUBLIC_HOST);
+		retired = undefined;
+		const target = completedRenditions(fresh.r2).find((r) => r.rev === rev && r.moving?.jobId === msg.moveId);
+		if (!target || desiredAccess(fresh) !== msg.to) return false;
+		target.access = msg.to;
+		delete target.moving;
+		const pkg = fresh.audioPackage;
+		if (pkg?.rev === rev) pkg.access = msg.to;
+		retired = retirePrevious(fresh);
+		refreshR2Frame(fresh as SoleCopyVideo, env.MEDIA_PUBLIC_HOST);
+		refreshR2Provider(fresh);
 		switched = true;
 		return true;
 	});
 	if (!switched) {
-		// Superseded meanwhile: drop the copy we made
-		await deleteKeys(dst, keys.map((k) => `${msg.to}/${k.slice(from.length + 1)}`));
+		// A duplicate or newer move may still need the destination we just wrote.
+		const destinationClaimed = completedRenditions(saved?.r2).some((r) =>
+			r.rev === rev && (r.access === msg.to || r.moving?.to === msg.to && !!saved && desiredAccess(saved) === msg.to));
+		if (!destinationClaimed && !saved?.r2?.retired?.some((r) => r.rev === rev && r.access === msg.to)) {
+			await deleteRendition(env, msg.videoId, msg.to, rev);
+		}
 		return 'stale';
 	}
-	await deleteKeys(src, keys);
-	if (from === 'pub') await purgeCdnPrefix(env, `${msg.videoId}/${r2.rev}/`);
+	// A subsequent visibility edit may need the source again.
+	const fresh = await repo(env).getObject(msg.videoId);
+	if (!fresh || desiredAccess(fresh) === msg.to || !completedRenditions(fresh.r2).some((r) => r.rev === rev)) {
+		await deleteRendition(env, msg.videoId, from, rev);
+	}
+	if (saved) {
+		if (retired) await queueRetiredRendition(env, saved, retired);
+		await reconcileRenditions(env, fresh ?? saved);
+		const shown = shownR2(saved);
+		if (shown && shown === saved.r2) {
+			const { onRenditionReady } = await import('../audio-tracks/service');
+			await onRenditionReady(env as never, undefined, saved as never);
+		}
+	}
 	return 'moved';
 }
 
-export async function handleMediaMoveBatch(batch: { messages: readonly { body: unknown; attempts: number; ack(): void; retry(o?: { delaySeconds?: number }): void }[] }, env: MediaEnv): Promise<void> {
+export async function handleMediaRenditionBatch(
+	batch: { messages: readonly { body: unknown; attempts: number; ack(): void; retry(o?: { delaySeconds?: number }): void }[] },
+	env: MediaEnv,
+	now = Date.now(),
+): Promise<void> {
 	for (const msg of batch.messages) {
-		if (!isMediaMoveMessage(msg.body)) {
-			msg.ack();
-			continue;
-		}
 		try {
-			await moveMedia(env, msg.body);
+			if (isMediaMoveMessage(msg.body)) await moveMedia(env, msg.body);
+			else if (isMediaRetireMessage(msg.body)) await retireRendition(env, msg.body, now);
 			msg.ack();
 		} catch (error) {
-			logger.warn('[Media] Move failed; retrying', { videoId: msg.body.videoId, error: error instanceof Error ? error.message : String(error) });
+			logger.warn('[Media] Rendition maintenance failed; retrying', { error: error instanceof Error ? error.message : String(error) });
 			msg.retry({ delaySeconds: Math.min(300, 30 * msg.attempts) });
 		}
 	}
@@ -1143,13 +1288,21 @@ export async function sweepMedia(env: MediaEnv, jobs: SweepCandidate[], now = Da
 	return { requeued, moved };
 }
 
-/** Write hook (search-sync wrapper): a ready rendition under the wrong prefix gets a move. */
+async function reconcileRenditions(env: MediaEnv, video: MediaVideo): Promise<void> {
+	const to = accessDrift(video);
+	const revocations = desiredAccess(video) === 'priv' ? (video.r2?.retired ?? []).filter((r) => r.access === 'pub') : [];
+	await Promise.all([
+		to ? queueMediaMove(env, video.id, to) : undefined,
+		...revocations.map((r) => queueRetiredRendition(env, video, r)),
+	]);
+}
+
+/** Write hook: reconcile visibility and revoke retired public URLs on restriction. */
 export async function onVideoWritten(env: MediaEnv, decoded: unknown): Promise<void> {
 	const video = decoded as MediaVideo | null;
-	const to = accessDrift(video);
-	if (!video || !to) return;
-	await queueMediaMove(env, video.id, to).catch((error) =>
-		logger.warn('[Media] Could not queue a move', { videoId: video.id, error: error instanceof Error ? error.message : String(error) }),
+	if (!video?.r2) return;
+	await reconcileRenditions(env, video).catch((error) =>
+		logger.warn('[Media] Could not queue rendition maintenance', { videoId: video.id, error: error instanceof Error ? error.message : String(error) }),
 	);
 }
 

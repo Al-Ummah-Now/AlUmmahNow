@@ -63,6 +63,8 @@ export interface VideoVisibilityFields extends VisibilityFlags {
   isDeleted?: boolean;
   /** Set with isDeleted when a channel is deleted (api-videos channelDeletion.ts) */
   markedForDeletion?: boolean;
+  suspensionHolds?: unknown;
+  csamTakedown?: unknown;
   /** Saved but not published (always stored private) */
   isDraft?: boolean;
   /** Absent on older videos, which count as ready */
@@ -142,6 +144,7 @@ export function isVideoOpenToAnyone(video: VideoVisibilityFields | null | undefi
  */
 export function isVideoMediaPublic(video: VideoVisibilityFields | null | undefined): boolean {
   if (!video || isVideoRemoved(video) || video.isPublic === false) return false;
+  if (video.csamTakedown || (Array.isArray(video.suspensionHolds) && video.suspensionHolds.length)) return false;
   // Held by review (in review, rejected, appealed): renditions move under the private prefix, so a
   // published video pulled back (VR2) stops being served from cached public URLs. A video still
   // in its first automated check stays where it is, like one still processing.

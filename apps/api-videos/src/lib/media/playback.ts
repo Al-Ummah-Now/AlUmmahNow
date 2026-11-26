@@ -109,7 +109,7 @@ export async function choosePlayback(
 	const bucket = playBucket(rules, video.id, opts.draw ?? drawBucket);
 	// Extra audio tracks play only from R2's demuxed package (wiki AUN-MULTI-AUDIO MA4): R2 goes first
 	// whatever the split, Bunny (original audio only) stays the fallback; a disabled R2 is still skipped
-	const audioFirst = !!audioPackageMaster(video as never);
+	const audioFirst = !!audioPackageMaster(video);
 	const planRules = audioFirst ? { ...rules, strategy: 'priority' as const, order: ['r2' as const, ...rules.order.filter((p) => p !== 'r2')] } : rules;
 	const plan = planSources({ rules: planRules, enabled, ready, unhealthy, exclude, bucket });
 
