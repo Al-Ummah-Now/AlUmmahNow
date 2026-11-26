@@ -1,5 +1,10 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, closeSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it, type TestContext } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
 	ENVIRONMENTS,
 	HARD_MAX_PAGES,
@@ -11,6 +16,9 @@ import {
 	formatCliReport,
 	parseCliArgs,
 	parseLegacyRestoreKey,
+	readCursorFile,
+	removeCursorFile,
+	writeCursorFile,
 	type BackfillStore,
 } from '../legacy-restore-pointers.ts';
 
@@ -154,7 +162,7 @@ describe('ENVIRONMENTS and parseCliArgs', () => {
 
 	it('formatCliReport omits raw nextCursor so stdout never prints a user ID encoded in an R2 cursor', () => {
 		const out = formatCliReport(
-			{ env: 'qa', backupsBucket: 'admin-backups-qa', profilesBucket: 'profiles-qa', cursorFile: '/tmp/legacy-restore-backfill-qa.cursor' },
+			{ env: 'qa', backupsBucket: 'admin-backups-qa', profilesBucket: 'profiles-qa', cursorFile: '/tmp/legacy-restore-backfill-qa.cursor', resumed: false },
 			{
 				dryRun: true,
 				pagesProcessed: 1,
@@ -177,6 +185,163 @@ describe('ENVIRONMENTS and parseCliArgs', () => {
 		assert.equal(out.cursorFile, '/tmp/legacy-restore-backfill-qa.cursor');
 		assert.equal(JSON.stringify(out).includes(USR_ACTIVE), false);
 	});
+});
+
+function makeCursorDirectory(t: TestContext): string {
+	const directory = mkdtempSync(join(tmpdir(), 'legacy-restore-cursor-test-'));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	return directory;
+}
+
+describe('cursor files', () => {
+	it('creates a private file and atomically replaces an existing file with broader permissions', (t) => {
+		const directory = makeCursorDirectory(t);
+		const path = join(directory, 'resume.cursor');
+		writeCursorFile(path, 'first-page');
+		assert.deepEqual(readCursorFile(path), { cursor: 'first-page' });
+		assert.equal(statSync(path).mode & 0o777, 0o600);
+
+		chmodSync(path, 0o644);
+		const oldFile = openSync(path, 'r');
+		try {
+			writeCursorFile(path, 'second-page');
+			assert.equal(readFileSync(oldFile, 'utf8'), 'first-page\n');
+			assert.deepEqual(readCursorFile(path), { cursor: 'second-page' });
+			assert.equal(statSync(path).mode & 0o777, 0o600);
+			assert.deepEqual(readdirSync(directory), ['resume.cursor']);
+		} finally {
+			closeSync(oldFile);
+		}
+	});
+
+	it('replaces a destination symlink and leaves its target and permissions intact', (t) => {
+		const directory = makeCursorDirectory(t);
+		const target = join(directory, 'other-file');
+		const path = join(directory, 'resume.cursor');
+		writeFileSync(target, 'existing content');
+		chmodSync(target, 0o640);
+		symlinkSync(target, path);
+
+		writeCursorFile(path, 'next-page');
+		assert.equal(lstatSync(path).isFile(), true);
+		assert.equal(statSync(path).mode & 0o777, 0o600);
+		assert.deepEqual(readCursorFile(path), { cursor: 'next-page' });
+		assert.equal(readFileSync(target, 'utf8'), 'existing content');
+		assert.equal(statSync(target).mode & 0o777, 0o640);
+	});
+
+	it('tolerates an already-removed file', (t) => {
+		const path = join(makeCursorDirectory(t), 'resume.cursor');
+		removeCursorFile(path);
+		assert.throws(() => statSync(path), { code: 'ENOENT' });
+	});
+});
+
+const NEXT_CURSOR = `opaque-cursor-${USR_ACTIVE}`;
+
+function runCursorCli(path: string, options: { initialCursor?: string; complete?: boolean; blockCursorIo?: boolean } = {}) {
+	const mockR2 = `
+		import { mkdirSync, unlinkSync } from 'node:fs';
+		import assert from 'node:assert/strict';
+		globalThis.fetch = async (input, init) => {
+			const url = new URL(input);
+			const profiles = url.pathname.includes('/profiles-qa/');
+			switch (init.method) {
+				case 'GET':
+					if (!profiles) assert.equal(url.searchParams.get('cursor'), ${JSON.stringify(options.initialCursor ?? null)});
+					return Response.json({
+						success: true,
+						result: [{ key: profiles ? '${USR_ACTIVE}' : 'legacy-restore/job-1/${USR_ACTIVE}/etag_1.json' }],
+						result_info: profiles || ${Boolean(options.complete)} ? {} : { is_truncated: true, cursor: '${NEXT_CURSOR}' },
+					});
+				case 'HEAD':
+					return new Response(null, { status: profiles ? 200 : 404 });
+				case 'PUT':
+					if (${Boolean(options.blockCursorIo)}) {
+						const path = ${JSON.stringify(path)};
+						if (${Boolean(options.initialCursor)}) unlinkSync(path);
+						mkdirSync(path);
+					}
+					return new Response(null, { status: 200 });
+				default:
+					throw new Error('Unexpected R2 request');
+			}
+		};
+	`;
+	const script = fileURLToPath(new URL('../backfill-legacy-restore-pointers.ts', import.meta.url));
+	const result = spawnSync(process.execPath, [
+		'--experimental-strip-types', '--no-warnings', '--import', `data:text/javascript,${encodeURIComponent(mockR2)}`,
+		script, '--env', 'qa', '--apply', '--confirm-1902-deployed', '--max-pages', '1', '--cursor-file', path,
+	], { env: { CLOUDFLARE_API_TOKEN: 'test-token' }, encoding: 'utf8', timeout: 10_000 });
+	assert.ifError(result.error);
+	return result;
+}
+
+describe('CLI cursor handling', () => {
+	for (const state of ['missing', 'empty']) {
+		it(`warns and reports a fresh run when the cursor file is ${state}`, (t) => {
+			const path = join(makeCursorDirectory(t), 'resume file.cursor');
+			if (state === 'empty') writeFileSync(path, ' \n\t');
+			const result = runCursorCli(path);
+
+			assert.equal(result.status, 0, result.stderr);
+			assert.match(result.stderr, new RegExp(`Warning: Cursor file is ${state}.*Starting from page 1`));
+			const [summary, hint] = result.stdout.trimEnd().split('\n\n');
+			const report = JSON.parse(summary);
+			assert.equal(report.resumed, false);
+			assert.equal(report.hasMore, true);
+			assert.equal(report.cursorFile, path);
+			assert.ok(hint.includes(`--cursor-file '${path}'`));
+			assert.ok(!result.stdout.includes(NEXT_CURSOR));
+			assert.deepEqual(readCursorFile(path), { cursor: NEXT_CURSOR });
+		});
+	}
+
+	it('passes the saved cursor to R2 and removes the file on completion', (t) => {
+		const path = join(makeCursorDirectory(t), 'resume.cursor');
+		writeCursorFile(path, 'previous-page');
+		const result = runCursorCli(path, { initialCursor: 'previous-page', complete: true });
+
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(result.stderr, '');
+		const report = JSON.parse(result.stdout);
+		assert.equal(report.resumed, true);
+		assert.equal(report.complete, true);
+		assert.equal(report.hasMore, false);
+		assert.equal(report.cursorFile, null);
+		assert.equal(report.pointersCreated, 1);
+		assert.throws(() => statSync(path), { code: 'ENOENT' });
+	});
+
+	it('checks the destination directory before the backfill starts', (t) => {
+		const path = join(makeCursorDirectory(t), 'missing-directory', 'resume.cursor');
+		const result = runCursorCli(path);
+		assert.equal(result.status, 1);
+		assert.equal(result.stdout, '');
+		assert.match(result.stderr, /ENOENT.*missing-directory/);
+	});
+
+	for (const complete of [false, true]) {
+		const operation = complete ? 'remove' : 'save';
+		it(`preserves the JSON mutation counts when it cannot ${operation} the cursor file`, (t) => {
+			const directory = makeCursorDirectory(t);
+			const path = join(directory, 'resume.cursor');
+			writeCursorFile(path, 'previous-page');
+			const result = runCursorCli(path, { initialCursor: 'previous-page', complete, blockCursorIo: true });
+
+			assert.equal(result.status, 1);
+			assert.match(result.stderr, new RegExp(`Could not ${operation} cursor file`));
+			const report = JSON.parse(result.stdout);
+			assert.equal(report.pointersCreated, 1);
+			assert.equal(report.pagesProcessed, 1);
+			assert.equal(report.complete, complete);
+			assert.equal(report.cursorFile, null);
+			assert.ok(!result.stdout.includes(NEXT_CURSOR));
+			assert.ok(!result.stderr.includes(NEXT_CURSOR));
+			assert.deepEqual(readdirSync(directory), ['resume.cursor'], 'failed cursor update leaves no temporary file');
+			assert.equal(statSync(path).isDirectory(), true);
+		});
+	}
 });
 
 describe('HTTP layer (cfFetch and createR2BackfillStore)', () => {
