@@ -232,6 +232,36 @@ describe('E14-S3a: POST /api/videos/:id/downloads & POST /api/downloads/sync', (
 		assert.equal(((await bunnyRes.json()) as { code: string }).code, 'rendition_not_ready');
 	});
 
+	it('resolves the published MP4 and keeps it available during and after a failed re-encode', async () => {
+		const { env } = await seedEnv();
+		await writeFeatureSwitch(env as never, { key: 'offlineDownloads', enabled: true, expectedVersion: 0, actorId: 'admin-1', currentStored: false });
+		const r2 = makeReadyR2();
+		const headers = { 'Content-Type': 'application/json' };
+		for (const status of ['transcoding', 'failed']) {
+			await env.videos.put(VID_PUB, JSON.stringify({
+				id: VID_PUB, title: 'Talk', isPublic: true, uploadStatus: 'ready', userId: 'creator-1', channelId: 'ch-open',
+				r2: { status, access: 'pub', rev: 'ffffffffffffffff', previous: r2 },
+			}));
+			const app = buildTestApp(() => ({ userId: `viewer-${status}` }));
+			for (const disposition of ['inline', 'attachment']) {
+				const res = await app.request(`/api/videos/${VID_PUB}/downloads`, {
+					method: 'POST', headers, body: JSON.stringify({ disposition }),
+				}, env);
+				assert.equal(res.status, 200);
+				const { r2Rev, media } = await res.json() as { r2Rev: string; media: { url: string; bytes: number } };
+				const path = disposition === 'inline' ? `pub/${VID_PUB}/${REV}/video.mp4` : `dl/${VID_PUB}/${REV}/Talk.mp4`;
+				assert.equal(media.url, `https://${env.MEDIA_PUBLIC_HOST}/${path}`);
+				assert.equal(media.bytes, r2.result.mp4.bytes);
+				assert.equal(r2Rev, REV);
+			}
+			const sync = await app.request('/api/downloads/sync', {
+				method: 'POST', headers, body: JSON.stringify({ videoIds: [VID_PUB] }),
+			}, env);
+			assert.equal(sync.status, 200);
+			assert.deepEqual(await sync.json(), { results: [{ videoId: VID_PUB, available: true }] });
+		}
+	});
+
 	it('returns zero-Worker /pub/ URL for native apps, sanitized /dl/ URL for Web attachment, and enforces 429 rate limit', async () => {
 		const { env } = await seedEnv();
 		await writeFeatureSwitch(env as never, { key: 'offlineDownloads', enabled: true, expectedVersion: 0, actorId: 'admin-1', currentStored: false });

@@ -14,6 +14,7 @@ import {
 	buildDownloadAttachmentUrl,
 	OFFLINE_DOWNLOAD_ERROR_CODES,
 	publicMp4Path,
+	shownR2,
 	type VideoR2State,
 } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
@@ -189,8 +190,9 @@ export class VideoDownloadCreate extends AuthenticatedRoute {
 
 		const mp4Path = publicMp4Path(video);
 		const host = (c.env as unknown as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST;
-		const mp4 = video.r2?.result?.mp4;
-		if (!mp4Path || !host || !video.r2?.rev || !mp4) {
+		const rendition = shownR2(video);
+		const mp4 = rendition?.result?.mp4;
+		if (!mp4Path || !host || !rendition || !mp4) {
 			return apiError(c, 409, OFFLINE_DOWNLOAD_ERROR_CODES.renditionNotReady);
 		}
 
@@ -254,14 +256,14 @@ export class VideoDownloadCreate extends AuthenticatedRoute {
 
 		const url =
 			disposition === 'attachment'
-				? buildDownloadAttachmentUrl(host, video.id, video.r2.rev, video.title)
+				? buildDownloadAttachmentUrl(host, video.id, rendition.rev, video.title)
 				: `https://${host}/${mp4Path}`;
 
 		c.header('Cache-Control', 'private, no-store');
 		c.header('Vary', 'Authorization');
 		return c.json({
 			videoId: video.id,
-			r2Rev: video.r2.rev,
+			r2Rev: rendition.rev,
 			media: {
 				format: 'mp4' as const,
 				url,
