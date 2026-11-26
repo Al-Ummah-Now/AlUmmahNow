@@ -2,7 +2,7 @@ import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import { AnalyticsVideo, daysInRange, loadRollups, parseRange, type DateRange, type MonthlyRollup } from "../../lib/analytics";
+import { AnalyticsVideo, daysInRange, parseRange, type RollupSources, type DateRange, type MonthlyRollup } from "../../lib/analytics";
 import R2Repository from "../../lib/r2Repo";
 import { channelContentIds } from "../../lib/search/ownership";
 import { healLater, rebuilding, requireContentAccess, healRows } from "./channelContent";
@@ -12,6 +12,12 @@ const MAX_PAGE = 50;
 const MAX_RANKED_VIDEOS = 5000;
 /** D1 allows 100 bound parameters per statement (90 video ids + 2 range dates = 92). */
 const STATS_CHUNK_SIZE = 90;
+// Legacy objects are drained by the processor. Keep the scan and matching reads
+// bounded, with room for ownership healing and video reads for the returned page.
+const LEGACY_VIDEO_PREFIX = "analytics/rollups/video/";
+const MAX_LEGACY_LIST_PAGES = 4;
+const MAX_LEGACY_READS = 400;
+const LEGACY_READ_CONCURRENCY = 20;
 
 type TopContentSort = "views" | "watchTime" | "avgViewDuration";
 
@@ -20,75 +26,113 @@ interface VideoRangeTotals {
 	watchTime: number;
 }
 
-/** The range's views and watch time for one video from legacy monthly R2 rollups. */
-function rangeStatsFromRollups(rollups: MonthlyRollup[], days: Set<string>): VideoRangeTotals {
-	let views = 0;
-	let watchTime = 0;
-	for (const rollup of rollups) {
-		for (const [day, entry] of Object.entries(rollup?.days || {})) {
-			if (!days.has(day)) continue;
-			views += entry.views || 0;
-			watchTime += entry.watchTime || 0;
+/** Find the candidate videos' existing monthly documents without probing missing keys. */
+async function legacyRollupKeys(bucket: R2Bucket, videoIds: string[], days: string[]): Promise<Map<string, string> | null> {
+	const months = new Set(days.map((day) => day.slice(0, 7)));
+	const candidates = new Set(videoIds);
+	const keys = new Map<string, string>();
+	let cursor: string | undefined;
+	for (let i = 0; i < MAX_LEGACY_LIST_PAGES; i++) {
+		const page = await bucket.list({ prefix: LEGACY_VIDEO_PREFIX, limit: 1000, cursor });
+		for (const { key } of page.objects) {
+			const suffix = key.slice(LEGACY_VIDEO_PREFIX.length);
+			const slash = suffix.lastIndexOf("/");
+			if (slash < 0 || !suffix.endsWith(".json")) continue;
+			const videoId = suffix.slice(0, slash);
+			const month = suffix.slice(slash + 1, -5);
+			if (!candidates.has(videoId) || !months.has(month)) continue;
+			keys.set(key, videoId);
+			if (keys.size > MAX_LEGACY_READS) return null;
 		}
+		if (!page.truncated) return keys;
+		cursor = page.cursor;
 	}
-	return { views, watchTime };
+	return null;
 }
 
-/**
- * Sum views and watch_time per video over `range` using primary-key range seeks on
- * analytics_daily (entity_type, entity_id, day, metric, dim). Never scans the table.
- * Falls back to legacy R2 rollups only when NOTIFICATIONS_DB is unbound.
- */
+/** Sum range metrics using D1 and any legacy documents the importer has yet to commit. */
 async function loadRangeTotalsByVideo(
-	env: { NOTIFICATIONS_DB?: D1Database; analytics_rollups?: R2Bucket },
+	env: RollupSources,
 	videoIds: string[],
 	range: DateRange,
-): Promise<Map<string, VideoRangeTotals>> {
+): Promise<Map<string, VideoRangeTotals> | null> {
 	const totals = new Map<string, VideoRangeTotals>();
 	if (videoIds.length === 0) return totals;
 
 	const days = daysInRange(range);
-	const fromDay = days[0];
-	const toDay = days[days.length - 1];
-	const db = env.NOTIFICATIONS_DB;
-
-	if (db) {
-		const chunks: string[][] = [];
-		for (let i = 0; i < videoIds.length; i += STATS_CHUNK_SIZE) {
-			chunks.push(videoIds.slice(i, i + STATS_CHUNK_SIZE));
+	const daySet = new Set(days);
+	const bucket = env.analytics_rollups;
+	const legacy = new Map<string, { videoId: string; views: number; watchTime: number }>();
+	if (bucket) {
+		const matching = await legacyRollupKeys(bucket, videoIds, days);
+		if (!matching) return null;
+		const keys = [...matching];
+		for (let i = 0; i < keys.length; i += LEGACY_READ_CONCURRENCY) {
+			await Promise.all(keys.slice(i, i + LEGACY_READ_CONCURRENCY).map(async ([key, videoId]) => {
+				const object = await bucket.get(key);
+				if (!object) return; // The importer may have moved it into D1 since the list.
+				const rollup = await object.json<MonthlyRollup>();
+				let views = 0;
+				let watchTime = 0;
+				for (const [day, entry] of Object.entries(rollup?.days || {})) {
+					if (!daySet.has(day)) continue;
+					views += entry.views || 0;
+					watchTime += entry.watchTime || 0;
+				}
+				legacy.set(key, { videoId, views, watchTime });
+			}));
 		}
-		const pages = await Promise.all(chunks.map((chunk) =>
-			db
-				.prepare(
-					`SELECT entity_id, metric, SUM(value) AS total
-					 FROM analytics_daily
-					 WHERE entity_type = 'video'
-					   AND entity_id IN (${chunk.map(() => "?").join(", ")})
-					   AND day >= ? AND day <= ?
-					   AND metric IN ('views', 'watch_time')
-					 GROUP BY entity_id, metric`,
-				)
-				.bind(...chunk, fromDay, toDay)
-				.all<{ entity_id: string; metric: string; total: number }>(),
-		));
-		for (const page of pages) {
-			for (const row of page.results ?? []) {
+	}
+
+	const db = env.NOTIFICATIONS_DB;
+	const imported = new Set<string>();
+	if (db) {
+		const counters: D1PreparedStatement[] = [];
+		const markers: D1PreparedStatement[] = [];
+		for (let i = 0; i < videoIds.length; i += STATS_CHUNK_SIZE) {
+			const chunk = videoIds.slice(i, i + STATS_CHUNK_SIZE);
+			counters.push(db.prepare(
+				`SELECT entity_id, metric, SUM(value) AS total
+				 FROM analytics_daily
+				 WHERE entity_type = 'video'
+				   AND entity_id IN (${chunk.map(() => "?").join(", ")})
+				   AND day BETWEEN ? AND ?
+				   AND metric IN ('views', 'watch_time')
+				 GROUP BY entity_id, metric`,
+			).bind(...chunk, days[0], days[days.length - 1]));
+		}
+		const keys = [...legacy.keys()];
+		for (let i = 0; i < keys.length; i += STATS_CHUNK_SIZE) {
+			const chunk = keys.slice(i, i + STATS_CHUNK_SIZE);
+			markers.push(db.prepare(
+				`SELECT r2_key FROM analytics_rollup_imports WHERE r2_key IN (${chunk.map(() => "?").join(", ")})`,
+			).bind(...chunk));
+		}
+		// Read both from one D1 snapshot after reading R2. The importer commits
+		// the marker and counters together, then deletes the legacy object.
+		type Counter = { entity_id: string; metric: "views" | "watch_time"; total: number };
+		type ImportMarker = { r2_key: string };
+		const pages = await db.batch<Counter | ImportMarker>([...counters, ...markers]);
+		for (const { results } of pages) {
+			for (const row of results) {
+				if ("r2_key" in row) {
+					imported.add(row.r2_key);
+					continue;
+				}
 				const entry = totals.get(row.entity_id) ?? { views: 0, watchTime: 0 };
-				const value = Number(row.total) || 0;
-				if (row.metric === "views") entry.views += value;
-				else if (row.metric === "watch_time") entry.watchTime += value;
+				if (row.metric === "views") entry.views += row.total;
+				else entry.watchTime += row.total;
 				totals.set(row.entity_id, entry);
 			}
 		}
-		return totals;
 	}
 
-	if (env.analytics_rollups) {
-		const daySet = new Set(days);
-		await Promise.all(videoIds.slice(0, MAX_PAGE).map(async (id) => {
-			const rollups = await loadRollups(env, "video", [id], range);
-			totals.set(id, rangeStatsFromRollups(rollups, daySet));
-		}));
+	for (const [key, { videoId, views, watchTime }] of legacy) {
+		if (imported.has(key)) continue;
+		const entry = totals.get(videoId) ?? { views: 0, watchTime: 0 };
+		entry.views += views;
+		entry.watchTime += watchTime;
+		totals.set(videoId, entry);
 	}
 	return totals;
 }
@@ -121,7 +165,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			},
 			"403": { description: "No access", content: { "application/json": { schema: ResponseError } } },
 			"404": { description: "Channel not found", content: { "application/json": { schema: ResponseError } } },
-			"503": { description: "The index cannot be read right now; try again shortly", content: { "application/json": { schema: ResponseError } } },
+			"503": { description: "The index is unavailable or the legacy analytics read budget was exceeded", content: { "application/json": { schema: ResponseError } } },
 		},
 	};
 
@@ -148,6 +192,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 
 		const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
 		const statsByVideo = await loadRangeTotalsByVideo(c.env, allIds, range);
+		if (!statsByVideo) return c.json({ success: false, error: "analytics_rollup_budget_exceeded" }, 503);
 
 		const ranked = allIds.map((id, lifetimeRank) => {
 			const raw = statsByVideo.get(id) ?? { views: 0, watchTime: 0 };
