@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { AnalyticsVideo, daysInRange, parseRange, type RollupSources, type DateRange, type MonthlyRollup } from "../../lib/analytics";
+import { apiError } from "../../lib/api-error";
 import R2Repository from "../../lib/r2Repo";
 import { channelContentIds } from "../../lib/search/ownership";
 import { healLater, rebuilding, requireContentAccess, healRows } from "./channelContent";
@@ -192,7 +193,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 
 		const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
 		const statsByVideo = await loadRangeTotalsByVideo(c.env, allIds, range);
-		if (!statsByVideo) return c.json({ success: false, error: "analytics_rollup_budget_exceeded" }, 503);
+		if (!statsByVideo) return apiError(c, 503, "analytics_rollup_budget_exceeded", { error: "analytics_rollup_budget_exceeded" });
 
 		const ranked = allIds.map((id, lifetimeRank) => {
 			const raw = statsByVideo.get(id) ?? { views: 0, watchTime: 0 };
