@@ -9,17 +9,19 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { writeFeatureSwitch } from '@al-ummah/shared-types';
+import { DEFAULT_MEDIA_SETTINGS, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import { errorHandler } from '../src/middleware/error-handler';
 import { applyFeatureGates } from '../src/middleware/require-feature';
 import { VideoAudio } from '../src/endpoints/video/videoAudio';
+import { VideoFetch } from '../src/endpoints/video/videoFetch';
 import { VideoUpdate } from '../src/endpoints/video/videoUpdate';
+import { ChannelCreate } from '../src/endpoints/channel/channelCreate';
 import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
 import { forgetFeatureCaches } from '../src/lib/features';
-import { clearMediaSettingsCache, SETTINGS_KEY } from '../src/lib/media/settings';
+import { clearMediaSettingsCache, saveMediaSettings, SETTINGS_KEY } from '../src/lib/media/settings';
 
 const VID_MULTI_PUB = '11111111-1111-1111-1111-111111111111';
 const VID_MULTI_PRIV = '22222222-2222-2222-2222-222222222222';
@@ -44,7 +46,9 @@ function buildApp(getUserId: () => string | null) {
 	applyFeatureGates(app, 'api-videos');
 	const openapi = fromHono(app);
 	openapi.get('/api/videos/:id/audio', VideoAudio);
+	openapi.get('/api/videos/:id', VideoFetch);
 	openapi.put('/api/videos/:id', VideoUpdate);
+	openapi.post('/api/channels', ChannelCreate);
 	openapi.put('/api/channels/:id', ChannelUpdate);
 	return app;
 }
@@ -130,6 +134,7 @@ async function seedEnv() {
 			...baseVideo,
 			id: VID_MULTI_PRIV,
 			isPublic: false,
+			media: { providers: {} },
 			r2: baseR2('priv'),
 			audioTracks,
 			audioPackage: { status: 'ready', jobId: 'pkg-2', rev: REV, access: 'priv', version: 1, master: 'master_a1.m3u8', trackIds: ['orig', 't1234567890ab'], queuedAt: '2026-01-01T00:00:00.000Z' },
@@ -192,6 +197,8 @@ async function seedEnv() {
 			SEARCH_DB: new SqliteD1() as unknown as D1Database,
 			videos: videos as unknown as R2Bucket,
 			channels: channels as unknown as R2Bucket,
+			channel_tabs: new MemoryBucket() as unknown as R2Bucket,
+			profiles: new MemoryBucket({ 'creator-1': { id: 'creator-1' } }) as unknown as R2Bucket,
 			global_settings: global_settings as unknown as R2Bucket,
 			queue: queue as unknown as Queue,
 			MEDIA_PUBLIC_HOST: 'media.qa.alummahnow.net',
@@ -297,6 +304,87 @@ describe('E14-S3b: GET /api/videos/:id/audio & creator download toggles', () => 
 		const unreadyRes = await app.request(`/api/videos/${VID_UNREADY}/audio`, { method: 'GET' }, env);
 		assert.equal(unreadyRes.status, 409);
 		assert.equal(((await unreadyRes.json()) as { code: string }).code, 'rendition_not_ready');
+	});
+
+	it('returns rendition_not_ready when the only available audio package needs a missing signing key', async () => {
+		const { env } = await seedEnv();
+		env.MEDIA_SIGN_KEY = '';
+		await writeFeatureSwitch(env as never, { key: 'listenMode', enabled: true, expectedVersion: 0, actorId: 'admin-1', currentStored: false });
+		const app = buildApp(() => 'creator-1');
+		for (const query of ['', '?trackId=orig']) {
+			const res = await app.request(`/api/videos/${VID_MULTI_PRIV}/audio${query}`, {}, env);
+			assert.equal(res.status, 409);
+			assert.equal(((await res.json()) as { code: string }).code, 'rendition_not_ready');
+		}
+	});
+
+	it('skips demuxed R2 tracks when R2 is disabled and falls back to Bunny for playback without an explicit track', async () => {
+		const { env, videos } = await seedEnv();
+		await writeFeatureSwitch(env as never, { key: 'listenMode', enabled: true, expectedVersion: 0, actorId: 'admin-1', currentStored: false });
+		await saveMediaSettings(env, {
+			...DEFAULT_MEDIA_SETTINGS,
+			providers: { bunny: { enabled: true }, r2: { enabled: false } },
+			ingest: ['bunny'],
+		}, 'admin-1');
+		const { media, playUrl, videoUrl } = videos.read(VID_BUNNY);
+		await videos.put(VID_MULTI_PUB, JSON.stringify({ ...videos.read(VID_MULTI_PUB), media, playUrl, videoUrl }));
+
+		const app = buildApp(() => 'viewer-1');
+		const path = `/api/videos/${VID_MULTI_PUB}/audio`;
+		const fallback = await app.request(path, {}, env);
+		assert.equal(fallback.status, 200);
+		const body = (await fallback.json()) as { url: string; trackId?: string; tracks: unknown[] };
+		assert.equal(body.url, playUrl);
+		assert.equal(body.trackId, undefined);
+		assert.deepEqual(body.tracks, []);
+
+		const explicit = await app.request(`${path}?trackId=t1234567890ab`, {}, env);
+		assert.equal(explicit.status, 409);
+		assert.equal(((await explicit.json()) as { code: string }).code, 'rendition_not_ready');
+	});
+
+	it('persists a download opt-out on channel creation and returns it in the create response', async () => {
+		const { env, channels } = await seedEnv();
+		const app = buildApp(() => 'creator-1');
+		const res = await app.request('/api/channels', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name: 'New Lectures', defaultAllowDownloads: false }),
+		}, env);
+		assert.equal(res.status, 200);
+		const { channel } = ((await res.json()) as { result: { channel: { id: string; defaultAllowDownloads?: boolean } } }).result;
+		assert.equal(channel.defaultAllowDownloads, false);
+		assert.equal(channels.read(channel.id).defaultAllowDownloads, false);
+	});
+
+	it('resolves the channel download default for the viewer and preserves the stored override for the editor', async () => {
+		const { env, channels, videos } = await seedEnv();
+		const viewer = buildApp(() => 'viewer-1');
+		const editor = buildApp(() => 'creator-1');
+		const path = `/api/videos/${VID_SINGLE_R2}`;
+		const video = videos.read(VID_SINGLE_R2);
+		const channel = channels.read('ch-1');
+
+		const read = async (app: ReturnType<typeof buildApp>, requestPath: string) => {
+			const res = await app.request(requestPath, {}, env);
+			assert.equal(res.status, 200);
+			return ((await res.json()) as { allowDownloads?: boolean }).allowDownloads;
+		};
+		assert.equal(await read(viewer, path), true);
+		await channels.put('ch-1', JSON.stringify({ ...channel, defaultAllowDownloads: false }));
+		assert.equal(await read(viewer, path), false);
+		assert.equal(await read(editor, `${path}?for=edit`), undefined);
+
+		await videos.put(VID_SINGLE_R2, JSON.stringify({ ...video, allowDownloads: true }));
+		assert.equal(await read(viewer, path), true);
+		assert.equal(await read(editor, `${path}?for=edit`), true);
+		await channels.put('ch-1', JSON.stringify({ ...channel, defaultAllowDownloads: true }));
+		await videos.put(VID_SINGLE_R2, JSON.stringify({ ...video, allowDownloads: false }));
+		assert.equal(await read(viewer, path), false);
+
+		channels.get = async () => { throw new Error('channel read unavailable'); };
+		await videos.put(VID_SINGLE_R2, JSON.stringify(video));
+		assert.equal(await read(viewer, path), false);
 	});
 
 	it('persists allowDownloads via VideoUpdate and defaultAllowDownloads via ChannelUpdate without clobbering on unrelated edits', async () => {
