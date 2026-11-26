@@ -228,6 +228,53 @@ describe('WebSocketManager subscriptions', () => {
     });
   });
 
+  it('backs off and gets a fresh ticket after AUTH_FAILED, with a retry limit', async () => {
+    const real = globalThis.WebSocket;
+    const sockets: TestSocket[] = [];
+    class TestSocket {
+      static OPEN = 1;
+      readyState = 1;
+      onopen = () => {};
+      onclose = (_event: { wasClean: boolean; code: number; reason: string }) => {};
+      send = jest.fn();
+      close(code: number, reason: string) {
+        this.readyState = 3;
+        this.onclose({ wasClean: true, code, reason });
+      }
+      constructor() { sockets.push(this); }
+    }
+    let issued = 0;
+    const manager = new WebSocketManager({
+      url: 'wss://example/ws',
+      reconnectInterval: 1000,
+      maxReconnectAttempts: 2,
+      heartbeatInterval: 30000,
+      getAuthToken: async () => `wst_${++issued}`,
+    });
+    jest.useFakeTimers();
+    globalThis.WebSocket = TestSocket as unknown as typeof WebSocket;
+    try {
+      void manager.connect();
+      for (const attempt of [0, 1, 2]) {
+        sockets[attempt].onopen();
+        await Promise.resolve();
+        expect(sockets[attempt].send).toHaveBeenCalledWith(JSON.stringify({ type: 'authenticate', token: `wst_${attempt + 1}` }));
+        deliver(manager, { type: 'error', code: 'AUTH_FAILED' });
+
+        const delay = 1000 * 2 ** attempt;
+        jest.advanceTimersByTime(delay - 1);
+        expect(sockets).toHaveLength(attempt + 1);
+        jest.advanceTimersByTime(1);
+      }
+      expect(sockets).toHaveLength(3);
+      expect(manager.getState().reconnectAttempts).toBe(2);
+    } finally {
+      manager.disconnect();
+      globalThis.WebSocket = real;
+      jest.useRealTimers();
+    }
+  });
+
   describe('token expiry on an open socket (#437)', () => {
     function attachSocket(manager: WebSocketManager) {
       const sent: Array<Record<string, unknown>> = [];

@@ -13,6 +13,8 @@ import { sanitizeEventPayload, validateStructure } from '@/lib/security/InputSan
 export const REALTIME_JOINED = 'realtime_joined';
 export const REALTIME_LEFT = 'realtime_left';
 
+const AUTH_RETRY_CLOSE_CODE = 4001;
+
 export class WebSocketManager {
   private ws: WebSocket | null = null;
   private config: WebSocketConfig;
@@ -72,7 +74,8 @@ export class WebSocketManager {
 
         logger.debug('🔌 Connecting to WebSocket:', wsUrl);
 
-        this.ws = new WebSocket(wsUrl);
+        const socket = new WebSocket(wsUrl);
+        this.ws = socket;
 
         this.ws.onopen = () => {
           logger.debug('✅ WebSocket connected');
@@ -80,7 +83,8 @@ export class WebSocketManager {
           this.authenticated = false;
           this.anonymousReady = false;
           this.state.lastConnected = new Date();
-          this.state.reconnectAttempts = 0;
+          // A signed-in connection has recovered once its credential is accepted.
+          if (!this.config.getAuthToken && !this.config.authToken) this.state.reconnectAttempts = 0;
 
           // SECURITY: Send auth token via first message, not URL
           void this.authenticate();
@@ -124,7 +128,11 @@ export class WebSocketManager {
           this.stopHeartbeat();
           this.notifyStateChange();
 
-          if (!event.wasClean && this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
+          if (
+            this.ws === socket &&
+            (!event.wasClean || event.code === AUTH_RETRY_CLOSE_CODE) &&
+            this.state.reconnectAttempts < this.config.maxReconnectAttempts
+          ) {
             this.scheduleReconnect();
           }
         };
@@ -338,6 +346,7 @@ export class WebSocketManager {
     if (message.type === 'authenticated') {
       logger.debug('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
       this.authenticated = true;
+      this.state.reconnectAttempts = 0;
       this.resubscribeAll();
       return;
     }
@@ -353,6 +362,12 @@ export class WebSocketManager {
       // The server put this socket out of its chats with it; a new token joins them again
       [...this.joined].forEach((channel) => this.setJoined(channel, false));
       void this.authenticate();
+      return;
+    }
+
+    if (errorCode === 'AUTH_FAILED' && this.config.getAuthToken) {
+      // An expired or lost single-use ticket needs a fresh handshake.
+      this.ws?.close(AUTH_RETRY_CLOSE_CODE, 'Retry authentication');
       return;
     }
 

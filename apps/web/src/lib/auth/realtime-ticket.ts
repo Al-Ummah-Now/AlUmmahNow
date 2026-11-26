@@ -80,7 +80,8 @@ export async function mintRealtimeTicket(accessToken: string, deps: MintTicketDe
         Authorization: `Bearer ${accessToken}`,
       },
       cache: 'no-store',
-      redirect: 'error',
+      // Workers supports manual redirects. A 3xx fails the res.ok check below.
+      redirect: 'manual',
       signal: AbortSignal.timeout(TICKET_TIMEOUT_MS),
     });
     if (!res.ok) {

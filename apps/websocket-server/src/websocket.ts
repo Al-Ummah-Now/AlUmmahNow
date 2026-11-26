@@ -380,6 +380,7 @@ export class WebSocketDurableObject extends DurableObject {
       const authPayload = isWebSocketTicket(token)
         ? await this.redeemTicket(token)
         : await authenticateToken(token, this.env as Env);
+      if (this.sockets.get(ws) !== state) return;
       if (!authPayload) {
         this.sendMessage(ws, { type: 'error', error: 'Invalid or expired token', code: 'AUTH_FAILED' });
         return;
