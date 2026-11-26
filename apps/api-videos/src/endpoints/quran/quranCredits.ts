@@ -12,7 +12,7 @@
  * be reached).
  */
 import { z } from 'zod';
-import { DEFAULT_QURAN_TRANSLATIONS, QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, featureGate, type QuranTranslationEdition } from '@al-ummah/shared-types';
+import { DEFAULT_QURAN_TRANSLATIONS, QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, readFeatureSwitches, type QuranTranslationEdition } from '@al-ummah/shared-types';
 import { PublicRoute, type AppContext } from '../../base';
 import { listTranslationEditions } from '../../lib/quran/translations';
 import { quranEditionsConfigured, quranTextAvailable } from '../../lib/features';
@@ -137,14 +137,13 @@ export class QuranCreditsGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const env = c.env as never;
-		const [freshText, textGate, editionsConfigured, editionsGate] = await Promise.all([
+		const [freshText, editionsConfigured, switches] = await Promise.all([
 			quranTextAvailable(env),
-			featureGate(env, 'quranText'),
 			quranEditionsConfigured(env),
-			featureGate(env, 'quranEditions').catch(() => ({ on: true as const })),
+			readFeatureSwitches(env).then(({ effective }) => effective).catch(() => ({ playerCredits: false, quranEditions: true })),
 		]);
-		const text = freshText && textGate.on;
-		const editionsOn = editionsConfigured && editionsGate.on;
+		const text = freshText && switches.playerCredits;
+		const editionsOn = editionsConfigured && switches.quranEditions;
 		if (!text && !editionsOn) return featureOff(c);
 		let editions: QuranTranslationEdition[] = [];
 		if (editionsOn) {
