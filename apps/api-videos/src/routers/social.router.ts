@@ -101,7 +101,7 @@ import { loadSocialContent, webOrigin } from '../lib/social/content';
 import { loadPublicPlay, type PublicPlayEnv } from '../lib/media/public-play';
 import { constantTimeEqual } from '@al-ummah/shared-types';
 import { featureOff } from '../lib/features/off';
-import { socialConfigured } from '../lib/features';
+import { forgetFeatureSettings, socialConfigured } from '../lib/features';
 
 type Env = { Bindings: SocialEnv & { videos: R2Bucket; channels: R2Bucket }; Variables: { userId?: string } };
 
@@ -687,6 +687,7 @@ socialInternalRouter.put('/admin/settings', async (c) => {
 		const before = await readPlatformSettings(c.env);
 		const settings = normalizeSocialSettings(await c.req.json().catch(() => null));
 		await writeSetting(c.env, 'platform', JSON.stringify(settings), actor);
+		forgetFeatureSettings();
 		return c.json({ before, settings });
 	} catch (error) {
 		return fail(c, error);
@@ -704,6 +705,7 @@ socialInternalRouter.put('/admin/credentials/:network', async (c) => {
 			const clientSecret = String(b.clientSecret ?? '').trim();
 			if (!/^[A-Za-z0-9_-]{8,200}$/.test(clientId) || clientSecret.length < 8 || clientSecret.length > 500) throw new SocialError(400, 'invalid_credentials');
 			await writeCredentials(c.env, 'x', { clientId, clientSecret }, actor);
+			forgetFeatureSettings();
 		} else if (network === 'telegram') {
 			const botToken = String(b.botToken ?? '').trim();
 			if (!/^\d{5,20}:[A-Za-z0-9_-]{30,100}$/.test(botToken)) throw new SocialError(400, 'invalid_credentials');
@@ -714,6 +716,9 @@ socialInternalRouter.put('/admin/credentials/:network', async (c) => {
 			} catch (error) {
 				await clearCredentials(c.env, 'telegram');
 				throw error instanceof SocialError ? new SocialError(422, 'invalid_credentials', error.message) : error;
+			} finally {
+				// Refresh readiness after webhook setup or a rollback that clears the token.
+				forgetFeatureSettings();
 			}
 		} else {
 			throw new SocialError(400, 'invalid_network');
@@ -729,6 +734,7 @@ socialInternalRouter.delete('/admin/credentials/:network', async (c) => {
 		const network = c.req.param('network');
 		if (network !== 'x' && network !== 'telegram') throw new SocialError(400, 'invalid_network');
 		await clearCredentials(c.env, network);
+		forgetFeatureSettings();
 		return c.json({ readiness: await networkReadiness(c.env) });
 	} catch (error) {
 		return fail(c, error);
