@@ -9423,6 +9423,16 @@
                                 },
                                 "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
                               },
+                              "captionSources": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "quranFoundation"
+                                  ]
+                                },
+                                "description": "Sources of text in published caption tracks"
+                              },
                               "delivery": {
                                 "type": "object",
                                 "properties": {
@@ -10537,6 +10547,16 @@
                               ]
                             },
                             "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "captionSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quranFoundation"
+                              ]
+                            },
+                            "description": "Sources of text in published caption tracks"
                           },
                           "delivery": {
                             "type": "object",
@@ -12805,6 +12825,16 @@
                             },
                             "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
                           },
+                          "captionSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quranFoundation"
+                              ]
+                            },
+                            "description": "Sources of text in published caption tracks"
+                          },
                           "delivery": {
                             "type": "object",
                             "properties": {
@@ -14372,6 +14402,16 @@
                               ]
                             },
                             "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "captionSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quranFoundation"
+                              ]
+                            },
+                            "description": "Sources of text in published caption tracks"
                           },
                           "delivery": {
                             "type": "object",
@@ -40392,6 +40432,16 @@
                             },
                             "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
                           },
+                          "captionSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quranFoundation"
+                              ]
+                            },
+                            "description": "Sources of text in published caption tracks"
+                          },
                           "delivery": {
                             "type": "object",
                             "properties": {
@@ -41070,6 +41120,16 @@
                                 ]
                               },
                               "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                            },
+                            "captionSources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "quranFoundation"
+                                ]
+                              },
+                              "description": "Sources of text in published caption tracks"
                             },
                             "delivery": {
                               "type": "object",
@@ -43979,6 +44039,16 @@
                               ]
                             },
                             "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "captionSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quranFoundation"
+                              ]
+                            },
+                            "description": "Sources of text in published caption tracks"
                           },
                           "delivery": {
                             "type": "object",
@@ -47905,6 +47975,16 @@
                       },
                       "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
                     },
+                    "captionSources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "quranFoundation"
+                        ]
+                      },
+                      "description": "Sources of text in published caption tracks"
+                    },
                     "delivery": {
                       "type": "object",
                       "properties": {
@@ -48605,6 +48685,16 @@
                                 ]
                               },
                               "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                            },
+                            "captionSources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "quranFoundation"
+                                ]
+                              },
+                              "description": "Sources of text in published caption tracks"
                             },
                             "delivery": {
                               "type": "object",
@@ -67847,6 +67937,7 @@
               "creatorSupport",
               "charityDonations",
               "supportDormantTransfer",
+              "playerCredits",
               "prayerTimes",
               "qibla",
               "hijriCalendar",

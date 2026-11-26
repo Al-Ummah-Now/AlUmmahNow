@@ -2329,3 +2329,5 @@
     animation: vjs-spinner-spin 1.1s linear infinite !important;
   }
 }
+
+.video-js.vjs-fanous-caption-credit-off .vjs-text-track-display { visibility: hidden; }

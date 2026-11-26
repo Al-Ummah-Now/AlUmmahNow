@@ -14,7 +14,7 @@
  */
 import { Enumeration, Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
-import { captionMarkerRanges, hasCaptionQuranMarkers, onDeviceTranscriptKey, renderCaptionVtt, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
+import { featureGate, captionMarkerRanges, hasCaptionQuranMarkers, onDeviceTranscriptKey, renderCaptionVtt, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { canOnVideo } from '../../lib/channelAccess';
@@ -326,12 +326,13 @@ export class CaptionDraftDownload extends AuthenticatedRoute {
 		if (!vtt.includes(' --> ')) return c.json({ success: false, error: 'draft_empty' }, 400);
 
 		const quran = hasCaptionQuranMarkers(vtt);
-		const translated = quran && draft.kind === 'translation';
+		const quranOn = quran && (await featureGate(c.env, 'quranText')).on;
+		const translated = quranOn && draft.kind === 'translation';
 		const edition = translated ? await editionFor(c.env as never, access.video.channelId, draft.language) : null;
 		const filled = quran
-			? await fillServedTrack(vtt, draft.language, c.env.MEDIA_PRIVATE, translated && captionMarkerRanges(vtt).translation.length ? { env: c.env as never, edition } : undefined)
+			? await fillServedTrack(vtt, draft.language, c.env.MEDIA_PRIVATE, translated && captionMarkerRanges(vtt).translation.length ? { env: c.env as never, edition } : undefined, quranOn)
 			: vtt;
-		const body = subtitleDownload(filled, format, quran ? { edition: translated ? edition : null } : null);
+		const body = subtitleDownload(filled, format, quranOn ? { edition: translated ? edition : null } : null);
 		const safe = (s: string) => s.replace(/[^\w.-]/g, '_');
 		return new Response(body, {
 			status: 200,

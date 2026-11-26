@@ -29,6 +29,7 @@ import { VideoProcessingState } from "@/components/video/VideoProcessingState";
 import { fetchVideoById } from "@/lib/api/videos";
 import { useRelatedVideos } from "@/hooks/useRelatedVideos";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { WatchSources } from "./WatchSources";
 import { useFeatures } from "@/hooks/useFeatures";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
@@ -401,6 +402,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                 <WatchMetaDetail video={videoDetails} views={videoDetails.views} lang={lang} />
                 <WatchDescription video={videoDetails} lang={lang} />
               </details>
+              <WatchSources sources={videoDetails.captionSources} lang={lang} enabled={watchFeatures.playerCredits} />
             </div>
           )}
 

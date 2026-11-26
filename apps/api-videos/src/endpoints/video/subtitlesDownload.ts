@@ -12,7 +12,7 @@
  * for Studio; anyone else gets 404 feature_off, before the track is looked up.
  */
 import { z } from 'zod';
-import { captionMarkerRanges } from '@al-ummah/shared-types';
+import { captionMarkerRanges, featureGate } from '@al-ummah/shared-types';
 import { Enumeration, Str } from '../../lib/chanfana-params';
 import { fillServedTrack } from '../../lib/captions/drafts';
 import { subtitleDownload, type SubtitleDownloadFormat } from '../../lib/captions/download';
@@ -70,15 +70,16 @@ export class SubtitlesDownload extends OptionalAuthRoute {
 
 			const raw = await track.text();
 			const quranTrack = track.customMetadata?.quran === '1';
+			const quranOn = quranTrack && (await featureGate(c.env, 'quranText')).on;
 			const translatedTrack = quranTrack && track.customMetadata?.qtr === '1';
 			let edition: Awaited<ReturnType<typeof editionFor>> = null;
-			if (translatedTrack) {
+			if (quranOn && translatedTrack) {
 				edition = await editionFor(c.env as never, video?.channelId ?? null, language);
 			}
 			const served = quranTrack
-				? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined)
+				? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, quranOn && translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined, quranOn)
 				: raw;
-			const body = subtitleDownload(served, format, quranTrack ? { edition: translatedTrack ? edition : null } : null);
+			const body = subtitleDownload(served, format, quranOn ? { edition: translatedTrack ? edition : null } : null);
 			return new Response(body, {
 				status: 200,
 				headers: {

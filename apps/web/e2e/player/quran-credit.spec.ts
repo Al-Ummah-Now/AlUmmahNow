@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright';
 /**
  * Quran Foundation's short credit in the player (QF 2026-11-23; docs/specs/VIDEO-PLAYER.md
  * "In-player links"; wiki AUN-PLAYER-LINKS phase 0). Served cues with QF text end with the credit
@@ -74,6 +75,11 @@ for (const lang of ['en', 'ar'] as const) {
       await expect(link).toHaveAttribute('href', 'https://quran.foundation/');
       await expect(link).toHaveAttribute('target', '_blank');
       await expect(link).toHaveAttribute('rel', 'noopener');
+      const { violations } = await new AxeBuilder({ page })
+        .include('.video-js')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      expect(violations).toEqual([]);
       // The caption itself no longer carries the credit line
       await expect(player.locator('.vjs-text-track-display')).not.toContainText(label);
 

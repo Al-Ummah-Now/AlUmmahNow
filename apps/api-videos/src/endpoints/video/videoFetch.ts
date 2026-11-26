@@ -1,3 +1,5 @@
+import type { SubtitleTrack } from '@al-ummah/shared-types';
+import { publishedCaptionSources } from '../../lib/captions/sources';
 import { privateAnswer } from '../../lib/private-answer';
 import { kidsRulesApply } from '../../lib/contentFlags';
 import { readPlaybackInputs, withPlayback } from '../../lib/media/playback';
@@ -82,7 +84,7 @@ export class VideoFetch extends OptionalAuthRoute {
 
 		// Implement your own object fetch here
 		const bucket = c.env.videos;
-		type VideoType = z.infer<typeof BusinessVideo>;
+		type VideoType = z.infer<typeof BusinessVideo> & { subtitles?: SubtitleTrack[] };
 		const repository = new R2Repository<VideoType>(bucket);
 		// The playback settings and health don't depend on the video: read beside it, not after it
 		const forEdit = request.query?.for === 'edit';
@@ -179,6 +181,10 @@ export class VideoFetch extends OptionalAuthRoute {
 		const videoView = forEdit
 			? Object.assign(transformVideoToView(video, channel), { delivery: { source: 'bunny' as const } })
 			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
+
+		if (!forEdit && video.subtitles?.length) {
+			videoView.captionSources = await publishedCaptionSources(c.env.subtitles, id, video.subtitles);
+		}
 
 		// Match download resolution and leave the stored override intact for the editor.
 		if (!forEdit) videoView.allowDownloads = video.allowDownloads ?? channel?.defaultAllowDownloads ?? !channelReadFailed;

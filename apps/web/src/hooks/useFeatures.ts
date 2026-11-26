@@ -31,7 +31,8 @@ interface Entry {
   listeners: Set<(state: FeaturesState) => void>;
 }
 
-const LOADING: FeaturesState = { ready: false, features: NO_FEATURES };
+const DEFAULT_FEATURES = { ...NO_FEATURES, playerCredits: true };
+const LOADING: FeaturesState = { ready: false, features: DEFAULT_FEATURES };
 const REFRESH_MS = 5000;
 const entries = new Map<string, Entry>();
 let generation = 0;
@@ -67,7 +68,7 @@ export async function fetchFeatures(channelId?: string | null, fetchImpl: typeof
   } catch (error) {
     logger.warn('[features] Request failed', { error });
   }
-  return NO_FEATURES;
+  return DEFAULT_FEATURES;
 }
 
 export function refreshFeatures(channelId?: string | null): Promise<void> {

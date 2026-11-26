@@ -112,7 +112,7 @@ test('defaults keep today’s behaviour (the live app features, creator terms ga
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'creatorTerms', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'recitationTools', 'ageRules', 'accountEvents'],
+    ['upload', 'createChannel', 'creatorTerms', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'playerCredits', 'recitationTools', 'ageRules', 'accountEvents'],
   );
 });
 
@@ -148,7 +148,7 @@ test('applySwitchesToUserFeatures turns covered keys off and leaves the rest', (
   const out = r.applySwitchesToUserFeatures({ live: true, upload: true, youtubeImport: true, quranText: true, billing: false }, effective);
   assert.deepEqual(out, { live: false, upload: false, youtubeImport: false, quranText: true, billing: false });
   assert.equal(r.switchForUserFeature('live'), 'live');
-  assert.equal(r.switchForUserFeature('quranText'), null);
+  assert.equal(r.switchForUserFeature('quranText'), 'playerCredits');
 });
 
 test('E21 hides every public and role-specific user feature by default', () => {

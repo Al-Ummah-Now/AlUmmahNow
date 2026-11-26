@@ -7,6 +7,7 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { QURAN_CURRENT_KEY, captionDraftKey, quranTextKey, type CaptionDraft } from '@al-ummah/shared-types';
 import { CaptionDraftDelete, CaptionDraftDownload, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../src/endpoints/captions/captionDrafts';
+import { VideoFetch } from '../src/endpoints/video/videoFetch';
 import { SubtitlesGet } from '../src/endpoints/video/subtitlesGet';
 import { SubtitlesDownload } from '../src/endpoints/video/subtitlesDownload';
 import { clearQuranCopyCache } from '../src/lib/quran/copy';
@@ -79,6 +80,7 @@ function env(opts: { copy?: boolean; track?: 'upload'; viewerDownload?: boolean 
 
 const app = (userId = 'owner', roles?: string[]) =>
 	buildApp((r) => {
+		r.get('/api/videos/:id', VideoFetch);
 		r.get('/api/videos/:videoId/captions/drafts', CaptionDraftsList);
 		r.get('/api/videos/:videoId/captions/drafts/:language', CaptionDraftGet);
 		r.put('/api/videos/:videoId/captions/drafts/:language', CaptionDraftSave);
@@ -93,6 +95,32 @@ const json = (method: string, body?: unknown) => ({ method, headers: { 'content-
 beforeEach(() => clearQuranCopyCache());
 
 describe('caption drafts', () => {
+	it('reports Quran Foundation only for published captions containing Quran text', async () => {
+		const e = env();
+		const router = app();
+		const watch = async () => {
+			const response = await router.request('/api/videos/v1', {}, e as never);
+			assert.equal(response.status, 200);
+			return await response.json() as { captionSources?: string[] };
+		};
+		const publish = async () => {
+			const response = await router.request('/api/videos/v1/captions/drafts/ar/publish', json('POST', { baseVersion: 1 }), e as never);
+			assert.equal(response.status, 200);
+		};
+		assert.equal((await watch()).captionSources, undefined);
+		const source = draft();
+		const verse = source.cues[1].segments[0];
+		assert.equal(verse.type, 'quran');
+		source.cues[1].segments[0] = { ...verse, status: 'accepted' };
+		e.subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(source));
+		await publish();
+		assert.deepEqual((await watch()).captionSources, ['quranFoundation']);
+		const original = draft();
+		e.subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(draft({ cues: [original.cues[2]] })));
+		await publish();
+		assert.equal((await watch()).captionSources, undefined);
+	});
+
 	it('lists and reads a draft for the owner; nobody else', async () => {
 		const e = env();
 		const list = (await (await app().request('/api/videos/v1/captions/drafts', {}, e as never)).json()) as any;
@@ -177,6 +205,13 @@ describe('caption drafts', () => {
 		assert.match(served.headers.get('etag')!, new RegExp(`-${VERSION}"$`));
 		const again = await app().request('/api/videos/v1/subtitles/ar', { headers: { 'If-None-Match': served.headers.get('etag')! } }, e as never);
 		assert.equal(again.status, 304);
+		const disabled = await app().request('/api/videos/v1/subtitles/ar', {
+			headers: { 'If-None-Match': served.headers.get('etag')! },
+		}, { ...e, FEATURES_FORCE_OFF: 'playerCredits' } as never);
+		assert.equal(disabled.status, 200);
+		const references = await disabled.text();
+		assert.match(references, /quran\.com\/112\/1/);
+		assert.doesNotMatch(references, /﴿|مؤسسة القرآن/);
 	});
 
 	it('a viewer downloads the track: verse text filled at download time, attribution and edition inside, nothing stored', async () => {

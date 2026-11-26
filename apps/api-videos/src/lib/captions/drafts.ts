@@ -19,6 +19,7 @@ import {
 	type SubtitleTrack,
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
+import { containsQuranText } from './sources';
 import { SubtitleService } from '../subtitles';
 import { readQuranCurrent, readQuranPassage } from '../quran/copy';
 import { spanTranslation, type QfTranslationEnv } from '../quran/translations';
@@ -169,6 +170,7 @@ export async function publishDraft(
 		origin: draft.edited ? 'machine_edited' : 'machine',
 		...(draft.kind === 'translation' ? { machineTranslation: true, sourceLanguage: draft.sourceLanguage } : {}),
 		version: draft.version,
+		hasQuranText: containsQuranText(vtt),
 		uploadedBy: userId,
 		uploadedAt: now,
 		fileSize: new TextEncoder().encode(vtt).length,
@@ -212,7 +214,9 @@ export async function fillServedTrack(
 	language: string,
 	mediaPrivate: Bucket | undefined,
 	translation?: { env: QfTranslationEnv; edition: QuranTranslationEdition | null; fetchImpl?: typeof fetch },
+	showQuranText = true,
 ): Promise<string> {
+	if (!showQuranText) return fillCaptionQuranMarkers(vtt, language, async () => null);
 	const arabic = async (range: string) => {
 		const r = parseQuranRange(range);
 		if (!r) return null;

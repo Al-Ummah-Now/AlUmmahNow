@@ -1,7 +1,9 @@
+import type { SystemCreditId } from '@al-ummah/shared-types';
 
 
 export interface PlayerOptions {
   id: string;
+  captionSources?: SystemCreditId[];
   title: string;
   /** Per-language titles (e.g. { en, ar }); the watch page shows the UI language's one */
   titleLocalized?: Record<string, string>;
