@@ -103,7 +103,7 @@ test.describe('Profile - view', () => {
     await expect(page.getByTestId('profile-heading')).not.toBeEmpty();
     await expect(page.locator('.cover-photo')).toBeVisible();
     await expect(page.locator('.profile-photo')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'My Channels' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My channels' })).toBeVisible();
     // Visible ones only: the header's account card has the same name in a hidden menu
     await expect(page.getByText(readAccount('single').channels[0].name!).filter({ visible: true }).first()).toBeVisible();
   });

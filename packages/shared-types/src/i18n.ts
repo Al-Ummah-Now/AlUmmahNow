@@ -715,6 +715,7 @@ export interface AppTranslations {
     myPlaylists: string;
     playlistsDescription: string;
     newPlaylist: string;
+    noPlaylistsYet: string;
     firstPlaylistMessage: string;
     welcomeUser: string;
     editProfileDescription: string;

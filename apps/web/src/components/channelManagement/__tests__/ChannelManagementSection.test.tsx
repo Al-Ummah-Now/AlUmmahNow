@@ -72,10 +72,11 @@ describe('ChannelManagementSection, hidden when off', () => {
     expect(screen.queryByTestId('channel-limit-reached')).toBeNull();
   });
 
-  it('a tier that may create: offers Create Channel', () => {
+  it('a tier that may create: shows the sentence-case empty state and action', () => {
     mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false };
     render(<ChannelManagementSection initialChannels={[]} />);
-    expect(screen.getByRole('button', { name: /create channel/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No channels yet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create channel' })).toBeInTheDocument();
   });
 
   it('keeps CreateChannelDialog mounted with typed values and opens CreatorTermsDialog over it on 403 terms_required', async () => {

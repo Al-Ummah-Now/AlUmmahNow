@@ -1,4 +1,4 @@
-import { formatNumber } from './locale-format';
+import { formatNumber, metaSeparator } from './locale-format';
 /**
  * Review alerts for the native Admin app (wiki AUN-ADMIN-NATIVE "Alerts and the 5-minute target").
  *
@@ -288,10 +288,12 @@ export function reviewAlertText(
   if (minutes !== null) parts.push(ar ? `بقي ${formatNumber('ar', minutes)} د` : `${formatNumber('en', minutes)} min left`);
   return {
     title: ar ? 'طابور المراجعة' : 'Review queue',
-    body: parts.join(ar ? '، ' : ' · '),
+    body: parts.join(metaSeparator(ar ? 'ar' : 'en', '·')),
     openLabel: ar ? 'فتح' : 'Open',
     claimLabel: ar ? 'استلام' : 'Claim',
     // The Windows Action Center group (wiki AUN-ADMIN-NATIVE Alerts, #1307)
-    groupTitle: ar ? 'الإدارة، طابور المراجعة' : 'Admin · Review queue',
+    groupTitle: ar
+      ? 'الإدارة، طابور المراجعة'
+      : 'Admin · Review queue',
   };
 }

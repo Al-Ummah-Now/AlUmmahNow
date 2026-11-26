@@ -38,7 +38,7 @@ import {
   type ReportedItemSummary,
 } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
-import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany, type Lookup, type MetaEnv } from './reportMeta';
+import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany, reportOwnerName, type Lookup, type MetaEnv } from './reportMeta';
 import { knownOwner } from './reportDecision';
 import { COUNT_CAP } from './reportList';
 import { noCaseAboutSql } from '../csam';
@@ -312,7 +312,7 @@ export function itemSummary(copy: ItemCopy, lookup: Lookup | null): ReportedItem
       parentId: live.parentId,
       parentType: live.parentType ?? null,
       channel: live.channelId ? { id: live.channelId, name: live.channelName } : null,
-      owner: live.ownerId ? { id: live.ownerId, name: owner?.found ? owner.displayName || owner.userName : null, isBanned: owner ? owner.isBanned : null } : null,
+      owner: live.ownerId ? { id: live.ownerId, name: reportOwnerName(owner), isBanned: owner ? owner.isBanned : null } : null,
       found: true,
       isHidden: live.isHidden,
       isDeleted: live.isDeleted,
@@ -326,18 +326,24 @@ export function itemSummary(copy: ItemCopy, lookup: Lookup | null): ReportedItem
     parentId: copy.entity_parent_id,
     parentType: null,
     channel: copy.channel_id ? { id: copy.channel_id, name: copy.channel_name } : null,
-    owner: copy.owner_id ? { id: copy.owner_id, name: owner?.found ? owner.displayName || owner.userName : copy.owner_name, isBanned: owner ? owner.isBanned : null } : null,
+    owner: copy.owner_id ? { id: copy.owner_id, name: owner ? reportOwnerName(owner) : copiedPersonName(copy.owner_name), isBanned: owner ? owner.isBanned : null } : null,
     found: live ? false : null,
     isHidden: null,
     isDeleted: null,
   };
 }
 
+/** Copies written before name resolution could contain a handle. */
+function copiedPersonName(copy: string | null): string | null {
+  const name = copy?.trim();
+  return name && !name.startsWith('@') ? name : null;
+}
+
 const personName = (lookup: Lookup | null, id: string, copy: string | null): string | null => {
   if (id === DELETED_USER_ID) return null;
   const user = lookup?.users.get(id);
-  if (user) return user.found ? user.displayName || user.userName : null;
-  return copy;
+  if (user) return user.found ? user.displayName?.trim() || null : null;
+  return copiedPersonName(copy);
 };
 
 function excerpt(row: Pick<ReportRow, 'id' | 'reason' | 'description' | 'reporter_id' | 'reporter_name' | 'created_at'>, lookup: Lookup | null): ReportExcerpt {
@@ -470,7 +476,7 @@ async function storeItemCopies(db: D1Database, rows: ItemCopy[], lookup: Lookup)
     const live = lookup.items.get(itemKey(row.entity_type, row.entity_id));
     if (!live?.found) return [];
     const owner = live.ownerId ? lookup.users.get(live.ownerId) : undefined;
-    const ownerName = owner?.found ? owner.displayName || owner.userName : null;
+    const ownerName = reportOwnerName(owner);
     if (live.title === row.entity_title && live.channelName === row.channel_name && live.ownerId === row.owner_id && ownerName === row.owner_name && live.parentId === row.entity_parent_id) return [];
     return [
       db

@@ -149,9 +149,9 @@ test.describe('Create channel dialog (profile)', () => {
     await page.goto(`/${locale}/profile`);
     const section = page.locator('section#channels');
     await expect(section).toBeVisible();
-    // The user's channel is listed, so the header "Create Channel" button is shown
+    // The user's channel is listed, so the header "Create channel" button is shown
     await expect(section.getByText(channelsOf('single').main.name).first()).toBeVisible();
-    const open = section.getByRole('button', { name: locale === 'ar' ? 'إنشاء قناة' : 'Create Channel', exact: true });
+    const open = section.getByRole('button', { name: locale === 'ar' ? 'إنشاء قناة' : 'Create channel', exact: true });
     const dialog = page.getByRole('dialog');
     await clickUntil(open, async () => expect(dialog).toBeVisible({ timeout: 3000 }));
     return dialog;
@@ -165,14 +165,14 @@ test.describe('Create channel dialog (profile)', () => {
     await expect(dialog.getByRole('heading', { name: 'Create New Channel' })).toBeVisible();
 
     // Empty name
-    await dialog.getByRole('button', { name: 'Create Channel', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Create channel', exact: true }).click();
     await expect(dialog.getByTestId('create-channel-name-error')).toHaveText('Channel name is required');
 
     // Too short
     const name = dialog.getByLabel(/Channel Name/);
     await fillStable(name, 'ab');
     await expect(dialog.getByTestId('create-channel-name-error')).toHaveCount(0); // typing clears the error
-    await dialog.getByRole('button', { name: 'Create Channel', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Create channel', exact: true }).click();
     await expect(dialog.getByTestId('create-channel-name-error')).toHaveText('Channel name must be at least 3 characters');
 
     // Description counter

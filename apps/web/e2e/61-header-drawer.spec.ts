@@ -139,12 +139,12 @@ test.describe('Header - channel owner', () => {
     const href = `/en/upload?channel=${encodeURIComponent(activeChannelId!)}`;
     if (isPhoneLayout(page)) {
       await expectUploadInTabBar(page, href, 'ready');
-      await expect(page.getByTestId('tab-upload')).toHaveAccessibleName('Upload Video');
+      await expect(page.getByTestId('tab-upload')).toHaveAccessibleName('Upload video');
       await page.goto('/ar');
       await expect(page.getByTestId('tab-upload')).toHaveAttribute('data-state', 'ready');
       return;
     }
-    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
+    const upload = page.getByRole('banner').getByRole('link', { name: /Upload video/ });
     await expect(upload).toHaveAttribute('href', href);
     await expect(upload).toHaveAttribute('data-state', 'ready');
     await expect(page.getByTestId('header-upload')).toHaveCount(1);
@@ -155,15 +155,15 @@ test.describe('Header - channel owner', () => {
     await expectUploadAfterSearch(page, true);
     // Back to English: `upload` is found by its English name
     await page.goto('/en');
-    await expect(upload).toHaveAccessibleName('Upload Video');
+    await expect(upload).toHaveAccessibleName('Upload video');
     const box = (await upload.boundingBox())!;
-    const label = await upload.getByText(/^Upload( Video)?$/).boundingBox();
+    const label = await upload.getByText(/^Upload( video)?$/).boundingBox();
     if (isDrawerLayout(page)) {
       // Below 1024px a 40px icon button; the label is visually hidden but stays its accessible name
       expect(Math.round(box.width)).toBe(40);
       expect(label!.width).toBeLessThanOrEqual(1);
     } else {
-      await expect(upload).toContainText(/Upload( Video)?/);
+      await expect(upload).toContainText(/Upload( video)?/);
     }
   });
 });

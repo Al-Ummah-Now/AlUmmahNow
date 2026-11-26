@@ -15,7 +15,7 @@ import { syncDurationWithPlaylist } from '@/lib/video/live-state';
 import { keepSeekBarOnPlayhead } from '@/lib/video/seek-bar-sync';
 import { keepBarTappableWhileItFades } from '@/lib/video/bar-fade';
 import { setupTouchSeekGate } from '@/lib/video/touch-seek-gate';
-import { videojsTimeFormatter } from '@/lib/video/player-time';
+import { formatLevel, videojsTimeFormatter } from '@/lib/video/player-time';
 
 
 
@@ -150,6 +150,7 @@ export function createVideoPlayer(
     // The skin (player-skin.css) is scoped to this class
     player.el()?.classList.add('vjs-fanous');
     applyBuiltInIcons(player.el());
+    localizeLoadedPercentage(player, lang);
 
     player.ready(() => {
       if (player) applyBuiltInIcons(player.el());
@@ -204,6 +205,26 @@ export function vhsTrackOptions(element: { canPlayType(type: string): string }):
     native = '';
   }
   return native ? {} : { nativeAudioTracks: false, nativeVideoTracks: false };
+}
+
+/** Localize the hidden progress text after Video.js writes it in its animation frame. */
+function localizeLoadedPercentage(player: Player, locale: 'en' | 'ar'): void {
+  const label = player.el()?.querySelector('.vjs-control-text-loaded-percentage');
+  if (!label) return;
+
+  const update = () => {
+    const text = label.textContent ?? '';
+    const rawPercent = /^(\d+(?:\.\d+)?)%$/.exec(text);
+    if (!rawPercent) return;
+    const localized = formatLevel(locale, Number(rawPercent[1]) / 100);
+    if (text !== localized) label.textContent = localized;
+  };
+
+  update();
+  // Watch only the screen-reader value. Video.js still owns the bar width and buffered ranges.
+  const observer = new MutationObserver(update);
+  observer.observe(label, { childList: true, characterData: true, subtree: true });
+  player.on('dispose', () => observer.disconnect());
 }
 
 /** Video.js formats every time on the page (current time, duration, seek-bar value text) in `lang`'s digits. */

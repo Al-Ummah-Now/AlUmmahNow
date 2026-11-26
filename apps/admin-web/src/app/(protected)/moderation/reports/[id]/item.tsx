@@ -1,5 +1,6 @@
 import type { Report, ReportedItemSummary } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
+import { CopyId } from '@/components/audit/CopyId';
 import { cardClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { translateDynamic, type Translator } from '@/i18n/translate';
 
@@ -17,8 +18,9 @@ export function ReportedItem({ item, t }: { item: ReportedItemSummary; t: Transl
             <dt className="text-fg-muted text-sm">{t('report.owner')}</dt>
             <dd>
               <Link href={`/users/${encodeURIComponent(item.owner.id)}`} className={linkClass} data-testid="report-item-owner">
-                <bdi>{item.owner.name ?? item.owner.id}</bdi>
+                <bdi>{item.owner.name ?? t('auditLog.unknownUser')}</bdi>
               </Link>
+              {!item.owner.name && <span className="ms-1.5"><CopyId id={item.owner.id} /></span>}
             </dd>
           </div>
         )}

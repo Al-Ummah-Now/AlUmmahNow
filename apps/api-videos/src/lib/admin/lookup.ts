@@ -12,6 +12,7 @@ import {
 	ADMIN_LOOKUP_MAX_USERS,
 	LIVE_METADATA_TABLE,
 	OWNERSHIP_TABLE,
+	resolveDisplayName,
 	type AdminLookupItem,
 	type AdminLookupRequest,
 	type AdminLookupResult,
@@ -276,7 +277,7 @@ async function lookupUsers(env: AdminEnv, db: SearchDb, ids: string[]): Promise<
 	return ids.map((id) => {
 		const indexed = profiles.get(id);
 		const profile = stored.get(id) as Row | undefined;
-		const name = indexed?.admin_title || (profile ? (profile.displayName as string) || [profile.firstName, profile.lastName].filter(Boolean).join(' ') : '') || null;
+		const name = resolveDisplayName(profile ?? { displayName: indexed?.admin_title }) || null;
 		return {
 			id,
 			found: !!indexed || !!profile,

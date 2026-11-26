@@ -153,7 +153,7 @@ describe('channel feeds', () => {
 
 		const ar = buildRss((await feedItems(env, 'ch1', 'videos'))!, 'videos', 'ar', `${WEB}/feeds/ch1/videos.xml?lang=ar`);
 		assertValidRss(ar);
-		assert.match(ar, /<title>نور وأصحابه · المرئيات<\/title>/);
+		assert.match(ar, /<title>نور وأصحابه، المرئيات<\/title>/);
 		assert.match(ar, /<language>ar<\/language>/);
 		assert.match(ar, /<title>تفسير<\/title>/);
 		assert.match(ar, new RegExp(`<link>${WEB}/ar/video/v1</link>`));
@@ -164,7 +164,9 @@ describe('channel feeds', () => {
 		const { env } = setup();
 		const feed = (await feedItems(env, 'ch1', 'live'))!;
 		assert.equal(feed.items.length, 0);
-		assertValidRss(buildRss(feed, 'live', 'en', `${WEB}/feeds/ch1/live.xml`, Date.parse('2026-11-14T00:00:00Z')));
+		const rss = buildRss(feed, 'live', 'en', `${WEB}/feeds/ch1/live.xml`, Date.parse('2026-11-14T00:00:00Z'));
+		assertValidRss(rss);
+		assert.match(rss, /<title>Noor &amp; Friends · Live<\/title>/);
 	});
 
 	it('escapes markup and drops characters XML forbids', () => {

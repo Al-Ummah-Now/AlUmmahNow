@@ -55,7 +55,10 @@ describe('site pages', () => {
 		assert.equal(siteRedirectFor([{ from: '/old/', to: '/new' }], '/old'), '/new');
 		assert.equal(siteRedirectFor([{ from: '/old', to: '/new' }], '/other'), null);
 		assert.equal(sitePageTitle('About', 'Scholar', '%s | Scholar site'), 'About | Scholar site');
-		assert.equal(sitePageTitle('About', 'Scholar', null), 'About · Scholar');
+		assert.equal(sitePageTitle('About', 'Scholar', null), 'About • Scholar');
+		assert.equal(sitePageTitle('عن الموقع', '٣ مجموعات'), 'عن الموقع، ٣ مجموعات');
+		assert.equal(sitePageTitle('About', 'Scholar', null, 'ar'), 'About، Scholar');
+		assert.equal(sitePageTitle('Scholar', 'Scholar'), 'Scholar');
 	});
 
 	it('creates, saves with revisions, restores, publishes; drafts only in a preview', async () => {

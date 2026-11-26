@@ -113,10 +113,13 @@ interface MetaRow {
   owner_id: string | null;
 }
 
+export function reportOwnerName(user: AdminLookupUser | undefined): string | null {
+  return user?.found ? user.displayName?.trim() || user.email?.trim() || null : null;
+}
+
 const userName = (lookup: Lookup, id: string | null): string | null => {
-  if (!id) return null;
-  const user = lookup.users.get(id);
-  return user?.found ? user.displayName || user.userName || null : null;
+  const user = id ? lookup.users.get(id) : undefined;
+  return user?.found ? user.displayName?.trim() || null : null;
 };
 
 /** The UPDATE for one row from a lookup. Item copies are kept when the item was not found. */
@@ -126,7 +129,11 @@ async function metaUpdate(db: D1Database, row: MetaRow, lookup: Lookup, now: str
   const unreadable = row.entity_type === 'live_chat' && row.reporter_id === GUEST_REPORTER_ID && !item?.openToAnyone;
   const found = !!item?.found && !unreadable;
   const ownerId = found ? item?.ownerId ?? null : row.owner_id;
-  const names = { owner: userName(lookup, ownerId), reporter: userName(lookup, row.reporter_id), moderator: userName(lookup, row.moderator_id) };
+  const names = {
+    owner: reportOwnerName(ownerId ? lookup.users.get(ownerId) : undefined),
+    reporter: userName(lookup, row.reporter_id),
+    moderator: userName(lookup, row.moderator_id),
+  };
   // Only whom this names: a moderator who is gone must not hold the row back
   const keys = await erasedKeysOf([found ? ownerId : null, names.owner && ownerId, names.reporter && row.reporter_id, names.moderator && row.moderator_id]);
   return db

@@ -51,7 +51,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           </svg>
         </div>
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-          {lang === 'ar' ? 'لا توجد قنوات بعد' : 'No Channels Yet'}
+          {lang === 'ar' ? 'لا توجد قنوات بعد' : 'No channels yet'}
         </h3>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-6 max-w-md">
           {lang === 'ar'
