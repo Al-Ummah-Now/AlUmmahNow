@@ -4,6 +4,7 @@
  * encode reports the uploaded MP4's duration and size (the Short rule reads them).
  */
 import { describe, it, before } from 'node:test';
+import { once } from 'node:events';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -168,4 +169,38 @@ describe('fake media pipeline (R2 transcode + media host)', () => {
     });
     assert.equal((await fakeTranscode(VID, 'ready')).status, 409);
   });
+});
+
+it('logs failures on the R2 control API and distinguishes bad requests from backend failures', async (t) => {
+  const { createFakeCdnServer, setStackR2, StackR2BadRequest } = await import('../fake-external.ts');
+  const backendError = new URIError('R2 binding failed');
+  const badRequest = new StackR2BadRequest('no bucket unknown');
+  setStackR2(async (bucket, _key, method) => {
+    if (bucket === 'unknown') throw badRequest;
+    if (method === 'GET' || method === 'LIST') throw backendError;
+    return { status: 200 };
+  });
+  const logger = t.mock.method(console, 'error', () => {});
+  const server = createFakeCdnServer().listen(0, '127.0.0.1');
+  t.after(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const url = `http://127.0.0.1:${address.port}/__stack/r2`;
+
+  for (const [path, status, error] of [
+    ['/global-settings/translations%2Fen.json', 500, backendError],
+    ['/global-settings?prefix=translations', 500, backendError],
+    ['/unknown/translations%2Fen.json', 400, badRequest],
+  ] as const) {
+    const response = await fetch(url + path);
+    assert.equal(response.status, status);
+    assert.deepEqual(await response.json(), { error: error.message });
+    assert.deepEqual(logger.mock.calls.at(-1)?.arguments, [`[local-stack] R2 GET /__stack/r2${path.split('?')[0]} -> HTTP ${status}`, error]);
+  }
+
+  const malformed = await fetch(url + '/global-settings/%FF');
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(await malformed.json(), { error: 'Malformed R2 path encoding' });
+  assert.equal(logger.mock.calls.length, 4);
 });

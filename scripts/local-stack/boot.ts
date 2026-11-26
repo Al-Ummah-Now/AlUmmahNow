@@ -23,7 +23,7 @@ import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
 import { appDir, AUTH_DIR, CMS_DIR, WWW_DIR, HOST, LOCAL_CLIENT_SECRETS, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
-import { fakeStateContaining, registerFakes, setStackHooks, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
+import { fakeStateContaining, registerFakes, setStackHooks, setStackR2, setStackSql, StackR2BadRequest, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
 import { assetsHandler } from './assets.ts';
 import { assetsFirstEntry } from './entry.ts';
@@ -519,7 +519,7 @@ async function main(): Promise<void> {
   for (const p of prepared) for (const b of (p.local.config.r2_buckets as Json[] | undefined) ?? []) if (!buckets.has(String(b.bucket_name))) buckets.set(String(b.bucket_name), { binding: String(b.binding), worker: p.name });
   setStackR2(async (name, key, method, body) => {
     const target = buckets.get(name);
-    if (!target) throw new Error(`no bucket ${name} (${[...buckets.keys()].join(', ')})`);
+    if (!target) throw new StackR2BadRequest(`no bucket ${name} (${[...buckets.keys()].join(', ')})`);
     const bucket = await mf.getR2Bucket(target.binding, target.worker);
     if (method === 'PUT') return (await bucket.put(key, body ?? '')), { status: 200 };
     if (method === 'DELETE') return (await bucket.delete(key)), { status: 200 };

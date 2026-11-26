@@ -6,9 +6,8 @@ name: Help pictures
 #
 # - Pull requests that change Help's text, the capture script or this workflow: the pictures are
 #   uploaded as the `help-pictures` artifact, to commit with the PR (nothing is pushed).
-# - Every release tag, and by hand: the same, then a PR "chore(help): refresh Help pictures" when
-#   anything changed. A PR opened with the workflow's token starts no checks by itself: push an
-#   empty commit to it (or close and reopen it) before merging.
+# - Every release tag, and by hand: the same, then push a branch when anything changed.
+#   The job summary links to GitHub's compare page for opening the PR.
 on:
   pull_request:
     branches: [main]
@@ -21,8 +20,8 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      open_pr:
-        description: 'Open a PR with the new pictures when anything changed'
+      push_branch:
+        description: 'Push a branch with the new pictures when anything changed'
         type: boolean
         default: true
 
@@ -136,15 +135,14 @@ jobs:
             ${{ runner.temp }}/stack.log
           retention-days: 7
 
-  pull-request:
-    name: Open a PR with the new pictures
+  publish-branch:
+    name: Push the new pictures for review
     needs: capture
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.open_pr)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -156,22 +154,24 @@ jobs:
           name: help-pictures
           path: apps/web/public/help
 
-      - name: Open the PR when anything changed
+      - name: Push a branch when anything changed
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE: ${{ github.ref_name }}
         run: |
           if [ -z "$(git status --porcelain apps/web/public/help)" ]; then
-            echo "Help pictures are current."
+            echo "Help pictures are current." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          branch="chore/help-pictures-${GITHUB_RUN_ID}"
+          branch="chore/help-pictures-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
           git add apps/web/public/help
           git commit -m "chore(help): refresh Help pictures from ${SOURCE}"
           git push origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "chore(help): refresh Help pictures" \
-            --body "Help's pictures and clips made again from the real site by \`help-pictures.yml\` (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}, from \`${SOURCE}\`). Look at the changed pictures, then push an empty commit to start the checks (a PR opened by the workflow's token starts none) and merge when green."
+          repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          {
+            echo "Help pictures were refreshed from \`${SOURCE}\`."
+            echo
+            echo "[Review the changes and open a pull request](${repo_url}/compare/main...${branch}?expand=1)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -492,6 +492,8 @@ export function setStackSql(fn: StackSql): void {
 
 /** One object of a stack R2 bucket by its bucket_name (boot.ts sets it once Miniflare is up). */
 export type StackR2 = (bucket: string, key: string, method: string, body?: string) => Promise<{ status: number; body?: string }>;
+export class StackR2BadRequest extends Error {}
+
 let stackR2: StackR2 | undefined;
 export function setStackR2(fn: StackR2): void {
   stackR2 = fn;
@@ -530,6 +532,14 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+function decodeR2Path(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch (cause) {
+    throw new StackR2BadRequest('Malformed R2 path encoding', { cause });
+  }
+}
+
 /**
  * Control API (loopback only):
  * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
@@ -563,23 +573,23 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     }
   }
   if (url.pathname.startsWith('/__stack/r2/')) {
-    const [bucket, ...rest] = url.pathname.slice('/__stack/r2/'.length).split('/');
-    const key = decodeURIComponent(rest.join('/'));
+    const [bucketPath, ...rest] = url.pathname.slice('/__stack/r2/'.length).split('/');
+    const method = req.method ?? '';
     if (!stackR2) return json({ error: 'R2 is available once the stack is up' }, 405);
-    if (bucket && !key && req.method === 'GET') {
-      try {
-        const listed = await stackR2(decodeURIComponent(bucket), '', 'LIST', JSON.stringify({ prefix: url.searchParams.get('prefix') ?? '', cursor: url.searchParams.get('cursor') ?? undefined }));
-        return new Response(listed.body ?? '{}', { status: listed.status, headers: { 'content-type': 'application/json' } });
-      } catch (error) {
-        return json({ error: (error as Error).message }, 400);
-      }
-    }
-    if (!bucket || !key || !['GET', 'PUT', 'DELETE'].includes(req.method ?? '')) return json({ error: 'GET, PUT or DELETE /__stack/r2/<bucket>/<key>' }, 400);
     try {
-      const out = await stackR2(decodeURIComponent(bucket), key, req.method!, req.method === 'PUT' ? await readBody(req) : undefined);
+      const bucket = decodeR2Path(bucketPath);
+      const key = decodeR2Path(rest.join('/'));
+      if (!bucket || (!key && method !== 'GET') || !['GET', 'PUT', 'DELETE'].includes(method)) {
+        throw new StackR2BadRequest('GET, PUT or DELETE /__stack/r2/<bucket>/<key>');
+      }
+      const out = key
+        ? await stackR2(bucket, key, method, method === 'PUT' ? await readBody(req) : undefined)
+        : await stackR2(bucket, '', 'LIST', JSON.stringify({ prefix: url.searchParams.get('prefix') ?? '', cursor: url.searchParams.get('cursor') ?? undefined }));
       return out.body === undefined ? json({}, out.status) : new Response(out.body, { status: out.status, headers: { 'content-type': 'application/json' } });
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      const status = error instanceof StackR2BadRequest ? 400 : 500;
+      console.error(`[local-stack] R2 ${method} ${url.pathname} -> HTTP ${status}`, error);
+      return json({ error: error instanceof Error ? error.message : String(error) }, status);
     }
   }
   if (url.pathname.startsWith('/__stack/kv/')) {
@@ -683,8 +693,7 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   return json(publicVideo(video));
 }
 
-/** The fake CDN + control API for the browser and the tests, on PORTS['fake-cdn']. */
-export function startFakeCdn(): Promise<() => Promise<void>> {
+export function createFakeCdnServer() {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     let response: Response;
@@ -701,6 +710,12 @@ export function startFakeCdn(): Promise<() => Promise<void>> {
   });
   server.keepAliveTimeout = IDLE_CONNECTION_MS;
   server.headersTimeout = IDLE_CONNECTION_MS + 1000;
+  return server;
+}
+
+/** The fake CDN + control API for the browser and the tests, on PORTS['fake-cdn']. */
+export function startFakeCdn(): Promise<() => Promise<void>> {
+  const server = createFakeCdnServer();
   return new Promise((resolve) => {
     server.listen(PORTS['fake-cdn'], '127.0.0.1', () => resolve(() => new Promise((done) => server.close(() => done()))));
   });

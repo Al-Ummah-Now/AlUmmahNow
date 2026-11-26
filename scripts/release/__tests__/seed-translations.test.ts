@@ -81,6 +81,16 @@ describe('localR2Client', () => {
 		assert.ok(calls.every((c) => c.includes('http://127.0.0.1:3190/__stack/r2/global-settings/')));
 	});
 
+
+	it('includes the status and response body for local read and write failures', async () => {
+		const fake: typeof fetch = async (_input, init) => init?.method === 'PUT'
+			? new Response('write failed', { status: 503 })
+			: Response.json({ error: 'R2 read failed' }, { status: 500 });
+		const r2 = localR2Client('global-settings', 'http://127.0.0.1:3190', fake);
+		await assert.rejects(r2.get(KEYS.en), /GET global-settings\/translations\/en\.json .* HTTP 500: \{"error":"R2 read failed"\}/);
+		await assert.rejects(r2.put(KEYS.ar, '{}'), /PUT global-settings\/translations\/ar\.json .* HTTP 503: write failed/);
+	});
+
 	it('refuses a control URL that is not loopback', () => {
 		assert.throws(() => localR2Client('global-settings', 'https://videos.api.qa.alummahnow.net'), /loopback/);
 	});
