@@ -30,7 +30,7 @@ const tdClass = 'px-3 py-3 align-top text-sm';
  */
 export function ProcessingTable({ rows, failures }: { rows: ProcessingVideoRow[]; /** Why the failed ones failed, by id */ failures: Readonly<Record<string, VideoFailure>>; locale: Locale }) {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const ids = useId();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -210,7 +210,7 @@ export function ProcessingTable({ rows, failures }: { rows: ProcessingVideoRow[]
                 <td className={tdClass} data-bunny-status={row.bunny === null ? 'missing' : row.bunny?.status ?? ''}>
                   <div className="text-fg">{bunnyLabel(t, row.bunny)}</div>
                   {row.bunny?.availableResolutions && (
-                    <div className="text-fg-muted text-xs">{resolutionsLabel(row.bunny.availableResolutions, t)}</div>
+                    <div className="text-fg-muted text-xs">{resolutionsLabel(row.bunny.availableResolutions, t, locale)}</div>
                   )}
                 </td>
                 <td className={tdClass} data-r2-status={row.r2Status ?? 'none'}>

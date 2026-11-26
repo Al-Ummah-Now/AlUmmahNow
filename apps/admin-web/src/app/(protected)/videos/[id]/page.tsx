@@ -192,7 +192,7 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
               </div>
               <div><dt className="text-fg-muted">{t('content.created')}</dt><dd className="text-fg">{v.createdAt ? <LocalTime value={v.createdAt} withTime /> : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{v.updatedAt ? <LocalTime value={v.updatedAt} withTime /> : t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('videos.dimensions')}</dt><dd className="text-fg">{v.width && v.height ? <bdi dir="ltr">{localizeDigits(locale, `${v.width}×${v.height}`)}</bdi> : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('videos.dimensions')}</dt><dd className="text-fg">{v.width && v.height ? localizeDigits(locale, `${v.width}×${v.height}`) : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.size')}</dt><dd className="text-fg">{bytes(v.fileSize, locale) ?? t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.category')}</dt><dd className="text-fg">{(v.category && categoryLabel(v.category, locale)) || v.category || t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.language')}</dt><dd className="text-fg">{v.language ? languageName(v.language, locale) : t('content.none')}</dd></div>
