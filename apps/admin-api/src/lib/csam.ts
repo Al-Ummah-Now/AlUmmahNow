@@ -438,6 +438,14 @@ export async function casesAbout(db: Db, items: ItemRef[], openOnly = false): Pr
   return new Set((results ?? []).map((r) => `${r.item_type}:${r.item_id}`));
 }
 
+/** Every video a case keeps from everyone else (idx_csam_cases_item, the video part only): a few rows. */
+export async function videosUnderCase(db: Db): Promise<string[]> {
+  const { results } = await db
+    .prepare(`SELECT DISTINCT c.item_id FROM csam_cases c INDEXED BY idx_csam_cases_item WHERE c.item_type = 'video' AND c.item_id IS NOT NULL AND ${hides('c')}`)
+    .all<{ item_id: string }>();
+  return (results ?? []).map((r) => r.item_id);
+}
+
 /** SQL: no case is about the item a reports row (alias `a`) names. */
 export const noCaseAboutSql = (a: string): string =>
   `NOT EXISTS (SELECT 1 FROM csam_cases tc INDEXED BY idx_csam_cases_item WHERE tc.item_id IS NOT NULL AND tc.item_type = ${a}.entity_type AND tc.item_id = ${a}.entity_id AND ${hides('tc')})`;

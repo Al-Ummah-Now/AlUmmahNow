@@ -3,7 +3,7 @@
  * super admins see what they are: everyone else sees the report and that the item is under a takedown.
  */
 import { isSuperAdmin, type ReportableEntityType, type ReportedItemSummary, type ReportExcerpt, type ReportGroup, type ReportHistoryRow } from '@al-ummah/shared-types';
-import { casesAbout, type ItemRef } from '../csam';
+import { casesAbout, videosUnderCase, type ItemRef } from '../csam';
 import type { D1Database } from '../types';
 
 /** The items the reader may not see, of those given. */
@@ -22,6 +22,9 @@ export async function withoutHiddenVideos<T>(db: D1Database, roles: readonly unk
   const hidden = await hiddenFrom(db, roles, rows.flatMap((r) => { const id = videoId(r); return id ? [{ type: 'video' as const, id }] : []; }));
   return hidden.size === 0 ? rows : rows.filter((r) => !isHiddenItem(hidden, 'video', videoId(r) ?? ''));
 }
+
+/** Every video the reader may not see (none for a super admin): for totals that must not count them. */
+export const hiddenVideoIds = async (db: D1Database, roles: readonly unknown[] | undefined): Promise<string[]> => (isSuperAdmin(roles) ? [] : videosUnderCase(db));
 
 /** The item without anything that says what or whose it is. */
 export const withheldSummary = (s: ReportedItemSummary): ReportedItemSummary => ({ ...s, title: null, parentId: null, parentType: null, channel: null, owner: null, takenDown: true });
