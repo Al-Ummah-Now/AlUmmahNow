@@ -311,7 +311,8 @@ export async function socialControl(method: string, url: URL, body: () => Promis
     try {
       return await telegramChannelPost(JSON.parse(await body()));
     } catch (error) {
-      return json({ error: (error as Error).message }, 400);
+      console.error('[fake-social] telegram/post error:', error);
+      return json({ error: 'invalid telegram post request' }, 400);
     }
   }
   if (method === 'POST' && step === 'fail') {
