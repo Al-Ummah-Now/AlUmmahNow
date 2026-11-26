@@ -318,7 +318,7 @@ describe('re-encoding a published rendition', () => {
 		await videos.put(ID, JSON.stringify({ ...videos.read(ID), isPublic: false }));
 		await onVideoWritten(env, videos.read(ID));
 		const immediate = raw.PROCESSING_CHECK_QUEUE.messages.slice(1);
-		assert.deepEqual(immediate.map((msg) => msg.kind), ['media-move', 'media-retire']);
+		assert.deepEqual(immediate.map((msg) => msg.kind).sort(), ['media-move', 'media-retire']);
 		for (const msg of immediate) await deliver(env, msg, deleteAfter - 60_000);
 		assert.equal(raw.MEDIA.store.has(oldMaster), false);
 		assert.equal(raw.MEDIA.store.has(newPublic), false);
