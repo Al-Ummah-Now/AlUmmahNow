@@ -47,7 +47,6 @@ import { readVideoFailures } from '../../lib/media/failures';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readHdrCheck, startHdrCheck } from '../../lib/media/hdr-check';
-import { apiError } from '../../lib/api-error';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
