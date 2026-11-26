@@ -19869,27 +19869,6 @@
             "required": false,
             "name": "lang",
             "in": "query"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50,
-              "default": 24
-            },
-            "required": false,
-            "name": "limit",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Pagination cursor"
-            },
-            "required": false,
-            "description": "Pagination cursor",
-            "name": "cursor",
-            "in": "query"
           }
         ],
         "responses": {

@@ -18,9 +18,14 @@ import { OptionalAuthRoute, type AppContext } from '../../base';
 import { Str } from '../../lib/chanfana-params';
 import { apiError } from '../../lib/api-error';
 import { featureOff } from '../../lib/features/off';
-import { listCalendarEvents, EVENT_CALENDAR_PAGE_MAX } from '../../lib/events/calendar';
+import {
+	EVENT_CALENDAR_PAGE_MAX,
+	isPublicCalendarChannel,
+	listCalendarEvents,
+	type StoredCalendarChannel,
+} from '../../lib/events/calendar';
 import R2Repository from '../../lib/r2Repo';
-import { Channel as BusinessChannel, ResponseError } from '../../lib/types';
+import { ResponseError } from '../../lib/types';
 
 const EventsQuerySchema = z.object({
 	channelId: Str({ description: 'Filter to one channel' }).optional(),
@@ -34,10 +39,26 @@ const EventsQuerySchema = z.object({
 	cursor: Str({ description: 'Pagination cursor' }).optional(),
 });
 
+const EventsIcsQuerySchema = EventsQuerySchema.omit({ limit: true, cursor: true });
+
 function resolveIcsLocale(langParam: 'en' | 'ar' | undefined, acceptLanguage: string | undefined): 'en' | 'ar' {
-	if (langParam === 'ar' || langParam === 'en') return langParam;
-	if (acceptLanguage && /(?:^|,|\s)ar(?:-|,|;|$)/i.test(acceptLanguage)) return 'ar';
-	return 'en';
+	if (langParam) return langParam;
+
+	let locale: 'en' | 'ar' = 'en';
+	let bestQuality = 0;
+	for (const range of (acceptLanguage ?? '').split(',')) {
+		const [tag, ...params] = range.trim().toLowerCase().split(';');
+		const language = tag.trim().split('-')[0];
+		if (language !== 'en' && language !== 'ar') continue;
+
+		const qualityParam = params.map((param) => param.trim()).find((param) => /^q\s*=/.test(param));
+		const quality = qualityParam === undefined ? 1 : Number(qualityParam.split('=')[1]);
+		if (quality > bestQuality && quality <= 1) {
+			locale = language;
+			bestQuality = quality;
+		}
+	}
+	return locale;
 }
 
 function parseOptionalBoundMs(raw: string | undefined): number | undefined | 'invalid' {
@@ -97,7 +118,7 @@ export class EventsCalendarIcs extends OptionalAuthRoute {
 	schema = {
 		tags: ['Events'],
 		summary: 'RFC 5545 iCalendar (.ics) feed of upcoming online events',
-		request: { query: EventsQuerySchema },
+		request: { query: EventsIcsQuerySchema },
 		responses: {
 			'200': { description: 'text/calendar (.ics) feed' },
 			'400': { description: 'Invalid filter', content: { 'application/json': { schema: ResponseError } } },
@@ -164,9 +185,8 @@ export class ChannelEventsCalendarIcs extends OptionalAuthRoute {
 			return featureOff(c, 'eventCalendar');
 		}
 		const { params, query } = await this.getValidatedData<typeof this.schema>();
-		type ChannelType = z.infer<typeof BusinessChannel>;
-		const channel = await new R2Repository<ChannelType>(c.env.channels).getObject(params.channelId);
-		if (!channel || channel.isDeleted || channel.isHidden || channel.isPrivate) {
+		const channel = await new R2Repository<StoredCalendarChannel>(c.env.channels).getObject(params.channelId);
+		if (!isPublicCalendarChannel(channel)) {
 			return apiError(c, 404, 'not_found');
 		}
 
@@ -177,7 +197,7 @@ export class ChannelEventsCalendarIcs extends OptionalAuthRoute {
 			viewerId: null,
 		});
 		const safeId = params.channelId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'channel';
-		const channelArName = (channel as { nameAr?: string | null }).nameAr || channel.name;
+		const channelArName = channel.nameLocalized?.ar || channel.name;
 		const calendarName = locale === 'ar'
 			? (channelArName ? `${channelArName} — الفعاليات القادمة` : 'الفعاليات القادمة للقناة')
 			: (channel.name ? `${channel.name} — Upcoming Events` : 'Channel Upcoming Events');

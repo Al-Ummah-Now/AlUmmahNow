@@ -275,7 +275,8 @@ describe('short-links domain association files (/.well-known/*, E22-D8)', () => 
     ]);
 
     let shouldFail = false;
-    const fetchMock = async (input: string) => {
+    const fetchMock = async (input: string, init?: RequestInit) => {
+      assert.ok(init?.signal instanceof AbortSignal);
       if (shouldFail) return new Response('bad gateway', { status: 502 });
       if (input.endsWith('/public/mobile-apps/short-links/apple-app-site-association')) {
         return new Response(aasaBody, { status: 200, headers: { 'Content-Type': 'application/json' } });

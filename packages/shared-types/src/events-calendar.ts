@@ -68,8 +68,8 @@ function escapeIcsValue(value: string): string {
     .replace(/\n/g, '\\n');
 }
 
-function sanitizeIcsUri(uri: string): string {
-  return uri.replace(/[\x00-\x20\x7F]+/g, '');
+function sanitizeIcsRawValue(value: string): string {
+  return value.replace(/[\x00-\x20\x7F-\x9F]+/g, '');
 }
 
 function toIcsUtc(isoOrMs: string | number): string | null {
@@ -154,7 +154,7 @@ export function buildEventsIcsFeed(
     const dtEnd = toIcsUtc(endMs);
     if (!dtStart || !dtEnd) continue;
 
-    const url = sanitizeIcsUri(`${siteOrigin}${ev.watchPath.startsWith('/') ? ev.watchPath : `/${ev.watchPath}`}`);
+    const url = sanitizeIcsRawValue(`${siteOrigin}${ev.watchPath.startsWith('/') ? ev.watchPath : `/${ev.watchPath}`}`);
     const channelLabel = locale === 'ar' && ev.channelNameAr ? ev.channelNameAr : ev.channelName;
     const summary = channelLabel ? `${ev.title} — ${channelLabel}` : ev.title;
     const watchLine = locale === 'ar' ? `شاهد عبر الإنترنت: ${url}` : `Watch online: ${url}`;
@@ -162,7 +162,7 @@ export function buildEventsIcsFeed(
 
     rawLines.push(
       'BEGIN:VEVENT',
-      `UID:live-${ev.streamId}@alummahnow.net`,
+      `UID:${escapeIcsValue(`live-${sanitizeIcsRawValue(ev.streamId)}@alummahnow.net`)}`,
       `DTSTAMP:${dtStamp}`,
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,

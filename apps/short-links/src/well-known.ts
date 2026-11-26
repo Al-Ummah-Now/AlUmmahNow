@@ -118,6 +118,7 @@ export async function shortLinksWellKnownResponse(
     try {
       const upstream = await fetchImpl(`${adminOrigin}/public/mobile-apps/short-links/${file}`, {
         headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(3_000),
       });
       if (upstream.status === 404) {
         fresh = { status: 404, body: '', at: now };
