@@ -95,6 +95,16 @@ describe('EventListenerValidator', () => {
       window.removeEventListener('resize', handler);
     });
 
+    it('allows animationcancel on document without logging a suspicious listener', () => {
+      validator.install();
+      const handler = jest.fn();
+      document.addEventListener('animationcancel', handler);
+      document.dispatchEvent(new Event('animationcancel'));
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(logger.getBufferedEvents()).toEqual([]);
+      document.removeEventListener('animationcancel', handler);
+    });
+
     it('registers non-allowlisted global listeners (e.g. media events) and reports them', () => {
       validator.install();
       const handler = jest.fn();

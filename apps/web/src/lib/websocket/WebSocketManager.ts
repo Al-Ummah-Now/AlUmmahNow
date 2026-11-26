@@ -351,29 +351,25 @@ export class WebSocketManager {
       return;
     }
 
-    // The socket's token expired (#437): authenticate again with a fresh one
-    // (getAuthToken refreshes); private channels come back via resubscribeAll
-    // The server puts `code` at the top level of error frames
-    const errorCode = message.type === 'error'
+    const messageType: string = message.type;
+    const errorCode = messageType === 'error' || messageType === 'auth_error'
       ? ((message as { code?: string }).code ?? (message.data as { code?: string } | undefined)?.code)
       : undefined;
-    if (errorCode === 'AUTH_EXPIRED') {
+    if (messageType === 'auth_error' || errorCode === 'AUTH_EXPIRED' || errorCode === 'AUTH_FAILED' || errorCode === 'AUTH_REQUIRED') {
+      logger.warn('🔐 Authentication failed:', { code: errorCode });
+      const wasAuthenticated = this.authenticated;
       this.authenticated = false;
-      // The server put this socket out of its chats with it; a new token joins them again
       [...this.joined].forEach((channel) => this.setJoined(channel, false));
-      void this.authenticate();
-      return;
-    }
 
-    if (errorCode === 'AUTH_FAILED' && this.config.getAuthToken) {
-      // An expired or lost single-use ticket needs a fresh handshake.
-      this.ws?.close(AUTH_RETRY_CLOSE_CODE, 'Retry authentication');
-      return;
-    }
-
-    // Handle auth error
-    if (errorCode?.startsWith('AUTH')) {
-      logger.error('🔐 Authentication failed:', message.data);
+      if (errorCode === 'AUTH_EXPIRED' && wasAuthenticated && this.config.getAuthToken) {
+        // Reauthenticate in place once; repeated rejections use the reconnect backoff.
+        void this.authenticate();
+      } else if (this.config.getAuthToken && errorCode !== 'AUTH_REQUIRED') {
+        this.ws?.close(AUTH_RETRY_CLOSE_CODE, 'Retry authentication');
+      } else if (!this.config.getAuthToken) {
+        // A static token cannot be refreshed here. Wait for the caller to supply a new one.
+        this.config.authToken = undefined;
+      }
       return;
     }
 

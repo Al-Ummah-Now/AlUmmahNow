@@ -99,12 +99,12 @@ export function useNotificationBell(userId: string | undefined): UseNotification
       setState(lastShown?.userId === userId ? lastShown.state : EMPTY_BELL);
       stateUser.current = userId;
     }
-    let cancelled = false;
-    void NotificationsService.counts().then((counts) => {
-      if (!cancelled && counts) setState((s) => ({ ...s, unreadCount: counts.unreadCount, unseenCount: unseenOf(counts), menuOpen: counts.menuOpen ?? s.menuOpen }));
+    const controller = new AbortController();
+    void NotificationsService.counts(controller.signal).then((counts) => {
+      if (!controller.signal.aborted && counts) setState((s) => ({ ...s, unreadCount: counts.unreadCount, unseenCount: unseenOf(counts), menuOpen: counts.menuOpen ?? s.menuOpen }));
     });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [userId]);
 
