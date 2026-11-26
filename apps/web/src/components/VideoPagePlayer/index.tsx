@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useState } from "react";
 import type { Player } from "video.js";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions, startsPortrait } from "./interface";
@@ -11,6 +11,7 @@ import { VideoDetails } from "@/components/VideoPagePlayer/VideoDetails";
 import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 import { useDeliveryPlayback } from "./useDeliveryPlayback";
 import { ListenModeSwitch } from "./ListenModeSwitch";
+import { useWatchPlayer } from "./useWatchPlayer";
 
 interface WatchPlayerProps {
   options: PlayerOptions;
@@ -35,19 +36,11 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
   const channelHref = playerChannelHref(locale, options);
   const channelName = playerChannelName(options, locale);
 
-  const playerRef = useRef<Player | null>(null);
+  const { playerRef, handleWatchPlayerReady } = useWatchPlayer(onPlayerReady);
   const [isListenView, setIsListenView] = useState(false);
 
-  const combinedOnPlayerReady = useCallback(
-    (p: Player) => {
-      playerRef.current = p;
-      onPlayerReady?.(p);
-    },
-    [onPlayerReady],
-  );
-
   // Bunny or R2, fallback and QoE: shared with the RTL player
-  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, combinedOnPlayerReady);
+  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, handleWatchPlayerReady);
 
   return (
     <>

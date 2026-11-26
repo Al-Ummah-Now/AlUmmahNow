@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Headphones, ListMusic, Moon, Pause, Play, RotateCcw, RotateCw, Trash2, X } from 'lucide-react';
-import { localizeDigits } from '@al-ummah/shared-types';
+import { localizeDigits, metaSeparator } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LISTEN_SPEEDS, SLEEP_PRESETS, useListenAudio, type SleepTimerSetting } from './listen-context';
@@ -214,6 +214,7 @@ export function ListenMiniBar() {
       <div className="px-3 pt-1">
         <input
           type="range"
+          dir="ltr"
           min={0}
           max={progressMax}
           value={Math.min(currentTime, progressMax)}
@@ -250,13 +251,18 @@ export function ListenMiniBar() {
               {current.title}
             </div>
             <div className="text-[11px] sm:text-xs text-[var(--fanous-color-text-secondary)] truncate">
-              {current.channelName}{isRTL ? '، ' : ' · '}{formatClock(currentTime, lang)} / {formatClock(duration, lang)}
+              {current.channelName}{metaSeparator(lang)}
+              <bdi dir="ltr">
+                <bdi>{formatClock(currentTime, lang)}</bdi>
+                {' / '}
+                <bdi>{formatClock(duration, lang)}</bdi>
+              </bdi>
             </div>
           </div>
         </Link>
 
         {/* Playback buttons */}
-        <div className="flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
+        <div dir="ltr" className="flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
           <button
             type="button"
             aria-label={labels.back15}

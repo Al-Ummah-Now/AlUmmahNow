@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useState } from "react";
 import type { Player } from "video.js";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions, startsPortrait } from "../interface";
@@ -11,6 +11,7 @@ import { VideoDetails } from "@/components/VideoPagePlayer/VideoDetails";
 import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
 import { useDeliveryPlayback } from "../useDeliveryPlayback";
 import { ListenModeSwitch } from "../ListenModeSwitch";
+import { useWatchPlayer } from "../useWatchPlayer";
 
 interface WatchPlayerProps {
   options: PlayerOptions;
@@ -32,19 +33,11 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
 
   const title = getLocalizedValue(options.titleLocalized, options.title, 'ar');
   const channelName = playerChannelName(options, 'ar');
-  const playerRef = useRef<Player | null>(null);
+  const { playerRef, handleWatchPlayerReady } = useWatchPlayer(onPlayerReady);
   const [isListenView, setIsListenView] = useState(false);
 
-  const combinedOnPlayerReady = useCallback(
-    (p: Player) => {
-      playerRef.current = p;
-      onPlayerReady?.(p);
-    },
-    [onPlayerReady],
-  );
-
   // Bunny or R2 per the admin switch, one-time fallback to Bunny, QoE: same hook as the LTR player
-  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, combinedOnPlayerReady);
+  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, handleWatchPlayerReady);
 
   return (
     <>

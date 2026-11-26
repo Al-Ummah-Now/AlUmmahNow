@@ -190,7 +190,9 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
+    Reflect.deleteProperty(navigator, 'mediaSession');
   });
 
   it('renders nothing at all when listenMode feature switch is OFF', () => {
@@ -347,6 +349,14 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
       ),
     );
 
+    const play = setActionHandler.mock.calls.find(([action, handler]) => action === 'play' && handler)![1];
+    act(() => play());
+    expect(lastVhsPlayer!.pause).not.toHaveBeenCalled();
+    expect(lastVhsPlayer!.play).toHaveBeenCalledTimes(1);
+
+    act(() => lastVhsPlayer!.pause());
+    act(() => play());
+    expect(lastVhsPlayer!.play).toHaveBeenCalledTimes(2);
     setActionHandler.mockClear();
 
     // Emit multiple timeupdate ticks: position state updates, action handlers are NOT rebound
@@ -360,6 +370,48 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
     expect(setPositionState).toHaveBeenCalled();
   });
 
+  it('does not start a queued track if Listen is paused while its audio URL resolves', async () => {
+    mockFeatures = { listenMode: true };
+    render(<Harness extra={<QueueHelper />} />);
+    fireEvent.click(screen.getByTestId('watch-listen-toggle'));
+    await waitFor(() => expect(lastVhsPlayer!.play).toHaveBeenCalled());
+
+    let resolveAudio!: (audio: { url: string }) => void;
+    mockFetchVideoAudio.mockImplementationOnce(() => new Promise((resolve) => { resolveAudio = resolve; }));
+    fireEvent.click(screen.getByTestId('enqueue-second'));
+    fireEvent.click(screen.getByTestId('listen-queue-button'));
+    fireEvent.click(screen.getByRole('button', { name: /Second Lecture/ }));
+    expect(mockFetchVideoAudio).toHaveBeenLastCalledWith('vid-99');
+
+    fireEvent.click(screen.getByTestId('listen-play-toggle'));
+    await act(async () => resolveAudio({ url: 'https://media.alummahnow.test/second.m3u8' }));
+    expect(screen.getByTestId('listen-track-title')).toHaveTextContent('Surah Al-Kahf');
+    expect(lastVhsPlayer!.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks the sleep deadline even if background throttling skips interval ticks', async () => {
+    mockFeatures = { listenMode: true };
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('watch-listen-toggle'));
+    await waitFor(() => expect(lastVhsPlayer!.play).toHaveBeenCalled());
+
+    jest.useFakeTimers();
+    fireEvent.click(screen.getByTestId('listen-sleep-button'));
+    fireEvent.click(screen.getByTestId('listen-sleep-15'));
+    expect(screen.getByTestId('listen-sleep-remaining')).toHaveTextContent('15:00');
+
+    const start = Date.now();
+    jest.setSystemTime(start + 5 * 60_000);
+    act(() => jest.advanceTimersByTime(1_000));
+    expect(screen.getByTestId('listen-sleep-remaining')).toHaveTextContent('9:59');
+    expect(lastVhsPlayer!.pause).not.toHaveBeenCalled();
+
+    jest.setSystemTime(start + 15 * 60_000);
+    fireEvent(document, new Event('visibilitychange'));
+    expect(lastVhsPlayer!.pause).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('listen-sleep-remaining')).toBeNull();
+  });
+
   it('uses Arabic copy with «مرئي» and Eastern Arabic digits (٠–٩) in ar locale', async () => {
     mockLang = 'ar';
     mockFeatures = { listenMode: true };
@@ -371,6 +423,11 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
     const card = screen.getByTestId('watch-listen-card');
     expect(card.textContent).toContain('مشاهدة المرئي');
     expect(card.textContent).not.toContain('فيديو');
+    expect(screen.getByTestId('listen-mini-bar')).toHaveAttribute('dir', 'rtl');
+    expect(screen.getByTestId('listen-progress')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByTestId('listen-play-toggle').parentElement).toHaveAttribute('dir', 'ltr');
+    const clock = screen.getByTestId('listen-track-link').querySelector('bdi[dir="ltr"]');
+    expect(Array.from(clock!.children, (part) => part.textContent)).toEqual(['٢:٠٥', '١٠:٠٠']);
 
     const speedBtn = screen.getByTestId('listen-speed-button');
     expect(speedBtn.textContent).toContain('١.٥×');
