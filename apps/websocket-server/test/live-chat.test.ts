@@ -23,7 +23,7 @@ type Row = Record<string, unknown>;
 const open: Row = { owner_id: 'owner', channel_id: 'ch1', visibility: 'public', status: 'live', made_for_kids: 0, recording_withheld: 0, allow_chat: 1, chat_replay: 1 };
 
 function db(streams: Record<string, Row>, access: Record<string, string> = {}, chatOn = true) {
-  const state = { streams, broken: false, banned: new Set<string>(), afterRead: null as null | (() => void) };
+  const state = { streams, broken: false, banned: new Set<string>(), owners: new Map([['ch1', 'owner']]), afterRead: null as null | (() => void) };
   const prepare = (sql: string) => {
     let args: unknown[] = [];
     const s = {
@@ -38,6 +38,10 @@ function db(streams: Record<string, Row>, access: Record<string, string> = {}, c
           return row;
         }
         if (sql.includes('videos_bans')) return state.banned.has(String(args[0])) ? { x: 1 } : null;
+        if (sql.includes('content_ownership') && sql.includes("kind = 'channel'")) {
+          const owner = state.owners.get(String(args[0]));
+          return owner ? { owner_id: owner } : null;
+        }
         if (sql.includes('channel_access')) return access[`${args[0]}:${args[1]}`] ? { role: access[`${args[0]}:${args[1]}`] } : null;
         return null;
       },
@@ -90,6 +94,17 @@ test('a private stream is its team’s; kids content and chat turned off are nob
   const d = db({ private: { ...open, visibility: 'private' }, kids: { ...open, made_for_kids: 1 }, off: { ...open, allow_chat: 0 } }, { 'ch1:mod': 'moderator', 'ch1:editor': 'editor' });
   for (const [user, type] of [['owner', 'subscribed'], ['mod', 'subscribed'], ['editor', 'error'], ['ali', 'error']] as const) assert.equal((await join(await socket(d, user), 'private')).type, type, user);
   for (const id of ['kids', 'off']) assert.equal((await join(await socket(d, 'owner'), id)).code, 'FORBIDDEN', id);
+});
+
+test('private chat follows the channel’s indexed owner after transfer', async () => {
+  const d = db({ private: { ...open, visibility: 'private' }, legacy: { ...open, channel_id: null, visibility: 'private' } });
+  d.owners.set('ch1', 'new-owner');
+  const oldOwner = await socket(d, 'owner');
+  assert.equal((await join(oldOwner, 'private')).code, 'FORBIDDEN');
+  assert.equal((await join(await socket(d, 'new-owner'), 'private')).type, 'subscribed');
+  assert.equal((await join(oldOwner, 'legacy')).type, 'subscribed');
+  d.owners.delete('ch1');
+  assert.equal((await join(oldOwner, 'private')).code, 'FORBIDDEN');
 });
 
 test('a withheld recording is the team’s; a banned member is refused what is not public', async () => {

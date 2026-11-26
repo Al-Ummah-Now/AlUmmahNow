@@ -8,6 +8,7 @@
  * session; a session that is live is never moved.
  */
 import { isReviewCleared, type LiveProviderId } from '@al-ummah/shared-types';
+import { ownerOfRecord } from '../channelAccess';
 import { NonVideoRepository } from '../r2Repo';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
@@ -142,10 +143,13 @@ export async function markStreamLive(env: StreamsEnv, streamId: string, now = Da
 		became = true;
 		return true;
 	});
-	if (became && updated) {
-		await announceLiveStarted(env as never, { id: streamId, channelId: updated.channelId ?? undefined, userId: updated.userId, title: updated.title, madeForKids: (updated as { madeForKids?: boolean }).madeForKids }).catch((e) =>
-			logger.warn('[Live] Live-started announcement failed', { streamId, error: String(e) }),
-		);
+	if (became && updated?.channelId) {
+		try {
+			const ownerId = await ownerOfRecord({ channels: env.channels }, updated);
+			await announceLiveStarted(env as never, { id: streamId, channelId: updated.channelId, userId: ownerId ?? undefined, title: updated.title, madeForKids: (updated as { madeForKids?: boolean }).madeForKids });
+		} catch (error) {
+			logger.warn('[Live] Live-started announcement failed', { streamId, error: String(error) });
+		}
 	}
 }
 

@@ -6,6 +6,7 @@ import { LiveReminderClear, LiveReminderSet } from '../src/endpoints/live/liveRe
 import { LiveStreamStateGet } from '../src/endpoints/live/liveSession';
 import { cancelPremiere } from '../src/lib/live/premieres';
 import { HEADS_UP_MS, runHeadsUps } from '../src/lib/live/reminders';
+import { markStreamLive } from '../src/lib/live/streams';
 import { withSearchSync } from '../src/lib/search/sync';
 import { JobsQueue, MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -91,6 +92,17 @@ describe('heads-up', () => {
 		await t.put({ scheduledStartTime: new Date(later).toISOString() });
 		assert.equal((await runHeadsUps(t.env as never, later - 60_000)).sent, 1);
 		assert.equal(t.sent()[1].startsAt, later);
+	});
+
+	it('attributes automated live notifications to the current channel owner', async () => {
+		const t = await setup();
+		await t.put({ userId: 'previous-owner' });
+		await t.call('ali', 'POST', 's1/reminders');
+		assert.equal((await runHeadsUps(t.env as never, t.now)).sent, 1);
+		assert.equal(t.sent()[0].actorUserId, 'owner');
+		await markStreamLive(t.env as never, 's1', t.now);
+		const started = t.raw.queue.messages.find((m: Json) => m.payload?.kind === 'live_started');
+		assert.equal(started?.payload.actorUserId, 'owner');
 	});
 
 	it('a failed queue is tried again; nobody asking sends nothing; the count is put right', async () => {

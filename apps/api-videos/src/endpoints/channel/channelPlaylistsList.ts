@@ -1,3 +1,4 @@
+import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Num, Str } from "../../lib/chanfana-params";
 import { scanFill } from "../../lib/listFill";
 import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
@@ -15,7 +16,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Playlists",
-		description: "🔓 **Authentication Optional**: Get all playlists from a specific channel. Returns additional private playlists when authenticated as the channel owner.",
+		description: "🔓 **Authentication Optional**: Get all playlists from a specific channel. Returns additional private playlists for channel roles with permission to view them.",
 		request: {
 			params: z.object({
 				id: Str({
@@ -120,8 +121,8 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				}, 404);
 			}
 
-			// Check if channel is private - only owner can access
-			if (channel.isPrivate && channel.userId !== userId) {
+			const role = channelRoleOf(channel, userId);
+			if (channel.isPrivate && !can(role, 'channel.view_private')) {
 				logger.debug('Private channel access denied', { channelId, userId });
 				return c.json({
 					success: false,
@@ -134,7 +135,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			type PlaylistType = z.infer<typeof BusinessPlaylist>;
 			const repository = new R2Repository<PlaylistType>(bucket);
 
-			const isOwner = Boolean(userId && channel.userId === userId);
+			const canViewPrivate = can(role, 'playlist.manage');
 			const isListed = (playlist: PlaylistType | null): playlist is PlaylistType => Boolean(playlist)
 				&& playlist.channelId === channelId
 				// Watch later is the user's, never a channel's playlist
@@ -142,8 +143,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				// Soft-deleted and moderation-hidden playlists are never listed
 				&& !playlist.isDeleted
 				&& !playlist.isHidden
-				// Private playlists (isPublic === false) only for the channel owner
-				&& (playlist.isPublic !== false || isOwner);
+				&& (playlist.isPublic !== false || canViewPrivate);
 
 			// Newest first, one keyset page of the ownership index (kind 'playlist'). The bucket
 			// scan read every playlist of the site to find one channel's.
@@ -151,7 +151,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				cursor,
 				sort: 'latest',
 				limit,
-				fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, { channelId, sort: 'latest', limit: pageLimit, after, offset, privateFor: isOwner }),
+				fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, { channelId, sort: 'latest', limit: pageLimit, after, offset, privateFor: canViewPrivate }),
 				load: (id) => repository.getObject(id),
 				isListed,
 			});

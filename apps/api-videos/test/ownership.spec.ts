@@ -16,6 +16,7 @@ import {
 import { ChannelsList } from '../src/endpoints/channel/channelList';
 import { ChannelVideosList } from '../src/endpoints/channel/channelVideosList';
 import { ChannelShortsList } from '../src/endpoints/channel/channelShortsList';
+import { ChannelPlaylistsList } from '../src/endpoints/channel/channelPlaylistsList';
 import { ChannelLiveList } from '../src/endpoints/channel/channelLiveList';
 import { ChannelFetch } from '../src/endpoints/channel/channelFetch';
 import { ChannelAbout } from '../src/endpoints/channel/channelHandle';
@@ -634,3 +635,50 @@ describe('ownership upsert write cost', () => {
 	});
 });
 
+
+
+describe('channel tab permissions', () => {
+	it('lists private items by current role on all four tabs, with and without the index', async () => {
+		const members = [{ userId: 'admin', role: 'admin' }, { userId: 'editor', role: 'editor' }, { userId: 'moderator', role: 'moderator' }];
+		const kinds = { videos: { duration: 900 }, shorts: { format: 'short' }, live: { isLive: true } };
+		const videoStates = {
+			public: {}, private: { isPublic: false },
+			scheduled: { isPublic: false, scheduledPublishStatus: 'scheduled' }, processing: { uploadStatus: 'processing' },
+			hidden: { isHidden: true }, deleted: { isDeleted: true },
+		};
+		const videos = Object.fromEntries(Object.entries(kinds).flatMap(([tab, fields]) =>
+			Object.entries(videoStates).map(([state, visibility]) => {
+				const id = `${tab}-${state}`;
+				return [id, videoFixture({ id, userId: 'previous-owner', channelId: 'ch1', ...fields, ...visibility })];
+			})));
+		const { raw } = ownershipEnv({ channels: { ch1: channel('ch1', { members }) }, videos });
+		for (const [state, visibility] of Object.entries({ public: {}, private: { isPublic: false }, hidden: { isHidden: true }, deleted: { isDeleted: true } })) {
+			const id = `playlists-${state}`;
+			await raw.playlists.put(id, JSON.stringify({ id, title: id, userId: 'previous-owner', channelId: 'ch1', dateCreated: '2026-01-01T00:00:00Z', ...visibility }));
+		}
+		await completeIndex(raw);
+		await runOwnershipPass(raw as never, 'playlist', { maxPages: 10 });
+		const scan = { ...raw, SEARCH_DB: undefined };
+		const privateChannel = { ...raw, channels: new MemoryBucket({ ch1: channel('ch1', { members, isPrivate: true }) }) };
+
+		for (const [userId, canViewPrivate] of [['owner', true], ['admin', true], ['editor', true], ['moderator', false], ['previous-owner', false], [null, false]] as const) {
+			const app = buildApp(r => {
+				r.get('/api/channels/:id/videos', ChannelVideosList);
+				r.get('/api/channels/:id/shorts', ChannelShortsList);
+				r.get('/api/channels/:id/live', ChannelLiveList);
+				r.get('/api/channels/:id/playlists', ChannelPlaylistsList);
+			}, userId ? { userId } : null);
+			for (const tab of ['videos', 'shorts', 'live', 'playlists']) {
+				const states = !canViewPrivate ? ['public'] : tab === 'playlists' ? ['private', 'public'] : ['private', 'processing', 'public', 'scheduled'];
+				for (const env of [raw, scan]) {
+					const res = await app.request(`/api/channels/ch1/${tab}`, {}, env);
+					assert.equal(res.status, 200);
+					const body = await res.json() as { data: Array<{ id: string }> };
+					assert.deepEqual(body.data.map(v => v.id).sort(), states.map(state => `${tab}-${state}`), `${userId} / ${tab} / ${env === raw ? 'index' : 'scan'}`);
+				}
+				const privateRes = await app.request(`/api/channels/ch1/${tab}`, {}, privateChannel);
+				assert.equal(privateRes.status, userId === 'owner' || userId === 'admin' ? 200 : 404, `${userId} / ${tab} / private channel`);
+			}
+		}
+	});
+});

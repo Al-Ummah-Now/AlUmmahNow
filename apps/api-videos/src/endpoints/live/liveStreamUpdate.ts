@@ -4,7 +4,7 @@ import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
-import { canManageLiveStream } from "../../lib/channelAccess";
+import { canManageLiveStream, ownerOfRecord } from "../../lib/channelAccess";
 import { LiveStreamView } from "../../lib/model/view";
 import { rethrowBusy, NonVideoRepository } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -148,8 +148,11 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
-			const tagRefused = await eventTagRefused(c, existingStream.userId, updateData.eventType);
-			if (tagRefused) return tagRefused;
+			if (updateData.eventType) {
+				const ownerId = await ownerOfRecord(c.env as never, existingStream);
+				const tagRefused = await eventTagRefused(c, ownerId, updateData.eventType);
+				if (tagRefused) return tagRefused;
+			}
 
 			// A premiere (wiki E17) starts and ends on its own routes, and its video's visibility is its own
 			if (isPremiere(existingStream)) {

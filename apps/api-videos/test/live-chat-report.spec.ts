@@ -20,7 +20,7 @@ async function setup(tier: Json = { live: true }) {
 	const raw: Json = { SEARCH_DB: db, NOTIFICATIONS_DB: createSqliteD1(), ADMIN_JOBS_QUEUE: new JobsQueue(), queue: new MemoryQueue() };
 	for (const b of ['videos', 'channels', 'profiles', 'playlists', 'community_posts', 'reports']) raw[b] = new MemoryBucket();
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => void pending.push(p) }) as Json;
-	await raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [{ userId: 'mod', role: 'moderator' }] }));
+	await env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [{ userId: 'mod', role: 'moderator' }] }));
 	await saveTier(db as never, 'creator', tier, 'test');
 	db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('owner', 'creator', 'admin', 'test', '2026-11-01')").run();
 	let version = 0;

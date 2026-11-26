@@ -7,6 +7,7 @@ import { LiveStreamGet, LiveStreamStateGet } from '../src/endpoints/live/liveSes
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { VideoPremiereCreate } from '../src/endpoints/live/premiere';
+import { forgetChatTiers } from '../src/lib/live/chat';
 import { saveTier } from '../src/lib/creatorTiers';
 import { streamListIds } from '../src/lib/search/ownership';
 import { withSearchSync } from '../src/lib/search/sync';
@@ -25,7 +26,7 @@ async function setup(tier: Json = { live: true }) {
 	for (const b of ['videos', 'channels', 'profiles', 'playlists', 'community_posts', 'subtitles']) raw[b] = new MemoryBucket();
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => void pending.push(p) }) as Json;
 	const settle = async () => { while (pending.length) await pending.shift(); };
-	await raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [] }));
+	await env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [] }));
 	await saveTier(db as never, 'creator', tier, 'test');
 	db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('owner', 'creator', 'admin', 'test', '2026-11-01')").run();
 	db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('stream'), '1', 1);
@@ -74,6 +75,19 @@ describe('setting a tag', () => {
 		const saved = await t.call('owner', 'PATCH', 'live-streams/s1', { eventType: 'halqa' });
 		assert.deepEqual([saved.status, saved.json.result.stream.eventType, (await t.stream('s1')).eventType], [200, 'halqa', 'halqa']);
 		assert.equal((t.db.db.prepare("SELECT event_type FROM live_stream_metadata WHERE stream_id = 's1'").get() as Json).event_type, 'halqa');
+	});
+
+	it('uses the current channel owner’s event tier when editing a transferred stream', async () => {
+		const t = await setup({ live: true, liveEvents: true });
+		await t.flip('liveEvents', true);
+		await t.put('s1', { userId: 'previous-owner' });
+		assert.equal((await t.call('owner', 'PATCH', 'live-streams/s1', { eventType: 'jumuah' })).status, 200);
+		assert.equal((await t.stream('s1')).eventType, 'jumuah');
+
+		await t.put('s1', { eventType: 'jumuah' });
+		await t.raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'new-owner', name: 'Channel' }));
+		isOff(await t.call('new-owner', 'PATCH', 'live-streams/s1', { eventType: 'halqa' }));
+		assert.equal((await t.stream('s1')).eventType, 'jumuah');
 	});
 
 	it('needs the owner’s tier', async () => {
@@ -127,6 +141,30 @@ describe('setting a tag', () => {
 });
 
 describe('reading', () => {
+	it('uses the indexed channel owner for anonymous chat state, including on a cold tier lookup', async () => {
+		const t = await setup();
+		await t.flip('liveChat', true);
+		await t.put('s1', { userId: 'previous-owner' });
+		let channelReads = 0;
+		t.raw.channels.get = async () => { channelReads++; throw new Error('Unexpected channel read'); };
+		forgetChatTiers();
+		const state = await t.call(null, 'GET', 'live-streams/s1/state');
+		assert.equal(state.status, 200);
+		assert.equal(state.json.result.chat.enabled, true);
+		assert.equal(channelReads, 0);
+
+		// A transfer uses the new owner's tier even while the former tier is memoized.
+		t.db.db.prepare("UPDATE content_ownership SET owner_id = 'new-owner' WHERE kind = 'channel' AND id = 'ch1'").run();
+		assert.equal((await t.call(null, 'GET', 'live-streams/s1/state')).json.result.chat.enabled, false);
+
+		// A channel with no indexed owner cannot fall back to the stream's former owner.
+		await t.put('s1', { userId: 'owner', channelId: 'unindexed-channel' });
+		const unindexed = await t.call(null, 'GET', 'live-streams/s1/state');
+		assert.equal(unindexed.status, 200);
+		assert.equal(unindexed.json.result.chat.enabled, false);
+		assert.equal(channelReads, 0);
+	});
+
 	it('shows no tag while tags are off', async () => {
 		const t = await setup();
 		await t.put('s1', { eventType: 'jumuah' });

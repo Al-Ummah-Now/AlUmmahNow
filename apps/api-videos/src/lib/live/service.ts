@@ -15,6 +15,7 @@ import {
 	type LiveStreamState,
 } from '@al-ummah/shared-types';
 import { reportNeedsAction, tierAllowsLive } from '@al-ummah/shared-types';
+import { ownerOfRecord } from '../channelAccess';
 import { readAssignment, readTier } from '../creatorTiers';
 import { liveUsage } from './tier-gate';
 import { logger } from '../logger';
@@ -91,6 +92,11 @@ export async function provisionSession(
 	const lowLatency = settings.selfhosted.lowLatency;
 	const tryProvision = async (provider: LiveProviderId) => {
 		const sessionId = crypto.randomUUID();
+		// Bunny files the recording in a collection. An unreadable owner leaves it unfiled.
+		const ownerId = provider === 'bunny' && env.channels ? await ownerOfRecord({ channels: env.channels }, stream).catch((error) => {
+			logger.warn('[Live] Could not resolve the recording owner', { streamId: stream.id, error: String(error) });
+			return null;
+		}) : null;
 		const provisioned = await LIVE_ADAPTERS[provider].provision(env, {
 			streamId: stream.id,
 			sessionId,
@@ -98,7 +104,7 @@ export async function provisionSession(
 			lowLatency,
 			recordVod: provider === 'selfhosted' ? settings.selfhosted.recordVod : true,
 			channelId: stream.channelId ?? null,
-			ownerId: stream.userId ?? null,
+			ownerId,
 		});
 		return { sessionId, provisioned };
 	};

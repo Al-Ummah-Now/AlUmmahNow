@@ -10308,7 +10308,7 @@
           "Channels"
         ],
         "summary": "List Channel Live Streams",
-        "description": "🔓 **Authentication Optional**: Get all live streams from a specific channel. Returns additional private streams when authenticated as the channel owner.",
+        "description": "🔓 **Authentication Optional**: Get all live streams from a specific channel. Returns additional private streams for channel roles with permission to view them.",
         "operationId": "get_ChannelLiveList",
         "parameters": [
           {
@@ -12271,7 +12271,7 @@
           "Channels"
         ],
         "summary": "List Channel Playlists",
-        "description": "🔓 **Authentication Optional**: Get all playlists from a specific channel. Returns additional private playlists when authenticated as the channel owner.",
+        "description": "🔓 **Authentication Optional**: Get all playlists from a specific channel. Returns additional private playlists for channel roles with permission to view them.",
         "operationId": "get_ChannelPlaylistsList",
         "parameters": [
           {
@@ -12561,7 +12561,7 @@
           "Channels"
         ],
         "summary": "List Channel Shorts",
-        "description": "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts when authenticated as the channel owner.",
+        "description": "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts for channel roles with permission to view them.",
         "operationId": "get_ChannelShortsList",
         "parameters": [
           {
@@ -14125,7 +14125,7 @@
           "Channels"
         ],
         "summary": "List Channel Videos",
-        "description": "🔓 **Authentication Optional**: Get all videos from a specific channel. Returns additional private videos when authenticated as the channel owner.",
+        "description": "🔓 **Authentication Optional**: Get all videos from a specific channel. Returns additional private videos for channel roles with permission to view them.",
         "operationId": "get_ChannelVideosList",
         "parameters": [
           {

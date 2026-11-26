@@ -125,7 +125,8 @@ export async function createPremiere(env: PremiereEnv, input: NewPremiere, now =
 	const id = crypto.randomUUID();
 	const at = new Date(now).toISOString();
 	// The stream belongs to its channel's owner now; the video's record can still name an earlier one
-	const ownerId = (await ownerOfRecord(env as never, input.video)) ?? input.video.userId;
+	const ownerId = await ownerOfRecord(env as never, input.video);
+	if (!ownerId) return { problem: 'forbidden' };
 	const held = await hold(env, input.video.id, input.video.userId, { streamId: id, heldAt: at, heldBy: input.actorId });
 	if ('problem' in held) return held;
 	const video = held.video;

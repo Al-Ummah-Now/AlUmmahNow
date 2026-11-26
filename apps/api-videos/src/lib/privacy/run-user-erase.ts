@@ -31,7 +31,7 @@ import { postLocationKey } from '../community-posts';
 import { eraseChannelHandleHistory } from './handle-history';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { deleteVideoSideRecords } from '../videoSideRecords';
-import { watchLaterId } from '../library';
+import { isSystemPlaylist, watchLaterId } from '../library';
 import { footprintTargets, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
@@ -86,8 +86,10 @@ async function prefixKeys(bucket: BucketLike, prefix: string, budget: OperationB
 	return keys;
 }
 
-/** The account's channels and the videos it owns or that sit on them, from the ownership index. */
-export async function runUserOwnedIds(db: D1Database, userId: string, received: string[] = []): Promise<{ channels: string[]; videos: string[] }> {
+type IndexedVideo = { id: string; owner_id: string | null; channel_id: string | null };
+
+/** Candidate channels and videos, to be checked against the stored records in each erasure step. */
+export async function runUserOwnedIds(db: D1Database, userId: string, received: string[] = []): Promise<{ channels: string[]; videos: IndexedVideo[] }> {
 	if (!(await isOwnershipComplete(db as never, 'channel')) || !(await isOwnershipComplete(db as never, 'video'))) {
 		throw new OwnershipIndexIncomplete();
 	}
@@ -103,11 +105,11 @@ export async function runUserOwnedIds(db: D1Database, userId: string, received: 
 	// (~7.6k rows per erased account on QA, 31M rows on 2026-11-13).
 	const { results: v } = await db
 		.prepare(
-			`SELECT id FROM content_ownership WHERE kind = 'video' AND owner_id = ?${channels.length ? ` UNION ALL SELECT id FROM content_ownership WHERE kind = 'video' AND channel_id IN (${channels.map(() => '?').join(', ')})` : ''}`,
+			`SELECT id, owner_id, channel_id FROM content_ownership WHERE kind = 'video' AND owner_id = ?${channels.length ? ` UNION ALL SELECT id, owner_id, channel_id FROM content_ownership WHERE kind = 'video' AND channel_id IN (${channels.map(() => '?').join(', ')})` : ''}`,
 		)
 		.bind(userId, ...channels)
-		.all<{ id: string }>();
-	return { channels, videos: [...new Set((v ?? []).map((r) => r.id))] };
+		.all<IndexedVideo>();
+	return { channels, videos: [...new Map((v ?? []).map(row => [row.id, row])).values()] };
 }
 
 export async function eraseRunUserData(
@@ -136,6 +138,13 @@ export async function eraseRunUserData(
 	// And what a move just brought, in case the index has not followed yet
 	const { channels, videos } = await runUserOwnedIds(db, userId, received);
 	const community = asBucket(env.community_posts);
+	const channelsBucket = asBucket(env.channels);
+	const readChannel = async (channelId: string) => {
+		budget.spend();
+		const stored = await channelsBucket.get(channelId);
+		// Let a read or parse failure retry the job. Only a missing object can use a fallback.
+		return stored ? (await stored.json<Json>()) ?? {} : null;
+	};
 	let again = false;
 
 	const steps: Array<() => Promise<void>> = [
@@ -148,11 +157,22 @@ export async function eraseRunUserData(
 		// Videos (subtitles, streaming media through the hook, then the record)
 		async () => {
 			const bucket = asBucket(env.videos);
-			for (const videoId of videos) {
+			const channelRecords = new Map<string, Json | null>();
+			for (const candidate of videos) {
+				const videoId = candidate.id;
 				budget.spend();
 				const stored = await bucket.get(videoId);
-				// The record names the Bunny library the media lives in
-				const record = stored ? await stored.json<Record<string, unknown>>().catch(() => undefined) : undefined;
+				// The record names the Bunny library and the channel the video actually sits on.
+				// The index supplies the channel only when retrying cleanup after the record is gone.
+				const record = stored ? (await stored.json<Json>()) ?? {} : undefined;
+				const channelId = record ? record.channelId : candidate.channel_id;
+				const recordOwner = record ? record.userId : candidate.owner_id;
+				let channel: Json | null | undefined;
+				if (typeof channelId === 'string' && channelId) {
+					if (!channelRecords.has(channelId)) channelRecords.set(channelId, await readChannel(channelId));
+					channel = channelRecords.get(channelId);
+				}
+				if ((channel ? channel.userId : recordOwner) !== userId) continue;
 				if (stored) {
 					// Under an open takedown case: its own job copies the evidence, then deletes the record (lib/csam/contain.ts)
 					if (record?.csamTakedown) continue;
@@ -177,6 +197,7 @@ export async function eraseRunUserData(
 		// Community posts of its channels with their subtrees
 		async () => {
 			for (const channelId of channels) {
+				if ((await readChannel(channelId))?.userId !== userId) continue;
 				for (const key of await prefixKeys(community, `posts/${channelId}/`, budget)) {
 					const file = key.split('/')[2];
 					if (file && file !== 'index.json') {
@@ -198,10 +219,14 @@ export async function eraseRunUserData(
 		},
 		// Playlists on its channels (search_playlists knows their channel)
 		async () => {
-			if (!channels.length) return;
+			const owned: string[] = [];
+			for (const channelId of channels) {
+				if ((await readChannel(channelId))?.userId === userId) owned.push(channelId);
+			}
+			if (!owned.length) return;
 			const { results } = await db
-				.prepare(`SELECT id FROM search_playlists WHERE channel_id IN (${channels.map(() => '?').join(', ')})`)
-				.bind(...channels)
+				.prepare(`SELECT id FROM search_playlists WHERE channel_id IN (${owned.map(() => '?').join(', ')})`)
+				.bind(...owned)
 				.all<{ id: string }>();
 			bump('playlists', await deleteKeys(asBucket(env.playlists), (results ?? []).map((r) => r.id), budget));
 		},
@@ -214,21 +239,21 @@ export async function eraseRunUserData(
 			const mine: string[] = [];
 			for (const key of new Set([...named, watchLaterId(userId)])) {
 				const playlist = await readJson<Json>(playlists, key, budget);
-				if (playlist && playlist.userId === userId) mine.push(key);
+				if (playlist?.userId === userId && (!playlist.channelId || playlist.channelId === userId || isSystemPlaylist(playlist))) mine.push(key);
 			}
 			bump('playlists', await deleteKeys(playlists, mine, budget));
 		},
 		// Channel sections, tabs and @handles, then the channels
 		async () => {
-			const channelsBucket = asBucket(env.channels);
 			const sections = asBucket(env.channel_sections);
 			const tabs = asBucket(env.channel_tabs);
 			for (const channelId of channels) {
+				const channel = await readChannel(channelId);
+				if (channel?.userId !== userId) continue;
 				bump('channelSections', await deleteKeys(sections, await prefixKeys(sections, `${channelId}/`, budget), budget));
 				await deleteKeys(sections, [sectionOrderKey(channelId)], budget);
 				await deleteKeys(tabs, [`channel-tabs/${channelId}`], budget);
-				const channel = await readJson<Json>(channelsBucket, channelId, budget);
-				if (channel && typeof channel.handle === 'string' && channel.handle) {
+				if (typeof channel.handle === 'string' && channel.handle) {
 					const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
 					const entry = await readJson<Json>(tabs, handleKey, budget);
 					if (entry?.channelId === channelId) await deleteKeys(tabs, [handleKey], budget);
@@ -236,7 +261,7 @@ export async function eraseRunUserData(
 				// Its old handles (handle history) stop redirecting to it
 				await eraseChannelHandleHistory(tabs, channelId, budget);
 				// Its Bunny collections (lib/channelCollection.ts) go with the record
-				if (channel && hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
+				if (hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
 				bump('channels', await deleteKeys(channelsBucket, [channelId], budget));
 			}
 		},

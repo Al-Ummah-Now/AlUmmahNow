@@ -2,7 +2,7 @@
  * Who may join a live stream's chat channel, `live:<streamId>` (wiki E17 §5.3): the same rule the
  * chat's HTTP reads use, from indexed reads. Anything unreadable refuses.
  */
-import { LIVE_METADATA_TABLE, can, liveChatGateOf, liveChatOpenToAnyone, liveChatReadable, type ChannelRole } from '@al-ummah/shared-types';
+import { LIVE_METADATA_TABLE, OWNERSHIP_TABLE, can, liveChatGateOf, liveChatOpenToAnyone, liveChatReadable, type ChannelRole } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 interface Row {
@@ -28,8 +28,9 @@ export async function mayJoinLiveChat(env: { SEARCH_DB?: D1Database }, channel: 
     if (!userId || !liveChatReadable(gate)) return false;
     // Banned on videos: like a visitor
     if (await env.SEARCH_DB.prepare('SELECT 1 AS x FROM videos_bans WHERE user_id = ?').bind(userId).first()) return false;
-    if (row.owner_id === userId) return true;
-    if (!row.channel_id) return false;
+    if (!row.channel_id) return row.owner_id === userId;
+    const owner = await env.SEARCH_DB.prepare(`SELECT owner_id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND id = ?`).bind(row.channel_id).first<{ owner_id: string | null }>();
+    if (owner?.owner_id === userId) return true;
     const access = await env.SEARCH_DB.prepare('SELECT role FROM channel_access WHERE channel_id = ? AND user_id = ?').bind(row.channel_id, userId).first<{ role: ChannelRole }>();
     const role = access?.role ?? null;
     return can(role, 'live.manage') || can(role, 'live.moderate') || can(role, 'comment.moderate');

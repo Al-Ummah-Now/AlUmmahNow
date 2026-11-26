@@ -35,7 +35,7 @@ async function setup(over: Json = {}) {
 		throw new Error(`unexpected fetch ${url}`);
 	}) as never;
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => void pending.push(p) }) as Json;
-	await raw.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [{ userId: 'mod', role: 'moderator' }, { userId: 'editor', role: 'editor' }] }));
+	await env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Channel', members: [{ userId: 'mod', role: 'moderator' }, { userId: 'editor', role: 'editor' }] }));
 	for (const id of ['owner', 'mod', 'editor', 'ali', 'sara', 'blocked']) await raw.profiles.put(id, JSON.stringify({ id, userId: id, displayName: id.toUpperCase() }));
 	// The owner's tier includes live, so chat
 	await saveTier(db as never, 'creator', { live: true }, 'test');
