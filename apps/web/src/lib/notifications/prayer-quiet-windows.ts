@@ -40,7 +40,8 @@ export const HALF_HOUR_MINUTES: readonly number[] = Array.from({ length: 48 }, (
 
 /** Formats a minute-of-day (0..1439) for display in `locale` (Eastern Arabic digits in `ar`). */
 export function formatMinuteOfDay(locale: string, minuteOfDay: number): string {
-  const clamped = Math.max(0, Math.min(1439, Math.floor(minuteOfDay)));
+  const minute = Number.isFinite(minuteOfDay) ? minuteOfDay : 0;
+  const clamped = Math.max(0, Math.min(1439, Math.floor(minute)));
   const hours = Math.floor(clamped / 60);
   const minutes = clamped % 60;
   return dateTimeFormat(locale, {
