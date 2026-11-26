@@ -16,6 +16,7 @@ import {
 	r2Urls,
 	sourceUrl,
 	stuckJobNotice,
+	sweepMediaJobs,
 	sweepVerdict,
 	writeDeliverySettings,
 	type MediaMoveMessage,
@@ -261,6 +262,56 @@ describe('access follows visibility', () => {
 		// Every slot of the admin's limit busy: a long wait is its turn coming, not a lost job
 		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'queued', queuedAt: '2026-11-11T10:00:00Z' } }, now, true), null);
 		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'transcoding', queuedAt: '2026-11-11T02:00:00Z', startedAt: '2026-11-11T03:00:00Z' } }, now, true), 'requeue');
+	});
+});
+
+describe('media job sweep', () => {
+	const now = Date.now();
+	const stale = new Date(now - 7 * 60 * 60 * 1000).toISOString();
+
+	it('cancels stuck jobs for missing and soft-deleted videos and excludes them from running', async () => {
+		const { env, raw } = setup({ isDeleted: true });
+		const db = new SqliteD1();
+		const full = { ...env, SEARCH_DB: db } as never;
+		const missing = '2b192987-11f7-4e4f-a35d-d5c9d39860e8';
+		const insert = db.db.prepare(
+			'INSERT INTO media_jobs (video_id, job_id, status, access, queued_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+		);
+		insert.run(ID, 'deleted-job', 'queued', 'pub', stale, stale);
+		insert.run(missing, 'missing-job', 'transcoding', 'pub', stale, stale);
+
+		assert.deepEqual(await sweepMediaJobs(full, now), { requeued: 0, moved: 0 });
+		const rows = db.db.prepare('SELECT status, failed_at, updated_at FROM media_jobs ORDER BY video_id').all();
+		const at = new Date(now).toISOString();
+		assert.equal(rows.length, 2);
+		for (const row of rows) assert.deepEqual({ ...row }, { status: 'cancelled', failed_at: at, updated_at: at });
+		assert.deepEqual(raw.TRANSCODE_QUEUE.messages, []);
+
+		await sweepMediaJobs(full, now + 1000);
+		assert.deepEqual(db.db.prepare('SELECT status, failed_at, updated_at FROM media_jobs ORDER BY video_id').all(), rows);
+
+		const summary = await createMediaInternalRouter().request('/summary', {}, full);
+		assert.equal(summary.status, 200);
+		const { result } = await summary.json() as { result: { jobs: { jobs: number; running: number } } };
+		assert.equal(result.jobs.jobs, 2);
+		assert.equal(result.jobs.running, 0);
+	});
+
+	it('leaves a replacement job queued if it arrived during the video lookup', async (t) => {
+		const { env, videos } = setup({ isDeleted: true });
+		const db = new SqliteD1();
+		db.db.prepare(
+			`INSERT INTO media_jobs (video_id, job_id, status, access, queued_at, updated_at) VALUES (?, 'old', 'queued', 'pub', ?, ?)`,
+		).run(ID, stale, stale);
+		const get = videos.get.bind(videos);
+		t.mock.method(videos, 'get', (key: string) => {
+			db.db.prepare("UPDATE media_jobs SET job_id = 'replacement' WHERE video_id = ?").run(key);
+			return get(key);
+		});
+
+		await sweepMediaJobs({ ...env, SEARCH_DB: db } as never, now);
+		const job = db.db.prepare('SELECT job_id, status FROM media_jobs WHERE video_id = ?').get(ID);
+		assert.deepEqual({ ...job }, { job_id: 'replacement', status: 'queued' });
 	});
 });
 
