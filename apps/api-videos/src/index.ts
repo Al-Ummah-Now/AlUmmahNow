@@ -15,7 +15,7 @@ import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/upl
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
 import { handleCollectionBackfillMessage, isCollectionBackfillMessage } from './lib/bunny/collectionBackfill';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
-import { handleMediaRenditionBatch, isMediaRenditionMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { handleMediaRenditionBatch, isMediaRenditionMessage, sweepMediaJobs, sweepPublicRenditionRevocations } from './lib/media/r2-delivery';
 import { flagStalledTranscodes } from './lib/media/troubleshoot';
 import { flushIndexNow } from './lib/indexnow';
 import { collectDeliveryCosts } from './lib/media/costs';
@@ -758,6 +758,11 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepMediaJobs(rawEnv as never, Date.now(), ctx).then(
 				() => undefined,
 				(error) => logger.error('[MediaSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
+		ctx.waitUntil(
+			sweepPublicRenditionRevocations(rawEnv as never).catch((error) =>
+				logger.error('[MediaSweep] Public rendition revocation sweep failed', { error: String(error) }),
 			),
 		);
 		// R2 transcodes that stalled (no progress, a late retry, waiting too long to start) flag the admin once (lib/media/troubleshoot.ts)

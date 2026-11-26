@@ -20,6 +20,7 @@ import {
 	sourceUrl,
 	stuckJobNotice,
 	sweepMediaJobs,
+	sweepPublicRenditionRevocations,
 	sweepVerdict,
 	writeDeliverySettings,
 	type MediaMoveMessage,
@@ -323,6 +324,55 @@ describe('re-encoding a published rendition', () => {
 		assert.equal(raw.MEDIA.store.has(oldMaster), false);
 		assert.equal(raw.MEDIA.store.has(newPublic), false);
 		assert.equal(raw.MEDIA_PRIVATE.store.has(`priv/${ID}/${job.rev}/master.m3u8`), true);
+	});
+
+	it('revokes the retired public copy directly when its immediate enqueue fails', async (t) => {
+		const { env, raw, videos } = existing();
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
+		const send = raw.PROCESSING_CHECK_QUEUE.send.bind(raw.PROCESSING_CHECK_QUEUE);
+		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async (msg: { kind: string }) => {
+			if (msg.kind === 'media-retire') throw new Error('queue unavailable');
+			await send(msg);
+		});
+
+		await videos.put(ID, JSON.stringify({ ...videos.read(ID), isPublic: false }));
+		await onVideoWritten(env, videos.read(ID));
+
+		assert.equal(raw.MEDIA.store.has(oldMaster), false);
+		assert.equal(videos.read(ID).r2.retired, undefined);
+	});
+
+	it('sweeps a retired public copy when both enqueue and the direct revocation failed', async (t) => {
+		const { env, raw, videos } = existing();
+		await enqueueTranscode(env, ID, 'retry', { force: true });
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result }));
+		const send = raw.PROCESSING_CHECK_QUEUE.send.bind(raw.PROCESSING_CHECK_QUEUE);
+		t.mock.method(raw.PROCESSING_CHECK_QUEUE, 'send', async (msg: { kind: string }) => {
+			if (msg.kind === 'media-retire') throw new Error('queue unavailable');
+			await send(msg);
+		});
+		const remove = raw.MEDIA.delete.bind(raw.MEDIA);
+		let storageUnavailable = true;
+		t.mock.method(raw.MEDIA, 'delete', async (keys: string[]) => {
+			if (storageUnavailable) throw new Error('R2 unavailable');
+			await remove(keys);
+		});
+
+		await videos.put(ID, JSON.stringify({ ...videos.read(ID), csamTakedown: { at: 'now' } }));
+		await onVideoWritten(env, videos.read(ID));
+		assert.equal(raw.MEDIA.store.has(oldMaster), true);
+		assert.equal(raw.global_settings.store.size, 1, 'the pending revocation survives the hook');
+
+		await sweepPublicRenditionRevocations(env);
+		assert.equal(raw.global_settings.store.size, 1, 'a failed sweep keeps the pending revocation');
+		await videos.delete(ID);
+		storageUnavailable = false;
+		await sweepPublicRenditionRevocations(env);
+		assert.equal(raw.MEDIA.store.has(oldMaster), false);
+		assert.equal(raw.global_settings.store.size, 0);
 	});
 
 	it('keeps the audio package tied to the served revision and falls back to its old HLS master on legacy records', async () => {
