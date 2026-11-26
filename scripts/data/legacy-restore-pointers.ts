@@ -19,6 +19,9 @@
  *   4. Deleting an orphaned backup also deletes its `by-user` pointer (404-tolerant)
  *      after the backup is removed.
  */
+import { randomUUID } from 'node:crypto';
+import { accessSync, closeSync, constants, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { DEFAULT_ACCOUNT_ID } from '../release/cf-api.ts';
 
 export const LEGACY_RESTORE_PREFIX = 'legacy-restore/';
@@ -225,9 +228,58 @@ export interface ParsedCliArgs {
 	perPage: number;
 }
 
+function isMissingFile(error: unknown): boolean {
+	return (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+export function validateCursorDirectory(path: string): void {
+	const directory = dirname(path);
+	if (!statSync(directory).isDirectory()) throw new Error(`Cursor file parent is not a directory: ${directory}`);
+	accessSync(directory, constants.W_OK | constants.X_OK);
+}
+
+export function readCursorFile(path: string): { cursor?: string; warning?: string } {
+	try {
+		const cursor = readFileSync(path, 'utf8').trim();
+		return cursor ? { cursor } : { warning: `Cursor file is empty: ${path}. Starting from page 1.` };
+	} catch (error) {
+		if (!isMissingFile(error)) throw error;
+		return { warning: `Cursor file is missing: ${path}. Starting from page 1.` };
+	}
+}
+
+/** Atomically replace the destination entry without following a symlink there. */
+export function writeCursorFile(path: string, cursor: string): void {
+	const tempPath = join(dirname(path), `.legacy-restore-cursor-${randomUUID()}.tmp`);
+	const fd = openSync(tempPath, 'wx', 0o600);
+	try {
+		try {
+			writeFileSync(fd, `${cursor}\n`);
+		} finally {
+			closeSync(fd);
+		}
+		renameSync(tempPath, path);
+	} catch (error) {
+		try {
+			removeCursorFile(tempPath);
+		} catch {
+			// Preserve the original write or rename failure.
+		}
+		throw error;
+	}
+}
+
+export function removeCursorFile(path: string): void {
+	try {
+		unlinkSync(path);
+	} catch (error) {
+		if (!isMissingFile(error)) throw error;
+	}
+}
+
 /** Public-safe summary printed to stdout: omits the raw R2 list cursor (which may encode a user ID). */
 export function formatCliReport(
-	meta: { env: TargetEnv; backupsBucket: string; profilesBucket: string; cursorFile: string | null },
+	meta: { env: TargetEnv; backupsBucket: string; profilesBucket: string; cursorFile: string | null; resumed: boolean },
 	report: BackfillReport,
 ): Record<string, unknown> {
 	const { nextCursor: _omitted, ...counts } = report;
