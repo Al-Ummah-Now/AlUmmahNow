@@ -1,3 +1,4 @@
+import { shownR2 } from './media-delivery';
 /**
  * Multiple audio tracks per video (wiki AUN-MULTI-AUDIO). Shared by api-videos (owns the track
  * list on the video record, queues the jobs), apps/media (normalises tracks, writes the demuxed
@@ -158,14 +159,14 @@ export const audioTrackFileKey = (videoId: string, trackId: string) => `${audioT
 /** Review audio of a track (MEDIA_PRIVATE), like review/<videoId>/<rev>/ for uploads */
 export const audioTrackReviewPrefix = (videoId: string, trackId: string, jobId: string) => `review/${videoId}/audio-${trackId}-${jobId.slice(0, 8)}/`;
 
-type PackagedVideo = { audioTracks?: AudioTrack[]; audioPackage?: AudioPackageState; r2?: { status?: string; rev?: string; access?: string } };
+type PackagedVideo = Parameters<typeof shownR2>[0] & { audioTracks?: AudioTrack[]; audioPackage?: AudioPackageState };
 
 /** Tracks in the current package that a viewer may hear, in its order (empty when no package plays). */
 export function packagedAudioTracks(video: PackagedVideo): AudioTrackView[] {
   const pkg = video.audioPackage;
-  const r2 = video.r2;
+  const r2 = shownR2(video);
   // A rebuild keeps the last ready master (and its track ids) playing until the new one is recorded
-  if (!pkg?.master || !pkg.trackIds?.length || !r2 || r2.status !== 'ready' || r2.rev !== pkg.rev || r2.access !== pkg.access) return [];
+  if (!pkg?.master || !pkg.trackIds?.length || !r2 || r2.rev !== pkg.rev || r2.access !== pkg.access) return [];
   const byId = new Map((video.audioTracks ?? []).map((t) => [t.id, t]));
   const out: AudioTrackView[] = [];
   for (const id of pkg.trackIds) {

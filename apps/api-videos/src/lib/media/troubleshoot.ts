@@ -35,7 +35,7 @@ import {
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { sourceOf } from './failures';
-import { enqueueTranscode, pushMediaLive, recordJob, transcodeSlotsFull, type MediaEnv, type MediaVideo } from './r2-delivery';
+import { enqueueTranscode, pushMediaLive, recordJob, refreshR2Provider, transcodeSlotsFull, type MediaEnv, type MediaVideo } from './r2-delivery';
 
 type SecretLike = string | { get(): Promise<string> };
 
@@ -259,11 +259,7 @@ export async function cancelTranscode(env: TroubleshootEnv & ErrorReporterEnv, c
 		v.r2.failedAt = at;
 		v.r2.cancelledBy = actorId;
 		delete v.r2.progress;
-		const ref = (v as MediaVideo & { media?: { providers: { r2?: { status: string; error?: string } } } }).media?.providers.r2;
-		if (ref) {
-			ref.status = 'failed';
-			ref.error = 'cancelled';
-		}
+		refreshR2Provider(v);
 		v.dateModified = at;
 		return true;
 	});

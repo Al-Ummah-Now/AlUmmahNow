@@ -1,3 +1,4 @@
+import { isVideoMediaPublic, type VideoVisibilityFields } from './video-visibility';
 /**
  * Video delivery on R2 + the Cloudflare CDN, side by side with Bunny (epic #687,
  * docs/media-delivery/R2-DELIVERY-PLAN.md). Shared by api-videos (enqueues jobs,
@@ -295,16 +296,28 @@ export function sanitizeStartup(raw: unknown): TranscodeStartup | null {
 	return { cold: r.cold, readyMs, acceptMs, ...(dispatchMs !== undefined ? { dispatchMs } : {}), ...(ffmpegMs !== undefined ? { ffmpegMs } : {}) };
 }
 
-/** The R2 side of a video record (api-videos). `r2PlayUrl` is derived from it. */
-export interface VideoR2State {
-	status: R2RenditionStatus;
-	jobId: string;
+/** A completed R2 rendition. Older kept renditions may only have a rev and access. */
+export interface R2Rendition {
 	rev: string;
 	access: MediaAccess;
+	result?: TranscodeResult;
+	readyAt?: string;
+	moving?: { to: MediaAccess; jobId: string; at: string };
+}
+
+export interface RetiredR2Rendition {
+	rev: string;
+	access: MediaAccess;
+	deleteAfter: number;
+}
+
+/** The R2 side of a video record (api-videos). `r2PlayUrl` is derived from it. */
+export interface VideoR2State extends R2Rendition {
+	status: R2RenditionStatus;
+	jobId: string;
 	attempts: number;
 	queuedAt: string;
 	startedAt?: string;
-	readyAt?: string;
 	failedAt?: string;
 	error?: string;
 	/** Who cancelled it (status cancelled) */
@@ -312,9 +325,6 @@ export interface VideoR2State {
 	/** Seconds the container ran (all attempts), for cost per video-minute */
 	containerSeconds?: number;
 	instanceType?: string;
-	result?: TranscodeResult;
-	/** A visibility change is moving the objects to the other prefix */
-	moving?: { to: MediaAccess; jobId: string; at: string };
 	/** 0..1 while transcoding */
 	progress?: number;
 	/** Per-rung state of the current attempt (all done once ready) */
@@ -323,8 +333,26 @@ export interface VideoR2State {
 	failure?: TranscodeFailure;
 	/** How long the latest attempt took to start (TranscodeStartup) */
 	startup?: TranscodeStartup;
-	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
-	previous?: { rev: string; access: MediaAccess };
+	/** The published copy kept until the replacement can be served, including after failure. */
+	previous?: R2Rendition;
+	/** Superseded revisions kept for previously issued playback URLs. */
+	retired?: RetiredR2Rendition[];
+}
+
+type R2PlaybackState = Partial<R2Rendition> & { status?: string; previous?: R2Rendition };
+
+/** The completed rendition available at the video's current access. */
+export function shownR2(video: VideoVisibilityFields & { r2?: R2PlaybackState }): R2Rendition | undefined {
+	const { r2 } = video;
+	const access = isVideoMediaPublic(video) ? 'pub' : 'priv';
+	const current = r2?.status === 'ready' && r2.rev && r2.access ? r2 as R2Rendition : undefined;
+	const previous = r2?.previous?.rev ? r2.previous : undefined;
+	if (current?.access === access) return current;
+	if (previous?.access === access) return previous;
+	// A public video can still use signed URLs while its private copy is being moved.
+	if (previous?.access === 'priv') return previous;
+	if (current?.access === 'priv') return current;
+	return undefined;
 }
 
 /** Message on the transcode queue (api-videos → apps/media). */
@@ -537,9 +565,8 @@ export const MEDIA_MANIFEST = 'manifest.json';
  * the MP4; never private, unlisted, hidden or removed videos (their media is under priv/ or gone).
  */
 export function publicMp4Path(video: { id?: unknown; r2?: unknown; isPublic?: unknown; isDeleted?: unknown; isHidden?: unknown }): string | null {
-	const r2 = video.r2 as Partial<VideoR2State> | null | undefined;
-	if (!r2 || typeof r2 !== 'object' || r2.status !== 'ready' || r2.access !== 'pub') return null;
-	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
+	const r2 = shownR2(video as VideoVisibilityFields & { r2?: R2PlaybackState });
+	if (r2?.access !== 'pub') return null;
 	const file = r2.result?.mp4?.file;
 	const id = video.id;
 	if (typeof id !== 'string' || typeof r2.rev !== 'string' || typeof file !== 'string') return null;
@@ -782,10 +809,12 @@ export function mediaContentType(name: string): string {
  * public copies would stay at the edge for their whole TTL, so the TTL is a day
  * (a day of R2 reads per colo per segment is still negligible).
  */
+export const MEDIA_MAX_EDGE_TTL_SECONDS = 24 * 60 * 60;
+
 export function mediaCacheControl(name: string): string {
 	if (name.endsWith('.m3u8')) return 'public, max-age=300';
 	if (name.endsWith(MEDIA_MANIFEST)) return 'no-store';
-	return 'public, max-age=86400';
+	return `public, max-age=${MEDIA_MAX_EDGE_TTL_SECONDS}`;
 }
 
 // ---------------------------------------------------------------------------

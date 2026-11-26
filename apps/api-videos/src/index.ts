@@ -15,7 +15,7 @@ import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/upl
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
 import { handleCollectionBackfillMessage, isCollectionBackfillMessage } from './lib/bunny/collectionBackfill';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
-import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { handleMediaRenditionBatch, isMediaRenditionMessage, sweepMediaJobs } from './lib/media/r2-delivery';
 import { flagStalledTranscodes } from './lib/media/troubleshoot';
 import { flushIndexNow } from './lib/indexnow';
 import { collectDeliveryCosts } from './lib/media/costs';
@@ -1164,17 +1164,17 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		// Owner deletes → Bunny (lib/uploads/bunnyDelete.ts); QA/stage purge (lib/uploads/testLibraryPurge.ts)
 		const bunnyDeletes = rest.filter((m) => isBunnyDeleteMessage(m.body));
 		const purges = rest.filter((m) => isPurgeMessage(m.body));
-		// R2 renditions moved between the public and private buckets (lib/media/r2-delivery.ts)
-		const mediaMoves = rest.filter((m) => isMediaMoveMessage(m.body));
+		// R2 rendition moves and retirement (lib/media/r2-delivery.ts)
+		const mediaRenditions = rest.filter((m) => isMediaRenditionMessage(m.body));
 		const processing = rest.filter(
 			(m) =>
-				!isReaperMessage(m.body) && !isPlaylistAddMessage(m.body) && !isBunnyDeleteMessage(m.body) && !isPurgeMessage(m.body) && !isMediaMoveMessage(m.body),
+				!isReaperMessage(m.body) && !isPlaylistAddMessage(m.body) && !isBunnyDeleteMessage(m.body) && !isPurgeMessage(m.body) && !isMediaRenditionMessage(m.body),
 		);
 		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, synced);
 		if (reaper.length) await handleReaperBatch({ messages: reaper }, synced);
 		if (bunnyDeletes.length) await handleBunnyDeleteBatch({ messages: bunnyDeletes }, synced);
 		if (purges.length) await handlePurgeBatch({ messages: purges }, synced);
-		if (mediaMoves.length) await handleMediaMoveBatch({ messages: mediaMoves as never }, synced);
+		if (mediaRenditions.length) await handleMediaRenditionBatch({ messages: mediaRenditions as never }, synced);
 		if (playlistAdds.length) await handlePlaylistAddBatch({ messages: playlistAdds }, synced, ctx);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page

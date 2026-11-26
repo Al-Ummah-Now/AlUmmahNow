@@ -1,5 +1,6 @@
 import { Str } from "../../lib/chanfana-params";
 import { withPlayback } from '../../lib/media/playback';
+import type { ProviderVideo } from '../../lib/media/providers';
 import { z } from "zod";
 import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -43,20 +44,48 @@ interface ExpandedEntry {
     /** The playlist's dateModified when the entry was built: another version is a miss */
     version: string;
     body: PlaylistBody;
-    /** What withPlayback reads: id, r2 and the visibility flags publicMp4Url checks before naming an MP4 */
-    items: { view: PlaylistView; video: Pick<VideoType, 'id'> & { r2?: unknown; isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean } }[];
+    items: { view: PlaylistView; video: ProviderVideo }[];
     hasOwnThumbnail: boolean;
 }
 
 /** Each item gets the one URL its player plays (lib/media/playback.ts), then the cover if the playlist has none */
 function playbackFields(video: VideoType): ExpandedEntry['items'][number]['video'] {
-    const v = video as VideoType & { r2?: unknown; isDeleted?: boolean; isHidden?: boolean };
-    return { id: v.id, r2: v.r2, isPublic: v.isPublic, isDeleted: v.isDeleted, isHidden: v.isHidden };
+    const v = video as VideoType & ProviderVideo;
+    return {
+        id: v.id,
+        userId: v.userId,
+        channelId: v.channelId,
+        uploadStatus: v.uploadStatus,
+        playUrl: v.playUrl,
+        thumbnailUrl: v.thumbnailUrl,
+        thumbnailType: v.thumbnailType,
+        availableResolutions: v.availableResolutions,
+        bunnyLibraryId: v.bunnyLibraryId,
+        isPublic: v.isPublic,
+        isUnlisted: v.isUnlisted,
+        isDeleted: v.isDeleted,
+        isHidden: v.isHidden,
+        isDraft: v.isDraft,
+        markedForDeletion: v.markedForDeletion,
+        scheduledPublishStatus: v.scheduledPublishStatus,
+        premiereHold: v.premiereHold,
+        review: v.review && { status: v.review.status },
+        suspensionHolds: Array.isArray(v.suspensionHolds) && v.suspensionHolds.length ? [true] : undefined,
+        csamTakedown: !!v.csamTakedown,
+        r2: v.r2,
+        media: v.media,
+        mediaOverride: v.mediaOverride,
+        readyAt: v.readyAt,
+        playableAt: v.playableAt,
+        bunnyRemoved: v.bunnyRemoved,
+        audioTracks: v.audioTracks,
+        audioPackage: v.audioPackage,
+    } satisfies ProviderVideo & Record<keyof ProviderVideo, unknown>;
 }
 
 async function finishExpanded(env: never, entry: ExpandedEntry): Promise<PlaylistBody> {
     const body: PlaylistBody = { ...entry.body };
-    body.videoItems = await Promise.all(entry.items.map(({ view, video }) => withPlayback(env, video as never, { ...view }, 'playlist')));
+    body.videoItems = await Promise.all(entry.items.map(({ view, video }) => withPlayback(env, video, { ...view }, 'playlist')));
     const first = entry.hasOwnThumbnail ? undefined : body.videoItems.find((video) => video.thumbnailUrl);
     if (first?.thumbnailUrl) body.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
     return body;
@@ -140,7 +169,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // EXPANDED_PLAYLIST_TTL_SECONDS old (the video list cache's window).
         // Its items' playUrls are signed for this request
         if (includeVideos) privateAnswer(c);
-        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded-v2/${encodeURIComponent(id)}`) : null;
+        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded-v3/${encodeURIComponent(id)}`) : null;
         const version = String(playlist.dateModified ?? playlist.dateCreated ?? '');
         if (cacheUrl) {
             const hit = await readEdgeCache<ExpandedEntry>(cacheUrl);

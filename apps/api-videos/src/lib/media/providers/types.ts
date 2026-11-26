@@ -3,11 +3,11 @@
  * only ever go through the registry (./index.ts), so adding a provider means writing an adapter
  * and adding its id to MEDIA_PROVIDER_IDS, never editing call sites.
  */
-import type { MediaOverride, MediaProviderId, StoredProviderRef, VideoMediaProviders, VideoProviderRecord, VideoR2State } from '@al-ummah/shared-types';
+import type { MediaOverride, MediaProviderId, StoredProviderRef, VideoMediaProviders, VideoProviderRecord, VideoR2State, VideoVisibilityFields, AudioTrack } from '@al-ummah/shared-types';
 import type { MediaEnv } from '../r2-delivery';
 
 /** The fields of a video record the adapters read. */
-export interface ProviderVideo {
+export interface ProviderVideo extends VideoVisibilityFields {
 	id: string;
 	channelId?: string | null;
 	uploadStatus?: string;
@@ -16,9 +16,6 @@ export interface ProviderVideo {
 	thumbnailType?: string;
 	availableResolutions?: string[];
 	bunnyLibraryId?: number;
-	isPublic?: boolean;
-	isDeleted?: boolean;
-	isHidden?: boolean;
 	r2?: VideoR2State;
 	/** New videos: which providers hold the video and their provider-side ids */
 	media?: VideoMediaProviders;
@@ -32,7 +29,7 @@ export interface ProviderVideo {
 	/** Set when the video was removed from its Bunny library after its R2 copy was verified: Bunny holds no copy */
 	bunnyRemoved?: { at: string; libraryId: number; guid: string };
 	/** Multiple audio tracks (wiki AUN-MULTI-AUDIO): a ready package makes R2 play first */
-	audioTracks?: unknown[];
+	audioTracks?: AudioTrack[];
 	audioPackage?: import('@al-ummah/shared-types').AudioPackageState;
 }
 

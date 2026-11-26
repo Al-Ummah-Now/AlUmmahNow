@@ -7,10 +7,10 @@
  * encode makes every rung, so one rung tells). One page per message on the processing-check queue
  * (index.ts queue()), like the MP4 backfill. The latest run is in global_settings `ops/hdr-check/latest.json`.
  */
-import { hdrKindOf, HDR_CHECK_MAX_ITEMS, initColors, mediaPrefix, underHold, type HdrCheckCounts, type HdrCheckItem, type HdrCheckRun, type VideoR2State } from '@al-ummah/shared-types';
+import { hdrKindOf, HDR_CHECK_MAX_ITEMS, initColors, mediaPrefix, shownR2, underHold, type HdrCheckCounts, type HdrCheckItem, type HdrCheckRun } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import type { MediaEnv } from './r2-delivery';
+import type { MediaEnv, MediaVideo } from './r2-delivery';
 
 export const HDR_CHECK_KIND = 'hdr-check';
 const RUN_KEY = 'ops/hdr-check/latest.json';
@@ -32,13 +32,8 @@ export interface HdrCheckMessage {
 
 type Env = Pick<MediaEnv, 'videos' | 'SEARCH_DB' | 'MEDIA' | 'MEDIA_PRIVATE' | 'PROCESSING_CHECK_QUEUE' | 'global_settings'>;
 
-interface Video {
-	id: string;
+interface Video extends MediaVideo {
 	title?: string;
-	isDeleted?: boolean;
-	r2?: VideoR2State;
-	suspensionHolds?: unknown;
-	csamTakedown?: unknown;
 }
 
 /** Deleted, or under a hold or takedown (whose purge may still be running): never looked at, never listed. */
@@ -53,8 +48,10 @@ export function isHdrCheckMessage(body: unknown): body is HdrCheckMessage {
 }
 
 /** The ready rendition. A video being encoded (again) is skipped: what comes out is SDR. */
-function shownRendition(r2: VideoR2State | undefined): { rev: string; access: 'pub' | 'priv'; rung: string } | null {
-	return r2?.status === 'ready' && r2.result?.rungs?.length ? { rev: r2.rev, access: r2.access, rung: r2.result.rungs[0]!.name } : null;
+function shownRendition(video: Video): { rev: string; access: 'pub' | 'priv'; rung: string } | null {
+	if (video.r2?.status === 'queued' || video.r2?.status === 'transcoding') return null;
+	const r2 = shownR2(video);
+	return r2?.result?.rungs?.length ? { rev: r2.rev, access: r2.access, rung: r2.result.rungs[0]!.name } : null;
 }
 
 const SAFE_FILE = /^[A-Za-z0-9._-]{1,64}$/;
@@ -118,7 +115,11 @@ export async function readHdrCheck(env: Env, opts: { live?: boolean } = {}): Pro
 				const video = await repo.getObject(item.id);
 				const r2 = video?.r2;
 				if (outOfReach(video)) items[i] = { ...item, title: null, now: 'gone' };
-				else items[i] = { ...item, now: r2?.status === 'queued' || r2?.status === 'transcoding' ? 'encoding' : r2?.status === 'ready' && r2.rev !== item.rev ? 'replaced' : 'same' };
+				else {
+					const shown = shownR2(video!);
+					const now = r2?.status === 'queued' || r2?.status === 'transcoding' ? 'encoding' : shown && shown.rev !== item.rev ? 'replaced' : 'same';
+					items[i] = { ...item, now };
+				}
 			}
 		}),
 	);
@@ -137,7 +138,7 @@ export async function checkHdrPage(env: Env, cursor: string | null): Promise<{ c
 	for (const id of ids) {
 		counts.scanned++;
 		const video = await repo.getObject(id);
-		const shown = !outOfReach(video) ? shownRendition(video!.r2) : null;
+		const shown = !outOfReach(video) ? shownRendition(video!) : null;
 		if (!video || !shown) {
 			counts.skipped++;
 			continue;

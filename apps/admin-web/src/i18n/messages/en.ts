@@ -4677,7 +4677,7 @@ const en = {
     select: 'Select {video}',
     reencode: 'Re-encode selected ({count})',
     confirmTitle: 'Re-encode the selected videos ({count})?',
-    confirmBody: 'Each is encoded again in standard color from its kept original. Until the new one is ready, a video plays from its other source if it has one; otherwise it cannot be watched for those minutes.',
+    confirmBody: 'Each is encoded again in standard color from its kept original. The existing video stays playable until the new version is ready, even if re-encoding fails.',
     confirm: 'Re-encode',
     queued: 'Queued to re-encode: {count}.',
     notQueued: 'Not queued: {count} ({videos}). They are being encoded already, or are gone.',
