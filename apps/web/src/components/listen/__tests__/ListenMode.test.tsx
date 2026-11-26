@@ -47,7 +47,7 @@ interface MockVhsPlayer {
 let lastVhsPlayer: MockVhsPlayer | null = null;
 const mockVideoJs = jest.fn((_el: Element, _opts?: Record<string, unknown>) => {
   let time = 0;
-  let dur = 600;
+  const dur = 600;
   let rate = 1;
   let isPaused = true;
   let disposed = false;

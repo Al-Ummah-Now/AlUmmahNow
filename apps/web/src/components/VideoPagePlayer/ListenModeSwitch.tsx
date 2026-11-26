@@ -123,29 +123,29 @@ export function ListenModeSwitch({
       {isListenView ? (
         <div
           data-testid="watch-listen-card"
-          className="w-full aspect-video max-h-[420px] rounded-lg border border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-slate-100 dark:from-emerald-950/60 dark:to-gray-900 flex flex-col items-center justify-center gap-4 p-6 text-center"
+          className="w-full aspect-video max-h-[420px] rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] flex flex-col items-center justify-center gap-4 p-6 text-center"
         >
           {thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={thumbnailUrl} alt="" className="w-28 h-28 sm:w-36 sm:h-36 rounded-xl object-cover shadow-md" />
           ) : (
-            <div className="w-24 h-24 rounded-full bg-emerald-600/15 flex items-center justify-center">
-              <Headphones className="w-12 h-12 text-emerald-700 dark:text-emerald-300" />
+            <div className="w-24 h-24 rounded-full bg-brand-soft flex items-center justify-center">
+              <Headphones className="w-12 h-12 text-brand-ink" />
             </div>
           )}
           <div className="max-w-lg">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-600 text-white mb-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand text-on-brand mb-2">
               <Headphones className="w-3.5 h-3.5" />
               {labels.audioOnly}
             </span>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">{title}</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{channelName}</p>
+            <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] line-clamp-2">{title}</h2>
+            <p className="text-sm text-[var(--fanous-color-text-secondary)] mt-0.5">{channelName}</p>
           </div>
           <button
             type="button"
             data-testid="watch-video-toggle"
             onClick={returnToVideo}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-on-brand text-sm font-medium hover:bg-brand-hover hover:text-[var(--fanous-color-on-primary-hover)] transition-colors"
           >
             <Tv className="w-4 h-4" />
             {labels.watchVideo}
@@ -159,7 +159,7 @@ export function ListenModeSwitch({
               disabled={loading}
               data-testid="watch-listen-toggle"
               onClick={() => void enterListenMode()}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-brand-edge bg-brand-soft text-brand-ink text-sm font-medium hover:bg-brand-soft/70 transition-colors disabled:opacity-60"
             >
               <Headphones className="w-4 h-4" />
               {loading ? labels.loadingAudio : labels.listenMode}
@@ -168,7 +168,7 @@ export function ListenModeSwitch({
               type="button"
               data-testid="watch-listen-queue"
               onClick={enqueueVideo}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--fanous-color-outline)] text-[var(--fanous-color-text-primary)] text-sm hover:bg-[var(--fanous-color-surface-raised)] transition-colors"
             >
               <ListPlus className="w-4 h-4" />
               {labels.addToQueue}
@@ -178,7 +178,7 @@ export function ListenModeSwitch({
             <p
               role="alert"
               data-testid="watch-listen-error"
-              className="text-xs text-red-700 dark:text-red-300"
+              className="text-xs text-[var(--fanous-color-error-text)]"
             >
               {errorMessage}
             </p>
