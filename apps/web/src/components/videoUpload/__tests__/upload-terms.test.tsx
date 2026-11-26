@@ -1,12 +1,14 @@
 /** The single upload form while the creator Terms refuse it (#1929): idle for the page, and it starts once they are accepted. */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { EN_TRANSLATIONS as mockEn } from '@al-ummah/shared-types';
+import { AR_TRANSLATIONS as mockAr, EN_TRANSLATIONS as mockEn } from '@al-ummah/shared-types';
 import VideoUpload from '..';
 
 const mockInitiate = jest.fn();
 const mockMark = jest.fn();
-const mockT = { ...mockEn };
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: mockT, lang: 'en', dir: 'ltr', isRTL: false }) }));
+let mockLang: 'en' | 'ar' = 'en';
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => ({ t: mockLang === 'ar' ? mockAr : mockEn, lang: mockLang, dir: mockLang === 'ar' ? 'rtl' : 'ltr', isRTL: mockLang === 'ar' }),
+}));
 jest.mock('@/hooks/useCreatorAccess', () => ({ markCreatorTermsRequired: () => mockMark(), refreshCreatorAccess: jest.fn() }));
 jest.mock('@/lib/api/upload-client', () => ({ initiateVideoUpload: (...a: unknown[]) => mockInitiate(...a), completeVideoUpload: jest.fn(), scheduleUploadedVideo: jest.fn() }));
 jest.mock('@/lib/upload/resilient-tus', () => ({ ResilientUpload: class { async start() { return undefined; } async abort() { return undefined; } }, grantedUploadUrl: jest.fn(), reportUploadFailure: jest.fn(), requestUploadResume: jest.fn(), tusEndpointFor: () => 'https://api.test/tus' }));
@@ -45,7 +47,24 @@ async function submit() {
   return view;
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  mockLang = 'en';
+  jest.clearAllMocks();
+});
+
+it.each([
+  ['en', 'The file is empty.'],
+  ['ar', 'الملف فارغ.'],
+] as const)('rejects an empty video before opening the metadata form or making an upload request (%s)', (lang, message) => {
+  mockLang = lang;
+  render(form(0));
+  fireEvent.change(screen.getByTestId('upload-file-input'), {
+    target: { files: [new File([], 'empty.mp4', { type: 'video/mp4' })] },
+  });
+  expect(onError).toHaveBeenCalledWith(message);
+  expect(screen.queryByTestId('upload-title-en')).toBeNull();
+  expect(mockInitiate).not.toHaveBeenCalled();
+});
 
 it('refused: said in its words, not reported, and the page may ask; accepting uploads the same video', async () => {
   mockInitiate.mockResolvedValue(refused);

@@ -956,6 +956,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     closeForm: 'إغلاق',
     privateUntilScheduled: 'سيبقى المرئي خاصًا حتى موعد النشر المجدول',
     // Errors
+    emptyFile: 'الملف فارغ.',
     invalidType: 'يرجى رفع ملف مرئي صالح ({formats})',
     authRequired: 'يجب تسجيل الدخول لرفع المرئيات.',
     sessionMissing: 'تعذر إنشاء جلسة الرفع. يرجى المحاولة مرة أخرى.',
@@ -1086,6 +1087,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     errors: {
       tooFewFiles: 'يرجى تحديد ملف مرئي واحد على الأقل',
       tooManyFiles: 'الحد الأقصى ١٥ ملفًا. لقد حددت {count, plural, one {ملفًا واحدًا} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}.',
+      emptyFile: 'الملف «{filename}» فارغ.',
       invalidFileType: 'نوع ملف غير صالح: {filename}. التنسيقات المدعومة: {formats}.',
       fileTooLarge: 'الملف كبير جدًا: {filename} ({size})',
       initiateFailed: 'فشل في بدء الرفع الدفعي. يرجى المحاولة مرة أخرى.',

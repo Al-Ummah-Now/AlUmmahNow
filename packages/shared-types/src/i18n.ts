@@ -1147,6 +1147,7 @@ export interface AppTranslations {
     closeForm: string;
     privateUntilScheduled: string;
     // Errors
+    emptyFile: string;
     invalidType: string;
     authRequired: string;
     sessionMissing: string;
@@ -1276,6 +1277,7 @@ export interface AppTranslations {
     errors: {
       tooFewFiles: string;
       tooManyFiles: string;
+      emptyFile: string;
       invalidFileType: string;
       fileTooLarge: string;
       initiateFailed: string;

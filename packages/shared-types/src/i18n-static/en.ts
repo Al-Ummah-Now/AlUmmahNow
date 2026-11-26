@@ -958,6 +958,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     closeForm: 'Close',
     privateUntilScheduled: 'Video will be private until scheduled publish date',
     // Errors
+    emptyFile: 'The file is empty.',
     invalidType: 'Please upload a valid video file ({formats})',
     authRequired: 'Authentication required. Please log in to upload videos.',
     sessionMissing: 'The upload session could not be created. Please try again.',
@@ -1088,6 +1089,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     errors: {
       tooFewFiles: 'Please select at least 1 video file',
       tooManyFiles: 'Maximum 15 files allowed. You selected {count, plural, one {# file} other {# files}}.',
+      emptyFile: '“{filename}” is empty.',
       invalidFileType: 'Invalid file type: {filename}. Supported formats: {formats}.',
       fileTooLarge: 'File too large: {filename} ({size})',
       initiateFailed: 'Failed to initialize batch upload. Please try again.',

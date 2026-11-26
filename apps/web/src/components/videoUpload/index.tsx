@@ -201,7 +201,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   }, [onWorkChange, workHasFile, workBusy]);
 
   // File validation
-  const validateFile = (file: File): string | null => {
+  const validateFile = useCallback((file: File): string | null => {
+    if (file.size === 0) return t.upload.emptyFile;
+
     if (!isAcceptedVideoFile(file)) {
       return fillTemplate(lang, t.upload.invalidType || VIDEO_UPLOAD_ERRORS.INVALID_TYPE, { formats: videoFormatsText(lang) });
     }
@@ -211,7 +213,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
 
     return null;
-  };
+  }, [lang, t.upload]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -255,7 +257,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       titleAr: ''
     }));
     setShowMetadataForm(true);
-  }, [onError, t, resumeTitle, resumeVideoId, activeChannel]);
+  }, [onError, validateFile, resumeTitle, resumeVideoId, activeChannel]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

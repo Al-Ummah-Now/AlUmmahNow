@@ -51,7 +51,8 @@
       "adm-zip@<0.6.1": "^0.6.1"
     },
     "patchedDependencies": {
-      "miniflare@4.20260706.0": "patches/miniflare@4.20260706.0.patch"
+      "miniflare@4.20260706.0": "patches/miniflare@4.20260706.0.patch",
+      "next@16.4.6": "patches/next@16.4.6.patch"
     }
   },
   "scripts": {

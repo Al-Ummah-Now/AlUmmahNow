@@ -10,7 +10,7 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import type { TusCallbacks } from '@al-ummah/shared-types';
-import { EN_TRANSLATIONS } from '@al-ummah/shared-types';
+import { AR_TRANSLATIONS, EN_TRANSLATIONS, isolateText } from '@al-ummah/shared-types';
 
 const tus = { created: new Map<string, TusCallbacks>() };
 
@@ -44,7 +44,10 @@ jest.mock('@/lib/version-skew/recovery', () => ({
   holdReload: () => () => undefined,
   recoverFromVersionSkew: jest.fn((error: unknown) => /Server Action .* was not found/.test(String((error as Error)?.message))),
 }));
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: EN_TRANSLATIONS, lang: 'en' }) }));
+let mockLang: 'en' | 'ar' = 'en';
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => ({ t: mockLang === 'ar' ? AR_TRANSLATIONS : EN_TRANSLATIONS, lang: mockLang }),
+}));
 const mockMarkTerms = jest.fn();
 jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: jest.fn(async () => undefined), markCreatorTermsRequired: () => mockMarkTerms() }));
 
@@ -88,8 +91,26 @@ async function uploadAll(hook: ReturnType<typeof setup>['hook']) {
 
 const statuses = (hook: ReturnType<typeof setup>['hook']) => hook.result.current.files.map((f) => f.status);
 
+describe('empty batch video', () => {
+  it.each([
+    ['en', `“${isolateText('empty.mp4')}” is empty.`],
+    ['ar', `الملف «${isolateText('empty.mp4')}» فارغ.`],
+  ] as const)('rejects the selection before initiating and names the empty file (%s)', async (lang, message) => {
+    mockLang = lang;
+    initiate.mockClear();
+    const { hook, onError } = setup();
+    const empty = new File([], 'empty.mp4', { type: 'video/mp4' });
+    await act(async () => { await hook.result.current.addFiles([mp4('valid.mp4'), empty]); });
+    expect(onError).toHaveBeenCalledWith(message);
+    expect(hook.result.current.files).toEqual([]);
+    expect(initiate).not.toHaveBeenCalled();
+    mockLang = 'en';
+  });
+});
+
 describe('useBatchUpload', () => {
   beforeEach(() => {
+    mockLang = 'en';
     window.localStorage.clear();
     tus.created.clear();
     initiate.mockClear();
