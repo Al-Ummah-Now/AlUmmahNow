@@ -133,6 +133,13 @@ test('dates and times use a plain space on every runtime (WebKit writes U+00A0 b
 });
 
 
+test('whole bytes use the locale’s long form by default', () => {
+  const values = [0, 1, 512];
+  assert.deepEqual(values.map(n => f.formatBytes('en', n)), ['0 bytes', '1 byte', '512 bytes']);
+  assert.deepEqual(values.map(n => f.formatBytes('ar', n)), ['٠ بايت', '١ بايت', '٥١٢ بايت']);
+  assert.equal(f.formatBytes('en', 512, { unitDisplay: 'narrow' }), '512B');
+});
+
 test('bytes switch units at 1000: 1000 MB reads 1 GB', () => {
   assert.equal(f.formatBytes('en', 1000 * 1024 ** 2), '1 GB');
   assert.equal(f.formatBytes('en', 999 * 1024 ** 2), '999 MB');

@@ -48,6 +48,7 @@ const RetentionSchema = z.object({
 const VideoAnalyticsSchema = z.object({
   videoId: z.string(),
   title: z.string(),
+  titleLocalized: z.record(z.string(), z.string()).optional(),
   views: z.number(),
   likes: z.number(),
   dislikes: z.number(),

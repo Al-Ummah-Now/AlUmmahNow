@@ -19,6 +19,7 @@ import {
   SearchEntityType,
   SearchQuery,
   SearchResultItem,
+  type SearchSuggestion,
   SearchPlaylistPayload,
   SearchStatement,
   SearchTranscriptMatch,
@@ -362,17 +363,7 @@ export async function searchIndex(
   };
 }
 
-export interface IndexSuggestion {
-  text: string;
-  type: SuggestionType;
-  id?: string;
-  thumbnailUrl?: string;
-  subtitle?: string;
-  handle?: string;
-  verified?: boolean;
-  count?: number;
-  metadata?: Record<string, unknown>;
-}
+export type IndexSuggestion = SearchSuggestion;
 
 export interface SuggestOptions {
   /** Which kinds to return (default: channels, videos, categories) */
@@ -428,6 +419,7 @@ function videoSuggestion(row: IndexRow, q: string, lang: string | undefined): Ra
   const channel = channelInfo(row.channel_payload);
   return [{
     text: q ? bestText(video.title, video.titleLocalized, q, lang) : video.title,
+    titleLocalized: video.titleLocalized,
     type: 'video' as const,
     id: video.id,
     thumbnailUrl: video.thumbnailUrl,
@@ -444,6 +436,7 @@ function playlistSuggestion(row: IndexRow, q = '', lang?: string): RankedSuggest
   const channel = channelInfo(row.channel_payload);
   return [{
     text: q ? bestText(playlist.name, playlist.titleLocalized, q, lang) : pickLocalized(playlist.name, playlist.titleLocalized, lang),
+    titleLocalized: playlist.titleLocalized,
     type: 'playlist' as const,
     id: playlist.id,
     thumbnailUrl: playlist.thumbnailUrl ?? playlist.cover?.thumbnailUrl,

@@ -4,13 +4,14 @@
  */
 import React, { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { AR_TRANSLATIONS as ar } from '@/lib/i18n/translations/ar';
 import { EN_TRANSLATIONS as en } from '@/lib/i18n/translations/en';
 import type { SearchHistoryEntry } from '@/lib/search/history';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { SearchBar } from '../SearchBar';
 
-const mockLanguage = { t: en, lang: 'en', locale: 'en', isRTL: false, dir: 'ltr' };
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => mockLanguage }));
+let mockLang: 'en' | 'ar' = 'en';
+jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: mockLang === 'ar' ? ar : en, lang: mockLang }) }));
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 jest.mock('@/lib/search/suggest-client', () => ({
@@ -38,6 +39,7 @@ async function type(text: string) {
 
 describe('SearchBar', () => {
   beforeEach(() => {
+    mockLang = 'en';
     jest.useFakeTimers();
     push.mockReset();
     mockFetch.mockReset();
@@ -60,6 +62,21 @@ describe('SearchBar', () => {
     expect(screen.getAllByTestId('search-suggestion')).toHaveLength(4);
     expect(list.querySelectorAll('img')).toHaveLength(2);
     expect(screen.getByTestId('autocomplete-status')).toHaveTextContent('4 suggestions');
+  });
+
+  it('uses the page language for video and playlist titles, falling back to text', async () => {
+    mockLang = 'ar';
+    mockFetch.mockResolvedValue([
+      { type: 'video', text: 'Early Seerah', id: 'v1', titleLocalized: { ar: 'السيرة في مكة' } },
+      { type: 'playlist', text: 'Complete Seerah', id: 'p1', titleLocalized: { ar: 'السيرة كاملة' } },
+      { type: 'video', text: 'Another talk', id: 'v2', titleLocalized: { en: 'Another talk' } },
+    ]);
+    render(<Harness />);
+    await type('seer');
+    const options = screen.getAllByTestId('search-suggestion');
+    expect(options.map(option => option.textContent)).toEqual(['السيرة في مكة', 'Another talk', 'السيرة كاملة']);
+    fireEvent.click(options[0]);
+    expect(push).toHaveBeenLastCalledWith('/ar/video/v1');
   });
 
   it('opens the picked channel, video or playlist', async () => {

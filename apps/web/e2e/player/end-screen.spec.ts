@@ -200,12 +200,13 @@ for (const dpr of [1, 2]) {
         expect(luminance(shot.at(4, 4)), 'scrim darkens the bright last frame').toBeLessThan(0.2);
         // Play now carries the ring with the seconds left, centred in it
         await expect(end.getByTestId('player-next-ring')).toBeVisible();
-        await expect(count(end)).toHaveText(/^[1-3]$/);
+        await expect(count(end)).toHaveText(lang === 'ar' ? /^[١-٣]$/ : /^[1-3]$/);
+        await expect(end.getByRole('status')).toHaveText(lang === 'ar' ? 'المرئي التالي بعد ٣ ثوانٍ' : 'Next video in 3 seconds');
         await expect(end.getByTestId('player-cancel-next')).toBeVisible();
         await freeze(page);
         const ring = await layoutBox(end.getByTestId('player-next-ring'));
-        // Always the figure the countdown starts on: a slow runner reaches the «1», whose ink its font
-        // draws half a pixel further to one side than the «2» and «3» (WebKit on Linux: 1.58px against 1.05px)
+        // Use the same reference glyph for the ink measurement in both locales. The live
+        // countdown text above checks the actual glyphs for each locale.
         await count(end).evaluate((el) => { el.textContent = '3'; });
         const digits = await inkBox(page, count(end), 'self', 2);
         // Across: the figure's box on the ring's centre; its ink may sit up to half a pixel more

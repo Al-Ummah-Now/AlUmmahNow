@@ -14,7 +14,7 @@
  * once. Focus moves to Play now only when it was on the page body or inside this player, so a viewer
  * typing elsewhere on the page keeps their place.
  */
-import { fillTemplate } from '@al-ummah/shared-types';
+import { fillTemplate, formatNumber } from '@al-ummah/shared-types';
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { ListRestart, Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-react';
 import type { EndSuggestion, UpNext } from '@/lib/video/player-ui';
@@ -153,6 +153,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
     );
   }
 
+  const locale = dir === 'rtl' ? 'ar' : 'en';
   const remaining = Math.max(0, Math.ceil(autoAdvanceSeconds - elapsed));
   const progress = Math.min(1, elapsed / autoAdvanceSeconds);
 
@@ -205,7 +206,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
                       strokeDashoffset={RING_LENGTH * progress}
                     />
                   </svg>
-                  <span className="vjs-fanous-next-count">{remaining}</span>
+                  <span className="vjs-fanous-next-count">{formatNumber(locale, remaining)}</span>
                 </span>
               ) : (
                 <SkipForward aria-hidden="true" className="vjs-fanous-icon-dir" />
@@ -228,7 +229,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
       {moreRow}
       {/* Announced once, not every second */}
       <p className="vjs-control-text" role="status" aria-live="polite">
-        {counting ? fillTemplate(dir === 'rtl' ? 'ar' : 'en', t.chrome.autoAdvance, { seconds: autoAdvanceSeconds }) : ''}
+        {counting ? fillTemplate(locale, t.chrome.autoAdvance, { seconds: autoAdvanceSeconds }) : ''}
       </p>
     </div>
   );

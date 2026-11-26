@@ -43,10 +43,10 @@ const ALL_KINDS: SuggestKind[] = ['video', 'channel', 'playlist', 'category'];
 const CHANNEL_KINDS: SuggestKind[] = ['video', 'playlist'];
 
 /** Map API suggestions to combobox options (grouped by type, with thumbnails). */
-export function suggestionOptions(suggestions: SearchSuggestion[]): AutocompleteOption[] {
+export function suggestionOptions(suggestions: SearchSuggestion[], lang: string): AutocompleteOption[] {
   return suggestions.map((s, index) => ({
     id: `${s.type}:${s.id ?? s.text}:${index}`,
-    label: s.text,
+    label: s.titleLocalized?.[lang] || s.text,
     group: s.type,
     subtitle: s.subtitle,
     thumbnailUrl: s.thumbnailUrl,
@@ -79,8 +79,8 @@ export function SearchBar({
 
   const load = useCallback(
     async (query: string, signal: AbortSignal) =>
-      suggestionOptions(await fetchSuggestions(query, { types: channelId ? CHANNEL_KINDS : ALL_KINDS, channelId, limit: 8, signal })),
-    [channelId],
+      suggestionOptions(await fetchSuggestions(query, { types: channelId ? CHANNEL_KINDS : ALL_KINDS, channelId, limit: 8, signal }), lang),
+    [channelId, lang],
   );
 
   const recent: AutocompleteOption[] = useMemo(() => history.slice(0, 8).map((h) => ({

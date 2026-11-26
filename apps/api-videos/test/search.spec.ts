@@ -201,13 +201,13 @@ async function seed(db: SqliteD1) {
 	const videos = [
 		videoFixture({ id: 'v-salah', title: 'أحكام الصَّلاة', channelId: 'ch-ar', category: 'fiqh', duration: 120, views: 50, dateCreated: new Date(NOW - 2 * 60 * 60 * 1000).toISOString() }),
 		videoFixture({ id: 'v-hadith', title: 'شرح الأحاديث النبوية', channelId: 'ch-ar', category: 'hadith_studies', duration: 1800, views: 500, language: 'ar', dateCreated: new Date(NOW - 3 * DAY).toISOString() }),
-		videoFixture({ id: 'v-seerah', title: 'Seerah part 1: Makkah', channelId: 'ch-en', category: 'islamic_history', duration: 900, views: 10, dateCreated: new Date(NOW - 40 * DAY).toISOString() }),
+		videoFixture({ id: 'v-seerah', title: 'Seerah part 1: Makkah', titleLocalized: { ar: 'السيرة في مكة' }, channelId: 'ch-en', category: 'islamic_history', duration: 900, views: 10, dateCreated: new Date(NOW - 40 * DAY).toISOString() }),
 		videoFixture({ id: 'v-seerah2', title: 'Seerah part 2: Madinah', channelId: 'ch-en', category: 'islamic_history', duration: 950, views: 5000, dateCreated: new Date(NOW - 20 * DAY).toISOString() }),
 		videoFixture({ id: 'v-hidden-channel', title: 'Tafsir hidden', channelId: 'ch-private', duration: 60 }),
 	];
 	for (const c of channels) await syncSearchDocument(db, 'channel', c.id, c, { now: NOW });
 	for (const v of videos) await syncSearchDocument(db, 'video', v.id, v, { now: NOW });
-	await syncSearchDocument(db, 'playlist', 'pl-seerah', { id: 'pl-seerah', name: 'Complete Seerah', isPublic: true, videos: ['v-seerah', 'v-seerah2'], channelId: 'ch-en', dateCreated: new Date(NOW - DAY).toISOString() }, { now: NOW });
+	await syncSearchDocument(db, 'playlist', 'pl-seerah', { id: 'pl-seerah', name: 'Complete Seerah', titleLocalized: { ar: 'السيرة كاملة' }, isPublic: true, videos: ['v-seerah', 'v-seerah2'], channelId: 'ch-en', dateCreated: new Date(NOW - DAY).toISOString() }, { now: NOW });
 	await syncSearchDocument(db, 'post', 'post-1', { id: 'post-1', channelId: 'ch-en', content: 'New Seerah lesson tonight', status: 'published', visibility: 'public', likes: 3, createdAt: new Date(NOW - DAY).toISOString() }, { now: NOW });
 }
 
@@ -339,6 +339,8 @@ describe('searchIndex (D1 FTS5)', () => {
 		const playlists = await initialSuggestionsFromIndex(db, 5, { types: ['playlist'], channelId: 'ch-en', now: NOW });
 		assert.deepEqual(playlists.map(s => s.id), ['pl-seerah']);
 		assert.equal(playlists[0].subtitle, 'Seerah Studies');
+		assert.deepEqual(playlists[0].titleLocalized, { ar: 'السيرة كاملة' });
+		assert.deepEqual(videos[1].titleLocalized, { ar: 'السيرة في مكة' });
 		// Channels: visible ones only, with handle/subtitle like typed suggestions
 		const channels = await initialSuggestionsFromIndex(db, 10, { types: ['channel'], now: NOW });
 		assert.ok(channels.length >= 2 && channels.every(s => s.type === 'channel' && s.id !== 'ch-private'));
@@ -539,6 +541,30 @@ describe('search endpoints', () => {
 		const { routes, env } = await app();
 		const body = await (await routes.request('/api/search/suggestions?q=%D8%A7%D9%84%D8%B5%D9%84%D8%A7%D9%87', {}, env)).json() as any;
 		assert.equal(body[0].text, 'أحكام الصَّلاة');
+	});
+
+	it('GET /api/search/suggestions returns video and playlist titles from the index', async () => {
+		const { routes, env } = await app();
+		const res = await routes.request('/api/search/suggestions?q=seer&types=video,playlist', {}, env);
+		assert.equal(res.status, 200);
+		const suggestions = await res.json() as import('@al-ummah/shared-types').SearchSuggestion[];
+		const video = suggestions.find(s => s.id === 'v-seerah');
+		const playlist = suggestions.find(s => s.id === 'pl-seerah');
+		assert.equal(video?.text, 'Seerah part 1: Makkah');
+		assert.deepEqual(video?.titleLocalized, { ar: 'السيرة في مكة' });
+		assert.equal(playlist?.text, 'Complete Seerah');
+		assert.deepEqual(playlist?.titleLocalized, { ar: 'السيرة كاملة' });
+	});
+
+	it('GET /api/search/suggestions carries video titles when falling back to the scan', async () => {
+		const { routes, env } = await app();
+		const titleLocalized = { en: 'Early Seerah', ar: 'السيرة في مكة' };
+		const videos = new MemoryBucket({ v1: videoFixture({ id: 'v1', title: 'Seerah', titleLocalized }) });
+		const res = await routes.request('/api/search/suggestions?q=seer&types=video', {}, { ...env, videos, SEARCH_DB: undefined });
+		assert.equal(res.status, 200);
+		const [video] = await res.json() as import('@al-ummah/shared-types').SearchSuggestion[];
+		assert.equal(video.text, 'Seerah');
+		assert.deepEqual(video.titleLocalized, titleLocalized);
 	});
 
 	it('GET /api/search/suggestions filters by types and channel, fills old rows\' handles, and rate limits', async () => {

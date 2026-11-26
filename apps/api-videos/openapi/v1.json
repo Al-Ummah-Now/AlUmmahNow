@@ -456,6 +456,12 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "views": {
                             "type": "number"
                           },
@@ -1158,6 +1164,12 @@
                         "title": {
                           "type": "string"
                         },
+                        "titleLocalized": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
                         "views": {
                           "type": "number"
                         },
@@ -1398,6 +1410,12 @@
                     },
                     "title": {
                       "type": "string"
+                    },
+                    "titleLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "views": {
                       "type": "number"
@@ -35939,6 +35957,13 @@
                     "properties": {
                       "text": {
                         "type": "string"
+                      },
+                      "titleLocalized": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "Video or playlist title per language (e.g. { en, ar }); fall back to text"
                       },
                       "type": {
                         "type": "string",

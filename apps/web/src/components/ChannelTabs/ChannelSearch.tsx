@@ -53,8 +53,8 @@ export function ChannelSearch({ channelId }: { channelId: string }) {
 
   const load = useCallback(
     async (query: string, signal: AbortSignal) =>
-      suggestionOptions(await fetchSuggestions(query, { types: ['video', 'playlist'], channelId, limit: 8, signal })),
-    [channelId],
+      suggestionOptions(await fetchSuggestions(query, { types: ['video', 'playlist'], channelId, limit: 8, signal }), lang),
+    [channelId, lang],
   );
 
   const recent: AutocompleteOption[] = useMemo(() => history.slice(0, 6).map((h) => ({

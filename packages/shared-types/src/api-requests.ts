@@ -97,8 +97,10 @@ export interface SearchQueryParams {
 }
 
 export interface SearchSuggestion {
-  /** Text shown (and searched when there is no item to open) */
+  /** Fallback text (also searched when there is no item to open) */
   text: string;
+  /** Video or playlist title per language, when available. */
+  titleLocalized?: Record<string, string>;
   type: 'query' | 'channel' | 'category' | 'video' | 'playlist';
   /** Id of the video, channel or playlist to open */
   id?: string;

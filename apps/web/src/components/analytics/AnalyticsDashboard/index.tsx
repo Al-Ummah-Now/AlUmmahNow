@@ -147,7 +147,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           {summary.topVideo && (
             <div className="text-end">
               <p className="text-sm font-medium text-gray-800 dark:text-white">{d.topPerformingVideo}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{summary.topVideo.title}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{summary.topVideo.titleLocalized?.[lang] || summary.topVideo.title}</p>
               <p className="text-sm text-blue-600 dark:text-blue-400">
                 {formatCountNoun(lang, summary.topVideo.views, 'view')}
               </p>
@@ -170,7 +170,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             {channelData.topPerformingVideos.slice(0, 5).map((video) => (
               <div key={video.videoId} className="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-gray-800 dark:text-white truncate">{video.title}</h4>
+                  <h4 className="font-medium text-gray-800 dark:text-white truncate">{video.titleLocalized?.[lang] || video.title}</h4>
                   {video.dateCreated && (
                     <p className="text-sm text-gray-600 dark:text-gray-300">
                       {formatDate(lang === 'ar' ? 'ar' : 'en-US', new Date(video.dateCreated), {})}

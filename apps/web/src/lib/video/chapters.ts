@@ -76,15 +76,14 @@ export function adjacentChapter(
 /**
  * Keyboard shortcut for chapter navigation: Ctrl or Alt with a horizontal
  * arrow (Ctrl+Arrow is the common player convention; Alt for macOS, where
- * Ctrl+Arrow switches desktops). Arrows follow reading direction, so in RTL
- * ArrowLeft is "next", like the seek arrows.
+ * Ctrl+Arrow switches desktops). Like seek, ArrowRight moves forward on the
+ * timeline in every language.
  */
 export function chapterShortcut(
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>,
-  rtl: boolean,
 ): 'next' | 'previous' | null {
   if (!(event.ctrlKey || event.altKey) || event.metaKey || event.shiftKey) return null;
-  if (event.key === 'ArrowRight') return rtl ? 'previous' : 'next';
-  if (event.key === 'ArrowLeft') return rtl ? 'next' : 'previous';
+  if (event.key === 'ArrowRight') return 'next';
+  if (event.key === 'ArrowLeft') return 'previous';
   return null;
 }

@@ -26,6 +26,7 @@ import { isInternalVideoKey } from '@al-ummah/shared-types';
 export interface AnalyticsVideo {
   id: string;
   title?: string;
+  titleLocalized?: Record<string, string>;
   userId?: string;
   channelId?: string;
   thumbnailUrl?: string;
@@ -219,6 +220,7 @@ export function engagementRate(views: number, likes: number, comments: number): 
 export interface VideoAnalyticsResult {
   videoId: string;
   title: string;
+  titleLocalized?: Record<string, string>;
   views: number;
   likes: number;
   dislikes: number;
@@ -257,6 +259,7 @@ export function videoAnalytics(video: AnalyticsVideo, rollups: MonthlyRollup[] =
   return {
     videoId: video.id,
     title: video.title || '',
+    titleLocalized: video.titleLocalized,
     views,
     likes,
     dislikes: video.dislikes?.length || 0,

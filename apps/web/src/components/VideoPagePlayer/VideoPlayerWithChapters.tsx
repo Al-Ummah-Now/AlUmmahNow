@@ -43,7 +43,7 @@ export function VideoPlayerWithChapters({
   onPlayerReady,
   ...playerProps
 }: VideoPlayerWithChaptersProps) {
-  const { lang, isRTL } = useLanguage();
+  const { lang } = useLanguage();
   const [player, setPlayer] = useState<Player | null>(null);
   const [progressHolder, setProgressHolder] = useState<HTMLElement | null>(null);
   const [isChapterListOpen, setIsChapterListOpen] = useState(false);
@@ -117,7 +117,7 @@ export function VideoPlayerWithChapters({
     const root = player.el() as HTMLElement | null;
     if (!root) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      const action = chapterShortcut(event, isRTL);
+      const action = chapterShortcut(event);
       if (!action) return;
       event.preventDefault();
       event.stopPropagation();
@@ -127,7 +127,7 @@ export function VideoPlayerWithChapters({
     };
     root.addEventListener('keydown', onKeyDown);
     return () => root.removeEventListener('keydown', onKeyDown);
-  }, [player, hasChapters, isRTL, nextChapter, previousChapter, videoId]);
+  }, [player, hasChapters, nextChapter, previousChapter, videoId]);
 
   const toggleChapterList = useCallback(() => {
     setIsChapterListOpen(prev => !prev);

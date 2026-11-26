@@ -1,7 +1,7 @@
 /** Retention curves and traffic sources for creators (docs/specs/CREATOR-STUDIO.md §8.4). */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { AnalyticsChannelGet, AnalyticsRetentionGet, AnalyticsVideoGet } from '../src/endpoints/analytics/analyticsOwner';
+import { AnalyticsChannelGet, AnalyticsRetentionGet, AnalyticsSummaryGet, AnalyticsVideoGet } from '../src/endpoints/analytics/analyticsOwner';
 import { MIN_RETENTION_STARTS, buildRetentionCurve, buildTraffic, loadOwnedVideos, parseRange, videoAnalytics } from '../src/lib/analytics';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { createSqliteD1 } from './sqlite-d1';
@@ -72,6 +72,7 @@ function routes(r: any) {
 	r.get('/api/analytics/videos/:videoId/retention', AnalyticsRetentionGet);
 	r.get('/api/analytics/videos/:videoId', AnalyticsVideoGet);
 	r.get('/api/analytics/channels/:channelId', AnalyticsChannelGet);
+	r.get('/api/analytics/summary', AnalyticsSummaryGet);
 }
 
 const QUERY = '?dateFrom=2026-11-01&dateTo=2026-11-09';
@@ -131,6 +132,30 @@ describe('traffic on the analytics responses', () => {
 		const res = await buildApp(routes, { userId: 'owner' }).request(`/api/analytics/channels/c1${QUERY}`, {}, env());
 		assert.equal(res.status, 200, await res.clone().text());
 		assert.deepEqual(((await res.json()) as any).traffic.sources, { home: 4 });
+	});
+});
+
+describe('localized analytics titles', () => {
+	it('carries stored titles through the summary and channel rankings', async () => {
+		const e = env();
+		const titleLocalized = { en: 'Introduction', ar: 'مقدمة' };
+		e.videos = new MemoryBucket({
+			v1: videoFixture({ id: 'v1', userId: 'owner', channelId: 'c1', title: 'Intro', titleLocalized, views: 100 }),
+			v2: videoFixture({ id: 'v2', userId: 'owner', channelId: 'c1', title: 'Another talk', views: 10 }),
+		});
+		const app = buildApp(routes, { userId: 'owner' });
+		const summary = await app.request('/api/analytics/summary?channelId=c1', {}, e);
+		assert.equal(summary.status, 200);
+		const { topVideo } = await summary.json() as any;
+		assert.equal(topVideo.title, 'Intro');
+		assert.deepEqual(topVideo.titleLocalized, titleLocalized);
+
+		const channel = await app.request(`/api/analytics/channels/c1${QUERY}`, {}, e);
+		assert.equal(channel.status, 200);
+		const { topPerformingVideos: [first, second] } = await channel.json() as any;
+		assert.deepEqual(first.titleLocalized, titleLocalized);
+		assert.equal(second.title, 'Another talk');
+		assert.equal('titleLocalized' in second, false);
 	});
 });
 

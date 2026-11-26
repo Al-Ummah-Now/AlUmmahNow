@@ -277,8 +277,13 @@ export function formatBytes(locale: FormatLocale, bytes: number, options?: Intl.
     value /= 1024;
     index += 1;
   }
-  const arabic = isArabicLocale(locale) ? { unitDisplay: 'long' as const, useGrouping: false } : undefined;
-  return formatUnit(locale, value, BYTE_UNITS[index], { maximumFractionDigits: index === 0 ? 0 : 1, ...arabic, ...options });
+  const arabic = isArabicLocale(locale);
+  return formatUnit(locale, value, BYTE_UNITS[index], {
+    maximumFractionDigits: index === 0 ? 0 : 1,
+    unitDisplay: arabic || index === 0 ? 'long' : 'short',
+    ...(arabic ? { useGrouping: false } : {}),
+    ...options,
+  });
 }
 
 type DateInput = Date | string | number;
