@@ -150,7 +150,7 @@ export function SearchBar({
           onSelect={choose}
           onSubmit={(query) => onSubmit(query)}
           load={load}
-          loadKey={channelId ?? 'all'}
+          loadKey={`${channelId ?? 'all'}:${lang}`}
           popupHost={popupHost}
           groups={groups}
           emptyOptions={recent}
