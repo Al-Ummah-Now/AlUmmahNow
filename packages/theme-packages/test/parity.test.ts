@@ -1,6 +1,5 @@
-// The built-in packages must compile to exactly what the hand-written themes produced before they
-// became packages (test/parity-baseline/, captured at conversion). Declarations are compared per
-// selector, so formatting may change but no value, selector or cascade position can.
+// Compare built-in output to the stylesheet baseline captured at package conversion.
+// Intentional token changes update the snapshot. Keep other values, selectors and cascade order intact.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -41,7 +40,7 @@ export function declarationMap(css: string): Map<string, Map<string, string>> {
 const plain = (m: Map<string, Map<string, string>>) => Object.fromEntries([...m].map(([s, d]) => [s, Object.fromEntries(d)]));
 const compiled = BUILT_IN.ids.map((id) => { const files = loadPackageDir(`${THEMES_DIR}/${id}`); return { id, out: compilePackage(files.theme, { isDefault: id === BUILT_IN.default, rootFallback: true, inlineAsset: inlineSvg(files) }) }; });
 
-test('design tokens are byte-identical to the pre-package stylesheet (comments aside)', () => {
+test('design tokens match the baseline stylesheet (comments aside)', () => {
   const now = compiled.map((c) => c.out.tokens).join('\n');
   assert.equal(stripComments(now).trim(), stripComments(baseline('site-themes.css')).trim());
 });

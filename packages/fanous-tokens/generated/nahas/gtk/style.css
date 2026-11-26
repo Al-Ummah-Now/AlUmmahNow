@@ -29,7 +29,7 @@
 @define-color fanous_on_error_fill #ffffff;
 @define-color fanous_live #ffa037;
 @define-color fanous_on_live #290d06;
-@define-color fanous_accent #a85600;
+@define-color fanous_accent #7b3f00;
 @define-color fanous_focus_ring #824825;
 @define-color fanous_focus_glow #824825;
 @define-color fanous_verified_icon #0f5a2c;
@@ -50,7 +50,7 @@
 @define-color headerbar_fg_color #2e1206;
 @define-color accent_bg_color #ffa037;
 @define-color accent_fg_color #290d06;
-@define-color accent_color #a85600;
+@define-color accent_color #7b3f00;
 @define-color destructive_bg_color #b00020;
 @define-color destructive_fg_color #ffffff;
 @define-color destructive_color #930019;

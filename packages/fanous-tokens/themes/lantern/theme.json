@@ -75,7 +75,7 @@
       "onErrorFill": "{color.derived.white}",
       "live": "{color.brand.glow}",
       "onLive": "{color.brand.night}",
-      "accent": "{color.derived.lanternDeep}",
+      "accent": "#8a4900",
       "focusRing": "{color.derived.goldEdge}",
       "focusGlow": "{color.derived.lanternDeep}",
       "verifiedIcon": "{color.derived.verifiedDeep}",

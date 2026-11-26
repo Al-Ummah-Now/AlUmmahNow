@@ -51,7 +51,7 @@ namespace AlUmmahNow.Fanous
         public static Color OnErrorFill => new Color(1f, 1f, 1f, 1f);
         public static Color Live => new Color(0.9098f, 0.7059f, 0.4667f, 1f);
         public static Color OnLive => new Color(0.0353f, 0.0824f, 0.1176f, 1f);
-        public static Color Accent => new Color(0.3608f, 0.7686f, 0.8314f, 1f);
+        public static Color Accent => new Color(0.4824f, 0.8784f, 0.9373f, 1f);
         public static Color FocusRing => new Color(0.9608f, 0.8118f, 0.5725f, 1f);
         public static Color FocusGlow => new Color(0.9608f, 0.8118f, 0.5725f, 1f);
         public static Color VerifiedIcon => new Color(0.5255f, 0.9373f, 0.6745f, 1f);

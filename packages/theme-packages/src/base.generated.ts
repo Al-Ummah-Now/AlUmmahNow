@@ -131,7 +131,7 @@ export const BASE = {
     },
     {
       "name": "accent",
-      "role": "nontext"
+      "role": "text"
     },
     {
       "name": "focusRing",

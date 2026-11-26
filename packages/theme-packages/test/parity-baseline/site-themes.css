@@ -342,7 +342,7 @@ html[data-theme='lantern']:not(.dark) {
   --fanous-color-on-error-fill: #ffffff;
   --fanous-color-live: #ffc46b;
   --fanous-color-on-live: #093041;
-  --fanous-color-accent: #a85600;
+  --fanous-color-accent: #8a4900;
   --fanous-color-focus-ring: #93612a;
   --fanous-color-focus-glow: #a85600;
   --fanous-color-verified-icon: #166534;
@@ -429,9 +429,9 @@ html[data-theme='lantern']:not(.dark) {
   --fanous-c-form-focus-ring: #93612a;
   --fanous-c-form-error: #b00020;
   --fanous-c-form-success: #166534;
-  --fanous-c-form-check-on: #a85600;
+  --fanous-c-form-check-on: #8a4900;
   --fanous-c-form-check-mark: #fbf5e9;
-  --fanous-c-form-switch-on: #a85600;
+  --fanous-c-form-switch-on: #8a4900;
   --fanous-c-form-switch-off: #7c6b52;
   --fanous-c-form-switch-thumb: #fbf5e9;
   --fanous-c-card-video-bg: #fbf5e9;
@@ -444,7 +444,7 @@ html[data-theme='lantern']:not(.dark) {
   --fanous-c-tabs-bg: #fbf5e9;
   --fanous-c-tabs-text: #2a4654;
   --fanous-c-tabs-active-text: #7a3f08;
-  --fanous-c-tabs-indicator: #a85600;
+  --fanous-c-tabs-indicator: #8a4900;
   --fanous-c-tabs-border: #d3c0a0;
   --fanous-c-segment-bg: #fffdf8;
   --fanous-c-segment-text: #0e2b3d;
@@ -472,7 +472,7 @@ html[data-theme='lantern']:not(.dark) {
   --fanous-c-badge-status-text: #ffffff;
   --fanous-c-player-control: #0e2b3d;
   --fanous-c-player-control-bg: #fbf5e9;
-  --fanous-c-player-progress: #a85600;
+  --fanous-c-player-progress: #8a4900;
   --fanous-c-player-buffered: #7c6b52;
   --fanous-c-player-track: #fffdf8;
   --fanous-c-footer-bg: #fbf5e9;
@@ -654,7 +654,7 @@ html[data-theme='zujaj'].dark {
   --fanous-color-on-error-fill: #ffffff;
   --fanous-color-live: #e8b477;
   --fanous-color-on-live: #09151e;
-  --fanous-color-accent: #5cc4d4;
+  --fanous-color-accent: #7be0ef;
   --fanous-color-focus-ring: #f5cf92;
   --fanous-color-focus-glow: #f5cf92;
   --fanous-color-verified-icon: #86efac;
@@ -667,7 +667,7 @@ html[data-theme='zujaj'].dark {
   --fanous-c-nav-hover: #106270;
   --fanous-c-nav-active-bg: #106270;
   --fanous-c-nav-active-text: #bfeaee;
-  --fanous-c-nav-indicator: #5cc4d4;
+  --fanous-c-nav-indicator: #7be0ef;
   --fanous-c-nav-search-bg: #0a4f58;
   --fanous-c-nav-search-border: #8fc0c6;
   --fanous-c-nav-search-text: #eff8f7;
@@ -741,9 +741,9 @@ html[data-theme='zujaj'].dark {
   --fanous-c-form-focus-ring: #f5cf92;
   --fanous-c-form-error: #ffc6c0;
   --fanous-c-form-success: #86efac;
-  --fanous-c-form-check-on: #5cc4d4;
+  --fanous-c-form-check-on: #7be0ef;
   --fanous-c-form-check-mark: #0c5560;
-  --fanous-c-form-switch-on: #5cc4d4;
+  --fanous-c-form-switch-on: #7be0ef;
   --fanous-c-form-switch-off: #8fc0c6;
   --fanous-c-form-switch-thumb: #0c5560;
   --fanous-c-card-video-bg: #0c5560;
@@ -756,7 +756,7 @@ html[data-theme='zujaj'].dark {
   --fanous-c-tabs-bg: #0c5560;
   --fanous-c-tabs-text: #d4ebeb;
   --fanous-c-tabs-active-text: #bfeaee;
-  --fanous-c-tabs-indicator: #5cc4d4;
+  --fanous-c-tabs-indicator: #7be0ef;
   --fanous-c-tabs-border: #237a84;
   --fanous-c-segment-bg: #106270;
   --fanous-c-segment-text: #eff8f7;
@@ -784,7 +784,7 @@ html[data-theme='zujaj'].dark {
   --fanous-c-badge-status-text: #ffffff;
   --fanous-c-player-control: #eff8f7;
   --fanous-c-player-control-bg: #0c5560;
-  --fanous-c-player-progress: #5cc4d4;
+  --fanous-c-player-progress: #7be0ef;
   --fanous-c-player-buffered: #8fc0c6;
   --fanous-c-player-track: #106270;
   --fanous-c-footer-bg: #0c5560;
@@ -1322,7 +1322,7 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-color-on-error-fill: #ffffff;
   --fanous-color-live: #ffa037;
   --fanous-color-on-live: #290d06;
-  --fanous-color-accent: #a85600;
+  --fanous-color-accent: #7b3f00;
   --fanous-color-focus-ring: #824825;
   --fanous-color-focus-glow: #824825;
   --fanous-color-verified-icon: #0f5a2c;
@@ -1409,9 +1409,9 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-c-form-focus-ring: #824825;
   --fanous-c-form-error: #930019;
   --fanous-c-form-success: #0f5a2c;
-  --fanous-c-form-check-on: #a85600;
+  --fanous-c-form-check-on: #7b3f00;
   --fanous-c-form-check-mark: #fdeedb;
-  --fanous-c-form-switch-on: #a85600;
+  --fanous-c-form-switch-on: #7b3f00;
   --fanous-c-form-switch-off: #83593a;
   --fanous-c-form-switch-thumb: #fdeedb;
   --fanous-c-card-video-bg: #fdeedb;
@@ -1424,7 +1424,7 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-c-tabs-bg: #fdeedb;
   --fanous-c-tabs-text: #4f260f;
   --fanous-c-tabs-active-text: #6d3412;
-  --fanous-c-tabs-indicator: #a85600;
+  --fanous-c-tabs-indicator: #7b3f00;
   --fanous-c-tabs-border: #dca877;
   --fanous-c-segment-bg: #fff7ec;
   --fanous-c-segment-text: #2e1206;
@@ -1452,7 +1452,7 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-c-badge-status-text: #ffffff;
   --fanous-c-player-control: #2e1206;
   --fanous-c-player-control-bg: #fdeedb;
-  --fanous-c-player-progress: #a85600;
+  --fanous-c-player-progress: #7b3f00;
   --fanous-c-player-buffered: #83593a;
   --fanous-c-player-track: #fff7ec;
   --fanous-c-footer-bg: #fdeedb;
