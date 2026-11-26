@@ -3,7 +3,7 @@
  * - A failed D1 flush never acknowledges counter-bearing messages; they are retried
  *   with bounded backoff and routed to the DLQ after max_retries.
  * - Per-message dedupe markers (analytics_dedupe, migration 0023, PK (day_bucket, message_id)
- *   WITHOUT ROWID and no secondary index: 1 row written on insert + 1 on purge) commit in the
+ *   WITHOUT ROWID and no secondary index) commit in the
  *   same D1 batch transaction as analytics_daily upserts, so redeliveries and duplicates are
  *   no-ops and mid-batch failures roll back cleanly.
  * - Hourly bounded PK-prefix purge in 1,000-row chunks; zero table scans.
@@ -343,6 +343,30 @@ describe('exact analytics counts (#1921)', () => {
     expect(metricValue(db, 'video', 'v-mid', 'views')).toBe(1);
   });
 
+  it.each([
+    ['stale', '2026-10-01T12:00:00Z', '2026-12-02'],
+    ['unparseable', 'invalid', '2026-11-27'],
+    ['missing', undefined, '2026-11-27'],
+    ['future', '2026-11-29T12:00:00Z', '2026-11-27'],
+    ['future on first delivery only', '2026-11-27T12:00:00Z', '2026-11-28'],
+    ['in-window on first delivery only', '2026-11-20T12:00:00Z', '2026-11-28'],
+  ])('dedupes a %s timestamp across UTC days without refreshing its marker', async (_label, timestamp, retryDay) => {
+    const db = createSqliteD1();
+    const increments = [
+      { entityType: 'video' as const, entityId: 'v1', day: DAY, metric: 'views', value: 1 },
+      { entityType: 'video' as const, entityId: 'v1', day: DAY, metric: 'source', dim: 'embed', maxDims: 5, value: 1 },
+    ];
+    for (const day of [DAY, retryDay]) {
+      await purgeExpiredAnalyticsDedupe(db, Date.parse(day));
+      const batch = new CounterBatch();
+      batch.addForMessage('redelivered', increments, timestamp);
+      await batch.flush(db, 1, { now: Date.parse(day) });
+    }
+    expect(metricValue(db, 'video', 'v1', 'views')).toBe(1);
+    expect(metricValue(db, 'video', 'v1', 'source', 'embed')).toBe(1);
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe').get()).toEqual({ n: 1 });
+  });
+
   it('a partial batch failure (per-message, mixed-batch flush, or refused increment) counts each valid message exactly once', async () => {
     const db = createSqliteD1();
 
@@ -500,7 +524,7 @@ describe('exact analytics counts (#1921)', () => {
   it('has no secondary index on analytics_dedupe, merges hot batches, and runs zero table scans', async () => {
     const db = createSqliteD1();
 
-    // S1: No secondary index on analytics_dedupe -> 1 row written on insert + 1 on purge delete
+    // S1: No secondary index on analytics_dedupe
     const secondaryIndexes = db.raw
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'analytics_dedupe'")
       .all() as { name: string }[];
@@ -529,7 +553,7 @@ describe('exact analytics counts (#1921)', () => {
       (db.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[]).map((r) => r.detail).join(' | ');
 
     const { lookupBuckets } = resolveMessageBuckets(AT, Date.parse(AT));
-    const bulkPlan = plan(BULK_UPSERT_DEDUPED, JSON.stringify([['video', 'v1', DAY, 'views', '', 1, 'hot-0', ...lookupBuckets]]));
+    const bulkPlan = plan(BULK_UPSERT_DEDUPED, JSON.stringify([['video', 'v1', DAY, 'views', '', 1, 'hot-0', lookupBuckets]]));
     expect(bulkPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket=\? AND message_id=\?\)/);
     expect(bulkPlan).not.toMatch(/SCAN analytics_dedupe/);
 
@@ -542,12 +566,12 @@ describe('exact analytics counts (#1921)', () => {
       'embed',
       10,
       'other',
-      JSON.stringify([['hot-0', 1, ...lookupBuckets]]),
+      JSON.stringify([['hot-0', 1, lookupBuckets]]),
     );
     expect(boundedPlan).toMatch(/SEARCH analytics_dedupe USING PRIMARY KEY \(day_bucket=\? AND message_id=\?\)/);
     expect(boundedPlan).not.toMatch(/SCAN analytics_dedupe/);
 
-    const dedupeInsertPlan = plan(DEDUPE_INSERT, JSON.stringify([[DAY, 'hot-0']]));
+    const dedupeInsertPlan = plan(DEDUPE_INSERT, JSON.stringify([[DAY, 'hot-0', lookupBuckets]]));
     expect(dedupeInsertPlan).not.toMatch(/SCAN analytics_dedupe/);
 
     const purgePlan = plan(
@@ -581,7 +605,7 @@ describe('exact analytics counts (#1921)', () => {
 
     // Next hourly run finishes the remaining expired row and keeps active rows untouched
     const finished = await runAnalyticsDedupePurge(makeEnv(db), now);
-    expect(finished).toMatchObject({ deleted: 1, rounds: 1, caughtUp: true, timedOut: false });
+    expect(finished).toMatchObject({ deleted: 1, rowsWritten: null, rounds: 1, caughtUp: true, timedOut: false });
     const remaining = db.raw.prepare('SELECT day_bucket, message_id FROM analytics_dedupe ORDER BY message_id').all();
     expect(remaining).toEqual([
       { day_bucket: activeDay, message_id: 'fresh-0' },
@@ -613,5 +637,39 @@ describe('exact analytics counts (#1921)', () => {
     expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(expiredDay)).toEqual({ n: 0 });
     expect(db.raw.prepare('SELECT COUNT(*) AS n FROM analytics_dedupe WHERE day_bucket = ?').get(activeDay)).toEqual({ n: 2 });
     expect(ANALYTICS_DEDUPE_TTL_MS).toBe(ANALYTICS_DEDUPE_TTL_DAYS * 86_400_000);
+  });
+
+  it('adds billed rows across purge chunks separately from changes', async () => {
+    const db = createSqliteD1();
+    const run = jest.fn()
+      .mockResolvedValueOnce({ success: true, meta: { changes: 1000, rows_written: 2000 } })
+      .mockResolvedValueOnce({ success: true, meta: { changes: 7, rows_written: 14 } });
+    const bind = jest.fn().mockReturnValue({ run });
+    const result = await purgeExpiredAnalyticsDedupe({ ...db, prepare: jest.fn().mockReturnValue({ bind }) }, Date.parse(AT));
+    expect(result).toMatchObject({ deleted: 1007, rowsWritten: 2014, rounds: 2, caughtUp: true });
+    expect(bind.mock.calls).toEqual([['2026-11-16', 1000], ['2026-11-16', 1000]]);
+  });
+
+  it('runs one authenticated 1,000-row purge chunk in QA only and returns the D1 metric', async () => {
+    const db = createSqliteD1();
+    const run = jest.fn().mockResolvedValue({ success: true, meta: { changes: 1000, rows_written: 2000 } });
+    const bind = jest.fn().mockReturnValue({ run });
+    const env = makeEnv({ ...db, prepare: jest.fn().mockReturnValue({ bind }) }, {
+      ENVIRONMENT: 'qa',
+      INTERNAL_API_KEY: 'test-internal-key',
+    });
+    const url = 'https://processor.example/internal/qa/analytics-dedupe/purge';
+    const headers = { 'X-API-Key': 'test-internal-key' };
+
+    expect((await worker.fetch(new Request(url, { method: 'POST' }), env)).status).toBe(401);
+    expect((await worker.fetch(new Request(url, { headers }), env)).status).toBe(405);
+    expect((await worker.fetch(new Request(url, { method: 'POST', headers }), { ...env, ENVIRONMENT: 'production' })).status).toBe(404);
+    expect(run).not.toHaveBeenCalled();
+
+    const response = await worker.fetch(new Request(url, { method: 'POST', headers }), env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: 1000, rowsWritten: 2000, rounds: 1, caughtUp: false });
+    expect(bind).toHaveBeenCalledWith(expect.any(String), 1000);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

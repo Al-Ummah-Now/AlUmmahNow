@@ -146,6 +146,50 @@ describe('handleModerationScan', () => {
     expect(signals(db)[0]).toMatchObject({ decision: 'skipped', skip_reason: 'error', review_status: 'pending' });
   });
 
+  it('scans clean chat and tracks usage without persisting a moderation signal', async () => {
+    const { db, ai, env } = setup();
+    const out = await handleModerationScan(payload('hello', { surface: 'live_chat' }), env, logger, { lastAttempt: true, now: NOW });
+    expect(out).toEqual({ status: 'done', decision: 'none' });
+    expect(ai!.run).toHaveBeenCalledTimes(1);
+    expect(usage(db)).toHaveLength(1);
+    expect(signals(db)).toHaveLength(0);
+    expect(actions(db)).toHaveLength(0);
+  });
+
+  it('retries chat AI failures and skips on the final attempt without a signal', async () => {
+    const chat = payload('hello', { surface: 'live_chat' });
+    const failure = setup({ ai: mockAi({ '@cf/meta/llama-guard-3-8b': new Error('down') }) });
+    expect(await handleModerationScan(chat, failure.env, logger, { lastAttempt: false, now: NOW })).toEqual({
+      status: 'retry', error: 'down',
+    });
+    expect(await handleModerationScan(chat, failure.env, logger, { lastAttempt: true, now: NOW })).toEqual({
+      status: 'done', decision: 'skipped:error',
+    });
+    expect(signals(failure.db)).toHaveLength(0);
+  });
+
+  it('persists a shadow flag and its audit action for chat', async () => {
+    const { db, env } = setup({ ai: mockAi({ '@cf/meta/llama-guard-3-8b': { response: 'unsafe\nS10' } }) });
+    const out = await handleModerationScan(payload('hello', { surface: 'live_chat' }), env, logger, { lastAttempt: true, now: NOW });
+    expect(out.decision).toBe('would_flag');
+    expect(signals(db)[0]).toMatchObject({ id: out.status === 'done' && out.signalId, subject_type: 'live_chat', review_status: 'pending' });
+    expect(actions(db)[0]).toMatchObject({ action: 'would_flag' });
+  });
+
+  it('keeps a signal for sub-threshold strict holds and still attempts the hold', async () => {
+    const { db, env } = setup({ extensions: true, ai: mockAi({ extensions: { response: extJson({ spam: 0.85 }) } }) });
+    db.raw.prepare('INSERT INTO moderation_config (key, value, updated_at) VALUES (?, ?, ?)').run(
+      'policies', JSON.stringify({ spam: { mode: 'enforce', action: 'flag', threshold: 0.95 } }), 'now',
+    );
+    const run = jest.fn().mockResolvedValue({ meta: { changes: 0 } });
+    const prepare = jest.fn().mockReturnValue({ bind: jest.fn().mockReturnValue({ run }) });
+    const out = await handleModerationScan(payload('hello', { surface: 'live_chat' }), { ...env, SEARCH_DB: { prepare } }, logger, { lastAttempt: true, now: NOW });
+    expect(out.decision).toBe('none');
+    expect(signals(db)[0]).toMatchObject({ decision: 'none', top_category: 'spam' });
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("m.ai_hold IN ('strict')"));
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it('mixed text with a meaningful Arabic part is translated AND checked as-is; stricter verdict wins', async () => {
     const ai = mockAi();
     ai.run.mockImplementation(async (model: string, input: Record<string, unknown>) => {

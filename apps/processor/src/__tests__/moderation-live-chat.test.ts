@@ -48,8 +48,8 @@ test('live chat stops at its share; other surfaces go on', async () => {
   const used = guardCalls;
   expect(((await handleModerationScan(scan({ surface: 'video_comment' }), env, logger)) as { decision: string }).decision).not.toBe('skipped:budget');
   expect(guardCalls).toBe(used + 1);
-  const skipped = db.raw.prepare("SELECT surface, skip_reason FROM moderation_signals WHERE decision = 'skipped' LIMIT 1").get();
-  expect({ ...(skipped as object) }).toEqual({ surface: 'live_chat', skip_reason: 'budget' });
+  const persisted = db.raw.prepare('SELECT surface, decision FROM moderation_signals').all();
+  expect(persisted.map((row) => ({ ...row }))).toEqual([{ surface: 'video_comment', decision: 'none' }]);
 });
 
 test('when the site is at its cap, the chat reservation is given back', async () => {
