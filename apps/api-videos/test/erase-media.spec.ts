@@ -426,6 +426,37 @@ describe('the job', () => {
 		for (const path of kept) assert.ok(item.message.includes(path), path);
 	});
 
+	it('leaves a surviving channel’s thumbnails out of profile erasure, including previously queued paths', async () => {
+		const env = await setup();
+		const bunny = '/thumbnails/v-guest/t.jpg';
+		const r2 = '/pub/thumbs/v-guest/a.jpg';
+		for (const path of [bunny, r2]) own(env, path, ME, null, 'video_thumbnail');
+		await eraseMediaHooks(env).onProfileDeleted(ME, env.profiles.read(ME));
+		const [job] = jobs(env);
+		const paths = JSON.parse(job.params).items.flatMap((item: Json) => item.paths ?? []);
+		assert.ok(paths.includes('/a-me_avatar.jpg'));
+		for (const path of [bunny, r2]) {
+			assert.ok(!paths.includes(path), path);
+			assert.ok(rowOf(env, path), path);
+		}
+
+		// A job built by the earlier code could already name these paths when the
+		// profile disappears and the uploader rows are still present.
+		env.profiles.store.delete(ME);
+		const id = await start(env, [{ t: 'images', paths: [bunny, r2] }]);
+		await step(env, id);
+		assert.equal((await step(env, id)).done, true);
+		// Also cover a partially processed job that had already checkpointed the paths.
+		const retry = await start(env, [{ t: 'files', kind: 'user', id: '', own: true, paths: [bunny, r2, '/a-me_avatar.jpg'] }]);
+		await step(env, retry);
+		assert.equal((await step(env, retry)).done, true);
+		assert.ok(!out.images.has('/a-me_avatar.jpg'));
+		assert.ok(out.images.has(bunny));
+		assert.ok(env.MEDIA.store.has(r2.slice(1)));
+		for (const path of [bunny, r2]) assert.ok(rowOf(env, path), path);
+		assert.ok(env.videos.read('v-guest'));
+	});
+
 	it('a channel\'s image on an unproven row is kept too, while its own folder goes', async () => {
 		const env = await setup();
 		env.SEARCH_DB.db.prepare("UPDATE image_owners SET created_at = '2026-11-01T00:00:00.000Z' WHERE path = '/c-me_avatar.jpg'").run();

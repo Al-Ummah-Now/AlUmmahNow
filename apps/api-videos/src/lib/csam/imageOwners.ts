@@ -1,11 +1,12 @@
 /**
- * Who uploaded each image on images.alummahnow.net (SEARCH_DB `image_owners`, migration 0037;
+ * Who uploaded each image on our image CDN or public media host (SEARCH_DB `image_owners`, migration 0037;
  * docs/specs/CSAM-RESPONSE.md §3). Avatar, cover and post-image paths carry only a random id, so a
  * matched URL reaches its uploader through this index: written on upload (recordImageOwner), and
  * for images uploaded before it by the images.index-owners job (backfillImageOwnersStep).
  */
 import type { JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
+import { IMAGE_HOST } from '../thumbnail/shape';
 
 export const IMAGE_OWNER_KINDS = ['profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail'] as const;
 export type ImageOwnerKind = (typeof IMAGE_OWNER_KINDS)[number];
@@ -33,6 +34,25 @@ export function imagePathOf(url: string | null | undefined): string | null {
 }
 
 /**
+ * Canonical path for a newly submitted upload URL. These paths are generated
+ * by our upload endpoints. Bunny thumbnail variants carry width and quality.
+ */
+export function imageUploadPath(value: string, mediaHost?: string): string | null {
+	const match = /^https:\/\/([a-z0-9.-]+)(\/(?:[a-z0-9_.-]+\/)*[a-z0-9_-]+\.[a-z0-9]+)(\?width=\d{1,4}&quality=\d{1,3})?$/i.exec(value);
+	if (!match || match[0] !== value) return null;
+	try {
+		const url = new URL(value);
+		if (url.pathname !== match[2]) return null;
+		if (/^\/pub\/thumbs\/[a-z0-9_-]+\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)) {
+			return mediaHost && url.hostname === mediaHost && !url.search ? url.pathname : null;
+		}
+		return url.hostname === IMAGE_HOST ? url.pathname : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * The upload's own marker: an upload writes its time with the offset `+00:00`, everything else
  * (the backfill, and every row from before the marker) with `Z`. A row without it is a guess from
  * whichever record names the image, good enough to find an uploader to ask about and not to delete
@@ -42,8 +62,8 @@ const uploadedAt = (now: Date) => now.toISOString().replace(/Z$/, '+00:00');
 export const isUploadRow = (createdAt: string): boolean => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$/.test(createdAt);
 
 /** Records who uploaded an image. Never fails the upload: a lost row is logged (the backfill finds it). */
-export async function recordImageOwner(db: Db | undefined, url: string, owner: { kind: ImageOwnerKind; ownerId: string | null; channelId?: string | null }, now = new Date()): Promise<void> {
-	const path = imagePathOf(url);
+export async function recordImageOwner(db: Db | undefined, url: string, owner: { kind: ImageOwnerKind; ownerId: string | null; channelId?: string | null; mediaHost?: string }, now = new Date()): Promise<void> {
+	const path = owner.kind === 'video_thumbnail' ? imageUploadPath(url, owner.mediaHost) : imagePathOf(url);
 	if (!db || !path) return;
 	try {
 		await db
@@ -75,10 +95,11 @@ export async function forgetImageOwner(db: Db | undefined, path: string): Promis
  * row still proves which channel the file is, so it goes when that channel does. A profile image's own
  * upload row stays until the erasure's media job has deleted the file, and goes with it: it is what that
  * job proves the file by, and finds a surviving profile or a takedown by (lib/privacy/erase-media.ts).
+ * Video thumbnails have video-level erasure proof, so their uploader rows can go now.
  */
 export async function eraseImageOwners(db: { prepare(sql: string): { bind(...v: unknown[]): { run(): Promise<unknown> } } }, userId: string): Promise<void> {
 	await db.prepare('UPDATE image_owners SET owner_id = NULL WHERE owner_id = ? AND channel_id IS NOT NULL').bind(userId).run();
-	await db.prepare(`DELETE FROM image_owners WHERE owner_id = ? AND created_at NOT LIKE '%+00:00'`).bind(userId).run();
+	await db.prepare(`DELETE FROM image_owners WHERE owner_id = ? AND (kind = 'video_thumbnail' OR created_at NOT LIKE '%+00:00')`).bind(userId).run();
 }
 
 // --- Backfill (job images.index-owners) ------------------------------------------------

@@ -2969,12 +2969,18 @@
                     "type": "boolean"
                   },
                   "avatarUrl": {
-                    "type": "string",
-                    "description": "Channel avatar URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Channel avatar URL. Null or an empty string clears it"
                   },
                   "coverUrl": {
-                    "type": "string",
-                    "description": "Channel cover image URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Channel cover image URL. Null or an empty string clears it"
                   }
                 },
                 "required": [
@@ -6090,12 +6096,18 @@
                     "type": "boolean"
                   },
                   "avatarUrl": {
-                    "type": "string",
-                    "description": "Channel avatar URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Channel avatar URL. Null or an empty string clears it"
                   },
                   "coverUrl": {
-                    "type": "string",
-                    "description": "Channel cover image URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Channel cover image URL. Null or an empty string clears it"
                   },
                   "handle": {
                     "type": "string",
@@ -27750,8 +27762,11 @@
                     "description": "Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"
                   },
                   "thumbnailUrl": {
-                    "type": "string",
-                    "description": "Playlist thumbnail URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Playlist thumbnail URL. Null or an empty string clears it"
                   },
                   "videos": {
                     "type": "array",
@@ -28763,8 +28778,11 @@
                     "description": "Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"
                   },
                   "thumbnailUrl": {
-                    "type": "string",
-                    "description": "Playlist thumbnail URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Playlist thumbnail URL. Null or an empty string clears it"
                   },
                   "isPublic": {
                     "type": "boolean"
@@ -31624,12 +31642,18 @@
                     "description": "Multi-language bios"
                   },
                   "avatarUrl": {
-                    "type": "string",
-                    "description": "Profile avatar URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Profile avatar URL. Null or an empty string clears it"
                   },
                   "coverUrl": {
-                    "type": "string",
-                    "description": "Profile cover image URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Profile cover image URL. Null or an empty string clears it"
                   },
                   "timezone": {
                     "type": "string",
@@ -33733,12 +33757,18 @@
                     "description": "Multi-language bios"
                   },
                   "avatarUrl": {
-                    "type": "string",
-                    "description": "Profile avatar URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Profile avatar URL. Null or an empty string clears it"
                   },
                   "coverUrl": {
-                    "type": "string",
-                    "description": "Profile cover image URL"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Profile cover image URL. Null or an empty string clears it"
                   },
                   "timezone": {
                     "type": "string",

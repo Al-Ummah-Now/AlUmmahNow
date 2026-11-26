@@ -181,15 +181,15 @@ const ROWS_PAGE = 200;
 const MAX_CHANNELS = 100;
 
 /**
- * Every image the account uploaded, except those on a channel that still exists (its own are gone by
- * now), a page of rows at a time: it is written down before the next is read.
+ * Images the account uploaded, excluding video thumbnails (handled per video) and uploads on
+ * surviving channels. Each page is written down before the next is read.
  */
 async function* profileItems(env: Env, userId: string, profile: Json | null, spend: (n: number) => void): AsyncGenerator<MediaItem[]> {
 	const db = dbOf(env)!;
 	const rowsWhere = async function* (where: string, binds: unknown[]): AsyncGenerator<OwnerRow[]> {
 		for (let at = ''; ; ) {
 			spend(1);
-			const { results } = await db.prepare(`SELECT path, kind, owner_id, channel_id, created_at FROM image_owners WHERE owner_id = ? AND ${where} AND path > ? ORDER BY path LIMIT ${ROWS_PAGE}`).bind(userId, ...binds, at).all<OwnerRow>();
+			const { results } = await db.prepare(`SELECT path, kind, owner_id, channel_id, created_at FROM image_owners WHERE owner_id = ? AND kind <> 'video_thumbnail' AND ${where} AND path > ? ORDER BY path LIMIT ${ROWS_PAGE}`).bind(userId, ...binds, at).all<OwnerRow>();
 			const rows = results ?? [];
 			if (rows.length) yield rows;
 			if (rows.length < ROWS_PAGE) return;
@@ -215,7 +215,7 @@ async function* profileItems(env: Env, userId: string, profile: Json | null, spe
 	};
 	for await (const rows of rowsWhere('channel_id IS NULL', [])) yield itemsOf(rows);
 	spend(1);
-	const { results } = await db.prepare(`SELECT channel_id AS id, COUNT(*) AS n FROM image_owners WHERE owner_id = ? AND channel_id IS NOT NULL GROUP BY channel_id LIMIT ${MAX_CHANNELS + 1}`).bind(userId).all<{ id: string; n: number }>();
+	const { results } = await db.prepare(`SELECT channel_id AS id, COUNT(*) AS n FROM image_owners WHERE owner_id = ? AND kind <> 'video_thumbnail' AND channel_id IS NOT NULL GROUP BY channel_id LIMIT ${MAX_CHANNELS + 1}`).bind(userId).all<{ id: string; n: number }>();
 	const channels = results ?? [];
 	let elsewhere = 0;
 	for (const channel of channels.slice(0, MAX_CHANNELS)) {
@@ -616,7 +616,7 @@ async function eraseOwnPaths(s: Step, item: Extract<MediaItem, { t: 'images' }>,
 		for (const path of chunk) {
 			const row = rows.get(path);
 			const [kind, id] = row?.channel_id ? (['channel', row.channel_id] as const) : (['user', row?.owner_id] as const);
-			if (!row || !proven(row) || !id) continue;
+			if (!row || row.kind === 'video_thumbnail' || !proven(row) || !id) continue;
 			const key = `${kind}:${id}`;
 			if (!groups.has(key)) groups.set(key, { kind, id, paths: [] });
 			groups.get(key)!.paths.push(path);
@@ -746,11 +746,16 @@ async function eraseFiles(s: Step, item: Extract<MediaItem, { t: 'files' }>): Pr
 	if (!calls.has(IMAGE_CHUNK * FILE_CALLS + 50)) return 'more';
 	const rows = await rowsOf(env, item.paths, calls);
 	if (item.own) {
-		const uploaders = [...rows.values()].map((row) => row.owner_id).filter((id): id is string => !!id);
-		// The rows go last: without them there is nothing left to finish
+		// The rows go last. A checkpoint can still name a thumbnail from before
+		// profile erasure excluded them, even after its uploader row was erased.
+		const paths = item.paths.filter((path) => {
+			const row = rows.get(path);
+			return row && row.kind !== 'video_thumbnail';
+		});
+		const uploaders = paths.map((path) => rows.get(path)!.owner_id).filter((id): id is string => !!id);
 		const id = item.kind === 'user' ? uploaders[0] : item.id;
-		if (!id) return 'done';
-		return (await deleteImages(s, { kind: item.kind, id }, item.paths, uploaders, true)) ? 'done' : 'takedown';
+		if (!id || !paths.length) return 'done';
+		return (await deleteImages(s, { kind: item.kind, id }, paths, uploaders, true)) ? 'done' : 'takedown';
 	}
 	const decided = await decide(s, item.paths, rows, new Shown(env, calls), false);
 	const left = item.paths.slice(decided.last ? item.paths.indexOf(decided.last) + 1 : 0);
