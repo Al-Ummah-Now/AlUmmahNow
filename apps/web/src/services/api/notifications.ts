@@ -19,7 +19,7 @@
 
 import { logger } from '@/lib/logger-client';
 import { getApiUrl } from '@/lib/runtime-config';
-import { getClientAuthHeaders } from '@/lib/auth/client-token';
+import { fetchClientAuthToken } from '@/lib/auth/client-token';
 import type {
   ChannelBellLevel,
   NotificationCounts,
@@ -44,7 +44,9 @@ export interface NotificationPage {
 
 async function request<T>(path: string, init: RequestInit = {}, label: string): Promise<T | null> {
   try {
-    const headers: Record<string, string> = { ...(await getClientAuthHeaders()) };
+    // The inbox belongs to the signed-in account, including after its active channel moves.
+    const token = await fetchClientAuthToken();
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     if (init.body) headers['Content-Type'] = 'application/json';
     const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
     if (!response.ok) {
