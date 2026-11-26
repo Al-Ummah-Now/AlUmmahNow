@@ -101,6 +101,18 @@ describe('/api/uploads/stale', () => {
     assert.equal((await audit()).length, 3);
   });
 
+  it('a refused list is an error for the page, never the list without its filter', async () => {
+    for (const status of [400, 413]) {
+      const { req, db, calls } = setup(['Admin'], (path) => (path.endsWith('/stale') ? { status, json: { success: false, code: 'x', error: 'refused' } } : { status: 200, json: { success: true, result: {} } }));
+      await db.prepare(CASE).bind(ID).run();
+      const res = await req('/api/uploads/stale');
+      assert.equal(res.status, status);
+      const body = (await res.json()) as any;
+      assert.deepEqual([body.success, body.result], [false, undefined]);
+      assert.equal(calls[0].method, 'POST');
+    }
+  });
+
   it('the videos a case keeps come from the index alone', async () => {
     const { VIDEOS_UNDER_CASE_SQL } = await import('../src/lib/csam');
     const { db } = setup(['Admin']);

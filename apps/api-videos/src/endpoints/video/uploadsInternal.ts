@@ -17,6 +17,7 @@
  */
 
 import { Hono } from 'hono';
+import { apiError } from '../../lib/api-error';
 import { logger } from '../../lib/logger';
 import {
 	keepItem,
@@ -49,6 +50,9 @@ function actorOf(body: unknown): string {
 	const actor = (body as { actor?: unknown })?.actor;
 	return typeof actor === 'string' && actor.trim() ? actor.trim().slice(0, 200) : 'admin';
 }
+
+/** Most videos one list may leave out (POST /stale) */
+export const MAX_HIDE = 10_000;
 
 export function createUploadsInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
@@ -105,7 +109,12 @@ export function createUploadsInternalRouter() {
 	app.get('/stale', (c) => stale(c as never, { status: c.req.query('status'), limit: c.req.query('limit') }, new Set()));
 	app.post('/stale', async (c) => {
 		const body = (await c.req.json().catch(() => null)) as { status?: unknown; limit?: unknown; hide?: unknown } | null;
-		const hide = Array.isArray(body?.hide) ? body!.hide.filter((id): id is string => typeof id === 'string').slice(0, 10_000) : [];
+		// Never a list without them: a hide that is not a list of ids is refused, and so is one too long to take whole
+		if (!body || typeof body !== 'object' || !Array.isArray(body.hide) || !body.hide.every((id) => typeof id === 'string')) {
+			return apiError(c, 400, 'bad_request', { error: 'hide must be a list of video ids' });
+		}
+		if (body.hide.length > MAX_HIDE) return apiError(c, 413, 'too_many', { error: `hide takes at most ${MAX_HIDE} ids` });
+		const hide = body.hide as string[];
 		return stale(c as never, { status: typeof body?.status === 'string' ? body.status : undefined, limit: body?.limit == null ? undefined : String(body.limit) }, new Set(hide));
 	});
 
