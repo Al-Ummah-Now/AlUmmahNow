@@ -6,11 +6,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { PlaylistsList } from '../src/endpoints/playlist/playlistsList';
+import { PlaylistAddVideo } from '../src/endpoints/playlist/playlistAddVideo';
+import { PlaylistCreate } from '../src/endpoints/playlist/playlistCreate';
 import { PlaylistFetch } from '../src/endpoints/playlist/playlistFetch';
+import { PlaylistRemoveVideo } from '../src/endpoints/playlist/playlistRemoveVideo';
+import { PlaylistUpdate } from '../src/endpoints/playlist/playlistUpdate';
 import { ChannelPlaylistsList } from '../src/endpoints/channel/channelPlaylistsList';
+import { MAX_COUNT_R2_READS, resolveViewableVideoIds, withPlaylistCovers } from '../src/lib/playlistCovers';
 import { transformPlaylistToView } from '../src/lib/transformations';
 import { runOwnershipPass } from '../src/lib/search/ownership';
-import { MemoryBucket, buildApp, videoFixture } from './helpers';
+import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const CHANNEL_ID = 'b4beecaf-0000-0000-0000-000000000001';
@@ -20,6 +25,10 @@ function routes(r: any) {
 	r.get('/api/playlists', PlaylistsList);
 	r.get('/api/playlists/:id', PlaylistFetch);
 	r.get('/api/channels/:id/playlists', ChannelPlaylistsList);
+	r.post('/api/playlists', PlaylistCreate);
+	r.patch('/api/playlists/:id', PlaylistUpdate);
+	r.post('/api/playlists/:id/videos', PlaylistAddVideo);
+	r.delete('/api/playlists/:id/videos/:videoId', PlaylistRemoveVideo);
 }
 
 function fixtureEnv(withIndex: boolean) {
@@ -119,6 +128,126 @@ describe('playlist videosCount excludes deleted and private videos (#941)', () =
 			assert.equal(editorList.data[0].videosCount, 4);
 		});
 	}
+
+	describe('mutation responses', () => {
+		const playlistPath = `/api/playlists/${PLAYLIST_ID}`;
+		const cases = [
+			{
+				name: 'creates a playlist with public and caller-visible private videos',
+				method: 'POST', path: '/api/playlists',
+				body: { title: 'New playlist', videos: ['pub-1', 'moved-private', 'deleted-1', 'hidden-1', 'other-private'] },
+				expected: ['pub-1', 'moved-private'],
+			},
+			{
+				name: 'adds a video and filters the existing playlist',
+				method: 'POST', path: `${playlistPath}/videos`,
+				body: { videoId: 'pub-3' },
+				expected: ['pub-1', 'pub-2', 'moved-private', 'pub-3'],
+			},
+			{
+				name: 'removes a video and filters the remaining playlist',
+				method: 'DELETE', path: `${playlistPath}/videos/pub-2`,
+				expected: ['pub-1', 'moved-private'],
+			},
+			{
+				name: 'updates details and filters the existing playlist',
+				method: 'PATCH', path: playlistPath,
+				body: { title: 'Renamed playlist' },
+				expected: ['pub-1', 'pub-2', 'moved-private'],
+			},
+		];
+
+		for (const { name, method, path, body, expected } of cases) {
+			it(name, async () => {
+				const env = { ...fixtureEnv(true), queue: new MemoryQueue() };
+				const playlist = env.playlists.read(PLAYLIST_ID);
+				const storedIds = ['pub-1', 'pub-2', 'moved-private', 'deleted-1', 'hidden-1', 'other-private'];
+				await env.playlists.put(PLAYLIST_ID, JSON.stringify({ ...playlist, videos: storedIds }));
+				await env.videos.put('moved-private', JSON.stringify(videoFixture({
+					id: 'moved-private', userId: 'former-owner', channelId: CHANNEL_ID, isPublic: false, uploadStatus: 'ready',
+				})));
+				await runOwnershipPass(env as never, 'video');
+
+				const app = buildApp(routes, { userId: 'qa-creator' });
+				const response = await app.request(path, {
+					method,
+					headers: { 'content-type': 'application/json', channelId: CHANNEL_ID },
+					body: JSON.stringify(body),
+				}, env);
+				const result = await response.json() as { result: { playlist: { id: string; videos: string[]; videosCount: number } } };
+				assert.equal(response.status, 200, JSON.stringify(result));
+				assert.deepEqual(result.result.playlist.videos, expected);
+				assert.equal(result.result.playlist.videosCount, expected.length);
+				const stored = env.playlists.read(result.result.playlist.id);
+				if (result.result.playlist.id === PLAYLIST_ID) {
+					assert.deepEqual(
+						stored.videos.filter((id: string) => ['deleted-1', 'hidden-1', 'other-private'].includes(id)),
+						['deleted-1', 'hidden-1', 'other-private'],
+					);
+				} else {
+					assert.deepEqual(stored.videos, expected);
+				}
+			});
+		}
+	});
+
+	it('uses the live channel owner after a move, including on indexed reads', async () => {
+		const env = fixtureEnv(true);
+		const channel = env.channels.read('other-ch');
+		await env.channels.put(channel.id, JSON.stringify({ ...channel, userId: 'new-owner' }));
+		await runOwnershipPass(env as never, 'video');
+
+		for (const [userId, expected] of [['new-owner', true], ['editor', true], ['android-tester', false]] as const) {
+			const response = await buildApp(routes, { userId }).request(`/api/playlists/${PLAYLIST_ID}`, {}, env);
+			assert.equal(response.status, 200);
+			const { videos, videosCount } = await response.json() as { videos: string[]; videosCount: number };
+			assert.deepEqual(videos, ['pub-1', 'pub-2', 'pub-3', ...(expected ? ['other-private'] : [])], userId);
+			assert.equal(videosCount, videos.length);
+		}
+	});
+
+	it('answers at the R2 read cap and falls back above it or without a videos binding', async () => {
+		const env = fixtureEnv(true);
+		const expandedPageSize = 200;
+		const ids = Array.from({ length: expandedPageSize + MAX_COUNT_R2_READS + 1 }, (_, i) => `private-${i}`);
+		for (const id of ids) {
+			await env.videos.put(id, JSON.stringify(videoFixture({
+				id, userId: 'qa-creator', channelId: CHANNEL_ID, isPublic: false, uploadStatus: 'ready',
+			})));
+		}
+		await runOwnershipPass(env as never, 'video');
+
+		const atCap = ids.slice(0, MAX_COUNT_R2_READS);
+		env.videos.calls = 0;
+		assert.deepEqual(await resolveViewableVideoIds(env as never, atCap, 'qa-creator'), new Set(atCap));
+		assert.equal(env.videos.calls, MAX_COUNT_R2_READS);
+
+		const allIds = ['pub-1', ...ids.slice(0, MAX_COUNT_R2_READS + 1)];
+		env.videos.calls = 0;
+		assert.equal(await resolveViewableVideoIds(env as never, allIds, 'qa-creator'), null);
+		assert.equal(env.videos.calls, 0);
+		const indexedOnly = { SEARCH_DB: env.SEARCH_DB };
+		assert.equal(await resolveViewableVideoIds(indexedOnly, ['pub-1', ids[0]], 'qa-creator'), null);
+		assert.deepEqual(await resolveViewableVideoIds(indexedOnly, allIds), new Set(['pub-1']));
+		assert.deepEqual(await resolveViewableVideoIds(indexedOnly, ['pub-1'], 'qa-creator'), new Set(['pub-1']));
+
+		// Each playlist fits the cap on its own, but the whole page exceeds it.
+		const playlists = [atCap, ['pub-1', ids[MAX_COUNT_R2_READS]]].map((videos, i) => ({
+			id: `playlist-${i}`, thumbnailUrl: 'https://example.test/cover.webp', videos, videosCount: videos.length,
+		}));
+		assert.deepEqual(await withPlaylistCovers(env as never, playlists, 'qa-creator'), playlists);
+		assert.equal(env.videos.calls, 0);
+
+		const playlist = env.playlists.read(PLAYLIST_ID);
+		await env.playlists.put(PLAYLIST_ID, JSON.stringify({ ...playlist, videos: ids }));
+		const app = buildApp(routes, { userId: 'qa-creator' });
+		const response = await app.request(`/api/playlists/${PLAYLIST_ID}?includeVideos=true`, {}, env);
+		assert.equal(response.status, 200);
+		const expanded = await response.json() as { videos: string[]; videosCount: number; videoItems: Array<{ id: string }> };
+		assert.deepEqual(expanded.videoItems.map(({ id }) => id), ids.slice(0, expandedPageSize));
+		assert.deepEqual(expanded.videos, ids);
+		assert.equal(expanded.videosCount, ids.length);
+	});
 
 	it('transformPlaylistToView honours filtered visibleVideos over raw playlist.videos.length', () => {
 		const view = transformPlaylistToView(

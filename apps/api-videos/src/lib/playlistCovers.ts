@@ -207,7 +207,7 @@ export async function resolveViewableVideoIds(
                     }
                 }
                 toRead = nonPublic;
-                if (!env.videos || toRead.length > MAX_COUNT_R2_READS) return visible;
+                if (toRead.length === 0) return visible;
             }
         } catch (error) {
             visible.clear();
