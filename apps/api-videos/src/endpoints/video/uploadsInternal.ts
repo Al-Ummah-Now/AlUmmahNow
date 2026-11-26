@@ -53,11 +53,13 @@ function actorOf(body: unknown): string {
 export function createUploadsInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
 
-	app.get('/stale', async (c) => {
-		const status = c.req.query('status');
-		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '200', 10) || 200, 1), 500);
-		// hide: videos the reader may not see (admin-api): not listed, not counted
-		const hide = new Set((c.req.query('hide') ?? '').split(',').filter(Boolean));
+	/**
+	 * The list. GET for a reader who sees everything; POST { status?, limit?, hide: string[] } with the videos the
+	 * reader may not see (admin-api: those a case keeps), which are neither listed nor counted.
+	 */
+	const stale = async (c: { env: Env; json: (b: unknown, s?: number) => Response }, q: { status?: string; limit?: string }, hide: ReadonlySet<string>) => {
+		const status = q.status;
+		const limit = Math.min(Math.max(parseInt(q.limit || '200', 10) || 200, 1), 500);
 		let items = (await listItems(c.env, 2000)).filter((i) => !hide.has(i.videoId));
 		if (status && STATUSES.has(status)) items = items.filter((i) => i.status === status);
 		else if (status === 'open') items = items.filter((i) => i.status !== 'deleted' && i.status !== 'skipped');
@@ -99,6 +101,12 @@ export function createUploadsInternalRouter() {
 				deadLetters,
 			},
 		});
+	};
+	app.get('/stale', (c) => stale(c as never, { status: c.req.query('status'), limit: c.req.query('limit') }, new Set()));
+	app.post('/stale', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { status?: unknown; limit?: unknown; hide?: unknown } | null;
+		const hide = Array.isArray(body?.hide) ? body!.hide.filter((id): id is string => typeof id === 'string').slice(0, 10_000) : [];
+		return stale(c as never, { status: typeof body?.status === 'string' ? body.status : undefined, limit: body?.limit == null ? undefined : String(body.limit) }, new Set(hide));
 	});
 
 	app.post('/scan', async (c) => {

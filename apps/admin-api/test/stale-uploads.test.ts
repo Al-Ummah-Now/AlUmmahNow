@@ -56,7 +56,7 @@ describe('/api/uploads/stale', () => {
   /** api-videos' answers: the lists, and each action's per id */
   const answer = (path: string, body: any) => {
     if (path.endsWith('/stale')) return { status: 200, json: { success: true, result: { items: [{ videoId: ID }, { videoId: OTHER }], audit: [{ videoId: ID }, { videoId: OTHER }], deadLetters: [{ videoId: ID }, { videoId: OTHER }, {}], counts: {} } } };
-    if (path.endsWith('/test-library-purge')) return { status: 200, json: { success: true, result: { allowed: true, state: { recent: [{ videoId: ID }, { videoId: OTHER }] } } } };
+    if (path.endsWith('/test-library-purge')) return { status: 200, json: { success: true, result: { allowed: true, state: { recent: [{ videoId: ID }, { videoId: OTHER }], deleteFailed: [{ videoId: ID }, { videoId: OTHER }] } } } };
     if (path.endsWith('/keep')) return { status: 200, json: { success: true, result: { results: body.ids.map((videoId: string) => ({ videoId, kept: true })) } } };
     return { status: 200, json: { success: true, result: { results: (body?.ids ?? []).map((videoId: string) => ({ videoId, started: true })) } } };
   };
@@ -67,14 +67,19 @@ describe('/api/uploads/stale', () => {
       await db.prepare(CASE).bind(ID).run();
       const r = ((await (await req('/api/uploads/stale')).json()) as any).result;
       assert.deepEqual([r.items.map((i: any) => i.videoId), r.audit.map((i: any) => i.videoId), r.deadLetters.map((i: any) => i.videoId ?? null)], [shown, shown, [...shown, null]], roles.join());
-      // api-videos neither lists nor counts the hidden one for this reader
-      assert.equal(new URL(calls[0].path, 'https://x').searchParams.get('hide'), shown.length === 1 ? ID : null);
-      const purge = ((await (await req('/api/uploads/stale/test-library-purge')).json()) as any).result;
-      assert.deepEqual(purge.state.recent.map((i: any) => i.videoId), shown);
-      for (const id of [ID, OTHER]) await req('/api/uploads/stale/keep', post({ ids: [id] }));
+      // api-videos neither lists nor counts the hidden one for this reader: asked in a body (no URL length limit)
+      assert.deepEqual([calls[0].method, calls[0].body?.hide ?? null], shown.length === 1 ? ['POST', [ID]] : ['GET', null]);
+      for (const purge of [((await (await req('/api/uploads/stale/test-library-purge')).json()) as any).result, ((await (await req('/api/uploads/stale/test-library-purge', post({ action: 'stop' }))).json()) as any).result]) {
+        assert.deepEqual([purge.state.recent.map((i: any) => i.videoId), purge.state.deleteFailed.map((i: any) => i.videoId)], [shown, shown]);
+      }
+      // The actions log: rows written directly, one about the hidden video and one about no video (the mode)
+      const log = (key: string, at: string) => db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, NULL, ?, ?, ?, NULL)').bind(crypto.randomUUID(), key, JSON.stringify({ action: 'keep' }), 'a', at).run();
+      await log(`${STALE_UPLOAD_AUDIT_PREFIX}${ID}`, '2026-11-25T01');
+      await log(`${STALE_UPLOAD_AUDIT_PREFIX}${OTHER}`, '2026-11-25T02');
+      await log(REAPER_MODE_AUDIT_KEY, '2026-11-25T03');
       const entries = ((await (await req('/api/uploads/stale/audit')).json()) as any).result.entries;
-      assert.deepEqual(entries.map((e: any) => e.videoId).sort(), [...shown].sort(), `audit ${roles.join()}`);
-      assert.equal((await audit()).length, shown.length);
+      // Newest first: the purge stop and the mode (no video) stay; the hidden video's row only for a super admin
+      assert.deepEqual(entries.map((e: any) => e.videoId), shown.length === 1 ? [null, null, OTHER] : [null, null, OTHER, ID], `audit ${roles.join()}`);
     }
   });
 
@@ -94,6 +99,13 @@ describe('/api/uploads/stale', () => {
     // Audit rows for the shown video only
     assert.ok((await audit()).every((r: any) => r.key === `${STALE_UPLOAD_AUDIT_PREFIX}${OTHER}`));
     assert.equal((await audit()).length, 3);
+  });
+
+  it('the videos a case keeps come from the index alone', async () => {
+    const { VIDEOS_UNDER_CASE_SQL } = await import('../src/lib/csam');
+    const { db } = setup(['Admin']);
+    const plan = ((await db.prepare(`EXPLAIN QUERY PLAN ${VIDEOS_UNDER_CASE_SQL}`).all<{ detail: string }>()).results ?? []).map((r) => r.detail).join(' | ');
+    assert.match(plan, /SEARCH c USING COVERING INDEX idx_csam_cases_item \(item_type=\? AND item_id>\?\)/, plan);
   });
 
   it('fails closed: when what the reader may see cannot be read, nothing is listed or done', async () => {

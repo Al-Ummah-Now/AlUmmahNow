@@ -102,9 +102,10 @@ const itemKeys = (ids: string[]) => ids.map((id) => `${STALE_UPLOAD_AUDIT_PREFIX
 app.get('/', async (c) => {
   // The tab counts leave out what the reader may not see, as the list does
   const hide = await hiddenVideoIds(c.env.REPORTS_DB, c.get('auth')?.roles);
-  const result = await callUploads<{ items?: { videoId: string }[]; audit?: { videoId: string }[]; deadLetters?: { videoId?: string }[] }>(c.env, '/stale', {
-    query: { status: c.req.query('status'), limit: c.req.query('limit'), ...(hide.length ? { hide: hide.join(',') } : {}) },
-  });
+  const query = { status: c.req.query('status'), limit: c.req.query('limit') };
+  type Stale = { items?: { videoId: string }[]; audit?: { videoId: string }[]; deadLetters?: { videoId?: string }[] };
+  // In a body: the list of videos to leave out has no length limit a URL would have
+  const result = hide.length ? await callUploads<Stale>(c.env, '/stale', { method: 'POST', json: { ...query, hide } }) : await callUploads<Stale>(c.env, '/stale', { query });
   // Only the videos the reader's lists show (fails closed: an unreadable check is an error, not everything)
   const shown = <T>(rows: T[] | undefined, id: (row: T) => string | null | undefined) => withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, rows ?? [], id);
   const [items, audit, deadLetters] = await Promise.all([shown(result.items, (i) => i.videoId), shown(result.audit, (a) => a.videoId), shown(result.deadLetters, (d) => d.videoId)]);
@@ -179,16 +180,24 @@ app.post('/mode', async (c) => {
   return c.json({ success: true, result });
 });
 
+type PurgeStateView = { recent?: { videoId: string }[]; deleteFailed?: { videoId: string }[] } & Record<string, unknown>;
+
+/** The purge's lists name videos: only those the reader's lists show. */
+async function shownPurgeState(c: C, state: PurgeStateView | null | undefined): Promise<PurgeStateView | null | undefined> {
+  if (!state) return state;
+  const shown = <T extends { videoId: string }>(rows: T[] | undefined) => (rows ? withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, rows, (r) => r.videoId) : Promise.resolve(undefined));
+  const [recent, deleteFailed] = await Promise.all([shown(state.recent), shown(state.deleteFailed)]);
+  return { ...state, ...(recent ? { recent } : {}), ...(deleteFailed ? { deleteFailed } : {}) };
+}
+
 /**
  * QA / stage only: the test-library purge (api-videos
  * lib/uploads/testLibraryPurge.ts) removes every Bunny video of this
  * environment that has no record. api-videos refuses it on production.
  */
 app.get('/test-library-purge', async (c) => {
-  const result = await callUploads<{ state?: { recent?: { videoId: string }[] } | null }>(c.env, '/test-library-purge');
-  // Its recent deletions name videos too: only those the reader's lists show
-  if (result?.state?.recent) result.state = { ...result.state, recent: await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, result.state.recent, (r) => r.videoId) };
-  return c.json({ success: true, result });
+  const result = await callUploads<{ state?: PurgeStateView | null }>(c.env, '/test-library-purge');
+  return c.json({ success: true, result: { ...result, state: await shownPurgeState(c, result?.state) } });
 });
 
 /** Start (dry run unless dryRun is false; resume continues a stopped / failed run) or stop the purge. */
@@ -205,7 +214,7 @@ app.post('/test-library-purge', async (c) => {
   const result = await audited(c, [TEST_LIBRARY_PURGE_AUDIT_KEY], `test_library_purge_${action}`, action === 'start' ? { dryRun, resume, ...tuning } : {}, () =>
     callUploads(c.env, '/test-library-purge', { method: 'POST', json: { action, dryRun, resume, ...tuning, actor: actorLabel(c) } }),
   );
-  return c.json({ success: true, result });
+  return c.json({ success: true, result: { ...(result as object), state: await shownPurgeState(c, (result as { state?: PurgeStateView | null })?.state) } });
 });
 
 export default app;
