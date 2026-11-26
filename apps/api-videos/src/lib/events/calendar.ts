@@ -7,8 +7,11 @@
  * Every D1 query uses a composite index; zero full-table scans.
  */
 import {
+	featureGate,
 	isLiveEventType,
 	isLiveStreamKind,
+	liveRecordingWithheld,
+	type SwitchesEnv,
 	type CalendarEventItem,
 	type LiveEventType,
 	type LiveStreamKind,
@@ -21,7 +24,7 @@ export const EVENT_CALENDAR_PAGE_MAX = 50;
 export const PAST_SCHEDULED_GRACE_MS = 6 * 60 * 60 * 1000;
 const MAX_SCAN_PAGES = 3;
 
-export interface EventCalendarEnv {
+export interface EventCalendarEnv extends SwitchesEnv {
 	SEARCH_DB?: D1Database;
 	NOTIFICATIONS_DB?: D1Database;
 	videos: R2Bucket;
@@ -73,22 +76,28 @@ interface StoredLiveStream {
 	isPrivate?: boolean;
 	isHidden?: boolean;
 	isDeleted?: boolean;
+	csamTakedown?: boolean;
 	kind?: string;
 	eventType?: string | null;
 	premiereVideoId?: string | null;
 	reminderCount?: number;
 }
 
-interface StoredChannel {
-	id?: string;
-	userId?: string;
+export interface StoredCalendarChannel {
 	name?: string;
-	nameAr?: string | null;
+	nameLocalized?: Record<string, string>;
 	handle?: string | null;
 	avatarUrl?: string | null;
 	isPrivate?: boolean;
 	isHidden?: boolean;
 	isDeleted?: boolean;
+	isSuspended?: boolean;
+	markedForDeletion?: boolean;
+}
+
+export function isPublicCalendarChannel(channel: StoredCalendarChannel | null): channel is StoredCalendarChannel {
+	return !!channel && !channel.isDeleted && !channel.isHidden && !channel.isPrivate
+		&& !channel.isSuspended && !channel.markedForDeletion;
 }
 
 function encodeOffsetCursor(offset: number): string {
@@ -242,10 +251,16 @@ export async function listCalendarEvents(
 
 	if (!env.SEARCH_DB) return { items: [], nextCursor: null };
 
+	const [{ on: premieresOn }, { on: eventsOn }] = await Promise.all([
+		featureGate(env, 'livePremieres'),
+		featureGate(env, 'liveEvents'),
+	]);
+	if (options.eventType && !eventsOn) return { items: [], nextCursor: null };
+
 	const streamRepo = new NonVideoRepository<StoredLiveStream>(env.videos);
-	const channelRepo = new R2Repository<StoredChannel>(env.channels);
-	const channelCache = new Map<string, StoredChannel | null>();
-	const loadChannel = async (id: string): Promise<StoredChannel | null> => {
+	const channelRepo = new R2Repository<StoredCalendarChannel>(env.channels);
+	const channelCache = new Map<string, StoredCalendarChannel | null>();
+	const loadChannel = async (id: string): Promise<StoredCalendarChannel | null> => {
 		if (channelCache.has(id)) return channelCache.get(id)!;
 		const ch = await channelRepo.getObject(id).catch(() => null);
 		channelCache.set(id, ch);
@@ -308,11 +323,12 @@ export async function listCalendarEvents(
 		let brokeWithExtra = false;
 		for (let idx = 0; idx < streams.length; idx++) {
 			const { id, meta, stream } = streams[idx]!;
-			if ((meta && meta.visibility !== 'public') || !stream || stream.isPrivate || stream.isHidden || stream.isDeleted) {
+			if ((meta && meta.visibility !== 'public') || !stream || stream.isPrivate || stream.isHidden || stream.isDeleted
+				|| stream.csamTakedown || liveRecordingWithheld(stream)) {
 				currentOffset++;
 				continue;
 			}
-			const status = (meta?.status ?? stream.status ?? 'scheduled') as CalendarEventItem['status'];
+			const status = stream.status ?? meta?.status;
 			if (status !== 'live' && status !== 'scheduled') {
 				currentOffset++;
 				continue;
@@ -324,21 +340,22 @@ export async function listCalendarEvents(
 				continue;
 			}
 
-			const channel = await loadChannel(channelId);
-			if (!channel || channel.isDeleted || channel.isHidden || channel.isPrivate) {
-				currentOffset++;
-				continue;
-			}
-
-			const kind: LiveStreamKind = isLiveStreamKind(meta?.kind ?? stream.kind) ? ((meta?.kind ?? stream.kind) as LiveStreamKind) : 'live';
-			if (options.kind && kind !== options.kind) {
+			const rawKind = stream.kind ?? meta?.kind;
+			const kind = isLiveStreamKind(rawKind) ? rawKind : 'live';
+			if ((!premieresOn && kind === 'premiere' && status === 'scheduled') || (options.kind && kind !== options.kind)) {
 				currentOffset++;
 				continue;
 			}
 
 			const rawEventType = meta?.event_type ?? stream.eventType ?? null;
 			const eventType: LiveEventType | null = isLiveEventType(rawEventType) ? rawEventType : null;
-			if (options.eventType && eventType !== options.eventType) {
+			if ((!eventsOn && eventType) || (options.eventType && eventType !== options.eventType)) {
+				currentOffset++;
+				continue;
+			}
+
+			const channel = await loadChannel(channelId);
+			if (!isPublicCalendarChannel(channel)) {
 				currentOffset++;
 				continue;
 			}
@@ -381,7 +398,7 @@ export async function listCalendarEvents(
 				streamId: id,
 				channelId,
 				channelName: channel.name || '',
-				channelNameAr: channel.nameAr ?? null,
+				channelNameAr: channel.nameLocalized?.ar ?? null,
 				channelHandle: channel.handle ?? null,
 				channelAvatarUrl: channel.avatarUrl ?? null,
 				title: stream.title || '',

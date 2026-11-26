@@ -14,6 +14,7 @@ import {
 	EventsCalendarIcs,
 	EventsCalendarList,
 } from '../src/endpoints/events/eventsCalendar';
+import { listCalendarEvents } from '../src/lib/events/calendar';
 import { MemoryBucket, buildApp } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { createSqliteD1 as createNotificationsD1 } from './sqlite-d1';
@@ -27,9 +28,9 @@ function registerRoutes(r: any) {
 function seedEnv(withE17Tables = true) {
 	const searchDb = new SqliteD1();
 	const notificationsDb = createNotificationsD1();
-	searchDb.db
-		.prepare("INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('eventCalendar', 1, 1, 'test', '2026-11-23T00:00:00Z')")
-		.run();
+	const enableSwitch = searchDb.db
+		.prepare("INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES (?, 1, 1, 'test', '2026-11-23T00:00:00Z')");
+	for (const key of ['eventCalendar', 'liveEvents', 'livePremieres']) enableSwitch.run(key);
 	forgetFeatureSwitches();
 
 	if (withE17Tables) {
@@ -59,7 +60,10 @@ function seedEnv(withE17Tables = true) {
 		searchDb.db
 			.prepare(`
 				INSERT INTO content_ownership (kind, id, owner_id, channel_id, is_public, is_deleted, is_hidden, status, created_at, updated_at)
-				VALUES ('stream', 'ls-halqa', 'owner-1', 'ch-1', 1, 0, 0, 'scheduled', 101, 101)
+				VALUES
+					('stream', 'ls-live', 'owner-1', 'ch-1', 1, 0, 0, 'live', 100, 100),
+					('stream', 'ls-halqa', 'owner-1', 'ch-1', 1, 0, 0, 'scheduled', 101, 101),
+					('stream', 'ls-premiere', 'owner-2', 'ch-2', 1, 0, 0, 'scheduled', 102, 102)
 			`)
 			.run();
 	}
@@ -69,7 +73,7 @@ function seedEnv(withE17Tables = true) {
 		.run();
 
 	const channels = new MemoryBucket({
-		'ch-1': { id: 'ch-1', userId: 'owner-1', name: 'Masjid Al-Noor', nameAr: 'مسجد النور', handle: 'alnoor' },
+		'ch-1': { id: 'ch-1', userId: 'owner-1', name: 'Masjid Al-Noor', nameLocalized: { ar: 'مسجد النور' }, handle: 'alnoor' },
 		'ch-2': { id: 'ch-2', userId: 'owner-2', name: 'Qalam Institute', handle: 'qalam' },
 		'ch-hidden': { id: 'ch-hidden', userId: 'owner-3', name: 'Hidden', isHidden: true },
 	});
@@ -81,6 +85,7 @@ function seedEnv(withE17Tables = true) {
 			userId: 'owner-1',
 			title: 'Friday Khutbah',
 			status: 'live',
+			eventType: 'jumuah',
 			scheduledStartTime: '2026-11-27T12:00:00.000Z',
 			actualStartTime: '2026-11-27T12:01:00.000Z',
 		},
@@ -133,6 +138,12 @@ function seedEnv(withE17Tables = true) {
 	} as any;
 }
 
+async function updateR2(bucket: MemoryBucket, key: string, fields: Record<string, unknown>) {
+	const existing = await bucket.get(key);
+	assert.ok(existing);
+	await bucket.put(key, JSON.stringify({ ...(await existing.json()), ...fields }));
+}
+
 describe('Event Calendar & .ics endpoints (E22-S3)', () => {
 	beforeEach((t) => {
 		t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-26T12:00:00Z') });
@@ -176,7 +187,113 @@ describe('Event Calendar & .ics endpoints (E22-S3)', () => {
 		const res = await app.request('/api/events', {}, e);
 		assert.equal(res.status, 200);
 		const body = (await res.json()) as any;
-		assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-halqa']);
+		assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-live', 'ls-halqa', 'ls-premiere']);
+	});
+
+	it('uses the partial index without scans or a sort for each fallback query before and after ANALYZE', async () => {
+		const e = seedEnv(false);
+		const searchDb: SqliteD1 = e.SEARCH_DB;
+		searchDb.db.exec(`
+			WITH RECURSIVE sample(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM sample WHERE n < 5000)
+			INSERT INTO content_ownership (kind, id, owner_id, channel_id, is_public, is_deleted, is_hidden, status, created_at, updated_at)
+			SELECT 'stream', 'ended-' || n, 'owner-1', 'ch-' || (n % 3 + 1), 1, 0, 0, 'ended', n + 100, n + 100
+			FROM sample;
+		`);
+		e.NOTIFICATIONS_DB.raw.exec(`
+			INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at)
+			VALUES ('ch-2', 'sub-ch', 'viewer-1', 'sub-2', 101);
+		`);
+		for (const analyzed of [false, true]) {
+			if (analyzed) searchDb.db.exec('ANALYZE');
+			for (const options of [{}, { channelId: 'ch-1' }, { subscribedOnly: true, viewerId: 'viewer-1' }]) {
+				searchDb.trace = [];
+				await listCalendarEvents(e, options);
+				const query = searchDb.trace.find(({ sql }) => sql.includes('SELECT id FROM content_ownership'));
+				assert.ok(query);
+				assert.deepEqual(searchDb.plan(query), [
+					'SEARCH content_ownership USING INDEX idx_content_ownership_kind_status_created (kind=?)',
+				]);
+			}
+		}
+	});
+
+	for (const withMetadata of [true, false]) {
+		const source = withMetadata ? 'metadata' : 'fallback';
+
+		for (const fields of [
+			{ isPrivate: true },
+			{ isHidden: true },
+			{ isDeleted: true },
+			{ review: { status: 'in_review' } },
+			{ csamTakedown: true },
+			{ status: 'ended' },
+			{ status: 'cancelled' },
+		]) {
+			it(`excludes a stream from the ${source} feed when R2 has ${JSON.stringify(fields)}`, async () => {
+				const e = seedEnv(withMetadata);
+				await updateR2(e.videos, 'livestream:ls-halqa', fields);
+				const app = buildApp(registerRoutes);
+				const res = await app.request('/api/events', {}, e);
+				assert.equal(res.status, 200);
+				const body = (await res.json()) as any;
+				assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-live', 'ls-premiere']);
+			});
+		}
+
+		for (const flag of ['isSuspended', 'markedForDeletion']) {
+			it(`excludes a channel from the ${source} feed when R2 has ${flag}`, async () => {
+				const e = seedEnv(withMetadata);
+				await updateR2(e.channels, 'ch-1', { [flag]: true });
+				const app = buildApp(registerRoutes);
+				const res = await app.request('/api/events', {}, e);
+				assert.equal(res.status, 200);
+				const body = (await res.json()) as any;
+				assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-premiere']);
+				assert.equal((await app.request('/api/channels/ch-1/events.ics', {}, e)).status, 404);
+			});
+		}
+
+		it(`hides scheduled premieres from the ${source} JSON and .ics feeds while livePremieres is off`, async () => {
+			const e = seedEnv(withMetadata);
+			e.SEARCH_DB.db.exec("UPDATE feature_switches SET enabled = 0 WHERE key = 'livePremieres'");
+			const app = buildApp(registerRoutes);
+			const res = await app.request('/api/events', {}, e);
+			assert.equal(res.status, 200);
+			const body = (await res.json()) as any;
+			assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-live', 'ls-halqa']);
+			const ics = await app.request('/api/events.ics', {}, e);
+			assert.equal(ics.status, 200);
+			assert.doesNotMatch(await ics.text(), /UID:live-ls-premiere/);
+		});
+
+		it(`hides tagged events from the ${source} JSON and .ics feeds while liveEvents is off`, async () => {
+			const e = seedEnv(withMetadata);
+			e.FEATURES_FORCE_OFF = 'liveEvents';
+			if (withMetadata) e.SEARCH_DB.db.exec("UPDATE live_stream_metadata SET event_type = NULL WHERE stream_id = 'ls-live'");
+			await updateR2(e.videos, 'livestream:ls-live', { eventType: null });
+			const app = buildApp(registerRoutes);
+			const res = await app.request('/api/events', {}, e);
+			assert.equal(res.status, 200);
+			const body = (await res.json()) as any;
+			assert.deepEqual(body.result.items.map((i: any) => i.streamId), ['ls-live']);
+
+			const filtered = await app.request('/api/events?eventType=halqa', {}, e);
+			assert.equal(filtered.status, 200);
+			assert.deepEqual(((await filtered.json()) as any).result.items, []);
+
+			const ics = await app.request('/api/channels/ch-1/events.ics', {}, e);
+			assert.equal(ics.status, 200);
+			const feed = await ics.text();
+			assert.match(feed, /UID:live-ls-live/);
+			assert.doesNotMatch(feed, /UID:live-ls-halqa/);
+		});
+	}
+
+	it('uses a newer active R2 status when D1 still says scheduled', async () => {
+		const e = seedEnv();
+		await updateR2(e.videos, 'livestream:ls-halqa', { status: 'live' });
+		const { items } = await listCalendarEvents(e, { eventType: 'halqa' });
+		assert.deepEqual(items.map(({ streamId, status }) => [streamId, status]), [['ls-halqa', 'live']]);
 	});
 
 	it('serves RFC 5545 text/calendar feeds globally and per channel, and 404s hidden/missing channels', async () => {
@@ -250,7 +367,12 @@ describe('Event Calendar & .ics endpoints (E22-S3)', () => {
 		const e = seedEnv(true);
 		const app = buildApp(registerRoutes);
 
-		const arGlobal = (await (await app.request('/api/events.ics?lang=ar', {}, e)).text()).replace(/\r\n /g, '');
+		const json = await app.request('/api/events?channelId=ch-1', {}, e);
+		assert.equal(json.status, 200);
+		const { result } = (await json.json()) as any;
+		assert.deepEqual(result.items.map((item: any) => item.channelNameAr), ['مسجد النور', 'مسجد النور']);
+
+		const arGlobal = (await (await app.request('/api/events.ics?lang=ar', { headers: { 'Accept-Language': 'en' } }, e)).text()).replace(/\r\n /g, '');
 		assert.match(arGlobal, /PRODID:-\/\/Al Ummah Now\/\/Event Calendar\/\/AR/);
 		assert.match(arGlobal, /X-WR-CALNAME:الأمة الآن — الفعاليات القادمة/);
 		assert.match(arGlobal, /SUMMARY:Tafsir Surah Yasin — مسجد النور/);
@@ -258,4 +380,21 @@ describe('Event Calendar & .ics endpoints (E22-S3)', () => {
 		const arChannel = (await (await app.request('/api/channels/ch-1/events.ics', { headers: { 'Accept-Language': 'ar-SA,ar;q=0.9' } }, e)).text()).replace(/\r\n /g, '');
 		assert.match(arChannel, /X-WR-CALNAME:مسجد النور — الفعاليات القادمة/);
 	});
+
+	it('ranks supported Accept-Language ranges by quality and breaks ties by header order', async () => {
+		const e = seedEnv();
+		const app = buildApp(registerRoutes);
+		for (const [header, locale] of [
+			['en-US,en;q=0.9,ar;q=0.5', 'EN'],
+			['ar;q=0', 'EN'],
+			['en;q=0.4, AR-SA; q=0.9', 'AR'],
+			['ar;q=0.8,en;q=0.8', 'AR'],
+			['en;q=0.8,ar;q=0.8', 'EN'],
+		]) {
+			const res = await app.request('/api/events.ics', { headers: { 'Accept-Language': header } }, e);
+			assert.equal(res.status, 200);
+			assert.ok((await res.text()).includes(`//Event Calendar//${locale}\r\n`), header);
+		}
+	});
+
 });

@@ -352,7 +352,7 @@ CREATE INDEX idx_content_ownership_email_lower ON content_ownership (kind, lower
 CREATE INDEX idx_content_ownership_handle_lower ON content_ownership (kind, lower(handle));
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_kind_created ON content_ownership (kind, COALESCE(created_at, 0), id);
-CREATE INDEX idx_content_ownership_kind_status_created ON content_ownership (kind, status, is_public, is_deleted, is_hidden, created_at DESC);
+CREATE INDEX idx_content_ownership_kind_status_created ON content_ownership (kind, created_at DESC, id) WHERE kind = 'stream' AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND status IN ('live', 'scheduled');
 CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);

@@ -109,3 +109,25 @@ test('buildEventsIcsFeed strips bare CR/control chars, keeps URL unescaped, and 
   // URI value type is not backslash-escaped on , or ;
   assert.match(unfolded, /URL:https:\/\/videos\.alummahnow\.net\/live\/ls-ar\?ref=a,b;c\r\n/);
 });
+
+test('buildEventsIcsFeed strips controls and blocks property injection through UID and URL', () => {
+  const ics = buildEventsIcsFeed([{
+    streamId: 'ls-1\r\nINJECTED:1\x00\x7F\x85',
+    channelId: 'ch-1',
+    channelName: 'Al-Noor Academy',
+    title: 'Weekly Tafsir',
+    kind: 'live',
+    eventType: null,
+    status: 'scheduled',
+    scheduledStartAt: '2026-11-27T18:00:00.000Z',
+    startedAt: null,
+    endedAt: null,
+    premiereVideoId: null,
+    reminderCount: 0,
+    viewerReminded: false,
+    watchPath: '/live/ls-1\r\nINJECTED:2',
+  }]).replace(/\r\n /g, '');
+  assert.match(ics, /\r\nUID:live-ls-1INJECTED:1@alummahnow\.net\r\n/);
+  assert.match(ics, /\r\nURL:https:\/\/videos\.alummahnow\.net\/live\/ls-1INJECTED:2\r\n/);
+  assert.doesNotMatch(ics, /\r\nINJECTED:|[\x00\x7F\x85]/);
+});
