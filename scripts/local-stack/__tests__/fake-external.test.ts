@@ -203,4 +203,14 @@ it('logs failures on the R2 control API and distinguishes bad requests from back
   assert.equal(malformed.status, 400);
   assert.deepEqual(await malformed.json(), { error: 'Invalid R2 control request' });
   assert.equal(logger.mock.calls.length, 4);
+
+  const telegramBad = await fetch(`http://127.0.0.1:${address.port}/__fake/social/telegram/post`, {
+    method: 'POST',
+    body: '{bad json',
+  });
+  assert.equal(telegramBad.status, 400);
+  assert.deepEqual(await telegramBad.json(), { error: 'invalid telegram post request' });
+  assert.equal(logger.mock.calls.length, 5);
+  assert.equal(logger.mock.calls.at(-1)?.arguments[0], '[fake-social] telegram/post error:');
+  assert.ok(logger.mock.calls.at(-1)?.arguments[1] instanceof SyntaxError);
 });
