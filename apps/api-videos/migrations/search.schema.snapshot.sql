@@ -81,6 +81,8 @@
 --   apps/api-videos/migrations/search/0127_media_source_facts.sql
 --   apps/api-videos/migrations/search/0128_unfinished_videos.sql
 --   apps/api-videos/migrations/search/0129_workflow_history_maintenance.sql
+--   apps/api-videos/migrations/search/0130_channel_blocks_blocked_by.sql
+--   apps/api-videos/migrations/search/0131_content_ownership_public_views.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -303,6 +305,7 @@ CREATE INDEX idx_channel_audit_actor ON channel_audit (actor_id);
 CREATE INDEX idx_channel_audit_channel ON channel_audit (channel_id, created_at, id);
 CREATE INDEX idx_channel_audit_created ON channel_audit (created_at);
 CREATE INDEX idx_channel_audit_target ON channel_audit (target_user_id);
+CREATE INDEX idx_channel_blocks_blocked_by ON channel_blocks (blocked_by);
 CREATE INDEX idx_channel_blocks_user ON channel_blocks (user_id);
 CREATE INDEX idx_channel_comments_author ON channel_comments (author_user_id);
 CREATE INDEX idx_channel_comments_list ON channel_comments (channel_id, status, created_at DESC);
@@ -339,6 +342,7 @@ CREATE INDEX idx_content_ownership_kind_created ON content_ownership (kind, COAL
 CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
+CREATE INDEX idx_content_ownership_public_views ON content_ownership (kind, views DESC, id) WHERE kind = 'video' AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND (upload_status IS NULL OR upload_status = 'ready');
 CREATE INDEX idx_content_ownership_unfinished ON content_ownership (upload_status, created_at DESC, id) WHERE kind = 'video' AND is_deleted = 0 AND upload_status <> 'ready';
 CREATE INDEX idx_content_ownership_upload ON content_ownership (kind, upload_status, id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { runOwnershipPass } from '../src/lib/search/ownership';
+import { eraseChannelComments } from '../src/lib/channelComments';
 import { DELETED_USER_ID, eraseUserData, type ErasureSummary } from '../src/lib/privacy/user-data';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import {
@@ -370,4 +371,25 @@ describe('privacy footprints', () => {
 		assert.ok(next || (await readFootprintPass(db as never, 'videos'))?.status === 'done');
 		assert.equal(await runFootprintBackfillStep(env as never, first), null, 'the same page again is a no-op');
 	});
+});
+
+it('anonymizes the erased blocker through the blocked_by index', async () => {
+	const db = new SqliteD1();
+	const insert = db.db.prepare('INSERT INTO channel_blocks (channel_id, user_id, blocked_by, created_at) VALUES (?, ?, ?, ?)');
+	insert.run('ch-other', THIRD, ME, '2026-01-01');
+	insert.run('ch-third', OTHER, THIRD, '2026-01-01');
+	insert.run('ch-other', ME, OTHER, '2026-01-01');
+	db.trace = [];
+
+	await eraseChannelComments(db as never, ME);
+
+	const query = db.trace.find(({ sql }) => sql.startsWith('UPDATE channel_blocks'));
+	assert.ok(query, 'account erasure should anonymize blocks the user placed');
+	const plan = db.plan(query).join('\n');
+	assert.match(plan, /SEARCH channel_blocks USING (?:COVERING )?INDEX idx_channel_blocks_blocked_by \(blocked_by=\?\)/);
+	assert.doesNotMatch(plan, /SCAN channel_blocks/);
+	assert.deepEqual(
+		db.db.prepare('SELECT user_id, blocked_by FROM channel_blocks ORDER BY user_id').all().map(row => [row.user_id, row.blocked_by]),
+		[[OTHER, THIRD], [THIRD, DELETED_USER_ID]],
+	);
 });

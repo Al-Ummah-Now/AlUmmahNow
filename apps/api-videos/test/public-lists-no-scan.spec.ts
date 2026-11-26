@@ -40,7 +40,7 @@ async function setup() {
 	const pl = (id: string, day: number, over: object = {}) => ({ id, title: id, channelId: CH, userId: 'owner', isPublic: true, videos: [], dateCreated: at(day), dateModified: at(day), ...over });
 	const st = (id: string, day: number, over: object = {}) => ({ id, title: id, channelId: CH, userId: 'owner', status: 'live', isPrivate: false, dateCreated: at(day), ...over });
 	const videos = new NoList({
-		v1: v('v1', 1), v2: v('v2', 2), v3: v('v3', 3), gone: v('gone', 4), hidden: v('hidden', 5), made_private: v('made_private', 6), moved: v('moved', 7),
+		v1: v('v1', 1, { views: 4 }), v2: v('v2', 2, { views: 12 }), v3: v('v3', 3, { views: 12 }), gone: v('gone', 4), hidden: v('hidden', 5), made_private: v('made_private', 6), moved: v('moved', 7),
 		s1: v('s1', 1, { format: 'short', duration: 30, width: 1080, height: 1920 }), l1: v('l1', 2, { isLive: true }),
 		'livestream:st1': st('st1', 1), 'livestream:st2': st('st2', 2),
 	});
@@ -96,6 +96,20 @@ const LISTS: Record<string, string[]> = {
 };
 
 describe('public lists never read the bucket', () => {
+
+	it('lists public videos by views across all channels in index order', async () => {
+		const t = await setup();
+		t.db.trace = [];
+		const r = await t.get('/api/videos?sort=views');
+		assert.equal(r.status, 200);
+		assert.deepEqual(r.body.data.map((video: { id: string }) => video.id), ['v2', 'v3', 'v1', 'l1', 's1']);
+
+		const query = t.db.trace.find(({ sql }) => /FROM content_ownership.*ORDER BY views DESC, id/.test(sql));
+		assert.ok(query, 'the route should read the ownership index by views');
+		const plan = t.db.plan(query).join('\n');
+		assert.match(plan, /SEARCH content_ownership USING (?:COVERING )?INDEX idx_content_ownership_public_views/);
+		assert.doesNotMatch(plan, /USE TEMP B-TREE/);
+	});
 	for (const [state, apply] of Object.entries({
 		'a row waits for a repair': (t: Awaited<ReturnType<typeof setup>>) => KINDS.forEach((kind) => t.mark(ownershipDirtyKey(kind, 'x'))),
 		'the index is rebuilt': (t: Awaited<ReturnType<typeof setup>>) => KINDS.forEach((kind) => t.db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey(kind))),

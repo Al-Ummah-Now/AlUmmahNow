@@ -50,6 +50,6 @@ The videos site explains itself in two ways:
 `capture.help.ts` signs up its own creator on the local stack and makes the content it photographs: two channels, a video, a comment and a post. Every name in that data is generic and fixed. The script then photographs every picture in en/ar × desktop/phone × light/dark, with numbered markers on the controls the text explains (Arabic digits in Arabic). It records the clips on desktop. Everything it made is deleted at the end.
 
 - **On a PR** that changes the text, the script or the workflow, `help-pictures.yml` uploads the `help-pictures` artifact. Commit its contents to `apps/web/public/help`.
-- **On every release tag, and by hand,** the workflow opens "chore(help): refresh Help pictures" when anything changed. The workflow's token starts no checks, so push an empty commit to that PR before merging it.
+- **On every release tag, and by hand with “Push a branch” enabled,** the workflow pushes a branch when pictures change. Open the comparison link in the run summary to review the pictures and create a pull request.
 - **Locally,** with the stack running and ffmpeg and Google Chrome installed: `cd apps/web && E2E_ENV=local pnpm exec playwright test -c playwright.help.config.ts`.
 - **A jest test** fails when a picture or clip named in the text has no file.

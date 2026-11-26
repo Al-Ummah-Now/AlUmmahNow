@@ -179,10 +179,14 @@ export function localR2Client(bucket: string, control = process.env.LOCAL_STACK_
 	const host = new URL(control).hostname;
 	if (host !== '127.0.0.1' && host !== 'localhost') throw new Error('LOCAL_STACK_CONTROL_URL must be a loopback URL');
 	const url = (key: string) => `${control.replace(/\/$/, '')}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
+	const responseError = async (method: string, key: string, res: Response) => {
+		const body = await res.text().catch((error) => `could not read response body: ${error}`);
+		return new Error(`${method} ${bucket}/${key} (local stack) -> HTTP ${res.status}${body ? `: ${body}` : ''}`);
+	};
 	const get = async (key: string) => {
 		const res = await fetchFn(url(key));
 		if (res.status === 404) return null;
-		if (!res.ok) throw new Error(`GET ${bucket}/${key} (local stack) -> HTTP ${res.status}`);
+		if (!res.ok) throw await responseError('GET', key, res);
 		return res.text();
 	};
 	return {
@@ -195,7 +199,7 @@ export function localR2Client(bucket: string, control = process.env.LOCAL_STACK_
 		get,
 		async put(key, body) {
 			const res = await fetchFn(url(key), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
-			if (!res.ok) throw new Error(`PUT ${bucket}/${key} (local stack) -> HTTP ${res.status}`);
+			if (!res.ok) throw await responseError('PUT', key, res);
 		},
 	};
 }
