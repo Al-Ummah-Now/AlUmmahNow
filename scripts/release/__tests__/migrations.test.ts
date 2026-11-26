@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,6 +20,46 @@ const base = [
 const guard = (diff: string) => checkMigrations(parseNameStatus(diff), base);
 
 describe('migration guard', () => {
+	it('checks the full push range and falls back to the first parent on manual dispatch', (t) => {
+		const workflow = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+		const block = workflow.match(/      - name: Migrations are append-only\n[\s\S]*?        run: \|\n((?:          [^\n]*\n)+)/);
+		assert.ok(block, 'migration guard workflow command');
+		const workdir = mkdtempSync(join(tmpdir(), 'migration-events-'));
+		t.after(() => rmSync(workdir, { recursive: true, force: true }));
+		const git = (...args: string[]) => execFileSync('git', args, { cwd: workdir, encoding: 'utf8' }).trim();
+		git('init', '-q');
+		const commit = (message: string) =>
+			git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-qm', message, '--allow-empty');
+		const migrationDir = join(workdir, 'apps/processor/migrations');
+		mkdirSync(migrationDir, { recursive: true });
+		const migration = join(migrationDir, '0001_existing.sql');
+		writeFileSync(migration, 'SELECT 1;\n');
+		git('add', 'apps');
+		commit('existing migration');
+		const before = git('rev-parse', 'HEAD');
+		writeFileSync(migration, 'SELECT 2;\n');
+		git('add', 'apps');
+		commit('edit an existing migration');
+		const parent = git('rev-parse', 'HEAD');
+		commit('tip with no migration changes');
+
+		const path = join(ROOT, 'scripts/release/migration-guard.ts');
+		// Run the workflow's shell block against the real guard in the fixture repo.
+		const command = 'pnpm() { shift; node --experimental-strip-types "$MIGRATION_GUARD" "$@"; }\n' + block[1];
+		const run = (event: string, base: string) => spawnSync('bash', ['-e', '-c', command], {
+			cwd: workdir,
+			env: { ...process.env, GITHUB_EVENT_NAME: event, MIGRATION_BASE: base, MIGRATION_GUARD: path },
+			encoding: 'utf8',
+		});
+
+		const push = run('push', before);
+		assert.equal(push.status, 1, push.stderr);
+		assert.match(push.stderr, /existing migration modified/);
+		const dispatch = run('workflow_dispatch', '');
+		assert.equal(dispatch.status, 0, dispatch.stderr);
+		assert.ok(dispatch.stdout.includes(`Migration guard passed (base ${parent.slice(0, 7)}).`), dispatch.stdout);
+	});
+
 	it('allows appending a new migration', () => {
 		assert.deepEqual(guard('A\tapps/processor/migrations/0003_add_col.sql'), []);
 	});

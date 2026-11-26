@@ -108,7 +108,14 @@ jobs:
         run: pnpm check:config
 
       - name: Migrations are append-only
-        run: pnpm check:migrations "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+        env:
+          MIGRATION_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A manual redeploy has no push range. Check the commit against its first parent.
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            MIGRATION_BASE=HEAD^
+          fi
+          pnpm check:migrations "$MIGRATION_BASE"
 
       - name: D1 schema snapshots are current
         run: pnpm check:schema
@@ -555,26 +562,39 @@ jobs:
     needs: [test, release-checks, build-web, build-admin-web, validate-api, validate-processor, validate-websocket, validate-admin-api]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    concurrency:
+      group: deploy-qa
+      cancel-in-progress: false
     environment: qa
+    outputs:
+      current: ${{ steps.head.outputs.current }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Still the head of main?
+        id: head
+        run: bash scripts/release/check-qa-head.sh
+
       - name: Setup pnpm
+        if: steps.head.outputs.current == 'true'
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.4
 
       - uses: actions/setup-node@v6
+        if: steps.head.outputs.current == 'true'
         with:
           node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
+        if: steps.head.outputs.current == 'true'
         run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build shared packages
+        if: steps.head.outputs.current == 'true'
         run: |
           pnpm --filter @al-ummah/shared-types build
           pnpm --filter @al-ummah/logger build
@@ -582,12 +602,14 @@ jobs:
         timeout-minutes: 2
 
       - name: Download web build artifacts
+        if: steps.head.outputs.current == 'true'
         uses: actions/download-artifact@v6
         with:
           name: web-build-artifacts
           path: apps/web/
 
       - name: Download admin-web build artifacts
+        if: steps.head.outputs.current == 'true'
         uses: actions/download-artifact@v6
         with:
           name: admin-web-build-artifacts
@@ -597,12 +619,14 @@ jobs:
       # apps' browser source maps: uploaded to the private bucket and removed from the assets
       # (scripts/release/upload-sourcemaps.ts; the Errors page symbolicates with them)
       - name: Ensure qa resources
+        if: steps.head.outputs.current == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types --no-warnings scripts/release/ensure-resources.ts --env qa
 
       - name: Upload private source maps (qa)
+        if: steps.head.outputs.current == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -611,6 +635,7 @@ jobs:
           node --experimental-strip-types --no-warnings scripts/release/upload-sourcemaps.ts --env qa --app admin-web --release "${GITHUB_SHA::12}"
 
       - name: Deploy Web to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/web
           # Pages opened on the version serving now keep being served by it (skew protection)
@@ -621,6 +646,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy API to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/api-videos
           pnpm wrangler d1 migrations apply al-ummah-now-search-qa --remote --config wrangler.qa.jsonc
@@ -633,6 +659,7 @@ jobs:
       # key not on a file's overrides list (admin edits are kept), removed keys
       # are dropped, missing files are seeded. Summary: "translations: N updated, M kept".
       - name: Sync QA translations with the repo
+        if: steps.head.outputs.current == 'true'
         run: pnpm exec tsx scripts/release/sync-translations.ts --env qa
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -640,12 +667,14 @@ jobs:
 
       # Smoke: fails when a non-override key differs from the repo, or the API does not serve both locales
       - name: Check QA translations match the repo
+        if: steps.head.outputs.current == 'true'
         run: pnpm exec tsx scripts/release/sync-translations.ts --env qa --check
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Processor to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/processor
           pnpm wrangler d1 migrations apply al-ummah-now-notifications-qa --remote --config wrangler.qa.jsonc
@@ -655,6 +684,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy WebSocket Server to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/websocket-server
           pnpm wrangler deploy --config wrangler.qa.jsonc
@@ -665,6 +695,7 @@ jobs:
       # Platform analytics collector (docs/admin/LIVE_OPS.md): its D1 is migrated before
       # admin-api, which reads it (COSTS_DB)
       - name: Deploy Cost Monitor to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/cost-monitor
           pnpm wrangler d1 migrations apply al-ummah-now-costs-qa --remote --config wrangler.qa.jsonc
@@ -676,6 +707,7 @@ jobs:
       # Public status page (docs/status-page/README.md): its D1 is migrated before admin-api,
       # which writes incidents to it (STATUS_DB); then a read-only smoke of status.qa
       - name: Deploy Status Page to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/status
           pnpm wrangler d1 migrations apply al-ummah-now-status-qa --remote --config wrangler.qa.jsonc
@@ -686,6 +718,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin API to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/admin-api
           pnpm wrangler d1 migrations apply al-ummah-now-reports-qa --remote --config wrangler.qa.jsonc
@@ -695,6 +728,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Admin Web to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/admin-web
           # Pages opened on the version serving now keep being served by it (skew protection)
@@ -705,6 +739,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Scheduler to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/scheduler
           pnpm wrangler deploy --config wrangler.qa.jsonc
@@ -715,6 +750,7 @@ jobs:
       # Short share links (apps/short-links, wiki AUN-SHORT-LINKS): qa.alummahnow.link, a Workers
       # Custom Domain (the deploy keeps its DNS record and certificate), then its smoke
       - name: Deploy Short Links to QA
+        if: steps.head.outputs.current == 'true'
         run: |
           cd apps/short-links
           pnpm wrangler deploy --config wrangler.qa.jsonc
@@ -726,6 +762,7 @@ jobs:
 
       # Fills columns added by a migration, once every new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (qa)
+        if: steps.head.outputs.current == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -734,7 +771,7 @@ jobs:
           pnpm release:content-columns --env qa --check
 
       - name: Notify QA deployment success
-        if: success()
+        if: steps.head.outputs.current == 'true'
         run: |
           echo "🧪 QA deployment successful!"
           echo ""
@@ -760,18 +797,27 @@ jobs:
   deploy-qa-media:
     needs: [deploy-qa]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: needs.deploy-qa.outputs.current == 'true'
+    concurrency:
+      group: deploy-qa-media
+      cancel-in-progress: false
     environment: qa
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
+      - name: Still the head of main?
+        id: head
+        run: bash scripts/release/check-qa-head.sh
+
       - name: Setup pnpm
+        if: steps.head.outputs.current == 'true'
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.4
 
       - uses: actions/setup-node@v6
+        if: steps.head.outputs.current == 'true'
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -780,6 +826,7 @@ jobs:
       # Worker; until the owner adds it, skip with a notice instead of failing main. The media
       # Worker is then deployed with an account login (docs/media-delivery/RUNBOOK.md).
       - name: Check the token can deploy Containers
+        if: steps.head.outputs.current == 'true'
         id: access
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -795,20 +842,20 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.access.outputs.ok == 'true'
+        if: steps.head.outputs.current == 'true' && steps.access.outputs.ok == 'true'
         run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build shared packages
-        if: steps.access.outputs.ok == 'true'
+        if: steps.head.outputs.current == 'true' && steps.access.outputs.ok == 'true'
         run: |
           pnpm --filter @al-ummah/shared-types build
           pnpm --filter @al-ummah/logger build
         timeout-minutes: 2
 
       - name: Deploy Media (transcoder + private edge) to QA
-        if: steps.access.outputs.ok == 'true'
+        if: steps.head.outputs.current == 'true' && steps.access.outputs.ok == 'true'
         run: |
           cd apps/media
           pnpm wrangler deploy --config wrangler.qa.jsonc
