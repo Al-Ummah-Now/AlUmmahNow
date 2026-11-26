@@ -108,7 +108,8 @@ export function JobsTable({ jobs, failures }: { jobs: MediaJob[]; /** Why the fa
                       return reason && reason !== 'unknown' ? (
                         <>
                           <span className="text-danger-fg">{t(REASON_LABEL[reason])}</span>
-                          <code className="block text-xs text-fg-muted" dir="ltr">{reason}</code>
+                          {/* Its own line, at the cell's start edge (the code reads left to right inside it) */}
+                          <div><code className="text-xs text-fg-muted" dir="ltr">{reason}</code></div>
                         </>
                       ) : (
                         <code className="text-xs text-danger-fg break-all" dir="ltr">{job.error}</code>
