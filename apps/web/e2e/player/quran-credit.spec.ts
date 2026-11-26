@@ -75,11 +75,6 @@ for (const lang of ['en', 'ar'] as const) {
       await expect(link).toHaveAttribute('href', 'https://quran.foundation/');
       await expect(link).toHaveAttribute('target', '_blank');
       await expect(link).toHaveAttribute('rel', 'noopener');
-      const { violations } = await new AxeBuilder({ page })
-        .include('.video-js')
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze();
-      expect(violations).toEqual([]);
       // The caption itself no longer carries the credit line
       await expect(player.locator('.vjs-text-track-display')).not.toContainText(label);
 
@@ -97,6 +92,12 @@ for (const lang of ['en', 'ar'] as const) {
       else expect(Math.abs(box.right - cue.right)).toBeLessThanOrEqual(2);
       // Above the progress bar (the control bar's box starts higher, under its gradient)
       expect(box.bottom).toBeLessThanOrEqual(bar.y);
+
+      const { violations } = await new AxeBuilder({ page })
+        .include('.video-js')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      expect(violations).toEqual([]);
 
       await pauseAt(page, player, 45);
       await expect(credit(page)).toHaveCount(0);
