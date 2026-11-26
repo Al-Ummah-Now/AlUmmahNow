@@ -221,7 +221,7 @@ export function transformVideosToView(videos: z.infer<typeof BusinessVideo>[]): 
 }
 
 export function transformChannelsToView(channels: z.infer<typeof BusinessChannel>[]): z.infer<typeof ChannelView>[] {
-    return (channels || []).map(transformChannelToView);
+    return (channels || []).map((channel) => transformChannelToView(channel));
 }
 
 export function transformProfilesToView(profiles: z.infer<typeof BusinessProfile>[]): z.infer<typeof ProfileView>[] {

@@ -12,7 +12,7 @@ import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
 import { SubscriptionCreate } from '../src/endpoints/channel/SubscriptionCreate';
 import { SubscriptionsList } from '../src/endpoints/channel/SubscriptionsList';
 import { toPublicChannel } from '../src/lib/public-views';
-import { transformChannelToView } from '../src/lib/transformations';
+import { transformChannelToView, transformChannelsToView } from '../src/lib/transformations';
 import { buildChannelAbout } from '../src/lib/channelAbout';
 import { handleKey } from '../src/lib/channelHandles';
 import { projectChannel } from '@al-ummah/shared-types';
@@ -68,6 +68,17 @@ describe('channel subscribersCount (#468)', () => {
 		assert.equal(buildChannelAbout(ch as never, { totalViews: 0, videosCount: 0, partial: false }).subscribersCount, 2);
 		assert.equal(buildChannelAbout(ch as never, { totalViews: 0, videosCount: 0, partial: false }, 9).subscribersCount, 9);
 		assert.equal(projectChannel(ch)?.payload.subscribersCount, 2);
+	});
+
+	it('preserves each channel’s subscriber count in a batch of channel views', () => {
+		const ch0 = channelFixture('ch0', { subscriptions: [{ channelId: 'fan-1' }, { channelId: 'fan-2' }] });
+		const ch1 = channelFixture('ch1');
+		const ch2 = channelFixture('ch2', { subscriptions: [{ channelId: 'fan-1' }, { channelId: 'fan-2' }, { channelId: 'fan-3' }] });
+
+		const views = transformChannelsToView([ch0, ch1, ch2] as never);
+
+		assert.deepEqual(views.map((view) => view.subscribersCount), [2, 0, 3]);
+		assert.deepEqual(views.map((view) => view.subscriptionsCount), [2, 0, 3]);
 	});
 
 	it('channel endpoints report subscribersCount from legacy channel.subscriptions without D1', async () => {
