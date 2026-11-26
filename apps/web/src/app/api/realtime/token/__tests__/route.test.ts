@@ -54,16 +54,18 @@ it('returns only the opaque ticket with no-store and exchanges the access token 
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(fetchMock).toHaveBeenCalledWith('https://realtime.qa.alummahnow.net/internal/ws-ticket', expect.objectContaining({
     method: 'POST',
+    redirect: 'manual',
     headers: { 'X-API-Key': 'test-internal-key', Authorization: `Bearer ${jwt}` },
   }));
 });
 
-it('returns a no-store failure when minting fails or returns a raw JWT', async () => {
+it('returns a no-store failure when minting redirects, fails or returns a raw JWT', async () => {
   global.fetch = jest.fn()
+    .mockResolvedValueOnce(Response.redirect('https://unexpected.example'))
     .mockResolvedValueOnce(new Response(null, { status: 500 }))
     .mockResolvedValueOnce(Response.json({ ticket: jwt }));
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const response = await GET(request());
     expect(response.status).toBe(503);
     expect(response.headers.get('cache-control')).toBe('no-store');

@@ -319,6 +319,7 @@ export const WORKERS: StackWorker[] = [
       API_URL: url('api-videos'),
       NEXT_PUBLIC_API_URL: url('api-videos'),
       ADMIN_API_URL: url('admin-api'),
+      REALTIME_URL: url('websocket'),
       NEXT_PUBLIC_BASE_URL: url('admin-web'),
       NEXT_PUBLIC_MAIN_SITE_URL: url('web'),
       ERRORS_INGEST_URL: `${url('admin-api')}/internal/errors`,

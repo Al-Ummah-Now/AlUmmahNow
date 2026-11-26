@@ -54,6 +54,7 @@
     "NEXTJS_ENV": "qa",
     "API_URL": "https://videos.api.qa.alummahnow.net",
     "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
+    "REALTIME_URL": "https://realtime.qa.alummahnow.net",
     "NEXT_PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
     "NEXT_PUBLIC_BASE_URL": "https://admin.qa.alummahnow.net",
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",

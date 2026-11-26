@@ -634,17 +634,6 @@ jobs:
           node --experimental-strip-types --no-warnings scripts/release/upload-sourcemaps.ts --env qa --app web --release "${GITHUB_SHA::12}"
           node --experimental-strip-types --no-warnings scripts/release/upload-sourcemaps.ts --env qa --app admin-web --release "${GITHUB_SHA::12}"
 
-      - name: Deploy Web to QA
-        if: steps.head.outputs.current == 'true'
-        run: |
-          cd apps/web
-          # Pages opened on the version serving now keep being served by it (skew protection)
-          MAPPING=$(node --experimental-strip-types --no-warnings ../../scripts/release/skew-mapping.ts --worker al-ummah-web-qa --dir .)
-          pnpm wrangler deploy --config wrangler.qa.jsonc --var "CF_DEPLOYMENT_MAPPING:$MAPPING"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       - name: Deploy API to QA
         if: steps.head.outputs.current == 'true'
         run: |
@@ -723,6 +712,18 @@ jobs:
           cd apps/admin-api
           pnpm wrangler d1 migrations apply al-ummah-now-reports-qa --remote --config wrangler.qa.jsonc
           pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The realtime worker must accept ticket mint requests before either browser app is deployed.
+      - name: Deploy Web to QA
+        if: steps.head.outputs.current == 'true'
+        run: |
+          cd apps/web
+          # Pages opened on the version serving now keep being served by it (skew protection)
+          MAPPING=$(node --experimental-strip-types --no-warnings ../../scripts/release/skew-mapping.ts --worker al-ummah-web-qa --dir .)
+          pnpm wrangler deploy --config wrangler.qa.jsonc --var "CF_DEPLOYMENT_MAPPING:$MAPPING"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -911,16 +912,6 @@ jobs:
           name: admin-web-build-artifacts
           path: apps/admin-web/
 
-      - name: Deploy Web to Production
-        run: |
-          cd apps/web
-          # Pages opened on the version serving now keep being served by it (skew protection)
-          MAPPING=$(node --experimental-strip-types --no-warnings ../../scripts/release/skew-mapping.ts --worker al-ummah-now-production --dir .)
-          pnpm wrangler deploy --config wrangler.production.jsonc --var "CF_DEPLOYMENT_MAPPING:$MAPPING"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       - name: Deploy API to Production
         run: |
           cd apps/api-videos
@@ -959,6 +950,17 @@ jobs:
           cd apps/admin-api
           pnpm wrangler d1 migrations apply al-ummah-now-reports --remote
           pnpm wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The realtime worker must accept ticket mint requests before either browser app is deployed.
+      - name: Deploy Web to Production
+        run: |
+          cd apps/web
+          # Pages opened on the version serving now keep being served by it (skew protection)
+          MAPPING=$(node --experimental-strip-types --no-warnings ../../scripts/release/skew-mapping.ts --worker al-ummah-now-production --dir .)
+          pnpm wrangler deploy --config wrangler.production.jsonc --var "CF_DEPLOYMENT_MAPPING:$MAPPING"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

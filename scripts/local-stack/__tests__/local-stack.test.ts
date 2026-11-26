@@ -11,7 +11,7 @@ import { parseJsonc } from '../../release/jsonc.ts';
 import { LIFTED_LIMIT, LIFTED_LIMITERS, localConfig, localRedirectUri, localRedirectUris, type Json } from '../configs.ts';
 import { releasedRun } from '../resolve-refs.ts';
 import { bundleTag } from '../fetch-auth.ts';
-import { PROD_HOST_TO_LOCAL, ROOT, WORKERS, LOCAL_SECRETS } from '../stack.ts';
+import { PROD_HOST_TO_LOCAL, ROOT, WORKERS, LOCAL_SECRETS, url } from '../stack.ts';
 
 const videosWorkers = WORKERS.filter((w) => w.repo === 'videos');
 const raw = (dir: string, file: string) => parseJsonc(readFileSync(join(ROOT, dir, file), 'utf8')) as Json;
@@ -31,6 +31,45 @@ describe('local configs', () => {
       for (const s of (config.services as Json[] | undefined) ?? []) assert.ok(names.has(String(s.service)), `service ${String(s.service)} is not in the stack`);
     });
   }
+
+  it('uses local realtime origins and the same test key for ticket minting', () => {
+    const configFor = (app: string) => {
+      const worker = videosWorkers.find((w) => w.app === app)!;
+      return localConfig(raw(worker.dir, worker.config), worker, names);
+    };
+    const web = configFor('web').config.vars as Json;
+    const admin = configFor('admin-web').config.vars as Json;
+    assert.equal(web.WEBSOCKET_URL, `${url('websocket').replace('http:', 'ws:')}/ws`);
+    assert.equal(admin.REALTIME_URL, url('websocket'));
+    const realtimeKey = configFor('websocket').secrets.find((secret) => secret.binding === 'INTERNAL_API_KEY');
+    assert.ok(realtimeKey);
+    assert.equal(web.INTERNAL_API_KEY, LOCAL_SECRETS[realtimeKey.binding]);
+    assert.equal(admin.INTERNAL_API_KEY, LOCAL_SECRETS[realtimeKey.binding]);
+  });
+
+  it('uses matching realtime origins and Secrets Store bindings on QA, stage and production', () => {
+    for (const tier of ['qa', 'stage', 'production']) {
+      const tierConfig = (app: string, filename: string) => {
+        const config = raw(`apps/${app}`, filename);
+        return tier === 'stage' ? (config.env as Record<string, Json>).stage : config;
+      };
+      const browserConfig = tier === 'qa' ? 'wrangler.qa.jsonc' : 'wrangler.production.jsonc';
+      const web = tierConfig('web', browserConfig);
+      const admin = tierConfig('admin-web', browserConfig);
+      const realtime = tierConfig('websocket-server', tier === 'qa' ? 'wrangler.qa.jsonc' : 'wrangler.jsonc');
+      const vars = realtime.vars as Json;
+      const origin = new URL(String(vars.WEBSOCKET_URL)).origin;
+      assert.equal(String((web.vars as Json).WEBSOCKET_URL), `${origin.replace('https:', 'wss:')}/ws`);
+      assert.equal((admin.vars as Json).REALTIME_URL, origin);
+      for (const config of [web, admin]) {
+        assert.equal((config.vars as Json).Issuer, vars.Issuer);
+        const binding = (entry: Json) => entry.binding === 'INTERNAL_API_KEY';
+        const key = (realtime.secrets_store_secrets as Json[]).find(binding);
+        assert.ok(key);
+        assert.deepEqual((config.secrets_store_secrets as Json[]).find(binding), key);
+      }
+    }
+  });
 
   it('drops services and Durable Objects bound to scripts outside the stack', () => {
     const worker = videosWorkers.find((w) => w.app === 'admin-api')!;
