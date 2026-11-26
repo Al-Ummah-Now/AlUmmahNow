@@ -188,19 +188,19 @@ it('logs failures on the R2 control API and distinguishes bad requests from back
   assert.ok(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}/__stack/r2`;
 
-  for (const [path, status, error] of [
-    ['/global-settings/translations%2Fen.json', 500, backendError],
-    ['/global-settings?prefix=translations', 500, backendError],
-    ['/unknown/translations%2Fen.json', 400, badRequest],
+  for (const [path, status, error, expectedMessage] of [
+    ['/global-settings/translations%2Fen.json', 500, backendError, 'R2 operation failed'],
+    ['/global-settings?prefix=translations', 500, backendError, 'R2 operation failed'],
+    ['/unknown/translations%2Fen.json', 400, badRequest, 'Invalid R2 control request'],
   ] as const) {
     const response = await fetch(url + path);
     assert.equal(response.status, status);
-    assert.deepEqual(await response.json(), { error: error.message });
+    assert.deepEqual(await response.json(), { error: expectedMessage });
     assert.deepEqual(logger.mock.calls.at(-1)?.arguments, [`[local-stack] R2 GET /__stack/r2${path.split('?')[0]} -> HTTP ${status}`, error]);
   }
 
   const malformed = await fetch(url + '/global-settings/%FF');
   assert.equal(malformed.status, 400);
-  assert.deepEqual(await malformed.json(), { error: 'Malformed R2 path encoding' });
+  assert.deepEqual(await malformed.json(), { error: 'Invalid R2 control request' });
   assert.equal(logger.mock.calls.length, 4);
 });
