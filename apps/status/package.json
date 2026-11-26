@@ -16,7 +16,7 @@
     "@al-ummah/shared-types": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251106.1",
+    "@cloudflare/workers-types": "^5.20261123.1",
     "@eslint/js": "^9.39.1",
     "@types/jsdom": "21.1.7",
     "@types/node": "^20.0.0",
