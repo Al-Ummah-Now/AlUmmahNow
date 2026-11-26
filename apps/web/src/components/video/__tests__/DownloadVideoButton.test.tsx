@@ -1,5 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { WebDownloadResult } from '@/lib/downloads/download-client';
 import { DownloadVideoButton } from '../DownloadVideoButton';
 
 let mockLang: 'en' | 'ar' = 'en';
@@ -36,6 +37,30 @@ const readyProps = {
   isLive: false,
   contentUrl: 'https://media.alummahnow.net/pub/vid-123/rev1/video.mp4',
 };
+
+const downloadSuccess: WebDownloadResult = {
+  ok: true,
+  videoId: readyProps.videoId,
+  r2Rev: 'rev1',
+  url: 'https://media.alummahnow.net/dl/vid-123/rev1/Friday_Khutbah.mp4',
+  contentType: 'video/mp4',
+  bytes: 10_000_000,
+  rung: '480p',
+};
+const downloadFailure: WebDownloadResult = {
+  ok: false,
+  status: 429,
+  code: 'download_rate_limited',
+  message: 'Too many downloads.',
+};
+
+function deferDownload() {
+  let resolve!: (result: WebDownloadResult) => void;
+  mockRequestWebVideoDownload.mockReturnValueOnce(new Promise<WebDownloadResult>((settle) => {
+    resolve = settle;
+  }));
+  return resolve;
+}
 
 describe('DownloadVideoButton (E14-S6b / E14-D3 / E14-D6)', () => {
   beforeEach(() => {
@@ -77,16 +102,7 @@ describe('DownloadVideoButton (E14-S6b / E14-D3 / E14-D6)', () => {
   });
 
   it('requests attachment URL and triggers browser download on click', async () => {
-    const attachmentUrl = 'https://media.alummahnow.net/dl/vid-123/rev1/Friday_Khutbah.mp4';
-    mockRequestWebVideoDownload.mockResolvedValue({
-      ok: true,
-      videoId: 'vid-123',
-      r2Rev: 'rev1',
-      url: attachmentUrl,
-      contentType: 'video/mp4',
-      bytes: 10_000_000,
-      rung: '480p',
-    });
+    mockRequestWebVideoDownload.mockResolvedValue(downloadSuccess);
     const triggerDownload = jest.fn();
     const onError = jest.fn();
 
@@ -96,8 +112,11 @@ describe('DownloadVideoButton (E14-S6b / E14-D3 / E14-D6)', () => {
 
     fireEvent.click(btn);
 
-    await waitFor(() => expect(triggerDownload).toHaveBeenCalledWith(attachmentUrl));
-    expect(mockRequestWebVideoDownload).toHaveBeenCalledWith('vid-123', { locale: 'en' });
+    await waitFor(() => expect(triggerDownload).toHaveBeenCalledWith(downloadSuccess.url));
+    expect(mockRequestWebVideoDownload).toHaveBeenCalledWith('vid-123', {
+      locale: 'en',
+      signal: expect.any(AbortSignal),
+    });
     expect(onError).toHaveBeenCalledWith(null);
   });
 
@@ -123,7 +142,60 @@ describe('DownloadVideoButton (E14-S6b / E14-D3 / E14-D6)', () => {
     fireEvent.click(btn);
 
     await waitFor(() => expect(onError).toHaveBeenCalledWith(message));
-    expect(mockRequestWebVideoDownload).toHaveBeenCalledWith('vid-123', { locale });
+    expect(mockRequestWebVideoDownload).toHaveBeenCalledWith('vid-123', {
+      locale,
+      signal: expect.any(AbortSignal),
+    });
     expect(triggerDownload).not.toHaveBeenCalled();
+  });
+
+  describe.each([
+    { outcome: 'success', result: downloadSuccess },
+    { outcome: 'failure', result: downloadFailure },
+  ])('with a late $outcome', ({ result }) => {
+    it('aborts and resets the button when switching videos', async () => {
+      const resolve = deferDownload();
+      const triggerDownload = jest.fn();
+      const onError = jest.fn();
+      const { rerender } = render(
+        <DownloadVideoButton {...readyProps} triggerDownload={triggerDownload} onError={onError} />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+      expect(screen.getByRole('button', { name: 'Preparing download…' })).toBeDisabled();
+      const { signal } = mockRequestWebVideoDownload.mock.calls[0][1];
+      expect(signal.aborted).toBe(false);
+      onError.mockClear();
+
+      rerender(<DownloadVideoButton {...readyProps} videoId="vid-456" triggerDownload={triggerDownload} onError={onError} />);
+      expect(signal.aborted).toBe(true);
+      expect(screen.getByRole('button', { name: 'Download' })).toBeEnabled();
+
+      await act(async () => resolve(result));
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+      expect(screen.getByRole('button', { name: 'Download' })).toBeEnabled();
+      expect(triggerDownload).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('aborts on unmount and ignores the completion', async () => {
+      const resolve = deferDownload();
+      const triggerDownload = jest.fn();
+      const onError = jest.fn();
+      const { unmount } = render(
+        <DownloadVideoButton {...readyProps} triggerDownload={triggerDownload} onError={onError} />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+      const { signal } = mockRequestWebVideoDownload.mock.calls[0][1];
+      expect(signal.aborted).toBe(false);
+      onError.mockClear();
+
+      unmount();
+      expect(signal.aborted).toBe(true);
+      await act(async () => resolve(result));
+      expect(triggerDownload).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
   });
 });

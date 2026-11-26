@@ -246,9 +246,10 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   }, [videoId]);
 
   const videoDetails = state.status === 'ready' ? state.video : null;
+  const isCurrentVideo = videoDetails?.id === videoId;
   // The tab title follows the video shown. /video/[id] sets it from the server's metadata too; the
   // legacy /video?vid= route has none, and either way it must not lag behind a seamless next.
-  const shownTitle = videoDetails && videoDetails.id === videoId ? getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang) : null;
+  const shownTitle = videoDetails && isCurrentVideo ? getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang) : null;
   // The router applies a route's metadata after its own commit, which can land after this effect
   // (the legacy route's default title): keepDocumentTitle puts the video's title back then
   useEffect(() => (shownTitle ? keepDocumentTitle(document, shownTitle) : undefined), [shownTitle]);
@@ -258,6 +259,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const { features: watchFeatures } = useFeatures(videoDetails?.channelId ?? null);
   const canShowDownload =
     Boolean(user) &&
+    isCurrentVideo &&
     watchFeatures.offlineDownloads === true &&
     isWatchDownloadAvailable(videoDetails);
   // One line of actions at every width: labels drop to icons, then the comment pill goes
@@ -334,8 +336,9 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   />
                   {user && <WatchLaterButton videoId={videoDetails.id} />}
                   {user && <SaveToPlaylistControl videoId={videoDetails.id} />}
-                  {user && (
+                  {user && isCurrentVideo && (
                     <DownloadVideoButton
+                      key={videoDetails.id}
                       videoId={videoDetails.id}
                       channelId={videoDetails.channelId}
                       allowDownloads={videoDetails.allowDownloads}
@@ -372,11 +375,11 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     </MenuButton>
                   )}
               </div>
-              {downloadError && (
+              {isCurrentVideo && downloadError && (
                 <div
                   role="alert"
                   data-testid="watch-download-error"
-                  className="mt-2 w-full rounded-lg border border-s-4 border-destructive bg-card px-4 py-2.5 text-sm text-card-foreground"
+                  className="watch-download-error mt-2 w-full rounded-lg border border-s-4 border-[var(--fanous-color-error-fill)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] px-4 py-2.5 text-sm text-[var(--fanous-color-error-text)]"
                 >
                   {downloadError}
                 </div>

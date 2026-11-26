@@ -706,7 +706,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     downloadVideo: 'تنزيل',
     downloadingVideo: 'جارٍ تجهيز التنزيل…',
     downloadStarted: 'بدأ التنزيل',
-    downloadFailed: 'تعذر بدء التنزيل. يرجى المحاولة مرة أخرى.',
+    downloadFailed: 'تعذر بدء التنزيل. يُرجى المحاولة مرة أخرى.',
     nextShort: 'المقطع القصير التالي',
     previousShort: 'المقطع القصير السابق',
     unlisted: 'غير مدرج',
