@@ -843,7 +843,7 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		return { db, videos, env, stuckIds };
 	}
 
-	it('uses indexed D1 seeks with no temp B-tree, zero R2 list scans, and zero Bunny calls by default', async () => {
+	it('seeks the D1 indexes without table scans or R2 listings and uses stored Bunny state by default', async () => {
 		const { db, videos, env, stuckIds } = await seedCatalogue({ ready: 2000, stuck: 30, abandoned: 15, thumbRuns: 10 });
 		let bunnyCalls = 0;
 		const prevFetch = globalThis.fetch;
@@ -864,11 +864,15 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 			'/videos?status=stuck',
 			'/videos?status=processing',
 			'/videos?status=failed',
+			'/videos?status=r2_failed',
 			'/videos?status=stalled',
 			'/videos?status=needs_reupload',
 			'/videos?status=stuck&channelId=ch-0',
 			'/videos?status=all&limit=20',
 			'/videos?status=all&channelId=ch-0&limit=20',
+			...['stuck', 'processing', 'failed', 'stalled', 'needs_reupload', 'all'].map(
+				(status) => `/videos?status=${status}&channelId=ch-0&offset=1&limit=3`,
+			),
 			'/errors',
 		]) {
 			db.trace = [];
@@ -883,7 +887,13 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 			for (const q of selectQueries) {
 				const plan = db.plan(q).join(' | ');
 				assert.match(plan, /USING (COVERING )?INDEX/, `${query}: unindexed plan:\n${q.sql}\n${plan}`);
-				assert.doesNotMatch(plan, /TEMP B-TREE/, `${query}: temp B-tree sort:\n${q.sql}\n${plan}`);
+				assert.doesNotMatch(plan, /SCAN (content_ownership|media_jobs|v|j)\b/, plan);
+				if (q.sql.includes('media_jobs')) {
+					assert.match(plan, /SEARCH j USING INDEX idx_media_jobs_status \(status=\?\)/, plan);
+					assert.match(plan, /SEARCH v USING INDEX \S+ \(kind=\? AND id=\?\)/, plan);
+				} else {
+					assert.doesNotMatch(plan, /TEMP B-TREE/, `${query}: temp B-tree sort:\n${q.sql}\n${plan}`);
+				}
 			}
 			if (query === '/videos?status=stuck') {
 				assert.equal(body.result.items.length, 30);
@@ -978,7 +988,7 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		assert.ok(body.result.items.some((r: any) => r.id === dirtyId), 'dirty stuck video is still returned');
 	});
 
-	it('keyset-pages past 600 newer non-ready rows to find older needs_reupload and stalled videos without temp B-trees', async () => {
+	it('keyset-pages past 600 nonmatches for needs_reupload and stalled, without temp B-trees', async () => {
 		const db = new SqliteD1();
 		const videos = new MemoryBucket();
 		const now = Date.now();
@@ -1030,6 +1040,18 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 			['needs_reupload', oldReuploadId],
 			['stalled', oldStalledId],
 		] as const) {
+			if (status === 'stalled') {
+				const older = [];
+				// Stalled starts oldest-first. Put 600 older active, unflagged rows before the stalled fixture.
+				for (let i = 0; i < 600; i++) {
+					const id = `44444444-4444-4000-8000-${String(i).padStart(12, '0')}`;
+					const iso = new Date(base - (1 + Math.floor(i / 10)) * 60_000).toISOString();
+					const v = videoFixture({ id, dateCreated: iso, uploadStatus: 'processing' });
+					videos.store.set(id, JSON.stringify(v));
+					older.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+				}
+				for (let i = 0; i < older.length; i += 500) await db.batch(older.slice(i, i + 500) as never);
+			}
 			db.trace = [];
 			const res = await app.request(`/videos?status=${status}&limit=10`, {}, env);
 			assert.equal(res.status, 200);
@@ -1060,17 +1082,18 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		assert.equal(cappedBody.result.scanned, PROCESSING_INDEX_SCAN_CAP);
 		assert.equal(cappedBody.result.truncated, true);
 
-		// /errors also reports truncated: true when hitting PROCESSING_INDEX_SCAN_CAP before filling the page
+		// /errors fills actual failures first, then spends the remaining budget on issue flags.
+		const errors = await seedCatalogue({ ready: 0, stuck: 0 });
 		const procStatements = [];
 		for (let i = 0; i < PROCESSING_INDEX_SCAN_CAP + 20; i++) {
 			const id = `66666666-7777-4000-8000-${String(i).padStart(12, '0')}`;
-			const iso = new Date(base + (5000 + i) * 60_000).toISOString();
+			const iso = new Date(base + i * 60_000).toISOString();
 			const v = videoFixture({ id, dateCreated: iso, uploadStatus: 'processing' });
-			videos.store.set(id, JSON.stringify(v));
-			procStatements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+			errors.videos.store.set(id, JSON.stringify(v));
+			procStatements.push(ownershipUpsertStatement(errors.db as never, projectOwnership('video', id, v)!, now, now));
 		}
-		for (let i = 0; i < procStatements.length; i += 500) await db.batch(procStatements.slice(i, i + 500) as never);
-		const cappedErrRes = await app.request('/errors?limit=10', {}, env);
+		for (let i = 0; i < procStatements.length; i += 500) await errors.db.batch(procStatements.slice(i, i + 500) as never);
+		const cappedErrRes = await app.request('/errors?limit=10', {}, errors.env);
 		const cappedErrBody = (await cappedErrRes.json()) as any;
 		assert.equal(cappedErrBody.result.truncated, true, '/errors surfaces truncated when capped');
 		assert.equal(cappedErrBody.result.videos.length, 0);

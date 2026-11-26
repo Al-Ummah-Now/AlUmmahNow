@@ -221,7 +221,7 @@ async function indexedRows(
 	const states = of.all ? [null] : of.states;
 	const queries = states.flatMap((state) => arms.map((arm) => ({
 		sql: `SELECT * FROM (SELECT id, COALESCE(created_at, 0) AS created_at FROM ${OWNERSHIP_TABLE}
-			WHERE kind = 'video'${state ? ' AND upload_status = ? AND is_deleted = 0' : ''}${channelClause}
+			WHERE kind = 'video' AND is_deleted = 0${state ? ' AND upload_status = ?' : ''}${channelClause}
 			AND ${arm.where} ORDER BY ${arm.orderBy} LIMIT ?)`,
 		params: [...(state ? [state] : []), ...channelBinds, ...arm.params, limit],
 	})));
@@ -234,7 +234,10 @@ function compareRows(a: CandidateRow, b: CandidateRow): number {
 	return a.created_at - b.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
-/** Read the failed-job index and look up each video by primary key, including playable videos. */
+/**
+ * Read only failed jobs and look up each video by primary key, including playable videos.
+ * The job index orders by job time, so only this subset is sorted by video creation time.
+ */
 async function r2FailedRows(db: D1Database, limit: number, channelId?: string): Promise<CandidateRow[]> {
 	const { results } = await db.prepare(
 		`SELECT v.id, COALESCE(v.created_at, 0) AS created_at
@@ -313,7 +316,8 @@ async function loadProcessingCandidates(
 	const filter = Object.hasOwn(LISTED, status) ? status as keyof typeof LISTED : 'stuck';
 	if (db) {
 		try {
-			if (await isOwnershipComplete(db, 'video')) {
+			// R2-only failures are selected by media_jobs, independently of the upload-status index.
+			if (status === 'r2_failed' || await isOwnershipComplete(db, 'video')) {
 				const read = (of: keyof typeof LISTED, count: number, offset: number, budget: number) =>
 					loadIndexedCandidates(db, env.videos, of, count, channelId, offset, budget);
 				if (status !== 'errors') return await read(filter, limit, from, PROCESSING_INDEX_SCAN_CAP);
@@ -521,7 +525,7 @@ export function createProcessingInternalRouter() {
 	app.get('/errors', async (c) => {
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
 		const { items: videos, next, truncated } = await loadProcessingCandidates(c.env, 'errors', limit);
-		const moreVideos = next !== null;
+		const moreVideos = next !== null || truncated || videos.length === limit;
 		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
 		let deadLetters: unknown[] = [];
 		const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;

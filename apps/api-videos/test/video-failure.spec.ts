@@ -187,7 +187,7 @@ describe('the lists of failed videos include R2-only failures, from the index', 
 			...(await plans(async () => app.request('/errors', {}, env))),
 		]) {
 			assert.doesNotMatch(plan, /SCAN (content_ownership|media_jobs|v|j)\b|idx_content_ownership_created/, plan);
-			assert.match(plan, /idx_content_ownership_unfinished \(upload_status=\?\)|idx_media_jobs_status \(status=\?\)/, plan);
+			assert.match(plan, /idx_content_ownership_unfinished \(upload_status=\?\)|idx_content_ownership_upload_created \(kind=\? AND upload_status=\? AND is_deleted=\?\)|idx_media_jobs_status \(status=\?\)/, plan);
 		}
 		// Every video: a page of the newest, in the index's order
 		const all = (db.db.prepare(`EXPLAIN QUERY PLAN ${videoStatesSql({ states: [], all: true })}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
