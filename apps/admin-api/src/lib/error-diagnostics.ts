@@ -3,7 +3,6 @@
  * expiry) and indexed in REPORTS_DB.error_diagnostics by error reference (ERR-XXXX-XXXX).
  */
 import { newErrorRef, parseErrorRef, type ErrorApp } from '@al-ummah/shared-types';
-import { findByRef, getErrorGroup } from './errors-store';
 import type { D1Database } from './types';
 
 /** Maximum accepted diagnostic body size (UTF-8 bytes, before server-side gzip). */
@@ -162,15 +161,6 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
     throw new DiagnosticRefConflictError();
   }
 
-  // Persist child-safety classification on the diagnostic row so isolation stays fail-closed even after error_refs pruning
-  let childSafety = existing?.child_safety ?? 0;
-  if (!childSafety) {
-    const refHit = await findByRef(db, ref, true);
-    if (refHit && !(await getErrorGroup(db, refHit.group_id, false))) {
-      childSafety = 1;
-    }
-  }
-
   const scrubbed = scrubDiagnosticContent(input.content);
   const sizeBytes = new TextEncoder().encode(scrubbed).byteLength;
   const { bytes, encoding } = await compressDiagnostic(scrubbed);
@@ -186,10 +176,23 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
     customMetadata: { ref, app, environment: env, sizeBytes: String(sizeBytes) },
   });
 
+  // Compute child_safety atomically in SQL (no TOCTOU window across bucket.put) and refuse attaching
+  // a ref that belongs to a different app's error group (e.g. tools attaching to an admin-api CSAM ref).
   const write = await db
     .prepare(
       `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, release, user_id, child_safety, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM error_refs r
+           JOIN error_actions cs ON cs.group_id = r.group_id
+           WHERE r.ref = ? AND (cs.item_key GLOB 'child-safety-*' OR cs.item_key GLOB 'csam[-:]*')
+         ) THEN 1 ELSE 0 END,
+         ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM error_refs r
+         JOIN error_groups g ON g.id = r.group_id
+         WHERE r.ref = ? AND g.app <> ?
+       )
        ON CONFLICT(ref) DO UPDATE SET
          r2_key = excluded.r2_key,
          content_encoding = excluded.content_encoding,
@@ -201,7 +204,7 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
          created_at = excluded.created_at
        WHERE error_diagnostics.app = excluded.app AND error_diagnostics.user_id IS excluded.user_id`,
     )
-    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, childSafety, createdAt)
+    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, ref, createdAt, ref, app)
     .run();
 
   if (((write.meta as { changes?: number } | undefined)?.changes ?? 0) === 0) {

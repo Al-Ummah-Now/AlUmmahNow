@@ -224,7 +224,12 @@ export class ErrorDiagnosticGet extends ErrorsRoute {
       return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
     }
     const bundle = await readErrorDiagnostic(c.env.REPORTS_DB, c.env.DIAGNOSTICS, ref);
-    if (!bundle || (bundle.meta.child_safety === 1 && !this.childSafety(c))) {
+    if (!bundle) {
+      return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
+    }
+    // Fail closed: any persisted child_safety bundle, or any non-tools bundle whose error_refs row
+    // is missing (e.g. group deleted while upload was in flight), is super-admin only.
+    if (!this.childSafety(c) && (bundle.meta.child_safety === 1 || (!anyHit && bundle.meta.app !== 'tools'))) {
       return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
     }
     if (query.download === '1' || query.format === 'text') {

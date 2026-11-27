@@ -188,5 +188,28 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(stillHidden.status, 404);
     const superAllowed = await makeApp(['SuperAdmin']).request(`/api/errors/diagnostics/${csRef}`, { method: 'GET' }, env as never);
     assert.equal(superAllowed.status, 200);
+
+    // Even if a non-tools bundle was inserted after its group was deleted (child_safety=0, no error_refs), it fails closed for non-super-admins
+    const orphanRef = newErrorRef();
+    await storeErrorDiagnostic(db, bucket, { ref: orphanRef, app: 'admin-api', environment: 'production', content: 'raced upload', now: NOW });
+    assert.equal((await makeApp(['Admin']).request(`/api/errors/diagnostics/${orphanRef}`, { method: 'GET' }, env as never)).status, 404);
+    assert.equal((await makeApp(['SuperAdmin']).request(`/api/errors/diagnostics/${orphanRef}`, { method: 'GET' }, env as never)).status, 200);
+
+    // A tools upload cannot attach to another app's ref
+    const csRef2 = newErrorRef();
+    const csEv2 = scrubEvent({
+      app: 'admin-api',
+      kind: 'action',
+      ref: csRef2,
+      message: 'CSAM action 2',
+      action: { key: 'child-safety-report:video:v2', source: 'other', title: 'Child safety report 2' },
+    })!;
+    await ingestErrorEvents(db, [csEv2], { environment: 'production', now: NOW, userKey: ADMIN });
+    const crossApp = await makeApp(['Admin'], ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: csRef2, content: 'attempt' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(crossApp.status, 409);
   });
 });
