@@ -63,7 +63,9 @@ export class DiagnosticRefConflictError extends Error {
 
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
-const HEADER_SECRET_RE = /("?(?:x-api-key|x-internal-api-key|authorization)"?\s*[:=]\s*"?)(?:(?:Basic|Bearer|Digest|Token)\s+)?[^\s,;"]+/gi;
+const JSON_DIGEST_RE = /("(?:authorization)"\s*:\s*")Digest\s+(?:[^"\\]|\\.)*"/gi;
+const DIGEST_HEADER_RE = /\b(authorization\s*[:=]\s*Digest\s+)[^\r\n]+/gi;
+const HEADER_SECRET_RE = /("?(?:x-api-key|x-internal-api-key|authorization)"?\s*[:=]\s*"?)(?:(?:Basic|Bearer|Token)\s+)?[^\s,;"]+/gi;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const QUERY_SECRET_RE = /([?&](?:token|access_token|refresh_token|key|api_key|apikey|sig|signature|auth|secret|password|x-amz-signature|x-amz-credential|x-amz-security-token)=)[^&\s"']+/gi;
 const API_KEY_RE = /\b(?:re|sk|pk|ghp|gho|ghu|ghs)_[A-Za-z0-9_-]{12,}\b/g;
@@ -75,6 +77,8 @@ const UNC_HOST_RE = /\\\\([^\\\s"']+)\\([^\\\s"']+)/g;
 export function scrubDiagnosticContent(raw: string): string {
   return raw
     .replace(BEARER_RE, 'Bearer [redacted]')
+    .replace(JSON_DIGEST_RE, '$1Digest [redacted]"')
+    .replace(DIGEST_HEADER_RE, '$1[redacted]')
     .replace(HEADER_SECRET_RE, '$1[redacted]')
     .replace(JWT_RE, '[jwt]')
     .replace(QUERY_SECRET_RE, '$1[redacted]')
@@ -173,14 +177,16 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
   const storedBytes = bytes.byteLength;
   const entryCount = typeof input.entryCount === 'number' && Number.isFinite(input.entryCount) ? Math.max(0, Math.min(100_000, Math.floor(input.entryCount))) : 0;
   const release = input.release ? input.release.trim().slice(0, 80) || null : null;
-  const r2Key = `diag/${env}/${app}/${day}/${ref}.log${encoding === 'gzip' ? '.gz' : ''}`;
+  // Unique per-upload R2 key prevents a racing loser from overwriting the winning account's R2 blob
+  const nonce = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  const r2Key = `diag/${env}/${app}/${day}/${ref}-${nonce}.log${encoding === 'gzip' ? '.gz' : ''}`;
 
   await bucket.put(r2Key, bytes, {
     httpMetadata: { contentType: 'text/plain; charset=utf-8', ...(encoding === 'gzip' ? { contentEncoding: 'gzip' } : {}) },
     customMetadata: { ref, app, environment: env, sizeBytes: String(sizeBytes) },
   });
 
-  await db
+  const write = await db
     .prepare(
       `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, release, user_id, child_safety, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -197,6 +203,10 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
     )
     .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, childSafety, createdAt)
     .run();
+
+  if (((write.meta as { changes?: number } | undefined)?.changes ?? 0) === 0) {
+    throw new DiagnosticRefConflictError();
+  }
 
   return { ref, r2Key, sizeBytes, storedBytes, entryCount, createdAt };
 }
