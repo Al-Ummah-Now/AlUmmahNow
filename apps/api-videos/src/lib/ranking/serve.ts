@@ -102,7 +102,7 @@ async function readMeta(db: Db, rail: RailId, scope: string): Promise<RailMeta |
  */
 export async function railPage(
 	env: { SEARCH_DB?: unknown; videos: R2Bucket; channels?: R2Bucket },
-	options: { rail: RailId; scope: string; limit: number; cursor?: string | null },
+	options: { rail: RailId; scope: string; limit: number; cursor?: string | null; readVideo?: (id: string) => Promise<VideoObject | null> },
 ): Promise<RailPage | null> {
 	const db = env.SEARCH_DB as Db | undefined;
 	if (!db) return null;
@@ -129,7 +129,8 @@ export async function railPage(
 		return null;
 	}
 	const repo = new R2Repository<VideoObject>(env.videos);
-	const objects = await Promise.all(rows.map((row) => repo.getObject(row.video_id).catch(() => null)));
+	const readVideo = options.readVideo ?? ((id: string) => repo.getObject(id));
+	const objects = await Promise.all(rows.map((row) => readVideo(row.video_id).catch(() => null)));
 	const kept: RailEntry[] = [];
 	let lastPosition = after;
 	let consumed = 0;

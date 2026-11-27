@@ -684,6 +684,27 @@ describe('R2 state on the admin video views', () => {
 // The delivery switch on the watch response: test/media-playback.spec.ts
 
 describe('daily cost inputs', () => {
+	it('recovers both analytics reads after HTTP and GraphQL rate limits', async (t) => {
+		const { collectDeliveryCosts } = await import('../src/lib/media/costs');
+		const search = new SqliteD1();
+		const calls: Array<{ account: boolean; at: number }> = [];
+		t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+			assert.equal(url, 'https://api.cloudflare.com/client/v4/graphql');
+			calls.push({ account: JSON.parse(init.body as string).query.includes('accounts('), at: Date.now() });
+			if (calls.length === 1) return new Response('Too many requests', { status: 429 });
+			if (calls.length === 3) return Response.json({ errors: [{ message: 'Rate limited. Please wait and consider throttling your request speed' }] });
+			return Response.json({ data: { viewer: {
+				accounts: [{ r2OperationsAdaptiveGroups: [{ sum: { requests: 42 }, dimensions: { actionType: 'GetObject' } }] }],
+				zones: [{ httpRequestsAdaptiveGroups: [{ count: 23 }] }],
+			} } });
+		});
+		await collectDeliveryCosts({ SEARCH_DB: search as never, MEDIA_ANALYTICS_TOKEN: 'test' }, new Date('2026-11-27T03:17:30Z'));
+		assert.deepEqual(calls.map((call) => call.account), [true, true, false, false]);
+		assert.ok(calls.slice(1).every((call, index) => call.at - calls[index].at >= 950));
+		const rows = search.db.prepare("SELECT metric, value FROM delivery_cost_daily WHERE metric IN ('class_b_ops', 'cdn_requests') ORDER BY metric").all();
+		assert.deepEqual(rows.map(({ metric, value }) => [metric, value]), [['cdn_requests', 23], ['class_b_ops', 42]]);
+	});
+
 	it('turns records into per-source metrics with estimated cost', async () => {
 		const { metricsFromRecords, PRICES } = await import('../src/lib/media/costs');
 		const GB = 1024 ** 3;

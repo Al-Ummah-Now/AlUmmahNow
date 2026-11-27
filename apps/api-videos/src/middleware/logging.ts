@@ -3,11 +3,17 @@ import { configureLogging, SLOW_MS } from '@al-ummah/logger';
 import { stepSummary } from '@al-ummah/shared-types/request-steps';
 import { logger } from '../lib/logger';
 
+const EXPECTED_RETRY = Symbol();
+
 const LOGGED = Symbol.for('al-ummah.request-logged');
 /** Set by the error handler once it has logged a thrown error with its stack. */
 export const ERROR_LOGGED = Symbol.for('al-ummah.request-error-logged');
 
-type MarkedRequest = Request & { [LOGGED]?: boolean; [ERROR_LOGGED]?: boolean };
+type MarkedRequest = Request & { [LOGGED]?: boolean; [ERROR_LOGGED]?: boolean; [EXPECTED_RETRY]?: boolean };
+
+export function markExpectedRetry(c: Context): void {
+	(c.req.raw as MarkedRequest)[EXPECTED_RETRY] = true;
+}
 
 /** Marks the request so the summary does not log the same failure twice. */
 export function markErrorLogged(c: Context): void {
@@ -78,7 +84,9 @@ export async function loggingMiddleware(c: Context, next: Next) {
 			...(durationMs >= slowMs ? stepSummary() : {}),
 		};
 		if (status >= 500 || thrown) {
-			if (!raw[ERROR_LOGGED]) {
+			if (!thrown && status === 503 && raw[EXPECTED_RETRY]) {
+			logger.debug('request deferred for retry', summary);
+		} else if (!raw[ERROR_LOGGED]) {
 				logger.request({ ...summary, error: thrown ?? (await errorMessage(c.res)) ?? `HTTP ${status}` }, slowMs);
 			} else {
 				logger.debug('request failed (logged by the error handler)', summary);
