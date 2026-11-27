@@ -214,17 +214,19 @@ export class ErrorDiagnosticGet extends ErrorsRoute {
   async handle(c: AppContext) {
     const denied = this.deny(c, 'errors:read');
     if (denied) return denied;
-    if (!c.env.DIAGNOSTICS) return c.json({ success: false, error: 'Diagnostic storage not configured' }, 503);
+    if (!c.env.DIAGNOSTICS) return apiError(c, 503, 'service_unavailable', { error: 'Diagnostic storage not configured' });
     const { params, query } = await this.getValidatedData<typeof this.schema>();
     const ref = parseErrorRef(params.ref);
-    if (!ref) return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
-    // Respect child-safety access control when the ref belongs to an error group
+    if (!ref) return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
+    // Respect child-safety access control both via persisted flag (fail-closed) and live error_refs lookup
     const anyHit = await findByRef(c.env.REPORTS_DB, ref, true);
     if (anyHit && !this.childSafety(c) && !(await getErrorGroup(c.env.REPORTS_DB, anyHit.group_id, false))) {
-      return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
+      return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
     }
     const bundle = await readErrorDiagnostic(c.env.REPORTS_DB, c.env.DIAGNOSTICS, ref);
-    if (!bundle) return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
+    if (!bundle || (bundle.meta.child_safety === 1 && !this.childSafety(c))) {
+      return apiError(c, 404, 'not_found', { error: 'Diagnostic log not found' });
+    }
     if (query.download === '1' || query.format === 'text') {
       const headers: Record<string, string> = {
         'Content-Type': 'text/plain; charset=utf-8',

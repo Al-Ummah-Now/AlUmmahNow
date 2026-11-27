@@ -904,8 +904,9 @@ export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RET
   const cutoff = new Date(now.getTime() - days * 86400_000).toISOString();
   const results = await db.batch([
     db.prepare('DELETE FROM error_events WHERE received_at < ?').bind(cutoff),
+    // Prune linked diagnostics together with their error_refs so a diagnostic cannot outlive its group's ref metadata
+    db.prepare('DELETE FROM error_diagnostics WHERE created_at < ? OR ref IN (SELECT ref FROM error_refs WHERE created_at < ?)').bind(cutoff, cutoff),
     db.prepare('DELETE FROM error_refs WHERE created_at < ?').bind(cutoff),
-    db.prepare('DELETE FROM error_diagnostics WHERE created_at < ?').bind(cutoff),
     db.prepare('DELETE FROM error_hourly WHERE hour < ?').bind(cutoff.slice(0, 13)),
     db.prepare('DELETE FROM error_rate WHERE expires_at < ?').bind(now.toISOString()),
     db.prepare('DELETE FROM error_group_users WHERE group_id IN (SELECT id FROM error_groups WHERE last_seen < ?)').bind(cutoff),

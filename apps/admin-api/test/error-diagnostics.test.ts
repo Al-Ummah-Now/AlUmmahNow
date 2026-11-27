@@ -2,14 +2,22 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { newErrorRef, scrubEvent } from '@al-ummah/shared-types';
-import { sqliteD1 } from './helpers/sqlite-d1';
+import { sqliteD1 } from './d1-sqlite';
 import adminImportRouter from '../src/routers/adminImport.router';
 import errorsRouter from '../src/routers/errors.router';
-import { DIAGNOSTIC_MAX_BYTES, scrubDiagnosticContent, storeErrorDiagnostic, readErrorDiagnostic } from '../src/lib/error-diagnostics';
+import {
+  DIAGNOSTIC_MAX_BYTES,
+  compressDiagnostic,
+  decompressDiagnostic,
+  readErrorDiagnostic,
+  scrubDiagnosticContent,
+  storeErrorDiagnostic,
+} from '../src/lib/error-diagnostics';
 import { ingestErrorEvents, listGroupEvents, pruneErrorData } from '../src/lib/errors-store';
 import type { D1Database } from '../src/lib/types';
 
 const ADMIN = 'usr_admin_diag_01';
+const OTHER_ADMIN = 'usr_admin_diag_02';
 const NOW = new Date('2026-11-26T15:00:00Z');
 
 function fakeBucket() {
@@ -39,21 +47,33 @@ describe('error diagnostics (R2 bundles)', () => {
     db = sqliteD1();
   });
 
-  it('scrubs tokens, headers, query secrets, emails, home paths and UNC hostnames', () => {
+  it('scrubs tokens, quoted JSON headers, Basic auth, query secrets, emails, home paths and UNC hostnames', () => {
     const raw = [
       'Bearer super_secret_token_abc123',
       'X-API-Key: my-secret-api-key',
+      '{"x-api-key": "json-secret-999", "authorization": "Basic dXNlcjpwYXNz"}',
       'https://api.alummahnow.net/x?X-Amz-Signature=deadbeef&token=abc',
       'user@example.com C:\\Users\\mahmoud\\Videos\\a.mp4 /Users/mahmoud/a.mp4 \\\\Home-NAS\\Originals\\a.mp4',
     ].join('\n');
     const clean = scrubDiagnosticContent(raw);
     assert.ok(!clean.includes('super_secret_token_abc123'));
     assert.ok(!clean.includes('my-secret-api-key'));
+    assert.ok(!clean.includes('json-secret-999'));
+    assert.ok(!clean.includes('dXNlcjpwYXNz'));
     assert.ok(!clean.includes('deadbeef'));
     assert.ok(!clean.includes('user@example.com'));
     assert.ok(!clean.includes('mahmoud'));
     assert.ok(!clean.includes('Home-NAS'));
     assert.ok(clean.includes('\\\\[share]\\Originals'));
+  });
+
+  it('compresses and decompresses large (~300 KB) diagnostic payloads without stalling', async () => {
+    // High-entropy lines > 64 KB compressed to exercise stream backpressure
+    const lines = Array.from({ length: 3000 }, (_, i) => `2026-11-26T15:00:${String(i % 60).padStart(2, '0')}Z [WARN] retry_${i} byte=${i * 65537} hash=${(i * 2654435761 >>> 0).toString(16)}\n`).join('');
+    assert.ok(lines.length > 200_000);
+    const { bytes, encoding } = await compressDiagnostic(lines);
+    const roundTrip = await decompressDiagnostic(bytes, encoding);
+    assert.equal(roundTrip, lines);
   });
 
   it('stores gzipped bundle in R2, joins diagnostic metadata onto listGroupEvents, and prunes after 30 days', async () => {
@@ -86,13 +106,13 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(await readErrorDiagnostic(db, bucket, ref), null);
   });
 
-  it('POST /api/admin/import/diagnostics and GET /api/errors/diagnostics/:ref enforce auth, size cap, and childSafety', async () => {
+  it('enforces auth, size cap, ref ownership, and fail-closed childSafety isolation', async () => {
     const bucket = fakeBucket();
     const env = { REPORTS_DB: db, DIAGNOSTICS: bucket, INTERNAL_API_KEY: 'k', ENVIRONMENT: 'production' };
-    const makeApp = (roles: string[]) => {
+    const makeApp = (roles: string[], userId = ADMIN) => {
       const app = new Hono();
       app.use('*', async (c, next) => {
-        c.set('auth' as never, { userId: ADMIN, email: 'admin@example.com', roles } as never);
+        c.set('auth' as never, { userId, email: 'admin@example.com', roles } as never);
         await next();
       });
       app.route('/api/admin/import', adminImportRouter);
@@ -117,7 +137,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(tooBig.status, 413);
 
     // Upload with auto-generated ref
-    const created = await makeApp(['Admin']).request(
+    const created = await makeApp(['Admin'], ADMIN).request(
       '/api/admin/import/diagnostics',
       { method: 'POST', body: JSON.stringify({ release: '2026.11.26.2', entryCount: 2, content: 'line 1\nline 2\n' }), headers: { 'Content-Type': 'application/json' } },
       env as never,
@@ -126,6 +146,14 @@ describe('error diagnostics (R2 bundles)', () => {
     const createdJson = (await created.json()) as { result: { ref: string } };
     const ref = createdJson.result.ref;
     assert.match(ref, /^ERR-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+
+    // Another admin cannot overwrite the first admin's bundle
+    const hijack = await makeApp(['Admin'], OTHER_ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref, content: 'overwritten' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(hijack.status, 409);
 
     // Read JSON + download text
     const jsonRes = await makeApp(['Admin']).request(`/api/errors/diagnostics/${ref}`, { method: 'GET' }, env as never);
@@ -137,7 +165,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(dlRes.headers.get('content-disposition'), `attachment; filename="diagnostic-${ref}.log"`);
     assert.equal(await dlRes.text(), 'line 1\nline 2\n');
 
-    // Child-safety ref hidden from non-super-admins
+    // Child-safety ref stays hidden from non-super-admins even if error_refs is later pruned
     const csRef = newErrorRef();
     const csEv = scrubEvent({
       app: 'admin-api',
@@ -151,6 +179,11 @@ describe('error diagnostics (R2 bundles)', () => {
 
     const adminHidden = await makeApp(['Admin']).request(`/api/errors/diagnostics/${csRef}`, { method: 'GET' }, env as never);
     assert.equal(adminHidden.status, 404);
+
+    // Simulate error_refs deleted while error_diagnostics still present -> still fail-closed!
+    await db.prepare('DELETE FROM error_refs WHERE ref = ?').bind(csRef).run();
+    const stillHidden = await makeApp(['Admin']).request(`/api/errors/diagnostics/${csRef}`, { method: 'GET' }, env as never);
+    assert.equal(stillHidden.status, 404);
     const superAllowed = await makeApp(['SuperAdmin']).request(`/api/errors/diagnostics/${csRef}`, { method: 'GET' }, env as never);
     assert.equal(superAllowed.status, 200);
   });
