@@ -188,12 +188,13 @@ export class TusProxy {
   }
 
   /** 503 + Retry-After: tus-js-client retries PATCH/POST on any 5xx. */
-  private retryLater(message: string): Response {
+  private retryLater(message: string, expected = false): Response {
     return new Response(JSON.stringify({ error: message, retryable: true }), {
       status: 503,
       headers: {
         'Content-Type': 'application/json',
         'Retry-After': String(RETRY_AFTER_SECONDS),
+        ...(expected ? { 'X-Error-Expected': 'busy' } : {}),
         'Tus-Resumable': TUS_VERSION,
         'Cache-Control': 'no-store',
       },
@@ -391,7 +392,7 @@ export class TusProxy {
         if (error instanceof R2PartConflict || /\(10058\)|Reduce your concurrent request rate for the same object/i.test(message)) {
           markExpectedRetry(c);
           logger.warn('[TUS Proxy] Chunk write contended; client retries', { uploadId, offset, length, error: message });
-          return this.retryLater('Upload storage busy, retry');
+          return this.retryLater('Upload storage busy, retry', true);
         }
         logger.warn('[TUS Proxy] Could not store a chunk; client retries', { uploadId, offset, length, error: message });
         return this.retryLater('Upload storage unavailable, retry');

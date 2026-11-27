@@ -85,8 +85,8 @@ export async function loggingMiddleware(c: Context, next: Next) {
 		};
 		if (status >= 500 || thrown) {
 			if (!thrown && status === 503 && raw[EXPECTED_RETRY]) {
-			logger.debug('request deferred for retry', summary);
-		} else if (!raw[ERROR_LOGGED]) {
+				logger.debug('request deferred for retry', summary);
+			} else if (!raw[ERROR_LOGGED]) {
 				logger.request({ ...summary, error: thrown ?? (await errorMessage(c.res)) ?? `HTTP ${status}` }, slowMs);
 			} else {
 				logger.debug('request failed (logged by the error handler)', summary);

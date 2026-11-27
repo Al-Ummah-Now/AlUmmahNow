@@ -10,9 +10,11 @@ it('uses a create-only PATCH write and handles a rejected precondition without c
 	}
 	Object.defineProperty(globalThis, 'FixedLengthStream', { configurable: true, value: TestFixedLengthStream });
 	t.after(() => Reflect.deleteProperty(globalThis, 'FixedLengthStream'));
+	let cancelled = false;
 	const body = new ReadableStream<Uint8Array>({
-		start(controller) {
-			controller.enqueue(new Uint8Array([1, 2, 3]));
+		async cancel() {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			cancelled = true;
 		},
 	});
 	const bucket = {
@@ -26,4 +28,5 @@ it('uses a create-only PATCH write and handles a rejected precondition without c
 		writeR2Part({ MEDIA_ORIGINALS: bucket as unknown as R2Bucket }, { videoId: 'video', uploadKey: 'upload', offset: 0, length: 3, body, createOnly: true }),
 		R2PartConflict,
 	);
+	assert.equal(cancelled, true);
 });
