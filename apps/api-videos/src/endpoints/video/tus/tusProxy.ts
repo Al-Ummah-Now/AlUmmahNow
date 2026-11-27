@@ -18,13 +18,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { can, requestIdOf } from '@al-ummah/shared-types';
 import { roleOnRecord } from '../../../lib/channelAccess';
+import { markExpectedRetry } from '../../../middleware/logging';
 import { getAuthContext } from '../../../middleware/auth';
 import { bunnyTusRequestHeaders, getTusSessionKey, parseTusMetadata, tusUploadIndexKey, type TusProxySession } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
 import { uploadsToBunny } from '../../../lib/media/ingest';
 import { isSourceChanged } from '../../../lib/media/source-changed';
-import { deleteR2Upload, MAX_R2_PATCH_BYTES, r2UploadOffset, writeR2Part } from '../../../lib/media/r2-tus';
+import { deleteR2Upload, MAX_R2_PATCH_BYTES, R2PartConflict, r2UploadOffset, writeR2Part } from '../../../lib/media/r2-tus';
 import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
@@ -384,9 +385,15 @@ export class TusProxy {
     }
     if (length > 0) {
       try {
-        await writeR2Part(this.env, { videoId: session.videoId, uploadKey, offset, length, body: body! });
+        await writeR2Part(this.env, { videoId: session.videoId, uploadKey, offset, length, body: body!, createOnly: true });
       } catch (error) {
-        logger.warn('[TUS Proxy] Could not store a chunk; client retries', { uploadId, offset, length, error: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof R2PartConflict || /\(10058\)|Reduce your concurrent request rate for the same object/i.test(message)) {
+          markExpectedRetry(c);
+          logger.warn('[TUS Proxy] Chunk write contended; client retries', { uploadId, offset, length, error: message });
+          return this.retryLater('Upload storage busy, retry');
+        }
+        logger.warn('[TUS Proxy] Could not store a chunk; client retries', { uploadId, offset, length, error: message });
         return this.retryLater('Upload storage unavailable, retry');
       }
     }

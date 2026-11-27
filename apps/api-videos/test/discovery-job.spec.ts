@@ -289,12 +289,27 @@ describe('home rails', () => {
 		const { env } = await library(80);
 		await runDiscoveryRank(env, NOW);
 		const app = buildApp((r: any) => r.get('/api/discovery/home', DiscoveryHome));
+		const videoReads = new Map<string, number>();
+		const getVideo = env.videos.get.bind(env.videos);
+		env.videos.get = (id: string) => {
+			videoReads.set(id, (videoReads.get(id) ?? 0) + 1);
+			return getVideo(id);
+		};
+		const channelReads: string[] = [];
+		env.channels = { get: async (id: string) => {
+			channelReads.push(id);
+			return null;
+		} };
 		const res = await app.request('/api/discovery/home?limit=8&language=en', {}, env);
 		assert.equal(res.status, 200, await res.clone().text());
 		const { data } = (await res.json()) as any;
 		assert.ok(data.rails.length >= 2);
 		const ids = data.rails.flatMap((r: any) => r.data.map((v: any) => v.id));
 		assert.equal(new Set(ids).size, ids.length);
+		assert.ok(videoReads.size >= ids.length);
+		assert.ok([...videoReads.values()].every((count) => count === 1));
+		const displayedChannels = new Set(data.rails.flatMap((r: any) => r.data.map((v: any) => v.channelId)));
+		assert.deepEqual(channelReads.sort(), [...displayedChannels].sort());
 		const headings = data.rails.filter((r: any) => r.key !== 'categories').map((r: any) => r.info.label);
 		assert.equal(new Set(headings).size, headings.length);
 		for (const r of data.rails) assert.ok(r.data.length >= MIN_HOME_ITEMS);

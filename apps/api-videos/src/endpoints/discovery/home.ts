@@ -8,6 +8,9 @@
  * signal Trending and New can both read "New this week"; Popular and Featured can both
  * read "Featured"), and a rail with fewer than MIN_HOME_ITEMS videos is left out.
  */
+import type { VideoObject } from '@al-ummah/shared-types';
+import { channelNamesByIds } from '../../lib/channelNames';
+import R2Repository from '../../lib/r2Repo';
 import { z } from 'zod';
 import { PublicRoute, type AppContext } from '../../base';
 import { Num, Str } from '../../lib/chanfana-params';
@@ -151,23 +154,37 @@ export class DiscoveryHome extends PublicRoute {
 				}
 			}
 		}
-		const pages = await Promise.all(wanted.map((w) => railPage(c.env as never, { rail: w.rail, scope: w.scope, limit: read }).catch(() => null)));
+		const repo = new R2Repository<VideoObject>(c.env.videos);
+		const reads = new Map<string, Promise<VideoObject | null>>();
+		const readVideo = (id: string) => {
+			let pending = reads.get(id);
+			if (!pending) {
+				pending = repo.getObject(id);
+				reads.set(id, pending);
+			}
+			return pending;
+		};
+		const railEnv = { SEARCH_DB: db, videos: c.env.videos };
+		const pages = await Promise.all(wanted.map((w) => railPage(railEnv, { rail: w.rail, scope: w.scope, limit: read, readVideo }).catch(() => null)));
 		const found: HomeRailOut[] = [];
 		wanted.forEach((w, i) => {
 			const page = pages[i];
 			if (page) found.push({ key: w.key, rail: w.rail, category: w.category, page });
 		});
 		let categories = 0;
-		const rails = dedupeHome(found, limit)
-			.filter((r) => r.key !== 'categories' || ++categories <= MAX_CATEGORY_RAILS)
-			.map((r) => ({
-				key: r.key,
-				rail: r.rail,
-				...(r.category ? { category: r.category, categoryLabel: categoryLabels.get(r.category) } : {}),
-				info: railLabelFields(r.page.meta),
-				data: r.videos.map((e) => feedItem(e.video as never)),
-				...(r.page.nextCursor ? { cursor: r.page.nextCursor } : {}),
-			}));
+		const displayed = dedupeHome(found, limit).filter((r) => r.key !== 'categories' || ++categories <= MAX_CATEGORY_RAILS);
+		const names = await channelNamesByIds(c.env.channels, displayed.flatMap((rail) => rail.videos.map((entry) => entry.video.channelId)));
+		const rails = displayed.map((r) => ({
+			key: r.key,
+			rail: r.rail,
+			...(r.category ? { category: r.category, categoryLabel: categoryLabels.get(r.category) } : {}),
+			info: railLabelFields(r.page.meta),
+			data: r.videos.map(({ video }) => {
+				const name = video.channelId ? names.get(video.channelId) : undefined;
+				return feedItem((name ? { ...video, ...name } : video) as never);
+			}),
+			...(r.page.nextCursor ? { cursor: r.page.nextCursor } : {}),
+		}));
 		const body = { success: true, data: { rails } };
 		if (rails.length) writeEdgeCache(cacheUrl, body, HOME_TTL, waitUntilOf(c as never));
 		else logger.debug('[Discovery] Home has no rails yet (no ranking run)');

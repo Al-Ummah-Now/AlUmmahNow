@@ -5,8 +5,8 @@
  * completeOriginal, the transcoder and retention work unchanged.
  *
  * The offset is the contiguous coverage of the stored parts from byte 0: no session write per
- * chunk, a retried PATCH at the same offset rewrites the same key (idempotent), and a resumed
- * upload continues exactly where the stored bytes end.
+ * chunk. A conditional PATCH write protects a committed part when two requests see the same
+ * offset, and a resumed upload continues exactly where the stored bytes end.
  */
 import { originalPartKey, originalPrefix, partsFromKeys } from '@al-ummah/shared-types';
 import { logger } from '../logger';
@@ -38,14 +38,27 @@ export async function r2UploadOffset(env: OriginalsEnv, videoId: string, uploadK
 	return covered;
 }
 
+export class R2PartConflict extends Error {}
+
 /** Store one PATCH body of a known length at `offset`. Throws when the bucket fails. */
-export async function writeR2Part(env: OriginalsEnv, p: { videoId: string; uploadKey: string; offset: number; length: number; body: ReadableStream<Uint8Array> }): Promise<void> {
+export async function writeR2Part(env: OriginalsEnv, p: { videoId: string; uploadKey: string; offset: number; length: number; body: ReadableStream<Uint8Array>; createOnly?: boolean }): Promise<void> {
 	const bucket = env.MEDIA_ORIGINALS;
 	if (!bucket) throw new Error('MEDIA_ORIGINALS is not bound');
 	const fixed = new FixedLengthStream(p.length);
-	const piped = p.body.pipeTo(fixed.writable);
-	await bucket.put(originalPartKey(p.videoId, p.uploadKey, p.offset), fixed.readable, { httpMetadata: { contentType: 'application/octet-stream' } });
-	await piped;
+	const abort = new AbortController();
+	const piped = p.body.pipeTo(fixed.writable, { signal: abort.signal });
+	const stored = bucket.put(originalPartKey(p.videoId, p.uploadKey, p.offset), fixed.readable, {
+		httpMetadata: { contentType: 'application/octet-stream' },
+		...(p.createOnly ? { onlyIf: { etagDoesNotMatch: '*' } } : {}),
+	}).then((object) => {
+		if (p.createOnly && object === null) throw new R2PartConflict('Upload part already stored');
+	});
+	try {
+		await Promise.all([stored, piped]);
+	} catch (error) {
+		abort.abort(error);
+		throw error;
+	}
 }
 
 /** The client gave up on the upload (TUS DELETE): its parts go. Never throws. */

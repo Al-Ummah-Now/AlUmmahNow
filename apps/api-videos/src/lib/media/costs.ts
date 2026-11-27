@@ -123,15 +123,41 @@ export async function bunnyStoredBytes(env: CostEnv): Promise<number | undefined
 	}
 }
 
-async function graphql(token: string, query: string, variables: Record<string, unknown>): Promise<any> {
-	const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
-		method: 'POST',
-		headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-		body: JSON.stringify({ query, variables }),
-	});
-	const json = (await res.json()) as { data?: any; errors?: { message: string }[] | null };
-	if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '));
-	return json.data;
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function retryAfterMs(value: string | null): number {
+	if (!value) return 0;
+	const ms = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
+	return Number.isFinite(ms) ? Math.max(0, ms) : 0;
+}
+
+/** One paced GraphQL client per collection, sharing the cooldown between queries. */
+function analyticsClient(token: string) {
+	let nextRequestAt = 0;
+	return async (query: string, variables: Record<string, unknown>): Promise<any> => {
+		for (let attempt = 0; ; attempt++) {
+			const delay = nextRequestAt - Date.now();
+			if (delay > 30_000) throw new Error('Cloudflare Analytics retry window exceeds 30 seconds');
+			if (delay > 0) await wait(delay);
+			const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+				body: JSON.stringify({ query, variables }),
+			});
+			nextRequestAt = Date.now() + 1000;
+			const json = await res.json().catch((error) => {
+				if (res.ok) throw error;
+				return null;
+			}) as { data?: any; errors?: { message: string }[] | null } | null;
+			const message = json?.errors?.map((error) => error.message).join('; ');
+			if (res.status === 429 || /rate[ -]?limit/i.test(message ?? '')) {
+				nextRequestAt = Date.now() + Math.max(retryAfterMs(res.headers.get('Retry-After')), 1000 * 2 ** attempt + Math.random() * 250);
+				if (attempt < 3) continue;
+			}
+			if (message || !res.ok) throw new Error(message || `HTTP ${res.status}`);
+			return json?.data;
+		}
+	};
 }
 
 const CLASS_B = new Set(['GetObject', 'HeadObject', 'HeadBucket', 'UsageSummary', 'GetBucketEncryption', 'GetBucketLocation', 'GetBucketCors', 'GetBucketLifecycleConfiguration']);
@@ -165,12 +191,12 @@ export function classBByKind(groups: { sum?: { requests?: number }; dimensions?:
 async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes?: number; r2ClassB?: number; r2ClassBOriginals?: number; extra: Metric[] }> {
 	const token = await getSecret(env.MEDIA_ANALYTICS_TOKEN, 'MEDIA_ANALYTICS_TOKEN');
 	if (!token) return { extra: [] };
+	const graphql = analyticsClient(token);
 	const buckets = (env.MEDIA_BUCKET_NAMES ?? '').split(',').filter(Boolean);
 	const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86400_000).toISOString().slice(0, 10);
 	const out: { r2StoredBytes?: number; r2ClassB?: number; r2ClassBOriginals?: number; extra: Metric[] } = { extra: [] };
 	try {
 		const data = await graphql(
-			token,
 			`query($a: String!, $b: [String!], $d: Date!, $n: Date!) { viewer { accounts(filter: { accountTag: $a }) {
 				r2StorageAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { max { payloadSize metadataSize } dimensions { bucketName } }
 				r2OperationsAdaptiveGroups(limit: 200, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { sum { requests } dimensions { actionType bucketName } } } } }`,
@@ -190,7 +216,6 @@ async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes
 	}
 	try {
 		const data = await graphql(
-			token,
 			`query($z: String!, $d: Date!, $n: Date!, $h: String!) { viewer { zones(filter: { zoneTag: $z }) {
 				httpRequestsAdaptiveGroups(limit: 20, filter: { date_geq: $d, date_lt: $n, clientRequestHTTPHost: $h }) { count sum { edgeResponseBytes } dimensions { cacheStatus } } } } }`,
 			{ z: ZONE_ID, d: day, n: next, h: env.MEDIA_PUBLIC_HOST ?? '' },
