@@ -321,5 +321,30 @@ describe('error diagnostics (R2 bundles)', () => {
       env as never,
     );
     assert.equal(ownerUnsampled.status, 201);
+
+    // Pre-migration sampled ref (error_refs.user_id IS NULL while linked event_id records the owner)
+    const legacyRef = newErrorRef();
+    const legacyEv = scrubEvent({
+      app: 'tools',
+      kind: 'upload',
+      ref: legacyRef,
+      message: 'Pre-migration tools failure',
+      route: '/import/upload',
+      userId: ADMIN,
+    })!;
+    await ingestErrorEvents(db, [legacyEv], { environment: 'production', now: NOW, clientKey: ADMIN });
+    await db.prepare('UPDATE error_refs SET user_id = NULL WHERE ref = ?').bind(legacyRef).run();
+    const otherLegacy = await makeApp(['Admin'], OTHER_ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: legacyRef, content: 'hijack legacy' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(otherLegacy.status, 409);
+    const ownerLegacy = await makeApp(['Admin'], ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: legacyRef, content: 'owner legacy' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(ownerLegacy.status, 201);
   });
 });

@@ -2,7 +2,7 @@
  * Opt-in scrubbed diagnostic log bundles stored in R2 (bucket DIAGNOSTICS, 30-day R2 lifecycle
  * expiry) and indexed in REPORTS_DB.error_diagnostics by error reference (ERR-XXXX-XXXX).
  */
-import { newErrorRef, parseErrorRef, type ErrorApp } from '@al-ummah/shared-types';
+import { ERASED_USER_ID, newErrorRef, parseErrorRef, type ErrorApp } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
 
 /** Maximum accepted diagnostic body size (UTF-8 bytes, before server-side gzip). */
@@ -166,10 +166,15 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
     .prepare(
       `SELECT 1 AS c FROM error_refs r
        JOIN error_groups g ON g.id = r.group_id
-       WHERE r.ref = ? AND (g.app <> ? OR (r.user_id IS NOT NULL AND r.user_id IS NOT ?))
+       LEFT JOIN error_events e ON e.id = r.event_id AND e.user_id IS NOT NULL AND e.user_id <> ?
+       WHERE r.ref = ?
+         AND (
+           g.app <> ?
+           OR (COALESCE(r.user_id, e.user_id) IS NOT NULL AND COALESCE(r.user_id, e.user_id) IS NOT ?)
+         )
        LIMIT 1`,
     )
-    .bind(ref, app, userId)
+    .bind(ERASED_USER_ID, ref, app, userId)
     .first<{ c: number }>();
   if (refConflict) {
     throw new DiagnosticRefConflictError();
@@ -205,7 +210,12 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
        WHERE NOT EXISTS (
          SELECT 1 FROM error_refs r
          JOIN error_groups g ON g.id = r.group_id
-         WHERE r.ref = ? AND (g.app <> ? OR (r.user_id IS NOT NULL AND r.user_id IS NOT ?))
+         LEFT JOIN error_events e ON e.id = r.event_id AND e.user_id IS NOT NULL AND e.user_id <> ?
+         WHERE r.ref = ?
+           AND (
+             g.app <> ?
+             OR (COALESCE(r.user_id, e.user_id) IS NOT NULL AND COALESCE(r.user_id, e.user_id) IS NOT ?)
+           )
        )
        ON CONFLICT(ref) DO UPDATE SET
          r2_key = excluded.r2_key,
@@ -218,7 +228,7 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
          created_at = excluded.created_at
        WHERE error_diagnostics.app = excluded.app AND error_diagnostics.user_id IS excluded.user_id`,
     )
-    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, ref, createdAt, ref, app, userId)
+    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, ref, createdAt, ERASED_USER_ID, ref, app, userId)
     .run();
 
   if (((write.meta as { changes?: number } | undefined)?.changes ?? 0) === 0) {

@@ -22,3 +22,15 @@ CREATE INDEX IF NOT EXISTS idx_error_diagnostics_created ON error_diagnostics (c
 -- upload ownership holds even when an event is unsampled or a second account submits a
 -- duplicate event with the same ref.
 ALTER TABLE error_refs ADD COLUMN user_id TEXT;
+
+-- Backfill pre-existing sampled refs from their canonical linked error_events row
+-- (excluding the ERASED_USER_ID tombstone 'deleted-user').
+UPDATE error_refs
+SET user_id = (
+    SELECT e.user_id
+    FROM error_events e
+    WHERE e.id = error_refs.event_id
+      AND e.user_id IS NOT NULL
+      AND e.user_id <> 'deleted-user'
+)
+WHERE event_id IS NOT NULL AND user_id IS NULL;
