@@ -13,7 +13,7 @@ import {
   scrubDiagnosticContent,
   storeErrorDiagnostic,
 } from '../src/lib/error-diagnostics';
-import { ingestErrorEvents, listGroupEvents, pruneErrorData } from '../src/lib/errors-store';
+import { deleteTestGroupByRef, ingestErrorEvents, listGroupEvents, pruneErrorData } from '../src/lib/errors-store';
 import type { D1Database } from '../src/lib/types';
 
 const ADMIN = 'usr_admin_diag_01';
@@ -213,7 +213,8 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(crossApp.status, 409);
 
     // Diagnostic-first order: a tools bundle uploaded before another app's event with the same ref
-    // must not surface on the other app's error group
+    // must not surface on the other app's error group, and deleting or pruning that other app's
+    // group/ref must not remove the tools diagnostic
     const preRef = newErrorRef();
     const preUpload = await makeApp(['Admin'], ADMIN).request(
       '/api/admin/import/diagnostics',
@@ -227,10 +228,51 @@ describe('error diagnostics (R2 bundles)', () => {
       ref: preRef,
       message: 'Unrelated admin-api failure',
       route: '/api/health',
+      test: true,
     })!;
     const otherIngest = await ingestErrorEvents(db, [otherAppEv], { environment: 'production', now: NOW, userKey: ADMIN });
     const otherEvents = await listGroupEvents(db, otherIngest.groups[0].groupId, 10);
     assert.equal(otherEvents[0].diagnostic_size_bytes, null);
     assert.equal(otherEvents[0].diagnostic_entry_count, null);
+    assert.equal(await deleteTestGroupByRef(db, preRef), 1);
+    assert.ok(await readErrorDiagnostic(db, bucket, preRef), 'deleting an unrelated app group must keep the tools diagnostic');
+
+    // Pruning an expired unrelated-app ref must not remove a newer tools diagnostic sharing the ref
+    const pruneRef = newErrorRef();
+    await storeErrorDiagnostic(db, bucket, { ref: pruneRef, app: 'tools', environment: 'production', userId: ADMIN, content: 'fresh tools log', now: NOW });
+    const oldAdminEv = scrubEvent({
+      app: 'admin-api',
+      kind: 'server',
+      ref: pruneRef,
+      message: 'Old admin-api error',
+      route: '/api/old',
+    })!;
+    await ingestErrorEvents(db, [oldAdminEv], { environment: 'production', now: new Date(NOW.getTime() - 40 * 86_400_000), userKey: ADMIN });
+    await pruneErrorData(db, NOW);
+    assert.ok(await readErrorDiagnostic(db, bucket, pruneRef), 'pruning an expired unrelated-app ref must keep a newer tools diagnostic');
+
+    // Same-app ownership: another Tools account cannot claim an existing Tools event's ref
+    const toolsRef = newErrorRef();
+    const toolsEv = scrubEvent({
+      app: 'tools',
+      kind: 'upload',
+      ref: toolsRef,
+      message: 'Owner upload failed',
+      route: '/import/upload',
+      userId: ADMIN,
+    })!;
+    await ingestErrorEvents(db, [toolsEv], { environment: 'production', now: NOW, userKey: ADMIN });
+    const otherClaim = await makeApp(['Admin'], OTHER_ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: toolsRef, content: 'hijacked tools log' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(otherClaim.status, 409);
+    const ownerUpload = await makeApp(['Admin'], ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: toolsRef, content: 'owner tools log' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(ownerUpload.status, 201);
   });
 });
