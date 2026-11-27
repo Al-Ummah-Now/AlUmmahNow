@@ -93,12 +93,14 @@ import {
   contentPermissionsFor,
   hasContentPermission,
   newErrorRef,
+  parseErrorRef,
   scrubEvent,
   type ErrorEventInput,
   baseName,
 } from '@al-ummah/shared-types';
 import { enqueueIngest } from '../endpoints/errors/ErrorsIngest';
 import { allowClientEvents } from '../lib/errors-store';
+import { DIAGNOSTIC_MAX_BYTES, storeErrorDiagnostic } from '../lib/error-diagnostics';
 import { hashIp } from '../lib/contact';
 import { hasPermission, normalizeRoles, permissionsFor } from '../lib/roles';
 import { callVideos, fetchVideosRaw, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
@@ -741,6 +743,47 @@ app.post('/errors', async (c) => {
     return c.json({ success: false, code: 'ingest_failed', error: 'Reports could not be queued; try again' }, 503, { 'Retry-After': '30' });
   }
   return c.json({ success: true, result: { accepted: events.length, rateLimited } }, 202);
+});
+
+app.post('/diagnostics', async (c) => {
+  if (!c.env.DIAGNOSTICS) {
+    return c.json({ success: false, code: 'diagnostics_unavailable', error: 'Diagnostic storage is not configured' }, 503);
+  }
+  const text = await c.req.text();
+  if (new TextEncoder().encode(text).byteLength > DIAGNOSTIC_MAX_BYTES) {
+    return c.json({ success: false, code: 'too_large', error: 'Diagnostic log exceeds the 512 KB limit' }, 413);
+  }
+  let body: { ref?: unknown; release?: unknown; entryCount?: unknown; content?: unknown };
+  try {
+    body = JSON.parse(text) as typeof body;
+  } catch {
+    return fail(c, 400, 'invalid_request', 'A JSON object is required');
+  }
+  if (!body || typeof body !== 'object' || typeof body.content !== 'string' || !body.content.trim()) {
+    return fail(c, 400, 'invalid_request', 'Diagnostic content is required');
+  }
+  if (body.ref !== undefined && body.ref !== null && (typeof body.ref !== 'string' || !parseErrorRef(body.ref))) {
+    return fail(c, 400, 'invalid_request', 'Invalid error reference');
+  }
+  const key = typeof c.env.INTERNAL_API_KEY === 'string' ? c.env.INTERNAL_API_KEY : ((await c.env.INTERNAL_API_KEY?.get().catch(() => '')) ?? '');
+  const rateKey = (await hashIp(`tools-diag:${actorOf(c)}`, key)).slice(0, 24);
+  const allowed = await allowClientEvents(c.env.REPORTS_DB, rateKey, 1, new Date());
+  if (allowed < 1) return c.json({ success: false, code: 'rate_limited', error: 'Too many diagnostic uploads; try again in a minute' }, 429, { 'Retry-After': '60' });
+  try {
+    const stored = await storeErrorDiagnostic(c.env.REPORTS_DB, c.env.DIAGNOSTICS, {
+      ref: typeof body.ref === 'string' ? body.ref : null,
+      app: 'tools',
+      environment: c.env.ENVIRONMENT || 'development',
+      release: typeof body.release === 'string' ? body.release : null,
+      userId: actorOf(c),
+      entryCount: typeof body.entryCount === 'number' ? body.entryCount : undefined,
+      content: body.content,
+    });
+    return c.json({ success: true, result: { ref: stored.ref, sizeBytes: stored.sizeBytes, storedBytes: stored.storedBytes, entryCount: stored.entryCount } }, 201);
+  } catch (error) {
+    logger.error('[AdminImport] Could not store diagnostic log', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ success: false, code: 'storage_failed', error: 'Diagnostic log could not be stored; try again' }, 503, { 'Retry-After': '30' });
+  }
 });
 
 // ---------------------------------------------------------------------------

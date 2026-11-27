@@ -3145,6 +3145,9 @@ const ar: Messages = {
   },
   errorsPage: {
     openImport: 'فتح الملف في الاستيراد',
+    diagnosticLog: 'سجل التشخيص',
+    viewDiagnosticLog: 'عرض سجل التشخيص',
+    downloadDiagnosticLog: 'تنزيل السجل',
     errorType: 'نوع الخطأ',
     platforms: {
       Windows: 'ويندوز',

@@ -435,6 +435,27 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
           )}
         </div>
       )}
+      {!!e.diagnostic_size_bytes && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm" data-testid="error-sample-diagnostic">
+          <span className="font-medium text-fg">{t('errorsPage.diagnosticLog')}</span>
+          <a
+            href={`/api/errors/diagnostics/${encodeURIComponent(e.ref)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={linkClass}
+            data-testid="error-sample-diagnostic-view"
+          >
+            {t('errorsPage.viewDiagnosticLog')}
+          </a>
+          <a
+            href={`/api/errors/diagnostics/${encodeURIComponent(e.ref)}?download=1`}
+            className={linkClass}
+            data-testid="error-sample-diagnostic-download"
+          >
+            {t('errorsPage.downloadDiagnosticLog')}
+          </a>
+        </div>
+      )}
     </li>
   );
 }

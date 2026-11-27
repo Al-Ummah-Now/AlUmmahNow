@@ -46,6 +46,8 @@ export const PLACEHOLDER_SECRET_VALUE = 'unset';
 
 /** Days a source map is kept, by environment; production keeps every release's. */
 const SOURCEMAP_DAYS: Partial<Record<ResourceEnv, number>> = { qa: 14, stage: 30 };
+/** Days diagnostic log bundles are kept in R2, across every environment. */
+const DIAGNOSTICS_DAYS = 30;
 export const EXPIRY_RULE_ID = 'al-ummah-expire';
 
 /** The production Turnstile widget "al-ummah-now-production" (docs/features/bot-protection.md). */
@@ -81,8 +83,12 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
 		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)
 		// CSAM evidence (docs/specs/CSAM-RESPONSE.md §4): private, never public, no lifecycle rule
-		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`, `al-ummah-now-media-originals${s}`, `al-ummah-now-csam-evidence${s}`],
-		...(SOURCEMAP_DAYS[env] ? { expireAfterDays: { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } } : {}),
+		// Diagnostic log bundles (apps/admin-api lib/error-diagnostics.ts): private, 30-day expiry in every env
+		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-diagnostics${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`, `al-ummah-now-media-originals${s}`, `al-ummah-now-csam-evidence${s}`],
+		expireAfterDays: {
+			...(SOURCEMAP_DAYS[env] ? { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } : {}),
+			[`al-ummah-now-diagnostics${s}`]: DIAGNOSTICS_DAYS,
+		},
 		// Move from YouTube: the Google OAuth client secret (api-videos GOOGLE_OAUTH_CLIENT_SECRET, docs/features/youtube-import.md)
 		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`] },
 		// www newsletter sign-up renders the widget (AlUmmahNowUI apps/www NewsletterForm)

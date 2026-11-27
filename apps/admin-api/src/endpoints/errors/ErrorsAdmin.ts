@@ -35,6 +35,7 @@ import {
   recordActionAttempt,
 } from '../../lib/errors-store';
 import { apiError } from '../../lib/api-error';
+import { readErrorDiagnostic } from '../../lib/error-diagnostics';
 import { parseRetry, retryPermissions, retrySitePermissions, runRetry } from '../../lib/errors-actions';
 import { hasContentPermission, isSuperAdmin } from '@al-ummah/shared-types';
 
@@ -193,6 +194,60 @@ export class ErrorRefLookup extends ErrorsRoute {
     const hit = ref ? await findByRef(c.env.REPORTS_DB, ref, this.childSafety(c)) : null;
     if (!hit) return c.json({ success: false, error: 'Reference not found' }, 404);
     return { success: true, result: { ref, groupId: hit.group_id, eventId: hit.event_id } };
+  }
+}
+
+export class ErrorDiagnosticGet extends ErrorsRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Read or download a scrubbed R2 diagnostic log bundle by ERR-XXXX-XXXX reference',
+    request: {
+      params: z.object({ ref: z.string().min(8).max(20) }),
+      query: z.object({
+        format: z.enum(['json', 'text']).optional(),
+        download: z.enum(['0', '1']).optional(),
+      }),
+    },
+    responses: { '200': { description: 'Diagnostic log content' }, '404': { description: 'Not found' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'errors:read');
+    if (denied) return denied;
+    if (!c.env.DIAGNOSTICS) return c.json({ success: false, error: 'Diagnostic storage not configured' }, 503);
+    const { params, query } = await this.getValidatedData<typeof this.schema>();
+    const ref = parseErrorRef(params.ref);
+    if (!ref) return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
+    // Respect child-safety access control when the ref belongs to an error group
+    const anyHit = await findByRef(c.env.REPORTS_DB, ref, true);
+    if (anyHit && !this.childSafety(c) && !(await getErrorGroup(c.env.REPORTS_DB, anyHit.group_id, false))) {
+      return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
+    }
+    const bundle = await readErrorDiagnostic(c.env.REPORTS_DB, c.env.DIAGNOSTICS, ref);
+    if (!bundle) return c.json({ success: false, error: 'Diagnostic log not found' }, 404);
+    if (query.download === '1' || query.format === 'text') {
+      const headers: Record<string, string> = {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      };
+      if (query.download === '1') headers['Content-Disposition'] = `attachment; filename="diagnostic-${ref}.log"`;
+      return new Response(bundle.content, { status: 200, headers });
+    }
+    return {
+      success: true,
+      result: {
+        ref: bundle.meta.ref,
+        app: bundle.meta.app,
+        environment: bundle.meta.environment,
+        release: bundle.meta.release,
+        sizeBytes: bundle.meta.size_bytes,
+        storedBytes: bundle.meta.stored_bytes,
+        entryCount: bundle.meta.entry_count,
+        createdAt: bundle.meta.created_at,
+        content: bundle.content,
+      },
+    };
   }
 }
 

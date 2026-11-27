@@ -106,6 +106,9 @@ export interface ErrorEventRow {
   /** context.origin.surface / .source (migration 0040), for the Origin filter */
   origin_surface?: string | null;
   origin_source?: string | null;
+  /** Attached R2 diagnostic log metadata (migration 0057), joined by ref */
+  diagnostic_size_bytes?: number | null;
+  diagnostic_entry_count?: number | null;
 }
 
 export interface ErrorActivityRow {
@@ -740,7 +743,17 @@ export async function groupOrigins(db: D1Database, groupId: string): Promise<{ s
 }
 
 export async function listGroupEvents(db: D1Database, groupId: string, limit = 20): Promise<ErrorEventRow[]> {
-  const rows = await db.prepare('SELECT * FROM error_events WHERE group_id = ? ORDER BY occurred_at DESC LIMIT ?').bind(groupId, limit).all<ErrorEventRow>();
+  const rows = await db
+    .prepare(
+      `SELECT e.*, d.size_bytes AS diagnostic_size_bytes, d.entry_count AS diagnostic_entry_count
+       FROM error_events e
+       LEFT JOIN error_diagnostics d ON d.ref = e.ref
+       WHERE e.group_id = ?
+       ORDER BY e.occurred_at DESC
+       LIMIT ?`,
+    )
+    .bind(groupId, limit)
+    .all<ErrorEventRow>();
   return rows.results ?? [];
 }
 
@@ -892,6 +905,7 @@ export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RET
   const results = await db.batch([
     db.prepare('DELETE FROM error_events WHERE received_at < ?').bind(cutoff),
     db.prepare('DELETE FROM error_refs WHERE created_at < ?').bind(cutoff),
+    db.prepare('DELETE FROM error_diagnostics WHERE created_at < ?').bind(cutoff),
     db.prepare('DELETE FROM error_hourly WHERE hour < ?').bind(cutoff.slice(0, 13)),
     db.prepare('DELETE FROM error_rate WHERE expires_at < ?').bind(now.toISOString()),
     db.prepare('DELETE FROM error_group_users WHERE group_id IN (SELECT id FROM error_groups WHERE last_seen < ?)').bind(cutoff),
