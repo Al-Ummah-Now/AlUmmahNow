@@ -31,6 +31,7 @@ export const TELEMETRY_MAX_EVENT_BYTES = 64 * 1024;
 export const TELEMETRY_MAX_EVENTS = 100;
 export const TELEMETRY_MAX_BREADCRUMBS = 50;
 export const TELEMETRY_MAX_PROPERTIES = 50;
+export const TELEMETRY_PENDING_TTL_MS = 60 * 1000;
 export const TELEMETRY_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 export const TELEMETRY_RATE_LIMIT: RateLimitConfig = {
 	perMinute: 30,
@@ -62,13 +63,20 @@ const TelemetryEventSchema = z.object({
 	properties: z
 		.record(z.string().min(1).max(64), PropValueSchema)
 		.refine((p) => Object.keys(p).length <= TELEMETRY_MAX_PROPERTIES, 'Too many properties')
+		.meta({
+			description: 'Up to 50 flat primitive properties (keys 1-64 chars, string values up to 16,384 chars)',
+			maxProperties: TELEMETRY_MAX_PROPERTIES,
+			propertyNames: { type: 'string', minLength: 1, maxLength: 64 },
+		})
 		.optional()
 		.default({}),
 	breadcrumbs: z.array(BreadcrumbSchema).max(TELEMETRY_MAX_BREADCRUMBS).optional().default([]),
 }).refine(
 	(ev) => new TextEncoder().encode(JSON.stringify(ev)).byteLength <= TELEMETRY_MAX_EVENT_BYTES,
 	'Telemetry event exceeds per-event size limit',
-);
+).meta({
+	description: 'Single telemetry or crash event (max 64 KiB serialized JSON)',
+});
 
 const AppInfoSchema = z.object({
 	platform: z.string().min(1).max(64),
@@ -260,14 +268,17 @@ async function hashCallerKey(raw: string, secret: string): Promise<string> {
 }
 
 /**
- * Atomically claims unseen (or expired) event IDs in `SEARCH_DB.telemetry_dedupe`.
- * Returns the subset of events that won the claim (not duplicates).
+ * Atomically claims unseen (or expired) event IDs in `SEARCH_DB.telemetry_dedupe` as short-lived
+ * `pending` leases tied to `claimToken`. Unclaimed IDs are inspected so already-`delivered` events
+ * are deduplicated while still-`pending` concurrent deliveries are reported in `pendingIds` (so the
+ * caller receives a retryable 503 instead of a premature 202).
  */
 export async function claimFreshEvents(
 	db: D1Database | undefined,
 	events: TelemetryEventInput[],
 	nowMs = Date.now(),
-): Promise<{ fresh: TelemetryEventInput[]; claimedIds: string[] }> {
+	claimToken = crypto.randomUUID(),
+): Promise<{ fresh: TelemetryEventInput[]; claimedIds: string[]; pendingIds: string[]; claimToken: string }> {
 	// Always deduplicate within the batch first
 	const unique: TelemetryEventInput[] = [];
 	const seen = new Set<string>();
@@ -277,41 +288,98 @@ export async function claimFreshEvents(
 		unique.push(ev);
 	}
 	if (!db || unique.length === 0) {
-		return { fresh: unique, claimedIds: [] };
+		return { fresh: unique, claimedIds: [], pendingIds: [], claimToken };
 	}
-	const expiresAt = nowMs + TELEMETRY_DEDUPE_TTL_MS;
+	const pendingExpiresAt = nowMs + TELEMETRY_PENDING_TTL_MS;
 	const stmts = unique.map((ev) =>
 		db
 			.prepare(
-				`INSERT INTO telemetry_dedupe (event_id, expires_at) VALUES (?, ?)
-				 ON CONFLICT(event_id) DO UPDATE SET expires_at = excluded.expires_at
+				`INSERT INTO telemetry_dedupe (event_id, status, claim_token, expires_at) VALUES (?, 'pending', ?, ?)
+				 ON CONFLICT(event_id) DO UPDATE SET status = 'pending', claim_token = excluded.claim_token, expires_at = excluded.expires_at
 				 WHERE telemetry_dedupe.expires_at <= ?`,
 			)
-			.bind(ev.id, expiresAt, nowMs),
+			.bind(ev.id, claimToken, pendingExpiresAt, nowMs),
 	);
 	const results = await db.batch(stmts);
 	const fresh: TelemetryEventInput[] = [];
 	const claimedIds: string[] = [];
+	const unclaimedIds: string[] = [];
 	for (let i = 0; i < unique.length; i++) {
 		const changes = (results[i]?.meta as { changes?: number } | undefined)?.changes ?? 0;
 		if (changes > 0) {
 			fresh.push(unique[i]);
 			claimedIds.push(unique[i].id);
+		} else {
+			unclaimedIds.push(unique[i].id);
 		}
 	}
-	return { fresh, claimedIds };
+
+	const pendingIds: string[] = [];
+	if (unclaimedIds.length > 0) {
+		const deliveredSet = new Set<string>();
+		const chunkSize = 49;
+		for (let i = 0; i < unclaimedIds.length; i += chunkSize) {
+			const part = unclaimedIds.slice(i, i + chunkSize);
+			const res = await db
+				.prepare(
+					`SELECT event_id FROM telemetry_dedupe
+					 WHERE status = 'delivered' AND expires_at > ? AND event_id IN (${part.map(() => '?').join(',')})`,
+				)
+				.bind(nowMs, ...part)
+				.all<{ event_id: string }>();
+			for (const row of res.results ?? []) {
+				deliveredSet.add(row.event_id);
+			}
+		}
+		for (const id of unclaimedIds) {
+			if (!deliveredSet.has(id)) {
+				pendingIds.push(id);
+			}
+		}
+	}
+	return { fresh, claimedIds, pendingIds, claimToken };
 }
 
-/** Releases claimed event IDs when a transient downstream failure asks the client to retry. */
-async function releaseClaimedIds(db: D1Database | undefined, ids: string[]): Promise<void> {
+/** Promotes successfully delivered pending claims (owned by `claimToken`) to `delivered` for 24h. */
+export async function markEventsDelivered(
+	db: D1Database | undefined,
+	ids: string[],
+	claimToken: string,
+	nowMs = Date.now(),
+): Promise<void> {
+	if (!db || ids.length === 0) return;
+	const expiresAt = nowMs + TELEMETRY_DEDUPE_TTL_MS;
+	const chunkSize = 48;
+	const stmts: D1PreparedStatement[] = [];
+	for (let i = 0; i < ids.length; i += chunkSize) {
+		const part = ids.slice(i, i + chunkSize);
+		stmts.push(
+			db
+				.prepare(
+					`UPDATE telemetry_dedupe SET status = 'delivered', expires_at = ?
+					 WHERE claim_token = ? AND event_id IN (${part.map(() => '?').join(',')})`,
+				)
+				.bind(expiresAt, claimToken, ...part),
+		);
+	}
+	await db.batch(stmts);
+}
+
+/** Releases only pending claims owned by `claimToken` when a downstream failure asks the client to retry. */
+export async function releaseClaimedIds(db: D1Database | undefined, ids: string[], claimToken: string): Promise<void> {
 	if (!db || ids.length === 0) return;
 	try {
-		const chunkSize = 50;
+		const chunkSize = 49;
 		const stmts: D1PreparedStatement[] = [];
 		for (let i = 0; i < ids.length; i += chunkSize) {
 			const part = ids.slice(i, i + chunkSize);
 			stmts.push(
-				db.prepare(`DELETE FROM telemetry_dedupe WHERE event_id IN (${part.map(() => '?').join(',')})`).bind(...part),
+				db
+					.prepare(
+						`DELETE FROM telemetry_dedupe
+						 WHERE status = 'pending' AND claim_token = ? AND event_id IN (${part.map(() => '?').join(',')})`,
+					)
+					.bind(claimToken, ...part),
 			);
 		}
 		await db.batch(stmts);
@@ -338,7 +406,7 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 		tags: ['Analytics'],
 		summary: 'Ingest native app telemetry and crash batches',
 		description:
-			'🔓 Authentication optional. Accepts an `aun_telemetry::TelemetryBatch` (max 100 events, 256 KB), deduplicates by event id, queues analytics/QoE events, and forwards error/crash reports to admin-api.',
+			'🔓 Authentication optional. Accepts an `aun_telemetry::TelemetryBatch` (max 256 KiB request body, max 100 events, max 64 KiB serialized JSON per event, max 50 breadcrumbs, max 50 flat primitive properties with 1-64 char keys), deduplicates delivered events by event id for 24h, queues analytics/QoE events, and forwards error/crash reports to admin-api.',
 		request: {
 			body: { content: { 'application/json': { schema: TelemetryBatchBody } } },
 		},
@@ -362,7 +430,7 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 				content: { 'application/json': { schema: z.object({ success: z.boolean(), code: z.string(), error: z.string() }) } },
 			},
 			'413': {
-				description: 'Batch exceeds 256 KB limit',
+				description: 'Batch exceeds 256 KiB limit',
 				content: { 'application/json': { schema: z.object({ success: z.boolean(), code: z.string(), error: z.string() }) } },
 			},
 			'429': {
@@ -393,6 +461,10 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 		}
 		const batch = parsed.data;
 		const secret = await resolveSecret(c.env.INTERNAL_API_KEY);
+		if (!secret) {
+			logger.error('[Telemetry] INTERNAL_API_KEY secret is unavailable');
+			return apiError(c, 503, 'service_unavailable', { error: 'Telemetry ingest temporarily unavailable' }, { 'Retry-After': '30' });
+		}
 		const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown';
 		const callerIdentity = this.getUserId(c) ?? ip;
 		const rateKey = await hashCallerKey(callerIdentity, secret);
@@ -411,21 +483,27 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 
 		try {
 			const nowMs = Date.now();
-			const { fresh, claimedIds } = await claimFreshEvents(c.env.SEARCH_DB, batch.events, nowMs);
-			const deduplicated = batch.events.length - fresh.length;
+			const { fresh, claimedIds, pendingIds, claimToken } = await claimFreshEvents(c.env.SEARCH_DB, batch.events, nowMs);
+			const deduplicated = batch.events.length - fresh.length - pendingIds.length;
 			if (fresh.length === 0) {
+				if (pendingIds.length > 0) {
+					return apiError(c, 503, 'service_unavailable', { error: 'Telemetry events are still being processed; retry shortly' }, { 'Retry-After': '5' });
+				}
 				return c.json({ success: true, result: { accepted: 0, deduplicated } }, 202);
 			}
 
 			const analyticsEvents = fresh.filter((e) => e.kind === 'analytics' || e.kind === 'qoe');
-			const errorEntries = fresh
-				.filter((e) => e.kind === 'error' || e.kind === 'crash')
+			const rawErrorEvents = fresh.filter((e) => e.kind === 'error' || e.kind === 'crash');
+			const errorEntries = rawErrorEvents
 				.map((e) => ({ id: e.id, input: telemetryEventToErrorInput(e, batch.app, c.env.ENVIRONMENT || 'development', nowMs) }))
 				.filter((entry): entry is { id: string; input: ErrorEventInput } => entry.input !== null);
 
 			const deliveredIds = new Set<string>();
 			try {
-				if (analyticsEvents.length > 0 && c.env.queue) {
+				if (analyticsEvents.length > 0) {
+					if (!c.env.queue) {
+						throw new Error('Telemetry analytics queue binding is unavailable');
+					}
 					const mappedAnalytics = analyticsEvents.map((e) => ({
 						id: e.id,
 						kind: e.kind,
@@ -457,11 +535,16 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 							},
 							timestamp: nowMs,
 						});
-						for (const ev of chunk) deliveredIds.add(ev.id);
+						const chunkIds = chunk.map((ev) => ev.id);
+						for (const id of chunkIds) deliveredIds.add(id);
+						await markEventsDelivered(c.env.SEARCH_DB, chunkIds, claimToken, nowMs);
 					}
 				}
 
-				if (errorEntries.length > 0 && c.env.ERRORS_INGEST_URL && secret) {
+				if (errorEntries.length > 0) {
+					if (!c.env.ERRORS_INGEST_URL) {
+						throw new Error('ERRORS_INGEST_URL is not configured');
+					}
 					const errorChunks = chunkBySize(errorEntries, ERROR_LIMITS.maxEventsPerBatch, FORWARD_MAX_BODY_BYTES, 16);
 					const ua = c.req.header('User-Agent')?.slice(0, 256);
 					for (const chunk of errorChunks) {
@@ -474,18 +557,23 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 							},
 							body: JSON.stringify({ events: chunk.map((entry) => entry.input) }),
 						});
-						if (res.status >= 500 || res.status === 429) {
+						if (!res.ok) {
 							throw new Error(`admin-api errors ingest returned ${res.status}`);
 						}
-						if (!res.ok) {
-							logger.warn('[Telemetry] admin-api rejected forwarded error chunk', { status: res.status, count: chunk.length });
-						}
-						for (const entry of chunk) deliveredIds.add(entry.id);
+						const chunkIds = chunk.map((entry) => entry.id);
+						for (const id of chunkIds) deliveredIds.add(id);
+						await markEventsDelivered(c.env.SEARCH_DB, chunkIds, claimToken, nowMs);
 					}
+				}
+
+				// If any error event failed scrubbing unexpectedly, release its pending claim rather than counting it delivered
+				if (errorEntries.length < rawErrorEvents.length) {
+					const dropped = rawErrorEvents.map((e) => e.id).filter((id) => !deliveredIds.has(id));
+					await releaseClaimedIds(c.env.SEARCH_DB, dropped, claimToken);
 				}
 			} catch (error) {
 				const undelivered = claimedIds.filter((id) => !deliveredIds.has(id));
-				await releaseClaimedIds(c.env.SEARCH_DB, undelivered);
+				await releaseClaimedIds(c.env.SEARCH_DB, undelivered, claimToken);
 				logger.error('[Telemetry] Failed to deliver telemetry batch', {
 					batchId: batch.batch_id,
 					count: fresh.length,
@@ -495,7 +583,11 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 				return apiError(c, 503, 'service_unavailable', { error: 'Telemetry delivery temporarily unavailable; retry shortly' }, { 'Retry-After': '30' });
 			}
 
-			return c.json({ success: true, result: { accepted: fresh.length, deduplicated } }, 202);
+			if (pendingIds.length > 0) {
+				return apiError(c, 503, 'service_unavailable', { error: 'Telemetry events are still being processed; retry shortly' }, { 'Retry-After': '5' });
+			}
+
+			return c.json({ success: true, result: { accepted: deliveredIds.size, deduplicated } }, 202);
 		} finally {
 			if (c.env.SEARCH_DB && leaseId) {
 				await releaseRateLimit(c.env.SEARCH_DB, rateKey, 'telemetry_batch', leaseId);

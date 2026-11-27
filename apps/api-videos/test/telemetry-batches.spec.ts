@@ -15,8 +15,10 @@ import {
 	TELEMETRY_RATE_LIMIT,
 	TelemetryBatchesCreate,
 	chunkErrorEvents,
+	claimFreshEvents,
 	mapTelemetryPlatformToErrorApp,
 	pruneTelemetryDedupe,
+	releaseClaimedIds,
 	telemetryEventToErrorInput,
 } from '../src/endpoints/analytics/telemetryBatches';
 import { buildApp } from './helpers';
@@ -160,6 +162,8 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 		// Crash forwarded to admin-api /internal/errors with scrubbed message, stack, breadcrumbs, deterministic ref
 		assert.equal(forwarded.length, 1);
 		assert.equal(forwarded[0].headers.get('x-api-key'), 'internal-secret-key');
+		assert.equal(forwarded[0].headers.get('x-client-ip'), null);
+		assert.equal(forwarded[0].headers.get('x-report-source'), null);
 		assert.equal(forwarded[0].body.events.length, 1);
 		const ev = forwarded[0].body.events[0];
 		assert.equal(ev.app, 'ios');
@@ -340,7 +344,7 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 				controller.close();
 			},
 		});
-		const streamedRes = await app.request(
+		const streamedRes = await app.fetch(
 			new Request('https://videos.api.test/api/telemetry/batches', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.13' },
@@ -391,6 +395,216 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 		assert.ok(queued.length >= 2, `expected >= 2 queue messages, got ${queued.length}`);
 		for (const msg of queued) {
 			assert.ok(new TextEncoder().encode(JSON.stringify(msg)).byteLength < 128 * 1024);
+		}
+	});
+
+	it('returns 503 (never premature 202) on concurrent in-flight retry, and guards rollback with claim_token', async () => {
+		const app = createApp();
+		const env = createEnv();
+		const batch = makeBatch({
+			events: [
+				{
+					id: 'evt_inflight_01',
+					kind: 'crash',
+					name: 'crash',
+					timestamp_ms: NOW_MS,
+					session_id: 'sess_race',
+					properties: { kind: 'EXC_BAD_ACCESS', message: 'boom' },
+				},
+			],
+		});
+
+		// Pause the first request while it is forwarding to admin-api
+		let releaseFirst!: () => void;
+		let firstEntered!: () => void;
+		const enteredPromise = new Promise<void>((r) => {
+			firstEntered = r;
+		});
+		const gatePromise = new Promise<void>((r) => {
+			releaseFirst = r;
+		});
+
+		let callCount = 0;
+		globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+			callCount += 1;
+			if (callCount === 1) {
+				firstEntered();
+				await gatePromise;
+				return new Response(JSON.stringify({ success: false }), { status: 503 });
+			}
+			const body = JSON.parse(String(init?.body ?? '{}')) as { events: any[] };
+			forwarded.push({ url: 'https://admin.api.test/internal/errors', headers: new Headers(init?.headers), body });
+			return new Response(JSON.stringify({ success: true }), { status: 202 });
+		}) as typeof fetch;
+
+		const req1Promise = app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.20' }, body: JSON.stringify(batch) },
+			env as any,
+		);
+		await enteredPromise;
+
+		// Concurrent retry while req1 is still forwarding: MUST get 503 Retry-After: 5, NOT 202!
+		const concurrentRes = await app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.20' }, body: JSON.stringify(batch) },
+			env as any,
+		);
+		assert.equal(concurrentRes.status, 503);
+		assert.equal(concurrentRes.headers.get('retry-after'), '5');
+
+		// First request finishes with downstream 503 and releases its pending claim
+		releaseFirst();
+		const req1Res = await req1Promise;
+		assert.equal(req1Res.status, 503);
+
+		// Subsequent retry delivers cleanly and promotes the row to 'delivered'
+		const retryRes = await app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.20' }, body: JSON.stringify(batch) },
+			env as any,
+		);
+		assert.equal(retryRes.status, 202);
+		assert.deepEqual(await retryRes.json(), { success: true, result: { accepted: 1, deduplicated: 0 } });
+		assert.equal(forwarded.length, 1);
+
+		// Stale claim_token cannot delete a newer claim
+		const claimA = await claimFreshEvents(
+			searchDb as unknown as D1Database,
+			[{ id: 'evt_token_guard', kind: 'analytics', name: 'tap', timestamp_ms: NOW_MS, session_id: 's', properties: {}, breadcrumbs: [] }],
+			NOW_MS,
+			'token_A',
+		);
+		assert.equal(claimA.fresh.length, 1);
+		// Reclaim after pending lease expires
+		const claimB = await claimFreshEvents(
+			searchDb as unknown as D1Database,
+			[{ id: 'evt_token_guard', kind: 'analytics', name: 'tap', timestamp_ms: NOW_MS, session_id: 's', properties: {}, breadcrumbs: [] }],
+			NOW_MS + 120_000,
+			'token_B',
+		);
+		assert.equal(claimB.fresh.length, 1);
+		await releaseClaimedIds(searchDb as unknown as D1Database, ['evt_token_guard'], 'token_A');
+		const row = searchDb.db.prepare('SELECT claim_token FROM telemetry_dedupe WHERE event_id = ?').get('evt_token_guard') as { claim_token: string } | undefined;
+		assert.equal(row?.claim_token, 'token_B');
+	});
+
+	it('fails closed on missing secret, missing sink config, and admin-api 401/403 without writing rate-limit or dedupe state', async () => {
+		const app = createApp();
+
+		// 1. Missing INTERNAL_API_KEY fails closed with 503 before hashing/writing rate limits
+		const noSecretEnv = { ...createEnv(), INTERNAL_API_KEY: '' };
+		const noSecretRes = await app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.30' }, body: JSON.stringify(makeBatch()) },
+			noSecretEnv as any,
+		);
+		assert.equal(noSecretRes.status, 503);
+		const rlRows = searchDb.db.prepare('SELECT COUNT(*) as c FROM upload_rate_windows').get() as { c: number };
+		assert.equal(rlRows.c, 0);
+
+		// 2. Missing ERRORS_INGEST_URL refuses to acknowledge crash events and releases pending claim
+		const noUrlEnv = { ...createEnv(), ERRORS_INGEST_URL: '' };
+		const crashBatch = makeBatch({
+			events: [{ id: 'evt_no_url', kind: 'crash', name: 'crash', timestamp_ms: NOW_MS, session_id: 's', properties: { kind: 'ERR', message: 'm' } }],
+		});
+		const noUrlRes = await app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.31' }, body: JSON.stringify(crashBatch) },
+			noUrlEnv as any,
+		);
+		assert.equal(noUrlRes.status, 503);
+		const dedupeAfterNoUrl = searchDb.db.prepare('SELECT event_id FROM telemetry_dedupe WHERE event_id = ?').get('evt_no_url');
+		assert.equal(dedupeAfterNoUrl, undefined);
+
+		// 3. Downstream 401/403 from admin-api fails with 503 and releases pending claim (never returns 202)
+		const env = createEnv();
+		for (const status of [401, 403]) {
+			forwardStatus = status;
+			const authFailRes = await app.request(
+				'/api/telemetry/batches',
+				{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.32' }, body: JSON.stringify(crashBatch) },
+				env as any,
+			);
+			assert.equal(authFailRes.status, 503);
+			assert.equal(searchDb.db.prepare('SELECT event_id FROM telemetry_dedupe WHERE event_id = ?').get('evt_no_url'), undefined);
+		}
+	});
+
+	it('enforces Content-Length fast-path 413 and byte-based admin-api chunking under 20 events', async () => {
+		const app = createApp();
+		const env = createEnv();
+
+		// 1. Oversized Content-Length header rejected immediately with 413 without reading stream
+		let streamRead = false;
+		const guardedStream = new ReadableStream<Uint8Array>(
+			{
+				pull() {
+					streamRead = true;
+				},
+			},
+			{ highWaterMark: 0 },
+		);
+		const fastPathReq = new Request('https://videos.api.test/api/telemetry/batches', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Content-Length': String(TELEMETRY_MAX_BODY_BYTES + 1),
+				'CF-Connecting-IP': '198.51.100.40',
+			},
+			body: guardedStream,
+			duplex: 'half',
+		} as RequestInit);
+		const fastPathRes = await app.fetch(fastPathReq, env as any);
+		assert.equal(fastPathRes.status, 413);
+		assert.equal(streamRead, false);
+		assert.equal(fastPathReq.bodyUsed, false);
+
+		// 2. Byte-based admin-api chunking: 10 large crash events (< 20 count, > 58 KB scrubbed) split into >= 2 chunks
+		const extraProps: Record<string, string> = {};
+		for (let p = 0; p < 7; p++) extraProps[`meta_${p}`] = 'detail value '.repeat(14).trim();
+		const bigCrashEvents = Array.from({ length: 10 }, (_, i) => ({
+			id: `byte_chunk_${i}`,
+			kind: 'crash' as const,
+			name: 'crash',
+			timestamp_ms: NOW_MS,
+			session_id: 's',
+			properties: {
+				kind: 'NativeCrash',
+				message: `crash ${i}: ` + 'unexpected player state transition '.repeat(24).trim(),
+				stack: Array.from({ length: 50 }, (_, f) => `${f} AlUmmahNow 0x${(i * 1000 + f).toString(16)} PlayerViewController.renderFrame(at line ${f}) in module playback`).join('\n'),
+				...extraProps,
+			},
+			breadcrumbs: Array.from({ length: 12 }, (_, b) => ({
+				timestamp_ms: NOW_MS - b * 100,
+				category: 'player',
+				message: `step ${b}: ` + 'playback state updated '.repeat(5).trim(),
+				level: 'info' as const,
+			})),
+		}));
+		const bigCrashes = bigCrashEvents.map((ev) =>
+			telemetryEventToErrorInput(
+				ev,
+				{ platform: 'ios', app_version: '1.0.0', os_version: '18.2', device_class: 'phone', locale: 'en', core_version: '0.4.0' },
+				'production',
+				NOW_MS,
+			)!,
+		);
+		const byteChunks = chunkErrorEvents(bigCrashes);
+		assert.ok(byteChunks.length >= 2, `expected >= 2 byte-bounded chunks, got ${byteChunks.length}`);
+		for (const chunk of byteChunks) {
+			assert.ok(new TextEncoder().encode(JSON.stringify({ events: chunk })).byteLength <= 64 * 1024);
+		}
+		// End-to-end through POST /api/telemetry/batches: splits into >= 2 admin-api requests
+		const e2eRes = await app.request(
+			'/api/telemetry/batches',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.41' }, body: JSON.stringify(makeBatch({ events: bigCrashEvents })) },
+			env as any,
+		);
+		assert.equal(e2eRes.status, 202);
+		assert.ok(forwarded.length >= 2, `expected >= 2 admin-api POSTs, got ${forwarded.length}`);
+		for (const req of forwarded) {
+			assert.ok(new TextEncoder().encode(JSON.stringify(req.body)).byteLength <= 64 * 1024);
 		}
 	});
 });

@@ -37999,7 +37999,7 @@
           "Analytics"
         ],
         "summary": "Ingest native app telemetry and crash batches",
-        "description": "🔓 Authentication optional. Accepts an `aun_telemetry::TelemetryBatch` (max 100 events, 256 KB), deduplicates by event id, queues analytics/QoE events, and forwards error/crash reports to admin-api.",
+        "description": "🔓 Authentication optional. Accepts an `aun_telemetry::TelemetryBatch` (max 256 KiB request body, max 100 events, max 64 KiB serialized JSON per event, max 50 breadcrumbs, max 50 flat primitive properties with 1-64 char keys), deduplicates delivered events by event id for 24h, queues analytics/QoE events, and forwards error/crash reports to admin-api.",
         "operationId": "post_TelemetryBatchesCreate",
         "requestBody": {
           "content": {
@@ -38099,7 +38099,14 @@
                               }
                             ]
                           },
-                          "default": {}
+                          "default": {},
+                          "description": "Up to 50 flat primitive properties (keys 1-64 chars, string values up to 16,384 chars)",
+                          "maxProperties": 50,
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
                         },
                         "breadcrumbs": {
                           "type": "array",
@@ -38144,7 +38151,8 @@
                         "name",
                         "timestamp_ms",
                         "session_id"
-                      ]
+                      ],
+                      "description": "Single telemetry or crash event (max 64 KiB serialized JSON)"
                     },
                     "minItems": 1,
                     "maxItems": 100
@@ -38222,7 +38230,7 @@
             }
           },
           "413": {
-            "description": "Batch exceeds 256 KB limit",
+            "description": "Batch exceeds 256 KiB limit",
             "content": {
               "application/json": {
                 "schema": {
