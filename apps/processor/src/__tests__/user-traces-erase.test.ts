@@ -34,6 +34,15 @@ function seed() {
   event('ev_1', USER, JSON.stringify({ email: 'erased@example.com', ip: '203.0.113.9', name: 'Erased', step: 'upload' }));
   event('ev_2', USER, 'not json');
   event('ev_3', OTHER, JSON.stringify({ email: 'kept@example.com' }));
+  reports.raw
+    .prepare(`INSERT INTO error_refs (ref, group_id, event_id, user_id, created_at) VALUES ('ERR-ev_1', 'eg_1', 'ev_1', ?, ?), ('ERR-ev_3', 'eg_1', 'ev_3', ?, ?)`)
+    .run(USER, now, OTHER, now);
+  reports.raw
+    .prepare(
+      `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, user_id, child_safety, created_at)
+       VALUES ('ERR-ev_1', 'tools', 'qa', 'diag/k1', 'gzip', 10, 10, 1, ?, 0, ?), ('ERR-ev_3', 'tools', 'qa', 'diag/k3', 'gzip', 10, 10, 1, ?, 0, ?)`
+    )
+    .run(USER, now, OTHER, now);
   for (const [subject, userId] of [['vid_1', USER], ['vid_2', OTHER]]) {
     search.raw
       .prepare(`INSERT INTO category_suggestions (subject_id, subject_type, user_id, reason, status, created_at, updated_at) VALUES (?, 'video', ?, 'upload', 'done', 1, 1)`)
@@ -104,7 +113,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, creatorTerms: 1, captionMinutes: 5, tierRequests: 2, billing: 6, support: 5, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, errorRefs: 1, errorDiagnostics: 1, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, creatorTerms: 1, captionMinutes: 5, tierRequests: 2, billing: 6, support: 5, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -113,6 +122,14 @@ describe('eraseUserTraces (#1059)', () => {
       { id: 'ev_1', user_id: ERASED, message: 'Boom', stack: 'at x', extra_json: JSON.stringify({ step: 'upload' }) },
       { id: 'ev_2', user_id: ERASED, message: 'Boom', stack: 'at x', extra_json: null },
       { id: 'ev_3', user_id: OTHER, message: 'Boom', stack: 'at x', extra_json: JSON.stringify({ email: 'kept@example.com' }) },
+    ]);
+    expect(reports.raw.prepare('SELECT ref, user_id FROM error_refs ORDER BY ref').all()).toEqual([
+      { ref: 'ERR-ev_1', user_id: ERASED },
+      { ref: 'ERR-ev_3', user_id: OTHER },
+    ]);
+    expect(reports.raw.prepare('SELECT ref, user_id FROM error_diagnostics ORDER BY ref').all()).toEqual([
+      { ref: 'ERR-ev_1', user_id: ERASED },
+      { ref: 'ERR-ev_3', user_id: OTHER },
     ]);
     // The group and its counts survive
     expect(reports.raw.prepare('SELECT users, occurrences FROM error_groups').all()).toEqual([{ users: 2, occurrences: 3 }]);
@@ -151,7 +168,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, creatorTerms: 0, captionMinutes: 0, tierRequests: 0, billing: 0, support: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, errorRefs: 0, errorDiagnostics: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, creatorTerms: 0, captionMinutes: 0, tierRequests: 0, billing: 0, support: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

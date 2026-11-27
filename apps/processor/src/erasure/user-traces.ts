@@ -44,6 +44,8 @@ export interface UserTracesResult {
   invites: number;
   errorUsers: number;
   errorEvents: number;
+  errorRefs: number;
+  errorDiagnostics: number;
   categorySuggestions: number;
   rateLimits: number;
   creatorTier: number;
@@ -70,7 +72,7 @@ export async function eraseUserTraces(
 ): Promise<UserTracesResult> {
   if (!userId) throw new Error('eraseUserTraces needs a user id');
   const removeKeys = IDENTIFYING_EXTRA_KEYS.map((k) => `'$.${k}'`).join(', ');
-  const [invites, errorUsers, errorEvents] = await reports.batch([
+  const [invites, errorUsers, errorEvents, errorRefs, errorDiagnostics] = await reports.batch([
     reports.prepare('DELETE FROM creator_invites WHERE user_id = ? RETURNING id').bind(userId),
     reports.prepare('DELETE FROM error_group_users WHERE user_key = ? RETURNING group_id').bind(userId),
     reports
@@ -79,6 +81,8 @@ export async function eraseUserTraces(
          WHERE user_id = ? RETURNING id`
       )
       .bind(erasedMarker, userId),
+    reports.prepare('UPDATE error_refs SET user_id = ? WHERE user_id = ? RETURNING ref').bind(erasedMarker, userId),
+    reports.prepare('UPDATE error_diagnostics SET user_id = ? WHERE user_id = ? RETURNING ref').bind(erasedMarker, userId),
   ]);
   const [suggestions, windows, leases, tier, terms, requests, decided, ...captions] = search
     ? await search.batch([
@@ -122,6 +126,8 @@ export async function eraseUserTraces(
     invites: count(invites),
     errorUsers: count(errorUsers),
     errorEvents: count(errorEvents),
+    errorRefs: count(errorRefs),
+    errorDiagnostics: count(errorDiagnostics),
     categorySuggestions: count(suggestions),
     rateLimits: count(windows) + count(leases),
     creatorTier: count(tier),
