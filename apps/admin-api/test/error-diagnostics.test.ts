@@ -226,7 +226,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(preUpload.status, 201);
     const otherAppEv = scrubEvent({
       app: 'admin-api',
-      kind: 'server',
+      kind: 'http',
       ref: preRef,
       message: 'Unrelated admin-api failure',
       route: '/api/health',
@@ -244,7 +244,7 @@ describe('error diagnostics (R2 bundles)', () => {
     await storeErrorDiagnostic(db, bucket, { ref: pruneRef, app: 'tools', environment: 'production', userId: ADMIN, content: 'fresh tools log', now: NOW });
     const oldAdminEv = scrubEvent({
       app: 'admin-api',
-      kind: 'server',
+      kind: 'http',
       ref: pruneRef,
       message: 'Old admin-api error',
       route: '/api/old',
