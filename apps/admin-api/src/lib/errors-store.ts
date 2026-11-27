@@ -747,7 +747,8 @@ export async function listGroupEvents(db: D1Database, groupId: string, limit = 2
     .prepare(
       `SELECT e.*, d.size_bytes AS diagnostic_size_bytes, d.entry_count AS diagnostic_entry_count
        FROM error_events e
-       LEFT JOIN error_diagnostics d ON d.ref = e.ref
+       JOIN error_groups g ON g.id = e.group_id
+       LEFT JOIN error_diagnostics d ON d.ref = e.ref AND d.app = g.app
        WHERE e.group_id = ?
        ORDER BY e.occurred_at DESC
        LIMIT ?`,
