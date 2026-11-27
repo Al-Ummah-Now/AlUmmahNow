@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
+import { formatNumber } from '@al-ummah/shared-types';
 import { useI18n } from '@/lib/i18n';
 import { parseLocaleFromPath } from '@/lib/i18n/utils';
 import type { SupportedLanguage } from '@/lib/i18n';
@@ -52,7 +53,7 @@ export default function NotFoundPage() {
             className="text-9xl md:text-[12rem] font-bold text-gray-300 dark:text-gray-700 select-none animate-pulse"
             aria-hidden="true"
           >
-            404
+            {formatNumber(locale, 404)}
           </p>
 
           {/* Decorative Elements */}

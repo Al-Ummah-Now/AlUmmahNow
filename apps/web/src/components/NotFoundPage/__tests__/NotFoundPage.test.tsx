@@ -19,9 +19,18 @@ describe('NotFoundPage (prod 2026-11-18: crashed with 500 instead of a 404)', ()
     expect(screen.getByTestId('not-found-page')).toHaveAttribute('dir', 'ltr');
   });
 
-  it('Arabic paths render right to left', () => {
+  it('Arabic paths render right to left with Eastern Arabic digits', () => {
     pathname = '/ar/nope';
     render(<NotFoundPage />);
-    expect(screen.getByTestId('not-found-page')).toHaveAttribute('dir', 'rtl');
+    const page = screen.getByTestId('not-found-page');
+    expect(page).toHaveAttribute('dir', 'rtl');
+    expect(page).toHaveTextContent('٤٠٤');
+    expect(page).not.toHaveTextContent('404');
+  });
+
+  it('English paths render Latin digits', () => {
+    pathname = '/en/nope';
+    render(<NotFoundPage />);
+    expect(screen.getByTestId('not-found-page')).toHaveTextContent('404');
   });
 });
