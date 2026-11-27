@@ -3,6 +3,7 @@
  * expiry) and indexed in REPORTS_DB.error_diagnostics by error reference (ERR-XXXX-XXXX).
  */
 import { newErrorRef, parseErrorRef, type ErrorApp } from '@al-ummah/shared-types';
+import { findByRef, getErrorGroup } from './errors-store';
 import type { D1Database } from './types';
 
 /** Maximum accepted diagnostic body size (UTF-8 bytes, before server-side gzip). */
@@ -29,6 +30,7 @@ export interface ErrorDiagnosticRow {
   entry_count: number;
   release: string | null;
   user_id: string | null;
+  child_safety: number;
   created_at: string;
 }
 
@@ -52,9 +54,16 @@ export interface StoredDiagnostic {
   createdAt: string;
 }
 
+export class DiagnosticRefConflictError extends Error {
+  constructor() {
+    super('Diagnostic reference belongs to another upload');
+    this.name = 'DiagnosticRefConflictError';
+  }
+}
+
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
-const HEADER_SECRET_RE = /\b((?:x-api-key|x-internal-api-key|authorization)\s*[:=]\s*)[^\s,;]+/gi;
+const HEADER_SECRET_RE = /("?(?:x-api-key|x-internal-api-key|authorization)"?\s*[:=]\s*"?)(?:(?:Basic|Bearer|Digest|Token)\s+)?[^\s,;"]+/gi;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const QUERY_SECRET_RE = /([?&](?:token|access_token|refresh_token|key|api_key|apikey|sig|signature|auth|secret|password|x-amz-signature|x-amz-credential|x-amz-security-token)=)[^&\s"']+/gi;
 const API_KEY_RE = /\b(?:re|sk|pk|ghp|gho|ghu|ghs)_[A-Za-z0-9_-]{12,}\b/g;
@@ -76,46 +85,57 @@ export function scrubDiagnosticContent(raw: string): string {
     .replace(UNC_HOST_RE, '\\\\[share]\\$2');
 }
 
-async function readStreamBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
-  const reader = stream.getReader();
+/** Reads a request body up to `maxBytes` without buffering unbounded payloads into memory. */
+export async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
+  const cl = request.headers.get('content-length');
+  if (cl !== null && /^\d+$/.test(cl.trim()) && Number(cl) > maxBytes) return null;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
       total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
     }
+  } finally {
+    reader.releaseLock();
   }
-  const out = new Uint8Array(total);
+  const merged = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
-    out.set(chunk, offset);
+    merged.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return out;
+  return new TextDecoder().decode(merged);
 }
 
+/**
+ * Compresses text with gzip using streaming pipeThrough + Response.arrayBuffer so the readable
+ * side is drained concurrently with writes (never stalls when output exceeds stream highWaterMark).
+ */
 export async function compressDiagnostic(text: string): Promise<{ bytes: Uint8Array; encoding: 'gzip' | 'identity' }> {
   const raw = new TextEncoder().encode(text);
   if (typeof CompressionStream === 'undefined') return { bytes: raw, encoding: 'identity' };
-  const cs = new CompressionStream('gzip');
-  const writer = cs.writable.getWriter();
-  await writer.write(raw);
-  await writer.close();
-  return { bytes: await readStreamBytes(cs.readable), encoding: 'gzip' };
+  const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'));
+  return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), encoding: 'gzip' };
 }
 
 export async function decompressDiagnostic(bytes: Uint8Array, encoding: string): Promise<string> {
   if (encoding !== 'gzip' || typeof DecompressionStream === 'undefined') {
     return new TextDecoder().decode(bytes);
   }
-  const ds = new DecompressionStream('gzip');
-  const writer = ds.writable.getWriter();
-  await writer.write(bytes);
-  await writer.close();
-  return new TextDecoder().decode(await readStreamBytes(ds.readable));
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const stream = new Blob([copy]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new TextDecoder().decode(await new Response(stream).arrayBuffer());
 }
 
 function safeSegment(value: string, fallback: string): string {
@@ -130,13 +150,29 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
   const ref = (input.ref ? parseErrorRef(input.ref) : null) ?? newErrorRef();
   const env = safeSegment(input.environment, 'unknown');
   const app = safeSegment(input.app, 'tools');
+  const userId = input.userId && /^usr_[A-Za-z0-9_-]+$/.test(input.userId) ? input.userId : null;
+
+  // Prevent one account (or another app) from overwriting an existing diagnostic bundle for a ref
+  const existing = await getErrorDiagnosticMeta(db, ref);
+  if (existing && (existing.app !== app || existing.user_id !== userId)) {
+    throw new DiagnosticRefConflictError();
+  }
+
+  // Persist child-safety classification on the diagnostic row so isolation stays fail-closed even after error_refs pruning
+  let childSafety = existing?.child_safety ?? 0;
+  if (!childSafety) {
+    const refHit = await findByRef(db, ref, true);
+    if (refHit && !(await getErrorGroup(db, refHit.group_id, false))) {
+      childSafety = 1;
+    }
+  }
+
   const scrubbed = scrubDiagnosticContent(input.content);
   const sizeBytes = new TextEncoder().encode(scrubbed).byteLength;
   const { bytes, encoding } = await compressDiagnostic(scrubbed);
   const storedBytes = bytes.byteLength;
   const entryCount = typeof input.entryCount === 'number' && Number.isFinite(input.entryCount) ? Math.max(0, Math.min(100_000, Math.floor(input.entryCount))) : 0;
   const release = input.release ? input.release.trim().slice(0, 80) || null : null;
-  const userId = input.userId && /^usr_[A-Za-z0-9_-]+$/.test(input.userId) ? input.userId : null;
   const r2Key = `diag/${env}/${app}/${day}/${ref}.log${encoding === 'gzip' ? '.gz' : ''}`;
 
   await bucket.put(r2Key, bytes, {
@@ -146,21 +182,20 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
 
   await db
     .prepare(
-      `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, release, user_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, release, user_id, child_safety, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(ref) DO UPDATE SET
-         app = excluded.app,
-         environment = excluded.environment,
          r2_key = excluded.r2_key,
          content_encoding = excluded.content_encoding,
          size_bytes = excluded.size_bytes,
          stored_bytes = excluded.stored_bytes,
          entry_count = excluded.entry_count,
          release = excluded.release,
-         user_id = excluded.user_id,
-         created_at = excluded.created_at`,
+         child_safety = MAX(error_diagnostics.child_safety, excluded.child_safety),
+         created_at = excluded.created_at
+       WHERE error_diagnostics.app = excluded.app AND error_diagnostics.user_id IS excluded.user_id`,
     )
-    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, createdAt)
+    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, childSafety, createdAt)
     .run();
 
   return { ref, r2Key, sizeBytes, storedBytes, entryCount, createdAt };
