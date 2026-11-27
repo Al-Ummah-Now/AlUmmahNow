@@ -155,7 +155,9 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
   const app = safeSegment(input.app, 'tools');
   const userId = input.userId && /^usr_[A-Za-z0-9_-]+$/.test(input.userId) ? input.userId : null;
 
-  // Prevent one account (or another app) from overwriting an existing diagnostic bundle or claiming another account's ref
+  // Prevent one account (or another app) from overwriting an existing diagnostic bundle or claiming another account's ref.
+  // Ownership is anchored on error_refs.user_id (written once via INSERT OR IGNORE), so unsampled events
+  // are still protected and a later duplicate event from another account cannot poison the rightful owner.
   const existing = await getErrorDiagnosticMeta(db, ref);
   if (existing && (existing.app !== app || existing.user_id !== userId)) {
     throw new DiagnosticRefConflictError();
@@ -164,14 +166,10 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
     .prepare(
       `SELECT 1 AS c FROM error_refs r
        JOIN error_groups g ON g.id = r.group_id
-       LEFT JOIN error_events e ON e.id = r.event_id
-       WHERE r.ref = ? AND (g.app <> ? OR (e.user_id IS NOT NULL AND e.user_id IS NOT ?))
-       UNION ALL
-       SELECT 1 AS c FROM error_events e
-       WHERE e.ref = ? AND e.user_id IS NOT NULL AND e.user_id IS NOT ?
+       WHERE r.ref = ? AND (g.app <> ? OR (r.user_id IS NOT NULL AND r.user_id IS NOT ?))
        LIMIT 1`,
     )
-    .bind(ref, app, userId, ref, userId)
+    .bind(ref, app, userId)
     .first<{ c: number }>();
   if (refConflict) {
     throw new DiagnosticRefConflictError();
@@ -193,7 +191,7 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
   });
 
   // Compute child_safety atomically in SQL (no TOCTOU window across bucket.put) and refuse attaching
-  // a ref that belongs to a different app's error group or another account's error event.
+  // a ref that belongs to a different app's error group or another account's error_refs row.
   const write = await db
     .prepare(
       `INSERT INTO error_diagnostics (ref, app, environment, r2_key, content_encoding, size_bytes, stored_bytes, entry_count, release, user_id, child_safety, created_at)
@@ -207,12 +205,7 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
        WHERE NOT EXISTS (
          SELECT 1 FROM error_refs r
          JOIN error_groups g ON g.id = r.group_id
-         LEFT JOIN error_events e ON e.id = r.event_id
-         WHERE r.ref = ? AND (g.app <> ? OR (e.user_id IS NOT NULL AND e.user_id IS NOT ?))
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM error_events e
-         WHERE e.ref = ? AND e.user_id IS NOT NULL AND e.user_id IS NOT ?
+         WHERE r.ref = ? AND (g.app <> ? OR (r.user_id IS NOT NULL AND r.user_id IS NOT ?))
        )
        ON CONFLICT(ref) DO UPDATE SET
          r2_key = excluded.r2_key,
@@ -225,7 +218,7 @@ export async function storeErrorDiagnostic(db: D1Database, bucket: DiagnosticBuc
          created_at = excluded.created_at
        WHERE error_diagnostics.app = excluded.app AND error_diagnostics.user_id IS excluded.user_id`,
     )
-    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, ref, createdAt, ref, app, userId, ref, userId)
+    .bind(ref, app, env, r2Key, encoding, sizeBytes, storedBytes, entryCount, release, userId, ref, createdAt, ref, app, userId)
     .run();
 
   if (((write.meta as { changes?: number } | undefined)?.changes ?? 0) === 0) {

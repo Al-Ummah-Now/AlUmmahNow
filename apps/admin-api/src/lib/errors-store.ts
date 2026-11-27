@@ -308,6 +308,7 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
     const isNew = group.occurrences === count && group.samples === 0;
 
     const hour = hourOf(new Date(occurredAt));
+    const refUserId = e.userId && e.userId !== ERASED_USER_ID ? e.userId : null;
     const writes: D1PreparedStatement[] = [
       db
         .prepare(
@@ -315,7 +316,7 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
            ON CONFLICT(group_id, hour) DO UPDATE SET occurrences = occurrences + excluded.occurrences`,
         )
         .bind(gid, hour, count),
-      db.prepare('INSERT OR IGNORE INTO error_refs (ref, group_id, event_id, created_at) VALUES (?, ?, NULL, ?)').bind(e.ref, gid, nowIso),
+      db.prepare('INSERT OR IGNORE INTO error_refs (ref, group_id, event_id, user_id, created_at) VALUES (?, ?, NULL, ?, ?)').bind(e.ref, gid, refUserId, nowIso),
     ];
     if (e.release) {
       writes.push(
@@ -397,7 +398,9 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
             e.locale ?? null, e.theme ?? null, ctx.browser || null, ctx.os || null, e.userId ?? null, e.requestId ?? null, e.name ?? null, e.message, e.stack ?? null,
             symbolicated, e.shown ? 1 : 0, e.extra ? JSON.stringify(e.extra) : null, contextJson(e, environment), e.context?.origin?.surface ?? null, e.context?.origin?.source ?? null,
           ),
-        db.prepare('UPDATE error_refs SET event_id = ? WHERE ref = ? AND group_id = ?').bind(eventId, e.ref, gid),
+        db
+          .prepare('UPDATE error_refs SET event_id = COALESCE(event_id, ?) WHERE ref = ? AND group_id = ? AND (user_id IS NULL OR user_id IS ?)')
+          .bind(eventId, e.ref, gid, refUserId),
         db.prepare('UPDATE error_groups SET samples = samples + 1 WHERE id = ?').bind(gid),
       ]);
       group.samples += 1;
@@ -893,10 +896,9 @@ async function deleteGroups(db: D1Database, ids: string[]): Promise<void> {
            WHERE EXISTS (
              SELECT 1 FROM error_refs r
              JOIN error_groups g ON g.id = r.group_id
-             LEFT JOIN error_events e ON e.id = r.event_id
              WHERE r.ref = error_diagnostics.ref
                AND g.app = error_diagnostics.app
-               AND (e.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = e.user_id)
+               AND (r.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = r.user_id)
                AND r.group_id = ?
            )`,
         )
@@ -921,7 +923,7 @@ async function deleteGroups(db: D1Database, ids: string[]): Promise<void> {
 export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RETENTION_DAYS): Promise<{ events: number; groups: number }> {
   const cutoff = new Date(now.getTime() - days * 86400_000).toISOString();
   const results = await db.batch([
-    // Prune linked diagnostics together with their same-app error_refs (before deleting error_events so user_id ownership is preserved)
+    // Prune linked diagnostics together with their same-app error_refs
     db
       .prepare(
         `DELETE FROM error_diagnostics
@@ -929,10 +931,9 @@ export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RET
             OR EXISTS (
               SELECT 1 FROM error_refs r
               JOIN error_groups g ON g.id = r.group_id
-              LEFT JOIN error_events e ON e.id = r.event_id
               WHERE r.ref = error_diagnostics.ref
                 AND g.app = error_diagnostics.app
-                AND (e.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = e.user_id)
+                AND (r.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = r.user_id)
                 AND r.created_at < ?
             )`,
       )
