@@ -883,6 +883,7 @@ export async function deleteTestGroupByRef(db: D1Database, ref: string): Promise
 async function deleteGroups(db: D1Database, ids: string[]): Promise<void> {
   for (const gid of ids) {
     await db.batch([
+      db.prepare('DELETE FROM error_diagnostics WHERE ref IN (SELECT ref FROM error_refs WHERE group_id = ?)').bind(gid),
       db.prepare('DELETE FROM error_events WHERE group_id = ?').bind(gid),
       db.prepare('DELETE FROM error_refs WHERE group_id = ?').bind(gid),
       db.prepare('DELETE FROM error_group_users WHERE group_id = ?').bind(gid),

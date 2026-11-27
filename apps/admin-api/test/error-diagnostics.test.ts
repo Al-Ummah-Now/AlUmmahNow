@@ -52,6 +52,7 @@ describe('error diagnostics (R2 bundles)', () => {
       'Bearer super_secret_token_abc123',
       'X-API-Key: my-secret-api-key',
       '{"x-api-key": "json-secret-999", "authorization": "Basic dXNlcjpwYXNz"}',
+      'Authorization: Digest username="u", realm="r", uri="https://api.alummahnow.net/x", response="deadbeefdigest999"',
       'https://api.alummahnow.net/x?X-Amz-Signature=deadbeef&token=abc',
       'user@example.com C:\\Users\\mahmoud\\Videos\\a.mp4 /Users/mahmoud/a.mp4 \\\\Home-NAS\\Originals\\a.mp4',
     ].join('\n');
@@ -60,6 +61,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.ok(!clean.includes('my-secret-api-key'));
     assert.ok(!clean.includes('json-secret-999'));
     assert.ok(!clean.includes('dXNlcjpwYXNz'));
+    assert.ok(!clean.includes('deadbeefdigest999'));
     assert.ok(!clean.includes('deadbeef'));
     assert.ok(!clean.includes('user@example.com'));
     assert.ok(!clean.includes('mahmoud'));
