@@ -8,8 +8,8 @@
  */
 import type { ErrorContext } from './context';
 
-/** Apps that report errors (admin "App" filter). `tools` is Admin Tools, the desktop import app (POST /api/admin/import/errors). */
-export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'short-links', 'auth', 'status', 'tools'] as const;
+/** Apps that report errors (admin "App" filter). `tools` is Admin Tools (POST /api/admin/import/errors); native apps report via POST /api/telemetry/batches. */
+export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'short-links', 'auth', 'status', 'tools', 'ios', 'macos', 'tvos', 'android', 'desktop'] as const;
 export type ErrorApp = (typeof ERROR_APPS)[number];
 
 /**
@@ -22,10 +22,11 @@ export type ErrorApp = (typeof ERROR_APPS)[number];
  * - fetch: a request to our API failed (network error or 5xx) where the UI handled it
  * - http: a Worker answered 5xx
  * - player / upload: reported by the video player overlay and the upload flow
+ * - crash: native app crash report (MetricKit, ApplicationExitInfo, WER, minidump)
  * - action: a "needs action" item (failed job, dead-lettered message, email not sent, AI step failed,
  *   admin job failed): listed on the Errors page with a link to the item and, when given, a Retry button
  */
-export const ERROR_KINDS = ['boundary', 'unhandled', 'rejection', 'chunk', 'skew', 'fetch', 'http', 'player', 'upload', 'action', 'caught'] as const;
+export const ERROR_KINDS = ['boundary', 'unhandled', 'rejection', 'chunk', 'skew', 'fetch', 'http', 'player', 'upload', 'crash', 'action', 'caught'] as const;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
 /** Admin workflow status of a group. */

@@ -91,7 +91,10 @@ export interface AppBindings {
   image_storage_key: { text(): Promise<string> };
   'bunny-stream-key': { text(): Promise<string> };
   bunny_stream_library_id: { text(): Promise<string> };
-  INTERNAL_API_KEY: { text(): Promise<string> };
+  INTERNAL_API_KEY: { get?(): Promise<string>; text?(): Promise<string> } | string;
+  /** admin-api's internal errors ingest URL, e.g. https://admin.api.alummahnow.net/internal/errors */
+  ERRORS_INGEST_URL?: string;
+  ENVIRONMENT?: string;
 
   // Environment Variables
   ZONE: string;

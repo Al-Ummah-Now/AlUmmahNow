@@ -88,6 +88,7 @@
 --   apps/api-videos/migrations/search/0134_account_events.sql
 --   apps/api-videos/migrations/search/0135_processing_list_indexes.sql
 --   apps/api-videos/migrations/search/0136_content_ownership_stream_status_idx.sql
+--   apps/api-videos/migrations/search/0137_telemetry_dedupe.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
 CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -248,6 +249,7 @@ CREATE TABLE support_reports (id TEXT PRIMARY KEY, target_kind TEXT NOT NULL CHE
 CREATE TABLE support_settings (channel_id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)), one_time_enabled INTEGER NOT NULL DEFAULT 1 CHECK (one_time_enabled IN (0, 1)), monthly_enabled INTEGER NOT NULL DEFAULT 1 CHECK (monthly_enabled IN (0, 1)), presets TEXT NOT NULL DEFAULT '[]', currency TEXT NOT NULL DEFAULT 'USD', thank_you_note TEXT, payout_threshold INTEGER, admin_paused INTEGER NOT NULL DEFAULT 0 CHECK (admin_paused IN (0, 1)), admin_paused_reason TEXT, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE support_tech_staff (user_id TEXT PRIMARY KEY, marked_by TEXT NOT NULL, marked_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE support_test_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE telemetry_dedupe (event_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
 CREATE TABLE tier_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, tier_name TEXT NOT NULL, from_tier_id TEXT NOT NULL, name TEXT NOT NULL, about TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined', 'withdrawn')), decline_reason TEXT, created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
 CREATE TABLE translation_audit (id TEXT PRIMARY KEY, at TEXT NOT NULL, user_id TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('inline', 'caption', 'viewer')), video_id TEXT, field TEXT, from_lang TEXT NOT NULL, to_lang TEXT NOT NULL, items INTEGER NOT NULL, chars INTEGER NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, cached INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE upload_limit_hits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, tier_id TEXT, hit_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -482,6 +484,7 @@ CREATE UNIQUE INDEX idx_support_refunds_ref ON support_refunds (collector_refund
 CREATE INDEX idx_support_refunds_requester ON support_refunds (requested_by_user) WHERE requested_by_user IS NOT NULL;
 CREATE INDEX idx_support_reports_reporter ON support_reports (reporter_user_id);
 CREATE INDEX idx_support_reports_status ON support_reports (status, created_at);
+CREATE INDEX idx_telemetry_dedupe_expires ON telemetry_dedupe (expires_at);
 CREATE UNIQUE INDEX idx_tier_requests_one_pending ON tier_requests (user_id) WHERE status = 'pending';
 CREATE INDEX idx_tier_requests_status ON tier_requests (status, created_at, id);
 CREATE INDEX idx_tier_requests_user ON tier_requests (user_id, created_at);

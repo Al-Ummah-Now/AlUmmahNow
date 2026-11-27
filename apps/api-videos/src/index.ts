@@ -74,6 +74,7 @@ import { videoListInvalidation } from './lib/videoListCache';
 import { withLogging } from "@al-ummah/logger";
 import { errorHandler } from "./middleware/error-handler";
 import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
+import { pruneTelemetryDedupe } from "./endpoints/analytics/telemetryBatches";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
 import { pruneLimitHits } from "./lib/creatorTiers";
 import { channelCreateGate, handleAcceptCreatorTerms, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
@@ -1002,6 +1003,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.
 				if (rawEnv.SEARCH_DB) await pruneRateLimits(rawEnv.SEARCH_DB);
+				// Expired native telemetry event-ID dedupe rows (AlUmmahNowCore#8)
+				if (rawEnv.SEARCH_DB) await pruneTelemetryDedupe(rawEnv.SEARCH_DB);
 				// Upload-limit hits older than 30 days (the Creators page shows the last 7)
 				if (rawEnv.SEARCH_DB) await pruneLimitHits(rawEnv.SEARCH_DB);
 			} catch (error) {
