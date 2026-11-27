@@ -44,6 +44,7 @@ import {
   listGroupActivity,
   listGroupEvents,
   openActionCount,
+  openActionCountSql,
   pruneErrorData,
   recordActionAttempt,
   resolveActionItems,
@@ -343,22 +344,13 @@ describe('needs-action items', () => {
       [
         action('dlq:m1'),
         action('dlq:m2'),
-        action('child-safety-report:post:p1', { source: 'csam', title: 'Child safety escalation' }),
+        action('child-safety-report:post:p1', { source: 'other', title: 'Child safety escalation' }),
       ],
       ctx(),
     );
     assert.equal(await openActionCount(db, true), 3);
     assert.equal(await openActionCount(db, false), 2);
-    const plan = (
-      await db
-        .prepare(
-          `EXPLAIN QUERY PLAN SELECT COALESCE(SUM(a.cnt), 0) AS n
-           FROM (SELECT group_id, COUNT(*) AS cnt FROM error_actions WHERE status IN ('open', 'retrying') GROUP BY group_id) a
-           JOIN error_groups g ON g.id = a.group_id
-           WHERE g.test = 0 AND NOT EXISTS (SELECT 1 FROM error_actions cs WHERE cs.group_id = g.id AND (cs.item_key GLOB 'child-safety-*' OR cs.item_key GLOB 'csam[-:]*'))`,
-        )
-        .all<{ detail: string }>()
-    ).results;
+    const plan = (await db.prepare(`EXPLAIN QUERY PLAN ${openActionCountSql(false)}`).all<{ detail: string }>()).results;
     assert.ok(
       plan.some((r) => r.detail.includes('idx_error_actions_child_safety')),
       `expected idx_error_actions_child_safety in query plan, got: ${JSON.stringify(plan)}`,
