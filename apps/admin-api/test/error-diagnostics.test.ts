@@ -195,7 +195,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal((await makeApp(['Admin']).request(`/api/errors/diagnostics/${orphanRef}`, { method: 'GET' }, env as never)).status, 404);
     assert.equal((await makeApp(['SuperAdmin']).request(`/api/errors/diagnostics/${orphanRef}`, { method: 'GET' }, env as never)).status, 200);
 
-    // A tools upload cannot attach to another app's ref
+    // A tools upload cannot attach to another app's ref (event-first)
     const csRef2 = newErrorRef();
     const csEv2 = scrubEvent({
       app: 'admin-api',
@@ -211,5 +211,26 @@ describe('error diagnostics (R2 bundles)', () => {
       env as never,
     );
     assert.equal(crossApp.status, 409);
+
+    // Diagnostic-first order: a tools bundle uploaded before another app's event with the same ref
+    // must not surface on the other app's error group
+    const preRef = newErrorRef();
+    const preUpload = await makeApp(['Admin'], ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: preRef, content: 'tools pre-upload' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(preUpload.status, 201);
+    const otherAppEv = scrubEvent({
+      app: 'admin-api',
+      kind: 'server',
+      ref: preRef,
+      message: 'Unrelated admin-api failure',
+      route: '/api/health',
+    })!;
+    const otherIngest = await ingestErrorEvents(db, [otherAppEv], { environment: 'production', now: NOW, userKey: ADMIN });
+    const otherEvents = await listGroupEvents(db, otherIngest.groups[0].groupId, 10);
+    assert.equal(otherEvents[0].diagnostic_size_bytes, null);
+    assert.equal(otherEvents[0].diagnostic_entry_count, null);
   });
 });
