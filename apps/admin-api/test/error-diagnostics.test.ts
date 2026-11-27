@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
+import { fromHono } from 'chanfana';
 import { newErrorRef, scrubEvent } from '@al-ummah/shared-types';
 import { sqliteD1 } from './d1-sqlite';
 import adminImportRouter from '../src/routers/adminImport.router';
@@ -13,11 +14,11 @@ import {
   scrubDiagnosticContent,
   storeErrorDiagnostic,
 } from '../src/lib/error-diagnostics';
-import { deleteTestGroupByRef, ingestErrorEvents, listGroupEvents, pruneErrorData } from '../src/lib/errors-store';
+import { ERROR_SAMPLE_LIMITS, deleteTestGroupByRef, ingestErrorEvents, listGroupEvents, pruneErrorData } from '../src/lib/errors-store';
 import type { D1Database } from '../src/lib/types';
 
-const ADMIN = 'usr_admin_diag_01';
-const OTHER_ADMIN = 'usr_admin_diag_02';
+const ADMIN = 'usr_' + 'a'.repeat(32);
+const OTHER_ADMIN = 'usr_' + 'b'.repeat(32);
 const NOW = new Date('2026-11-26T15:00:00Z');
 
 function fakeBucket() {
@@ -82,7 +83,7 @@ describe('error diagnostics (R2 bundles)', () => {
     const bucket = fakeBucket();
     const ref = newErrorRef();
     const ev = scrubEvent({ app: 'tools', kind: 'upload', ref, message: 'Windows error 59 at byte 1024', route: '/import/upload' })!;
-    const ingest = await ingestErrorEvents(db, [ev], { environment: 'production', now: NOW, userKey: ADMIN });
+    const ingest = await ingestErrorEvents(db, [ev], { environment: 'production', now: NOW, clientKey: ADMIN });
     const stored = await storeErrorDiagnostic(db, bucket, {
       ref,
       app: 'tools',
@@ -96,7 +97,7 @@ describe('error diagnostics (R2 bundles)', () => {
     assert.equal(stored.ref, ref);
     assert.equal(bucket.store.size, 1);
 
-    const events = await listGroupEvents(db, ingest.groups[0].groupId, 10);
+    const events = await listGroupEvents(db, ingest.created[0].id, 10);
     assert.equal(events[0].diagnostic_size_bytes, stored.sizeBytes);
     assert.equal(events[0].diagnostic_entry_count, 3);
 
@@ -118,7 +119,8 @@ describe('error diagnostics (R2 bundles)', () => {
         await next();
       });
       app.route('/api/admin/import', adminImportRouter);
-      app.route('/api/errors', errorsRouter);
+      const openapi = fromHono(app);
+      openapi.route('/api/errors', errorsRouter);
       return app;
     };
 
@@ -176,7 +178,7 @@ describe('error diagnostics (R2 bundles)', () => {
       message: 'CSAM action',
       action: { key: 'child-safety-report:video:v1', source: 'other', title: 'Child safety report' },
     })!;
-    await ingestErrorEvents(db, [csEv], { environment: 'production', now: NOW, userKey: ADMIN });
+    await ingestErrorEvents(db, [csEv], { environment: 'production', now: NOW, clientKey: ADMIN });
     await storeErrorDiagnostic(db, bucket, { ref: csRef, app: 'admin-api', environment: 'production', content: 'sensitive', now: NOW });
 
     const adminHidden = await makeApp(['Admin']).request(`/api/errors/diagnostics/${csRef}`, { method: 'GET' }, env as never);
@@ -204,7 +206,7 @@ describe('error diagnostics (R2 bundles)', () => {
       message: 'CSAM action 2',
       action: { key: 'child-safety-report:video:v2', source: 'other', title: 'Child safety report 2' },
     })!;
-    await ingestErrorEvents(db, [csEv2], { environment: 'production', now: NOW, userKey: ADMIN });
+    await ingestErrorEvents(db, [csEv2], { environment: 'production', now: NOW, clientKey: ADMIN });
     const crossApp = await makeApp(['Admin'], ADMIN).request(
       '/api/admin/import/diagnostics',
       { method: 'POST', body: JSON.stringify({ ref: csRef2, content: 'attempt' }), headers: { 'Content-Type': 'application/json' } },
@@ -230,8 +232,8 @@ describe('error diagnostics (R2 bundles)', () => {
       route: '/api/health',
       test: true,
     })!;
-    const otherIngest = await ingestErrorEvents(db, [otherAppEv], { environment: 'production', now: NOW, userKey: ADMIN });
-    const otherEvents = await listGroupEvents(db, otherIngest.groups[0].groupId, 10);
+    const otherIngest = await ingestErrorEvents(db, [otherAppEv], { environment: 'production', now: NOW, clientKey: ADMIN });
+    const otherEvents = await listGroupEvents(db, otherIngest.created[0].id, 10);
     assert.equal(otherEvents[0].diagnostic_size_bytes, null);
     assert.equal(otherEvents[0].diagnostic_entry_count, null);
     assert.equal(await deleteTestGroupByRef(db, preRef), 1);
@@ -247,11 +249,12 @@ describe('error diagnostics (R2 bundles)', () => {
       message: 'Old admin-api error',
       route: '/api/old',
     })!;
-    await ingestErrorEvents(db, [oldAdminEv], { environment: 'production', now: new Date(NOW.getTime() - 40 * 86_400_000), userKey: ADMIN });
+    await ingestErrorEvents(db, [oldAdminEv], { environment: 'production', now: new Date(NOW.getTime() - 40 * 86_400_000), clientKey: ADMIN });
     await pruneErrorData(db, NOW);
     assert.ok(await readErrorDiagnostic(db, bucket, pruneRef), 'pruning an expired unrelated-app ref must keep a newer tools diagnostic');
 
-    // Same-app ownership: another Tools account cannot claim an existing Tools event's ref
+    // Same-app ownership: another Tools account cannot claim an existing Tools ref, and a
+    // spoofed duplicate event from another account cannot block the original owner
     const toolsRef = newErrorRef();
     const toolsEv = scrubEvent({
       app: 'tools',
@@ -261,7 +264,17 @@ describe('error diagnostics (R2 bundles)', () => {
       route: '/import/upload',
       userId: ADMIN,
     })!;
-    await ingestErrorEvents(db, [toolsEv], { environment: 'production', now: NOW, userKey: ADMIN });
+    await ingestErrorEvents(db, [toolsEv], { environment: 'production', now: NOW, clientKey: ADMIN });
+    // Second account submits a duplicate event with the same ref
+    const spoofedEv = scrubEvent({
+      app: 'tools',
+      kind: 'upload',
+      ref: toolsRef,
+      message: 'Owner upload failed',
+      route: '/import/upload',
+      userId: OTHER_ADMIN,
+    })!;
+    await ingestErrorEvents(db, [spoofedEv], { environment: 'production', now: NOW, clientKey: OTHER_ADMIN });
     const otherClaim = await makeApp(['Admin'], OTHER_ADMIN).request(
       '/api/admin/import/diagnostics',
       { method: 'POST', body: JSON.stringify({ ref: toolsRef, content: 'hijacked tools log' }), headers: { 'Content-Type': 'application/json' } },
@@ -274,5 +287,39 @@ describe('error diagnostics (R2 bundles)', () => {
       env as never,
     );
     assert.equal(ownerUpload.status, 201);
+
+    // Unsampled events (error_refs row with event_id IS NULL) still enforce owner via error_refs.user_id
+    const unsampledRef = newErrorRef();
+    const unsampledCount = ERROR_SAMPLE_LIMITS.alwaysKeep + 1;
+    const unsampledGroup = await ingestErrorEvents(
+      db,
+      Array.from({ length: unsampledCount }, (_, i) =>
+        scrubEvent({
+          app: 'tools',
+          kind: 'upload',
+          ref: i < ERROR_SAMPLE_LIMITS.alwaysKeep ? newErrorRef() : unsampledRef,
+          message: 'High-volume tools error',
+          route: '/import/upload',
+          userId: ADMIN,
+        })!,
+      ),
+      { environment: 'production', now: NOW, clientKey: ADMIN, random: () => 0.99 },
+    );
+    const unsampledRow = await db.prepare('SELECT event_id, user_id FROM error_refs WHERE ref = ?').bind(unsampledRef).first<{ event_id: string | null; user_id: string | null }>();
+    assert.equal(unsampledGroup.accepted, unsampledCount);
+    assert.equal(unsampledRow?.event_id, null);
+    assert.equal(unsampledRow?.user_id, ADMIN);
+    const otherUnsampled = await makeApp(['Admin'], OTHER_ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: unsampledRef, content: 'hijack unsampled' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(otherUnsampled.status, 409);
+    const ownerUnsampled = await makeApp(['Admin'], ADMIN).request(
+      '/api/admin/import/diagnostics',
+      { method: 'POST', body: JSON.stringify({ ref: unsampledRef, content: 'owner unsampled' }), headers: { 'Content-Type': 'application/json' } },
+      env as never,
+    );
+    assert.equal(ownerUnsampled.status, 201);
   });
 });

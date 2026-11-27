@@ -17,3 +17,8 @@ CREATE TABLE IF NOT EXISTS error_diagnostics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_error_diagnostics_created ON error_diagnostics (created_at);
+
+-- Persist the original owner of each ref on error_refs (INSERT OR IGNORE) so diagnostic
+-- upload ownership holds even when an event is unsampled or a second account submits a
+-- duplicate event with the same ref.
+ALTER TABLE error_refs ADD COLUMN user_id TEXT;
