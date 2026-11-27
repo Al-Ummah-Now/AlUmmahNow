@@ -530,9 +530,16 @@ export async function recordActionAttempt(
   ]);
 }
 
-/** Open needs-action items (nav badge). */
+/** Open needs-action items (nav badge). Groups by group_id first so error_groups and NOT_CHILD_SAFETY run once per group. */
 export async function openActionCount(db: D1Database, childSafety = true): Promise<number> {
-  const row = await db.prepare(`SELECT COUNT(*) AS n FROM error_actions a JOIN error_groups g ON g.id = a.group_id WHERE a.status IN ('open', 'retrying') AND g.test = 0${childSafety ? '' : ` AND ${NOT_CHILD_SAFETY}`}`).first<{ n: number }>();
+  const row = await db
+    .prepare(
+      `SELECT COALESCE(SUM(a.cnt), 0) AS n
+       FROM (SELECT group_id, COUNT(*) AS cnt FROM error_actions WHERE status IN ('open', 'retrying') GROUP BY group_id) a
+       JOIN error_groups g ON g.id = a.group_id
+       WHERE g.test = 0${childSafety ? '' : ` AND ${NOT_CHILD_SAFETY}`}`,
+    )
+    .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
