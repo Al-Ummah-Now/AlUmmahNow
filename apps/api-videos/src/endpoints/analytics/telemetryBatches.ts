@@ -550,6 +550,7 @@ export class TelemetryBatchesCreate extends OptionalAuthRoute {
 					for (const chunk of errorChunks) {
 						const res = await fetch(c.env.ERRORS_INGEST_URL, {
 							method: 'POST',
+							redirect: 'error',
 							headers: {
 								'Content-Type': 'application/json',
 								'X-API-Key': secret,

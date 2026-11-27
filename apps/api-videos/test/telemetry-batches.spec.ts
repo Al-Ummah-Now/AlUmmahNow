@@ -82,7 +82,7 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 	const originalFetch = globalThis.fetch;
 	let searchDb: SqliteD1;
 	let queued: unknown[];
-	let forwarded: { url: string; headers: Headers; body: { events: any[] } }[];
+	let forwarded: { url: string; headers: Headers; redirect?: RequestRedirect; body: { events: any[] } }[];
 	let forwardStatus: number;
 
 	beforeEach(() => {
@@ -93,8 +93,11 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 			if (url === 'https://admin.api.test/internal/errors') {
+				if (forwardStatus >= 300 && forwardStatus < 400 && init?.redirect === 'error') {
+					throw new TypeError(`fetch failed: unexpected redirect (${forwardStatus})`);
+				}
 				const body = JSON.parse(String(init?.body ?? '{}')) as { events: any[] };
-				forwarded.push({ url, headers: new Headers(init?.headers), body });
+				forwarded.push({ url, headers: new Headers(init?.headers), redirect: init?.redirect, body });
 				return new Response(JSON.stringify({ success: forwardStatus < 400 }), { status: forwardStatus });
 			}
 			return new Response('not found', { status: 404 });
@@ -161,6 +164,7 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 
 		// Crash forwarded to admin-api /internal/errors with scrubbed message, stack, breadcrumbs, deterministic ref
 		assert.equal(forwarded.length, 1);
+		assert.equal(forwarded[0].redirect, 'error');
 		assert.equal(forwarded[0].headers.get('x-api-key'), 'internal-secret-key');
 		assert.equal(forwarded[0].headers.get('x-client-ip'), null);
 		assert.equal(forwarded[0].headers.get('x-report-source'), null);
@@ -517,9 +521,9 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 		const dedupeAfterNoUrl = searchDb.db.prepare('SELECT event_id FROM telemetry_dedupe WHERE event_id = ?').get('evt_no_url');
 		assert.equal(dedupeAfterNoUrl, undefined);
 
-		// 3. Downstream 401/403 from admin-api fails with 503 and releases pending claim (never returns 202)
+		// 3. Downstream 303/401/403 from admin-api fails with 503 and releases pending claim (never returns 202)
 		const env = createEnv();
-		for (const status of [401, 403]) {
+		for (const status of [303, 401, 403]) {
 			forwardStatus = status;
 			const authFailRes = await app.request(
 				'/api/telemetry/batches',
