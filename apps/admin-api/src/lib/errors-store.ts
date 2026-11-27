@@ -748,7 +748,10 @@ export async function listGroupEvents(db: D1Database, groupId: string, limit = 2
       `SELECT e.*, d.size_bytes AS diagnostic_size_bytes, d.entry_count AS diagnostic_entry_count
        FROM error_events e
        JOIN error_groups g ON g.id = e.group_id
-       LEFT JOIN error_diagnostics d ON d.ref = e.ref AND d.app = g.app
+       LEFT JOIN error_diagnostics d
+         ON d.ref = e.ref
+        AND d.app = g.app
+        AND (e.user_id IS NULL OR d.user_id IS NULL OR d.user_id = e.user_id)
        WHERE e.group_id = ?
        ORDER BY e.occurred_at DESC
        LIMIT ?`,
@@ -884,7 +887,20 @@ export async function deleteTestGroupByRef(db: D1Database, ref: string): Promise
 async function deleteGroups(db: D1Database, ids: string[]): Promise<void> {
   for (const gid of ids) {
     await db.batch([
-      db.prepare('DELETE FROM error_diagnostics WHERE ref IN (SELECT ref FROM error_refs WHERE group_id = ?)').bind(gid),
+      db
+        .prepare(
+          `DELETE FROM error_diagnostics
+           WHERE EXISTS (
+             SELECT 1 FROM error_refs r
+             JOIN error_groups g ON g.id = r.group_id
+             LEFT JOIN error_events e ON e.id = r.event_id
+             WHERE r.ref = error_diagnostics.ref
+               AND g.app = error_diagnostics.app
+               AND (e.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = e.user_id)
+               AND r.group_id = ?
+           )`,
+        )
+        .bind(gid),
       db.prepare('DELETE FROM error_events WHERE group_id = ?').bind(gid),
       db.prepare('DELETE FROM error_refs WHERE group_id = ?').bind(gid),
       db.prepare('DELETE FROM error_group_users WHERE group_id = ?').bind(gid),
@@ -905,9 +921,23 @@ async function deleteGroups(db: D1Database, ids: string[]): Promise<void> {
 export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RETENTION_DAYS): Promise<{ events: number; groups: number }> {
   const cutoff = new Date(now.getTime() - days * 86400_000).toISOString();
   const results = await db.batch([
+    // Prune linked diagnostics together with their same-app error_refs (before deleting error_events so user_id ownership is preserved)
+    db
+      .prepare(
+        `DELETE FROM error_diagnostics
+         WHERE created_at < ?
+            OR EXISTS (
+              SELECT 1 FROM error_refs r
+              JOIN error_groups g ON g.id = r.group_id
+              LEFT JOIN error_events e ON e.id = r.event_id
+              WHERE r.ref = error_diagnostics.ref
+                AND g.app = error_diagnostics.app
+                AND (e.user_id IS NULL OR error_diagnostics.user_id IS NULL OR error_diagnostics.user_id = e.user_id)
+                AND r.created_at < ?
+            )`,
+      )
+      .bind(cutoff, cutoff),
     db.prepare('DELETE FROM error_events WHERE received_at < ?').bind(cutoff),
-    // Prune linked diagnostics together with their error_refs so a diagnostic cannot outlive its group's ref metadata
-    db.prepare('DELETE FROM error_diagnostics WHERE created_at < ? OR ref IN (SELECT ref FROM error_refs WHERE created_at < ?)').bind(cutoff, cutoff),
     db.prepare('DELETE FROM error_refs WHERE created_at < ?').bind(cutoff),
     db.prepare('DELETE FROM error_hourly WHERE hour < ?').bind(cutoff.slice(0, 13)),
     db.prepare('DELETE FROM error_rate WHERE expires_at < ?').bind(now.toISOString()),
@@ -920,5 +950,5 @@ export async function pruneErrorData(db: D1Database, now: Date, days = ERROR_RET
     .all<{ id: string }>();
   const ids = (stale.results ?? []).map((r) => r.id);
   await deleteGroups(db, ids);
-  return { events: (results[0] as { meta?: { changes?: number } }).meta?.changes ?? 0, groups: ids.length };
+  return { events: (results[1] as { meta?: { changes?: number } }).meta?.changes ?? 0, groups: ids.length };
 }
