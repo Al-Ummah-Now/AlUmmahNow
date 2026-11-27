@@ -27,18 +27,19 @@ describe('ensure-resources', () => {
 	it('names each environment', () => {
 		assert.deepEqual(resourcesFor('production'), {
 			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq', 'al-ummah-now-yt-import', 'al-ummah-now-account-events', 'al-ummah-now-status-notify', 'al-ummah-cost-jobs', 'al-ummah-cost-jobs-dlq'],
-			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals', 'al-ummah-now-csam-evidence'],
+			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-diagnostics', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals', 'al-ummah-now-csam-evidence'],
+			expireAfterDays: { 'al-ummah-now-diagnostics': 30 },
 			placeholderSecrets: { [SECRETS_STORE_ID]: ['google-oauth-client-secret'] },
 			turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['alummahnow.net', 'www.alummahnow.net'] },
 		});
 		assert.deepEqual(resourcesFor('qa').turnstileHostnames?.hostnames, ['qa.alummahnow.net', 'www.qa.alummahnow.net']);
 		assert.deepEqual(resourcesFor('stage').turnstileHostnames?.hostnames, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
 		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-account-events-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa']);
-		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage', 'al-ummah-now-media-originals-stage', 'al-ummah-now-csam-evidence-stage']);
+		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-diagnostics-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage', 'al-ummah-now-media-originals-stage', 'al-ummah-now-csam-evidence-stage']);
 	});
 
 	it('creates only what is missing', async () => {
-		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-account-events-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa', 'al-ummah-now-media-originals-qa', 'al-ummah-now-csam-evidence-qa']);
+		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-account-events-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa'], ['al-ummah-now-diagnostics-qa', 'al-ummah-now-media-qa', 'al-ummah-now-media-private-qa', 'al-ummah-now-media-originals-qa', 'al-ummah-now-csam-evidence-qa'], { 'al-ummah-now-diagnostics-qa': [{ id: 'al-ummah-expire', enabled: true, conditions: { prefix: '' }, deleteObjectsTransition: { condition: { type: 'Age', maxAge: 30 * 86_400 } } }] });
 		const { created } = await ensureResources(cf, resourcesFor('qa'), () => undefined);
 		assert.deepEqual(created, ['queue al-ummah-now-errors-dlq-qa', 'bucket al-ummah-now-sourcemaps-qa', 'lifecycle al-ummah-now-sourcemaps-qa 14d']);
 		assert.ok(calls.includes('POST /queues {"queue_name":"al-ummah-now-errors-dlq-qa"}'));
@@ -58,18 +59,19 @@ describe('ensure-resources', () => {
 
 	it('changes nothing when everything exists', async () => {
 		const expiry = { id: 'al-ummah-expire', enabled: true, conditions: { prefix: '' }, deleteObjectsTransition: { condition: { type: 'Age', maxAge: 30 * 86_400 } } };
-		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, { 'al-ummah-now-sourcemaps-stage': [expiry] });
+		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, { 'al-ummah-now-sourcemaps-stage': [expiry], 'al-ummah-now-diagnostics-stage': [expiry] });
 		const { created } = await ensureResources(cf, resourcesFor('stage'), () => undefined);
 		assert.deepEqual(created, []);
 		assert.equal(calls.filter((c) => c.startsWith('POST')).length, 0);
 	});
 
-	it('expires QA and stage source maps (14 and 30 days), never production ones', async () => {
-		assert.deepEqual(resourcesFor('qa').expireAfterDays, { 'al-ummah-now-sourcemaps-qa': 14 });
-		assert.deepEqual(resourcesFor('stage').expireAfterDays, { 'al-ummah-now-sourcemaps-stage': 30 });
-		assert.equal(resourcesFor('production').expireAfterDays, undefined);
+	it('expires QA and stage source maps (14 and 30 days) and diagnostics (30 days in every env), never production source maps', async () => {
+		assert.deepEqual(resourcesFor('qa').expireAfterDays, { 'al-ummah-now-sourcemaps-qa': 14, 'al-ummah-now-diagnostics-qa': 30 });
+		assert.deepEqual(resourcesFor('stage').expireAfterDays, { 'al-ummah-now-sourcemaps-stage': 30, 'al-ummah-now-diagnostics-stage': 30 });
+		assert.deepEqual(resourcesFor('production').expireAfterDays, { 'al-ummah-now-diagnostics': 30 });
 		const other = { id: 'someone-else', enabled: true, conditions: { prefix: 'tmp/' } };
-		const { cf, calls } = fakeCf(resourcesFor('qa').queues, resourcesFor('qa').buckets, { 'al-ummah-now-sourcemaps-qa': [other] });
+		const diagRule = { id: 'al-ummah-expire', enabled: true, conditions: { prefix: '' }, deleteObjectsTransition: { condition: { type: 'Age', maxAge: 30 * 86_400 } } };
+		const { cf, calls } = fakeCf(resourcesFor('qa').queues, resourcesFor('qa').buckets, { 'al-ummah-now-sourcemaps-qa': [other], 'al-ummah-now-diagnostics-qa': [diagRule] });
 		const { created } = await ensureResources(cf, resourcesFor('qa'), () => undefined);
 		assert.deepEqual(created, ['lifecycle al-ummah-now-sourcemaps-qa 14d']);
 		const put = calls.find((c) => c.startsWith('PUT /r2/buckets/al-ummah-now-sourcemaps-qa/lifecycle'))!;
@@ -80,7 +82,7 @@ describe('ensure-resources', () => {
 
 	it('leaves a matching rule alone', async () => {
 		const rule = { id: 'al-ummah-expire', enabled: true, conditions: { prefix: '' }, deleteObjectsTransition: { condition: { type: 'Age', maxAge: 30 * 86_400 } } };
-		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, { 'al-ummah-now-sourcemaps-stage': [rule] });
+		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, { 'al-ummah-now-sourcemaps-stage': [rule], 'al-ummah-now-diagnostics-stage': [rule] });
 		await ensureResources(cf, resourcesFor('stage'), () => undefined);
 		assert.equal(calls.filter((c) => c.startsWith('PUT')).length, 0);
 	});

@@ -3147,6 +3147,9 @@ const en = {
   },
   errorsPage: {
     openImport: 'Open the file in Imports',
+    diagnosticLog: 'Diagnostic log',
+    viewDiagnosticLog: 'View diagnostic log',
+    downloadDiagnosticLog: 'Download log',
     errorType: 'Error type',
     platforms: {
       Windows: 'Windows',

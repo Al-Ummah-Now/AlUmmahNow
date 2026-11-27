@@ -12,6 +12,7 @@ import {
   ErrorTestGroupDelete,
   ErrorActionRetry,
   ErrorActionUpdate,
+  ErrorDiagnosticGet,
 } from '../endpoints/errors/ErrorsAdmin';
 
 const app = new Hono();
@@ -24,6 +25,7 @@ errorsRouter.get('/counts', ErrorCounts);
 errorsRouter.get('/queue', ErrorQueue);
 errorsRouter.get('/facets', ErrorFacets);
 errorsRouter.get('/refs/:ref', ErrorRefLookup);
+errorsRouter.get('/diagnostics/:ref', ErrorDiagnosticGet);
 errorsRouter.get('/groups/:id', ErrorGroupGet);
 errorsRouter.patch('/groups/:id', ErrorGroupUpdate);
 errorsRouter.post('/groups/:id/notes', ErrorGroupAddNote);

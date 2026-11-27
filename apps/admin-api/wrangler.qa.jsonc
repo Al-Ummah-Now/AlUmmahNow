@@ -73,6 +73,11 @@
       // Private source maps (deploy.yml uploads them for QA builds)
       "binding": "SOURCEMAPS",
       "bucket_name": "al-ummah-now-sourcemaps-qa"
+    },
+    {
+      // Opt-in scrubbed diagnostic log bundles (30-day R2 expiry)
+      "binding": "DIAGNOSTICS",
+      "bucket_name": "al-ummah-now-diagnostics-qa"
     }
   ],
 

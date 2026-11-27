@@ -112,6 +112,8 @@ export interface AdminBindings {
   ERRORS_ALERT_TO?: string;
   /** Private source maps uploaded by the release, for symbolicating browser stacks */
   SOURCEMAPS?: R2Bucket;
+  /** Opt-in scrubbed diagnostic log bundles linked by ERR-XXXX-XXXX (30-day R2 expiry) */
+  DIAGNOSTICS?: R2Bucket;
   /** Error ingest queue (al-ummah-now-errors[-stage|-qa]): /internal/errors enqueues, this Worker consumes */
   ERRORS_QUEUE?: Queue<unknown>;
   /** Processor service binding: Retry of dead-lettered messages (POST /dlq/replay) */

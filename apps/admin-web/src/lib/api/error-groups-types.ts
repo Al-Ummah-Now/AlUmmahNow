@@ -79,6 +79,9 @@ export interface ErrorEvent {
   extra_json?: string | null;
   /** ErrorContext JSON (admin-api migration 0037): worker, ids, failed upstream call, breadcrumbs, queue job */
   context_json?: string | null;
+  /** Attached R2 diagnostic log metadata (admin-api migration 0057) */
+  diagnostic_size_bytes?: number | null;
+  diagnostic_entry_count?: number | null;
 }
 
 export interface ErrorActivity {

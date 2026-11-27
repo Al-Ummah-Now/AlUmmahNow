@@ -108,6 +108,11 @@
 			// Private source maps (release uploads; symbolicates browser stacks on the Errors page)
 			"binding": "SOURCEMAPS",
 			"bucket_name": "al-ummah-now-sourcemaps"
+		},
+		{
+			// Opt-in scrubbed diagnostic log bundles linked by ERR-XXXX-XXXX (30-day R2 expiry)
+			"binding": "DIAGNOSTICS",
+			"bucket_name": "al-ummah-now-diagnostics"
 		}
 	],
 
@@ -314,6 +319,10 @@
 				{
 					"binding": "SOURCEMAPS",
 					"bucket_name": "al-ummah-now-sourcemaps-stage"
+				},
+				{
+					"binding": "DIAGNOSTICS",
+					"bucket_name": "al-ummah-now-diagnostics-stage"
 				}
 			],
 			"queues": {
