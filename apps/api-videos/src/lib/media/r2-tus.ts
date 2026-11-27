@@ -57,6 +57,9 @@ export async function writeR2Part(env: OriginalsEnv, p: { videoId: string; uploa
 		await Promise.all([stored, piped]);
 	} catch (error) {
 		abort.abort(error);
+		// A rejected PUT may leave the transform unread, with a write blocked on backpressure.
+		if (!fixed.readable.locked) await fixed.readable.cancel(error).catch(() => undefined);
+		await piped.catch(() => undefined);
 		throw error;
 	}
 }

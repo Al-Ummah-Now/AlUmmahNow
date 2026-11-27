@@ -705,6 +705,39 @@ describe('daily cost inputs', () => {
 		assert.deepEqual(rows.map(({ metric, value }) => [metric, value]), [['cdn_requests', 23], ['class_b_ops', 42]]);
 	});
 
+	for (const { name, retryAfter, rateLimited, offsets } of [
+		{ name: 'Retry-After seconds', retryAfter: '6', rateLimited: 1, offsets: [0, 6000, 7000] },
+		{ name: 'Retry-After HTTP-date', retryAfter: 'Fri, 27 Nov 2026 03:17:37 GMT', rateLimited: 1, offsets: [0, 7000, 8000] },
+		{ name: 'Retry-After beyond the retry window', retryAfter: '31', rateLimited: 1, offsets: [0] },
+		{ name: 'retry exhaustion', retryAfter: null, rateLimited: Infinity, offsets: [0, 1000, 3000, 7000, 15000] },
+	]) {
+		it(`paces daily analytics through ${name}`, async (t) => {
+			const { collectDeliveryCosts } = await import('../src/lib/media/costs');
+			const search = new SqliteD1();
+			const now = new Date('2026-11-27T03:17:30Z');
+			let elapsed = 0;
+			t.mock.method(Date, 'now', () => now.getTime() + elapsed);
+			t.mock.method(Math, 'random', () => 0);
+			t.mock.method(globalThis, 'setTimeout', (callback: () => void, ms: number) => {
+				elapsed += ms;
+				callback();
+			});
+			const calls: Array<{ account: boolean; offset: number }> = [];
+			t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+				assert.equal(url, 'https://api.cloudflare.com/client/v4/graphql');
+				const account = JSON.parse(init.body as string).query.includes('accounts(');
+				calls.push({ account, offset: elapsed });
+				if (account && calls.length <= rateLimited) {
+					return new Response(null, { status: 429, headers: retryAfter ? { 'Retry-After': retryAfter } : {} });
+				}
+				return Response.json({ data: { viewer: {} } });
+			});
+			await collectDeliveryCosts({ SEARCH_DB: search as never, MEDIA_ANALYTICS_TOKEN: 'test' }, now);
+			assert.deepEqual(calls.map((call) => call.offset), offsets);
+			assert.deepEqual(calls.map((call) => call.account), offsets.map((_, index) => offsets.length === 1 || index < offsets.length - 1));
+		});
+	}
+
 	it('turns records into per-source metrics with estimated cost', async () => {
 		const { metricsFromRecords, PRICES } = await import('../src/lib/media/costs');
 		const GB = 1024 ** 3;

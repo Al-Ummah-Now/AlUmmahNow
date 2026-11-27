@@ -19,6 +19,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
+import { withErrorReporting } from '@al-ummah/shared-types';
+import { loggingMiddleware } from '../src/middleware/logging';
+import { logger } from '../src/lib/logger';
 import { createTusRouter, clearTusSessionCache } from '../src/endpoints/video/tus/tusProxy';
 import { UploadCompleteEndpoint } from '../src/endpoints/video/uploadComplete';
 import { UploadFailedEndpoint } from '../src/endpoints/video/uploadFailed';
@@ -90,7 +93,7 @@ function bunnyStub() {
 	return s;
 }
 
-function harness(user = 'alice') {
+function harness(user = 'alice', logRequests = false) {
 	const kv = flakyKv();
 	const videos = new MemoryBucket({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'uploading', fileSize: SIZE }) });
 	const queue = new MemoryQueue();
@@ -101,6 +104,7 @@ function harness(user = 'alice') {
 		expiresAt: '2000-01-01T00:00:00.000Z',
 	}));
 	const app = new Hono();
+	if (logRequests) app.use('*', loggingMiddleware);
 	app.use('*', async (c, next) => {
 		c.set('userId' as never, user as never);
 		c.set('auth' as never, { userId: user } as never);
@@ -119,7 +123,7 @@ function harness(user = 'alice') {
 		body: new Uint8Array(CHUNK),
 		headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(offset), 'Tus-Resumable': '1.0.0' },
 	});
-	return { kv, videos, queue, env, request, post, head, patch };
+	return { app, kv, videos, queue, env, request, post, head, patch };
 }
 
 async function created(h: ReturnType<typeof harness>): Promise<string> {
@@ -140,6 +144,62 @@ describe('TUS proxy resilience', () => {
 	afterEach(() => {
 		globalThis.fetch = realFetch;
 	});
+
+	for (const { name, failure, expected } of [
+		{ name: 'failed R2 precondition', failure: null, expected: true },
+		{ name: 'R2 10058', failure: 'put: Reduce your concurrent request rate for the same object. (10058)', expected: true },
+		{ name: 'unexpected R2 failure', failure: 'R2 write unavailable', expected: false },
+	]) {
+		it(`responds to a PATCH with ${name} and reports only unexpected errors`, async (t) => {
+			class TestFixedLengthStream extends TransformStream<Uint8Array, Uint8Array> {
+				constructor(_length: number) { super(); }
+			}
+			Object.defineProperty(globalThis, 'FixedLengthStream', { configurable: true, value: TestFixedLengthStream });
+			t.after(() => Reflect.deleteProperty(globalThis, 'FixedLengthStream'));
+			const warning = t.mock.method(logger, 'warn', (_message: string) => {});
+			const summary = t.mock.method(logger, 'request', () => {});
+			const ingestUrl = 'https://errors.example.test/internal/errors';
+			const published: unknown[] = [];
+			t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+				assert.equal(url, ingestUrl);
+				published.push(...JSON.parse(init.body as string).events);
+				return new Response(null, { status: 204 });
+			});
+			const h = harness('alice', true);
+			h.kv.data.set('tus:upload:direct', JSON.stringify({ videoId: 'vid', userId: 'alice', target: 'r2', fileSize: SIZE }));
+			const env = {
+				...h.env,
+				ERRORS_INGEST_URL: ingestUrl,
+				INTERNAL_API_KEY: 'test-key',
+				MEDIA_ORIGINALS: {
+					list: async () => ({ objects: [], truncated: false }),
+					put: async () => {
+						if (failure) throw new Error(failure);
+						return null;
+					},
+				},
+			};
+			const handle = withErrorReporting('api-videos', (req, bindings: typeof env) => h.app.fetch(req, bindings));
+			const path = '/api/videos/tus/direct.vid';
+			const pending: Promise<unknown>[] = [];
+			const res = await handle(new Request(`https://videos.example.test${path}`, {
+				method: 'PATCH',
+				body: new Uint8Array(CHUNK),
+				headers: { 'Content-Type': 'application/offset+octet-stream', 'Content-Length': String(CHUNK), 'Upload-Offset': '0', 'Tus-Resumable': '1.0.0' },
+			}), env, { waitUntil: (work) => { pending.push(work); } });
+			await Promise.all(pending);
+			assert.equal(res.status, 503, await res.clone().text());
+			assert.equal(res.headers.get('Retry-After'), '5');
+			assert.equal(res.headers.get('X-Error-Expected'), expected ? 'busy' : null);
+			assert.equal(res.headers.has('X-Error-Ref'), !expected);
+			assert.equal(warning.mock.callCount(), 1);
+			assert.match(String(warning.mock.calls[0].arguments[0]), expected ? /Chunk write contended/ : /Could not store a chunk/);
+			assert.equal(summary.mock.callCount(), expected ? 0 : 1);
+			assert.equal(pending.length, expected ? 0 : 1);
+			assert.equal(published.length, expected ? 0 : 1);
+			if (!expected) assert.equal((published[0] as { status: number }).status, 503);
+		});
+	}
 
 	it('POST signs with a fresh Bunny signature, not the expired one stored at initiate', async () => {
 		const h = harness();
