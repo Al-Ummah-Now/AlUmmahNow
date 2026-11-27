@@ -254,6 +254,7 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
   x('admin-api', 'GET', '/api/admin/import/quran-index', READ),
   x('admin-api', 'POST', '/api/admin/import/channels', 'the import’s channel; its uploads are gated'),
   x('admin-api', 'POST', '/api/admin/import/errors', 'reports an import failure'),
+  x('admin-api', 'POST', '/api/admin/import/diagnostics', 'uploads an opt-in diagnostic log bundle for an import failure'),
   x('admin-api', 'GET', '/api/admin/import/sources', READ),
   x('admin-api', 'GET', '/api/admin/import/sources/channels/:channelId/connections', READ),
   x('admin-api', 'GET', '/api/admin/import/sources/:id', READ),
