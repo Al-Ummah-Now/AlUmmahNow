@@ -29,6 +29,7 @@ import { channelInvitesRouter } from './channel-invites.router';
 import { moveOffersRouter } from './move-offers.router';
 import { downloadsRouter } from './downloads.router';
 import eventsRouter from './events.router';
+import telemetryRouter from './telemetry.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -83,6 +84,8 @@ export function registerAllRouters(openapi: any) {
 
   // Analytics domain - analytics retrieval
   openapi.route('/api/analytics', analyticsRouter);
+  // Native app telemetry & crash batch ingest (AlUmmahNowCore#8 / Epic 9.8)
+  openapi.route('/api/telemetry', telemetryRouter);
 
   // Moderation domain - reports and moderation actions
   openapi.route('/api/moderation', moderationRouter);

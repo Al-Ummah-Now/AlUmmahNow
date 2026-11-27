@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Al Ummah Now API",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Public API v1 for Al Ummah Now apps. Additive changes ship in v1; breaking changes ship as a new version. Deprecated operations answer with Deprecation and Sunset headers. See API_VERSIONING.md."
   },
   "servers": [
@@ -37984,6 +37984,315 @@
                   },
                   "required": [
                     "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/batches": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Ingest native app telemetry and crash batches",
+        "description": "🔓 Authentication optional. Accepts an `aun_telemetry::TelemetryBatch` (max 100 events, 256 KB), deduplicates by event id, queues analytics/QoE events, and forwards error/crash reports to admin-api.",
+        "operationId": "post_TelemetryBatchesCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "batch_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "sent_at_ms": {
+                    "type": "integer"
+                  },
+                  "app": {
+                    "type": "object",
+                    "properties": {
+                      "platform": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "app_version": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "default": ""
+                      },
+                      "os_version": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "default": ""
+                      },
+                      "device_class": {
+                        "type": "string",
+                        "maxLength": 32,
+                        "default": ""
+                      },
+                      "locale": {
+                        "type": "string",
+                        "maxLength": 32,
+                        "default": ""
+                      },
+                      "core_version": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "default": ""
+                      }
+                    },
+                    "required": [
+                      "platform"
+                    ]
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "analytics",
+                            "qoe",
+                            "error",
+                            "crash"
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_.]{1,64}$"
+                        },
+                        "timestamp_ms": {
+                          "type": "integer"
+                        },
+                        "session_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "properties": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 16384
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              }
+                            ]
+                          },
+                          "default": {}
+                        },
+                        "breadcrumbs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "timestamp_ms": {
+                                "type": "integer"
+                              },
+                              "category": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "message": {
+                                "type": "string",
+                                "maxLength": 1024
+                              },
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "debug",
+                                  "info",
+                                  "warning",
+                                  "error"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "timestamp_ms",
+                              "category",
+                              "message"
+                            ]
+                          },
+                          "maxItems": 50,
+                          "default": []
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "timestamp_ms",
+                        "session_id"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "batch_id",
+                  "sent_at_ms",
+                  "app",
+                  "events"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "accepted": {
+                          "type": "number"
+                        },
+                        "deduplicated": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "accepted",
+                        "deduplicated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid telemetry batch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Batch exceeds 256 KB limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Telemetry delivery temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
                     "error"
                   ]
                 }
