@@ -164,6 +164,9 @@ test.describe('autoplay at the end of a video', () => {
   test('on: when the move to the next video does not commit, the page loads and it still plays', async ({ page }) => {
     // The next page's client-side request never answers (seen in Firefox): navigateOrLoad loads the
     // page instead, and the in-app request must survive that load (#1137)
+    // The fallback waits NAVIGATION_STALL_MS (10 s) for an answer before it loads the page, and a
+    // warm next dev page load can take Firefox up to about 25 s on the runner: 35 s for the address
+    test.setTimeout(150_000);
     await page.route(/\/dev\/player\?src=bright/, async (route) => {
       if (route.request().headers()['rsc'] === '1') return; // left pending: the client move never commits
       await route.continue();
@@ -171,7 +174,7 @@ test.describe('autoplay at the end of a video', () => {
     await openHarness(page, { src: 'dark' });
     const end = await reachEnd(page);
     await expect(end.getByTestId('player-next-ring')).toBeVisible();
-    await expect(page).toHaveURL(/src=bright/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/src=bright/, { timeout: 35_000 });
     // Muted when the browser refuses sound on the loaded page, but playing
     await expect.poll(() => mediaTime(page), { timeout: 30_000 }).toBeGreaterThan(0.5);
   });
