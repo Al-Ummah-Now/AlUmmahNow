@@ -1,9 +1,11 @@
 'use server';
 
+import * as v from 'valibot';
 import { ApiHeaders } from "./types";
 import { buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
+import { createModerationReportSchema, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 /** Entity types accepted by api-videos ReportInput */
 export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream' | 'live_chat' | 'post';
@@ -62,6 +64,12 @@ export async function createReport(
   turnstileToken?: string
 ): Promise<ReportCreateResult> {
   try {
+    const validated = v.safeParse(createModerationReportSchema, reportData);
+    if (!validated.success) {
+      return { success: false, error: 'invalid' };
+    }
+    const cleanData = validated.output;
+
     const auth = await getServerAuthContext();
     if (!auth?.accessToken) {
       logger.warn('[createReport] No authenticated session');
@@ -70,8 +78,9 @@ export async function createReport(
 
     // The channelId header must be a channel the reporter owns (api-videos
     // verifies ownership), so use the session's active channel.
-    const reporterChannelId = auth.channelId || headers?.channelId;
-    const description = [reportData.customReason, reportData.description].filter(Boolean).join(' — ') || undefined;
+    const reporterChannelId = sanitizeHeaderValue(auth.channelId || headers?.channelId, 128);
+    const safeTurnstile = sanitizeHeaderValue(turnstileToken, 2048);
+    const description = [cleanData.customReason, cleanData.description].filter(Boolean).join(' — ') || undefined;
 
     const response = await fetch(buildApiUrl('/api/moderation/reports'), {
       method: 'POST',
@@ -79,12 +88,12 @@ export async function createReport(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${auth.accessToken}`,
         ...(reporterChannelId && { 'channelId': reporterChannelId }),
-        ...(turnstileToken && { 'X-Turnstile-Token': turnstileToken }),
+        ...(safeTurnstile && { 'X-Turnstile-Token': safeTurnstile }),
       },
       body: JSON.stringify({
-        entityType: reportData.contentType,
-        entityId: reportData.contentId,
-        reason: reportData.reason,
+        entityType: cleanData.contentType,
+        entityId: cleanData.contentId,
+        reason: cleanData.reason,
         description,
       }),
     });

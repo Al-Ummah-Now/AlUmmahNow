@@ -10,6 +10,7 @@ import {
   PaginationResponse
 } from "./types";
 import { apiRequestServer, apiRequestServerResult, buildApiUrl, buildQueryParams, type ApiResult } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 import { Channel, VideoObject, Playlist } from "@al-ummah/shared-types";
 import { logger } from '@/lib/logger-server';
@@ -94,7 +95,7 @@ export async function getChannelById(
 ): Promise<Channel | null> {
   return apiRequestServer<Channel>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${id}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(id)}`),
     functionName: 'getChannelById'
   }, getServerAuthContext, false);
 }
@@ -149,7 +150,7 @@ export async function updateChannel(
 ): Promise<ApiResponse<{ channel: Channel }> | null> {
   return apiRequestServer<ApiResponse<{ channel: Channel }>>({
     method: 'PUT',
-    url: buildApiUrl(`/api/channels/${id}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(id)}`),
     body: data,
     functionName: 'updateChannel'
   }, async () => ({
@@ -169,7 +170,7 @@ export async function deleteChannel(
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/channels/${id}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(id)}`),
     functionName: 'deleteChannel'
   }, async () => ({
     
@@ -212,7 +213,7 @@ export async function subscribeToChannel(
 ): Promise<SubscriptionStatusResponse | null> {
   return apiRequestServer<SubscriptionStatusResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/channels/${channelId}/subscriptions`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/subscriptions`),
     body: data,
     functionName: 'subscribeToChannel'
   }, () => subscriberAuthContext(headers?.channelId), true);
@@ -230,7 +231,7 @@ export async function unsubscribeFromChannel(
 ): Promise<SubscriptionStatusResponse | null> {
   return apiRequestServer<SubscriptionStatusResponse>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/channels/${channelId}/subscriptions${scope === 'all' ? '?scope=all' : ''}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/subscriptions${scope === 'all' ? '?scope=all' : ''}`),
     functionName: 'unsubscribeFromChannel'
   }, () => subscriberAuthContext(headers?.channelId), true);
 }
@@ -244,7 +245,7 @@ export async function getChannelSubscriptionStatus(
 ): Promise<SubscriptionStatusResponse | null> {
   return apiRequestServer<SubscriptionStatusResponse>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/subscriptions/status`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/subscriptions/status`),
     functionName: 'getChannelSubscriptionStatus'
   }, () => subscriberAuthContext(), false);
 }
@@ -308,7 +309,7 @@ export async function updateChannelAvatar(
     
   });
 
-  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/avatar`), {
+  const response = await fetch(buildApiUrl(`/api/channels/${apiSegment(channelId)}/avatar`), {
     method: 'PUT',
     headers: requestHeaders,
     body: formData,
@@ -366,7 +367,7 @@ export async function updateChannelCover(
     
   });
 
-  const response = await fetch(buildApiUrl(`/api/channels/${channelId}/cover`), {
+  const response = await fetch(buildApiUrl(`/api/channels/${apiSegment(channelId)}/cover`), {
     method: 'PUT',
     headers: requestHeaders,
     body: formData,
@@ -407,7 +408,7 @@ export async function getChannelVideos(
 
   return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/videos${queryString}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/videos${queryString}`),
     functionName: 'getChannelVideos'
   }, getServerAuthContext, false);
 }
@@ -427,7 +428,7 @@ export async function getChannelShorts(
 
   return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/shorts${queryString}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/shorts${queryString}`),
     functionName: 'getChannelShorts'
   }, getServerAuthContext, false);
 }
@@ -448,7 +449,7 @@ export async function getChannelLiveStreams(
 
   return apiRequestServer<PaginationResponse<VideoObject>>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/live${queryString}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/live${queryString}`),
     functionName: 'getChannelLiveStreams'
   }, getServerAuthContext, false);
 }
@@ -468,7 +469,7 @@ export async function getChannelPlaylists(
 
   return apiRequestServer<PaginationResponse<Playlist>>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/playlists${queryString}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/playlists${queryString}`),
     functionName: 'getChannelPlaylists'
   }, getServerAuthContext, false);
 }

@@ -5,6 +5,7 @@ import {
   ScheduledVideoListResponse,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, apiRequestServerResult, buildApiUrl } from './api-client';
+import { apiSegment } from '@/lib/security/safe-input';
 import { getServerAuthContext } from './server-auth';
 import { ApiHeaders } from './types';
 import { logger } from '@/lib/logger-client';
@@ -41,7 +42,7 @@ export async function scheduleVideo(
     }>(
       {
         method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/schedule`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/schedule`),
         body: {
           scheduledPublishDate,
           timezone,
@@ -98,7 +99,7 @@ export async function updateSchedule(
     }>(
       {
         method: 'PUT',
-        url: buildApiUrl(`/api/videos/${videoId}/schedule`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/schedule`),
         body: {
           scheduledPublishDate,
           timezone,
@@ -146,7 +147,7 @@ export async function cancelSchedule(
     }>(
       {
         method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/schedule`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/schedule`),
         functionName: 'cancelSchedule',
       },
       async () => ({
@@ -186,7 +187,7 @@ export async function publishNow(
     }>(
       {
         method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/publish-now`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/publish-now`),
         functionName: 'publishNow',
       },
       async () => ({
@@ -280,7 +281,7 @@ export async function getVideoSchedule(
     }>(
       {
         method: 'GET',
-        url: buildApiUrl(`/api/videos/${videoId}/schedule`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/schedule`),
         functionName: 'getVideoSchedule',
       },
       async () => ({

@@ -17,11 +17,14 @@ export interface HumanCheckStatus {
   siteKey: string | null;
 }
 
+const HUMAN_CHECK_KINDS = new Set<HumanCheckKind>(['comment', 'post', 'report', 'tier_request']);
+
 export async function getHumanCheck(kind: HumanCheckKind): Promise<HumanCheckStatus> {
+  if (!HUMAN_CHECK_KINDS.has(kind)) return { required: false, siteKey: null };
   const auth = await getServerAuthContext();
   if (!auth?.accessToken) return { required: false, siteKey: null };
   try {
-    const response = await fetch(buildApiUrl(`/api/me/human-check?kind=${kind}`), {
+    const response = await fetch(buildApiUrl(`/api/me/human-check?kind=${encodeURIComponent(kind)}`), {
       headers: { Authorization: `Bearer ${auth.accessToken}` },
       cache: 'no-store',
     });

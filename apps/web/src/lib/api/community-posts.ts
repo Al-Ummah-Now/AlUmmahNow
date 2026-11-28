@@ -14,6 +14,7 @@ import {
   COMMUNITY_FILE_TOO_LARGE,
 } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from "@/lib/logger-server";
 import { ApiHeaders } from "./types";
@@ -35,7 +36,7 @@ export async function listCommunityPosts(
 
   return apiRequestServer<ListCommunityPostsResponse>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/channels/${params.channelId}/posts${queryString}`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(params.channelId)}/posts${queryString}`),
     functionName: 'listCommunityPosts'
   }, async () => ({
     channelId: headers?.channelId,
@@ -54,7 +55,7 @@ export async function getCommunityPost(
 ): Promise<CommunityPost | null> {
   return apiRequestServer<CommunityPost>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}`),
     functionName: 'getCommunityPost'
   }, async () => ({
     channelId: headers?.channelId,
@@ -75,7 +76,7 @@ export async function createCommunityPost(
 ): Promise<{ success: boolean; post: CommunityPost } | null> {
   return apiRequestServer<{ success: boolean; post: CommunityPost }>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts`),
     body: data,
     ...(turnstileToken ? { headers: { 'X-Turnstile-Token': turnstileToken } } : {}),
     functionName: 'createCommunityPost'
@@ -97,7 +98,7 @@ export async function updateCommunityPost(
 ): Promise<{ success: boolean; post: CommunityPost } | null> {
   return apiRequestServer<{ success: boolean; post: CommunityPost }>({
     method: 'PUT',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}`),
     body: data,
     functionName: 'updateCommunityPost'
   }, async () => ({
@@ -118,7 +119,7 @@ export async function deleteCommunityPost(
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}`),
     functionName: 'deleteCommunityPost'
   }, async () => ({
 
@@ -138,7 +139,7 @@ export async function likeCommunityPost(
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/like`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/like`),
     functionName: 'likeCommunityPost'
   }, async () => ({
 
@@ -158,7 +159,7 @@ export async function unlikeCommunityPost(
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/like`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/like`),
     functionName: 'unlikeCommunityPost'
   }, async () => ({
 
@@ -179,7 +180,7 @@ export async function voteOnPoll(
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'POST',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/vote`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/vote`),
     body: data,
     functionName: 'voteOnPoll'
   }, async () => ({
@@ -200,7 +201,7 @@ export async function getPollResults(
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'GET',
-    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/results`),
+    url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/results`),
     functionName: 'getPollResults'
   }, async () => ({
     channelId: headers?.channelId,

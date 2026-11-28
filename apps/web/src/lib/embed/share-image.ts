@@ -92,6 +92,34 @@ export function isAllowedImageSource(url: string): boolean {
   }
 }
 
+/**
+ * Fetch an image/media URL while enforcing `isAllowedImageSource` on the initial
+ * URL and every redirect hop (blocks SSRF via open redirect on an allowed host).
+ */
+export async function fetchAllowedImageSource(
+  url: string,
+  init: Omit<RequestInit, 'redirect'> = {},
+  maxRedirects = 3,
+): Promise<Response | null> {
+  let current = url;
+  for (let hop = 0; hop <= maxRedirects; hop += 1) {
+    if (!isAllowedImageSource(current)) return null;
+    const res = await fetch(current, { ...init, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) return null;
+      try {
+        current = new URL(location, current).toString();
+      } catch {
+        return null;
+      }
+      continue;
+    }
+    return res;
+  }
+  return null;
+}
+
 /** True when a meta/oEmbed image URL carries a Bunny token (it would expire in caches) */
 export function hasExpiringToken(url: string): boolean {
   return /bcdn_token=|[?&]token=[^&]*&expires=/.test(url);

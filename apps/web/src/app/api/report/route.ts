@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import * as v from 'valibot';
 import { logger } from '@/lib/logger';
+import { jsonObjectSchema, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 /**
  * Reports of people who are not signed in (same origin, /[locale]/report; signed-in people use
@@ -29,12 +31,15 @@ export async function POST(req: NextRequest) {
 
   const text = await req.text();
   if (text.length > MAX_BODY_BYTES) return NextResponse.json({ error: 'too_large' }, { status: 413 });
-  let body: unknown;
+  let parsedJson: unknown;
   try {
-    body = JSON.parse(text);
+    parsedJson = JSON.parse(text);
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
+  const checked = v.safeParse(jsonObjectSchema, parsedJson);
+  if (!checked.success) return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  const body = checked.output;
 
   const adminApi = process.env.ADMIN_API_URL;
   const key = await internalApiKey();
@@ -43,11 +48,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 
+  const cfIp = sanitizeHeaderValue(req.headers.get('cf-connecting-ip'), 128);
   const headers = {
     'Content-Type': 'application/json',
     'X-API-Key': key,
     // Only what Cloudflare itself says; a header of the visitor's own would pick their limit
-    ...(req.headers.get('cf-connecting-ip') ? { 'X-Client-IP': req.headers.get('cf-connecting-ip')! } : {}),
+    ...(cfIp ? { 'X-Client-IP': cfIp } : {}),
   };
 
   let upstream: Response;

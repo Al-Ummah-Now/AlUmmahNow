@@ -15,7 +15,7 @@
 
 import { logger } from '@/lib/logger-server';
 import { loadPublicVideo } from '@/lib/embed/content';
-import { isAllowedImageSource, parseShareImageFile, sizedImageSource, thumbWidth } from '@/lib/embed/share-image';
+import { fetchAllowedImageSource, isAllowedImageSource, parseShareImageFile, sizedImageSource, thumbWidth } from '@/lib/embed/share-image';
 
 const CACHE_SECONDS = 3600;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -50,13 +50,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const source = video?.thumbnailSource;
   if (!source || !isAllowedImageSource(source)) return notFound();
 
-  let upstream: Response;
+  let upstream: Response | null;
   try {
-    upstream = await fetch(sizedImageSource(source, width), { headers: { Accept: 'image/*' }, redirect: 'follow', cache: 'no-store' });
+    upstream = await fetchAllowedImageSource(sizedImageSource(source, width), { headers: { Accept: 'image/*' }, cache: 'no-store' });
   } catch (error) {
     logger.warn('[thumb] Thumbnail fetch failed', { videoId, error: error instanceof Error ? error.message : String(error) });
     return new Response('Unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } });
   }
+  if (!upstream) return notFound();
   const contentType = (upstream.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (!upstream.ok || !IMAGE_TYPE.test(contentType)) {
     if (upstream.status >= 500) logger.warn('[thumb] Thumbnail source failed', { videoId, status: upstream.status });

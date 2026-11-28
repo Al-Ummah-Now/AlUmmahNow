@@ -10,16 +10,23 @@ import { logger } from '@/lib/logger-client';
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as v from 'valibot';
 import { watchTimeReports, type WatchTimeEvent } from '@/lib/video/watch-time';
 import { retentionReports, type RetentionEvent } from '@/lib/video/retention';
 import { viewContextFromBatch } from '@/lib/embed/view-context';
 import { trafficFromBatch } from '@/lib/analytics/traffic-source';
 import { isValidContentId } from '@/lib/embed/params';
+import { videoAnalyticsBatchSchema } from '@/lib/security/safe-input';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const events = body.events || [];
+    const rawBody = await request.json();
+    const parsed = v.safeParse(videoAnalyticsBatchSchema, rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: 'Invalid analytics payload' }, { status: 400 });
+    }
+    const body = parsed.output;
+    const events = body.events;
     // Embed frames tag their views (docs/embeds §6); anything invalid counts as a watch-page view
     const viewContext = viewContextFromBatch(body.context);
     const traffic = trafficFromBatch(body.context);
@@ -58,7 +65,7 @@ export async function POST(request: NextRequest) {
         // The id comes from the request body: only an opaque id may reach the
         // API path, so '../', '?', '#', '@' or a full URL can't redirect the
         // server-side request (CodeQL js/request-forgery).
-        if (!isValidContentId(videoId)) {
+        if (typeof videoId !== 'string' || !isValidContentId(videoId)) {
           logger.debug('[Analytics] Ready event without a valid videoId');
           continue;
         }
@@ -95,8 +102,8 @@ export async function POST(request: NextRequest) {
     }
 
     // #235: played-seconds reports → POST /api/videos/:id/watch-time
-    const watchTime = await forwardWatchTime(events);
-    const retention = await forwardRetention(events);
+    const watchTime = await forwardWatchTime(events as WatchTimeEvent[]);
+    const retention = await forwardRetention(events as RetentionEvent[]);
 
     return NextResponse.json({
       success: true,
@@ -114,7 +121,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to process analytics event'
       },
       { status: 500 }
     );

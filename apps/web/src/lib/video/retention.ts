@@ -9,6 +9,7 @@
  */
 
 import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
+import { isValidContentId } from '@/lib/embed/params';
 import { MAX_TICK_SECONDS } from './watch-time';
 
 export class RetentionTracker {
@@ -73,9 +74,9 @@ export interface RetentionEvent {
 export function retentionReports(events: RetentionEvent[]): Array<{ videoId: string; sessionId: string; buckets: number[] }> {
   return events.flatMap((e) => {
     const buckets = e?.data?.buckets;
-    if (e?.eventType !== 'retention' || typeof e.videoId !== 'string' || !e.videoId) return [];
-    if (typeof e.sessionId !== 'string' || !e.sessionId) return [];
-    if (!Array.isArray(buckets) || buckets.length === 0) return [];
+    if (e?.eventType !== 'retention' || typeof e.videoId !== 'string' || !isValidContentId(e.videoId)) return [];
+    if (typeof e.sessionId !== 'string' || !e.sessionId || e.sessionId.length > 128) return [];
+    if (!Array.isArray(buckets) || buckets.length === 0 || buckets.length > RETENTION_BUCKET_COUNT) return [];
     if (!buckets.every((b) => Number.isInteger(b) && b >= 0 && b < RETENTION_BUCKET_COUNT)) return [];
     return [{ videoId: e.videoId, sessionId: e.sessionId, buckets: buckets as number[] }];
   });

@@ -2,6 +2,7 @@
 
 import { ChannelTabConfig } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl } from './api-client';
+import { apiSegment } from '@/lib/security/safe-input';
 import { getServerAuthContext } from './server-auth';
 import { getChannelById } from './channels';
 import { logger } from '@/lib/logger';
@@ -16,7 +17,7 @@ export async function getChannelTabConfig(
   return apiRequestServer<ChannelTabConfig>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/channels/${channelId}/tabs`),
+      url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/tabs`),
       functionName: 'getChannelTabConfig',
     },
     getServerAuthContext,
@@ -48,7 +49,7 @@ export async function updateChannelTabConfig(
   return apiRequestServer<ChannelTabConfig>(
     {
       method: 'PUT',
-      url: buildApiUrl(`/api/channels/${channelId}/tabs`),
+      url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/tabs`),
       body: data,
       functionName: 'updateChannelTabConfig',
     },

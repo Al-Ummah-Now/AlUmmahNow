@@ -2,6 +2,7 @@
 
 import { ApiResponse, ApiHeaders } from "./types";
 import { buildApiUrl } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 import type { SubtitleTrack, SubtitleCue, SubtitleValidationResult } from "./subtitles-types";
@@ -30,7 +31,7 @@ export async function uploadSubtitle(
   const authContext = await getServerAuthContext();
 
   const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/subtitles`),
+    buildApiUrl(`/api/videos/${apiSegment(videoId)}/subtitles`),
     {
       method: 'POST',
       headers: {
@@ -72,7 +73,7 @@ export async function listSubtitles(
   const authContext = await getServerAuthContext();
 
   const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/subtitles`),
+    buildApiUrl(`/api/videos/${apiSegment(videoId)}/subtitles`),
     {
       method: 'GET',
       headers: {
@@ -106,7 +107,7 @@ export async function getSubtitle(
   const authContext = await getServerAuthContext();
 
   const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}`),
+    buildApiUrl(`/api/videos/${apiSegment(videoId)}/subtitles/${apiSegment(language)}`),
     {
       method: 'GET',
       headers: {
@@ -137,7 +138,7 @@ export async function deleteSubtitle(
   const authContext = await getServerAuthContext();
 
   const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}`),
+    buildApiUrl(`/api/videos/${apiSegment(videoId)}/subtitles/${apiSegment(language)}`),
     {
       method: 'DELETE',
       headers: {
@@ -174,7 +175,7 @@ export async function setDefaultSubtitle(
   const authContext = await getServerAuthContext();
 
   const response = await fetch(
-    buildApiUrl(`/api/videos/${videoId}/subtitles/${language}/default`),
+    buildApiUrl(`/api/videos/${apiSegment(videoId)}/subtitles/${apiSegment(language)}/default`),
     {
       method: 'PUT',
       headers: {

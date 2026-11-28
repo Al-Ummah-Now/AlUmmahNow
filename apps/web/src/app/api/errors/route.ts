@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { ERROR_LIMITS } from '@al-ummah/shared-types';
+import * as v from 'valibot';
 import { subjects } from '@/interfaces/subjects';
 import { getOpenAuthClient } from '@/lib/auth/openauth-client';
 import { verifiedUserId } from '@/lib/auth/verify-result';
+import { errorReportEnvelopeSchema, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 /**
  * Browser error reports (lib/errors/reporter.ts) → admin-api POST /internal/errors.
@@ -67,8 +69,8 @@ export async function POST(req: NextRequest) {
   const text = await req.text();
   if (!text || text.length > ERROR_LIMITS.maxBodyBytes) return new NextResponse(null, { status: 413 });
   try {
-    const parsed = JSON.parse(text) as { events?: unknown };
-    if (!parsed || !Array.isArray(parsed.events)) return new NextResponse(null, { status: 400 });
+    const parsed = JSON.parse(text);
+    if (!v.safeParse(errorReportEnvelopeSchema, parsed).success) return new NextResponse(null, { status: 400 });
   } catch {
     return new NextResponse(null, { status: 400 });
   }
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
   if (!adminApi || !key) return new NextResponse(null, { status: 204 });
 
   const userId = await sessionUserId();
+  const safeUserId = sanitizeHeaderValue(userId, 128);
   const forward = fetch(`${adminApi.replace(/\/$/, '')}/internal/errors`, {
     method: 'POST',
     headers: {
@@ -87,13 +90,13 @@ export async function POST(req: NextRequest) {
       'X-API-Key': key,
       'X-Report-Source': 'browser',
       'X-Report-App': 'web',
-      ...(userId ? { 'X-Client-User-Id': userId } : {}),
-      'X-Client-IP': req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
-      'X-Client-User-Agent': (req.headers.get('user-agent') || '').slice(0, 512),
+      ...(safeUserId ? { 'X-Client-User-Id': safeUserId } : {}),
+      'X-Client-IP': sanitizeHeaderValue(req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0], 128) || 'unknown',
+      'X-Client-User-Agent': sanitizeHeaderValue(req.headers.get('user-agent'), 512) || '',
       // Origin, classified at ingest (no IP or UA is stored): the page, country and mobile hint
-      'X-Client-Page': (req.headers.get('referer') || '').slice(0, 512),
-      'X-Client-Country': (req.headers.get('cf-ipcountry') || '').slice(0, 2),
-      'X-Client-Mobile': (req.headers.get('sec-ch-ua-mobile') || '').slice(0, 2),
+      'X-Client-Page': sanitizeHeaderValue(req.headers.get('referer'), 512) || '',
+      'X-Client-Country': sanitizeHeaderValue(req.headers.get('cf-ipcountry'), 2) || '',
+      'X-Client-Mobile': sanitizeHeaderValue(req.headers.get('sec-ch-ua-mobile'), 2) || '',
     },
     body: text,
     cache: 'no-store',

@@ -5,6 +5,7 @@ import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { logger } from '@/lib/logger-client';
 import type { SubtitleTrack } from './subtitles-types';
 import { normalizeSubtitleTrack, type ApiSubtitleTrack } from './subtitle-utils';
+import { encodePathSegment, safeSameOriginPath, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 /**
  * Upload a file from the browser straight to api-videos.
@@ -38,6 +39,10 @@ export async function uploadFileDirect<T = unknown>(
   file: File,
   { method = 'PUT', field = 'photo', channelId, fields }: DirectUploadOptions = {},
 ): Promise<T> {
+  const safePath = safeSameOriginPath(path);
+  if (!safePath || safePath.split('/').some((seg) => seg === '..')) {
+    throw new DirectUploadError('Invalid upload path', 400);
+  }
   const auth = await fetchClientAuthInfo();
   if (!auth.accessToken) {
     throw new DirectUploadError('Not signed in', 401);
@@ -48,10 +53,10 @@ export async function uploadFileDirect<T = unknown>(
   for (const [key, value] of Object.entries(fields ?? {})) form.append(key, value);
 
   const headers: Record<string, string> = { Authorization: `Bearer ${auth.accessToken}` };
-  const actingChannel = channelId ?? auth.channelId ?? undefined;
+  const actingChannel = sanitizeHeaderValue(channelId ?? auth.channelId, 128);
   if (actingChannel) headers.channelId = actingChannel;
 
-  const url = `${getApiUrl().replace(/\/$/, '')}${path}`;
+  const url = `${getApiUrl().replace(/\/$/, '')}${safePath}`;
   const response = await fetch(url, { method, headers, body: form });
   const body = await response.json().catch(() => null);
 
@@ -80,8 +85,12 @@ export async function uploadSubtitleDirect(
   { channelId }: { channelId: string },
 ): Promise<{ success: boolean; data?: { subtitle: SubtitleTrack }; error?: { code: string; message: string } }> {
   try {
+    const safeVideoId = encodePathSegment(videoId);
+    if (!safeVideoId) {
+      return { success: false, error: { code: 'INVALID_ID', message: 'Invalid video ID' } };
+    }
     const body = await uploadFileDirect<{ success?: boolean; data?: { track?: ApiSubtitleTrack } }>(
-      `/api/videos/${videoId}/subtitles`,
+      `/api/videos/${safeVideoId}/subtitles`,
       file,
       { method: 'POST', field: 'subtitle', channelId, fields: { language, isDefault: String(isDefault) } },
     );
