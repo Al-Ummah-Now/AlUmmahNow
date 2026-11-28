@@ -8,6 +8,9 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation';
+
 const LOG_SERVICE_URL = process.env.LOG_SERVICE_URL || 'http://localhost:3089';
 
 interface LogEntry {
@@ -42,9 +45,11 @@ const tools: Tool[] = [
     description: 'Get recent logs from all apps or a specific app. Returns structured log entries with timestamps, levels, and messages.',
     inputSchema: {
       type: 'object',
+      additionalProperties: false,
       properties: {
         app: {
           type: 'string',
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$',
           description: 'Filter by app name (e.g., "admin-api", "api-videos", "web", "processor", "websocket")',
         },
         level: {
@@ -53,7 +58,9 @@ const tools: Tool[] = [
           description: 'Filter by log level',
         },
         lines: {
-          type: 'number',
+          type: 'integer',
+          minimum: 1,
+          maximum: 500,
           description: 'Number of log lines to return (default: 50, max: 500)',
           default: 50,
         },
@@ -70,9 +77,11 @@ const tools: Tool[] = [
     description: 'Watch logs in real-time for a specified duration. Useful for monitoring new log entries as they happen during debugging.',
     inputSchema: {
       type: 'object',
+      additionalProperties: false,
       properties: {
         app: {
           type: 'string',
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$',
           description: 'Filter by app name (e.g., "admin-api", "api-videos", "web")',
         },
         level: {
@@ -82,6 +91,8 @@ const tools: Tool[] = [
         },
         duration: {
           type: 'number',
+          minimum: 1,
+          maximum: 30,
           description: 'How long to watch for new logs in seconds (default: 5, max: 30)',
           default: 5,
         },
@@ -93,6 +104,7 @@ const tools: Tool[] = [
     description: 'List all available app names that have log files',
     inputSchema: {
       type: 'object',
+      additionalProperties: false,
       properties: {},
     },
   },
@@ -101,13 +113,17 @@ const tools: Tool[] = [
     description: 'Search logs for specific text patterns across all apps or a specific app',
     inputSchema: {
       type: 'object',
+      additionalProperties: false,
       properties: {
         query: {
           type: 'string',
+          minLength: 1,
+          maxLength: 1000,
           description: 'Text pattern to search for in log messages',
         },
         app: {
           type: 'string',
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$',
           description: 'Filter by app name',
         },
         level: {
@@ -116,7 +132,9 @@ const tools: Tool[] = [
           description: 'Filter by log level',
         },
         lines: {
-          type: 'number',
+          type: 'integer',
+          minimum: 1,
+          maximum: 500,
           description: 'Max number of matching lines to return (default: 100)',
           default: 100,
         },
@@ -125,6 +143,12 @@ const tools: Tool[] = [
     },
   },
 ];
+
+const validator = new AjvJsonSchemaValidator();
+const argumentValidators = new Map(tools.map(({ name, inputSchema }) => [
+  name,
+  validator.getValidator(inputSchema as JsonSchemaType),
+]));
 
 // Fetch logs from the log service
 async function fetchLogs(params: {
@@ -282,7 +306,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Call tool handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: rawArgs } = request.params;
+  const args = rawArgs ?? {};
+  const validate = argumentValidators.get(name);
+  if (validate && !validate(args).valid) {
+    return { content: [{ type: 'text', text: 'Invalid tool arguments' }], isError: true };
+  }
 
   try {
     switch (name) {

@@ -23,6 +23,11 @@ export class SchedulerLock {
     const url = new URL(request.url);
     const action = url.pathname.slice(1); // Remove leading slash
 
+    if ((action === 'status' && request.method !== 'GET') ||
+        (['acquire', 'release', 'verify'].includes(action) && request.method !== 'POST')) {
+      return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    }
+
     switch (action) {
       case 'acquire':
         return this.handleAcquire(request);
@@ -45,7 +50,12 @@ export class SchedulerLock {
    * This is atomic - only one caller can succeed
    */
   private async handleAcquire(request: Request): Promise<Response> {
-    const { ttl = 120 } = await request.json() as { ttl?: number };
+    const body = await request.json().catch(() => null) as { ttl?: unknown } | null;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return Response.json({ error: 'Invalid lock request' }, { status: 400 });
+    const ttl = body.ttl === undefined ? 120 : body.ttl;
+    if (typeof ttl !== 'number' || !Number.isSafeInteger(ttl) || ttl < 1 || ttl > 3600) {
+      return Response.json({ error: 'Invalid lock duration' }, { status: 400 });
+    }
     const now = Date.now();
 
     // Load current lock state from storage
@@ -91,7 +101,11 @@ export class SchedulerLock {
    * Release the lock (only if caller owns it)
    */
   private async handleRelease(request: Request): Promise<Response> {
-    const { token } = await request.json() as { token: string };
+    const body = await request.json().catch(() => null) as { token?: unknown } | null;
+    const token = body?.token;
+    if (typeof token !== 'string' || token.length === 0 || token.length > 100) {
+      return Response.json({ error: 'Invalid lock token' }, { status: 400 });
+    }
 
     // Load current lock state
     this.lock = await this.state.storage.get<LockState>('lock') || null;
@@ -134,7 +148,11 @@ export class SchedulerLock {
    * Verify if caller still holds the lock
    */
   private async handleVerify(request: Request): Promise<Response> {
-    const { token } = await request.json() as { token: string };
+    const body = await request.json().catch(() => null) as { token?: unknown } | null;
+    const token = body?.token;
+    if (typeof token !== 'string' || token.length === 0 || token.length > 100) {
+      return Response.json({ error: 'Invalid lock token' }, { status: 400 });
+    }
 
     // Load current lock state
     this.lock = await this.state.storage.get<LockState>('lock') || null;

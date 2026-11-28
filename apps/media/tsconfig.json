@@ -9,6 +9,6 @@
     "target": "es2022",
     "noEmit": true
   },
-  "include": ["src/**/*", "test/**/*", "container/colour.mjs", "container/ladder.mjs", "container/rungs.mjs", "container/review.mjs", "container/prebuilt.mjs", "container/errors.mjs", "container/audio.mjs", "container/source-facts.mjs"],
+  "include": ["src/**/*", "test/**/*", "container/colour.mjs", "container/ladder.mjs", "container/rungs.mjs", "container/review.mjs", "container/prebuilt.mjs", "container/errors.mjs", "container/audio.mjs", "container/source-facts.mjs", "container/request.mjs"],
   "exclude": ["node_modules", "dist"]
 }

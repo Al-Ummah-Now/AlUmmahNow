@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
-import { Str } from '../lib/chanfana-params';
 import { z } from 'zod';
+import { LOG_APP_NAME, logLevel } from '../lib/log-record';
 import { watch } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -22,8 +22,8 @@ export class StreamLogsRealtime extends OpenAPIRoute {
     description: 'Stream log entries in real-time using Server-Sent Events. Monitors all log files and sends new entries as they are written.',
     request: {
       query: z.object({
-        level: Str({ description: 'Filter by log level (debug, info, warn, error)', required: false }),
-        app: Str({ description: 'Filter by specific app name', required: false }),
+        level: logLevel.optional(),
+        app: z.string().regex(LOG_APP_NAME).optional(),
       }),
     },
     responses: {

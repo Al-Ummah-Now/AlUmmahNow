@@ -502,48 +502,49 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
 
   await Promise.allSettled(
     batch.messages.map(async (message: QueueMessage<AlUmmahMessage>) => {
+      const messageId = typeof message.body?.id === 'string' ? message.body.id : (message.id ?? 'unknown');
       try {
         const result = await processor.processMessage(message.body, env);
 
         if (!result.success) {
           if (result.shouldRetry) {
             // Retry the message (account erasure steps back off; contact/erase.ts)
-            retried.push(message.body.id);
+            retried.push(messageId);
             const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
             if (delaySeconds) message.retry({ delaySeconds });
             else message.retry();
           } else {
-            deadLettered.push(message.body.id);
+            deadLettered.push(messageId);
             logger.error('[Queue] Message failed for good; sending to DLQ', {
-              messageId: message.body.id,
-              type: message.body.type,
+              messageId,
+              type: message.body?.type,
               queue: batch.queue,
               reason: result.error,
-              retryCount: message.body.retryCount ?? 0,
+              retryCount: message.body?.retryCount ?? 0,
             });
             if (env.DLQ && typeof env.DLQ.send === 'function') {
               await env.DLQ.send({
                 ...message.body,
-                retryCount: (message.body.retryCount || 0) + 1,
+                retryCount: (message.body?.retryCount || 0) + 1,
                 failureReason: result.error || 'Unknown error',
                 failedAt: result.processedAt,
               });
             } else {
-              logger.warn('[Queue] DLQ not configured; message acknowledged without DLQ', { messageId: message.body.id });
+              logger.warn('[Queue] DLQ not configured; message acknowledged without DLQ', { messageId: messageId });
             }
             message.ack();
           }
-        } else if (processor.isPendingCounterFlush(message.body.id)) {
+        } else if (processor.isPendingCounterFlush(messageId)) {
           // Defer ack until flushCounters commits so a D1 failure retries instead of losing counts (#1921)
           pendingFlush.push(message);
         } else {
           message.ack();
         }
       } catch (error) {
-        retried.push(message.body.id);
+        retried.push(messageId);
         logger.error('[Queue] Unexpected error processing message; retrying', {
-          messageId: message.body.id,
-          type: message.body.type,
+          messageId,
+          type: message.body?.type,
           queue: batch.queue,
           error,
         });

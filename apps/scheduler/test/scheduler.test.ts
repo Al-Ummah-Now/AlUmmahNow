@@ -466,3 +466,17 @@ describe('#1240: a released video reaches the subscribers', () => {
     assert.equal(sent.some((m) => m.payload?.kind === 'new_video'), false);
   });
 });
+
+it('rejects malformed lock input before contacting DO storage', async () => {
+  const { SchedulerLock } = await import('../src/durable-objects/SchedulerLock');
+  const lock = new SchedulerLock({} as DurableObjectState);
+  for (const [path, body] of [
+    ['acquire', '{"ttl":"120"}'],
+    ['acquire', '{"ttl":0}'],
+    ['verify', '{"token":23}'],
+    ['release', '{'],
+  ]) {
+    const res = await lock.fetch(new Request('https://lock/' + path, { method: 'POST', body }));
+    assert.equal(res.status, 400);
+  }
+});

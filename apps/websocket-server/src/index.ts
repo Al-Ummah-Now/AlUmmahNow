@@ -5,7 +5,8 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
+import { WebSocketDurableObject } from './websocket';
+import { parseBroadcastItems } from './messages';
 import { authenticateToken } from './auth';
 import { WS_TICKET_DO_NAME } from './tickets';
 import { SHARD_HEADER, readAllShards, routeBroadcast, shardsInRandomOrder, topicRoutingReady, type BroadcastItem } from './shards';
@@ -154,17 +155,15 @@ app.post('/broadcast', async (c) => {
     }
 
     // One event `{ channel, message }`, or many `{ items: [{ channel, message }] }` in one call
-    const body = await c.req.json<{ channel?: string; message?: unknown; items?: BroadcastItem[] }>();
-    const items: BroadcastItem[] = Array.isArray(body.items)
-      ? body.items
-      : [{ channel: body.channel as string, message: body.message }];
-
-    if (items.length === 0 || items.length > MAX_BROADCAST_ITEMS || items.some((i) => !i?.channel || !i.message)) {
+    const parsed = parseBroadcastItems(await c.req.json().catch(() => null));
+    if (!parsed.success) {
       logger.warn('Broadcast request missing required fields');
       return c.json({
         error: 'Missing required fields: channel and message',
       }, 400);
     }
+
+    const items = parsed.data;
 
     // admin:<topic> updates go through the topic's coalescer (at most one update per second, admin-coalescer.ts)
     const adminItems = items.filter((i) => isAdminLiveChannel(i.channel));

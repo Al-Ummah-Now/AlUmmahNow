@@ -18,7 +18,7 @@ import { DurableObject } from "cloudflare:workers";
 import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously, isLiveChat, isPublicFeed, type AuthPayload } from './auth';
 import { isTokenRevoked } from './token-revocation';
 import { TicketStore, WS_TICKET_DO_NAME, isWebSocketTicket, type TicketClaims } from './tickets';
-import { ClientMessageSchema, ServerMessage } from './messages';
+import { BroadcastBatchSchema, ChannelSchema, ClientMessageSchema, parseBroadcastItems, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket, type ViewIndex } from './view-counter';
 import { recordIndexRepair, syncVideoViews, type SearchDb } from '@al-ummah/shared-types';
@@ -27,7 +27,7 @@ import { AdminCoalescer, coalescerName, eventsOf } from './admin-coalescer';
 import { QoeLive, type QoeStorage } from './qoe-live';
 import { LiveViewers, isNet, isViewerId } from './live-viewers';
 import { ACCESS_CHANGED_EVENT, adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
-import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
+import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type FanOutResult } from './shards';
 import { channelFeatureOff } from './lib/feature-gate';
 import { mayJoinLiveChat } from './lib/live-chat';
 
@@ -37,7 +37,6 @@ const SOCKET_TAG = 'socket';
 export const MAX_ATTACHMENT_BYTES = 2048;
 export const MAX_CHANNELS_PER_SOCKET = 12;
 /** Most broadcast items one internal request may carry. */
-export const MAX_BROADCAST_ITEMS = 1000;
 /** Shard storage: set once every local channel is in its directory (see shards.ts topicRoutingReady). */
 const TOPICS_JOINED_KEY = 'topics-joined';
 /** Directory storage: one key per shard holding the channel, valued with the join's generation. */
@@ -810,16 +809,11 @@ export class WebSocketDurableObject extends DurableObject {
 
   /** Body: `{ channel, message }` or `{ items: [{ channel, message }, ...] }`. */
   private async handleBroadcastRequest(request: Request): Promise<Response> {
-    let items: BroadcastItem[];
-    try {
-      const body = (await request.json()) as { channel?: string; message?: unknown; items?: BroadcastItem[] };
-      items = Array.isArray(body.items) ? body.items : [{ channel: body.channel as string, message: body.message }];
-    } catch {
-      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
-    }
-    if (items.length === 0 || items.length > MAX_BROADCAST_ITEMS || items.some((i) => !i || typeof i.channel !== 'string' || !i.channel || !i.message)) {
-      return Response.json({ error: 'Missing channel or message' }, { status: 400 });
-    }
+    const input: unknown = await request.json().catch(() => undefined);
+    if (input === undefined) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    const parsed = parseBroadcastItems(input);
+    if (!parsed.success) return Response.json({ error: 'Missing channel or message' }, { status: 400 });
+    const items = parsed.data;
     let delivered = 0;
     for (const item of items) delivered += this.deliver(item.channel, item.message);
     // Which of these channels still have a subscriber here (a directory drops this shard otherwise)
@@ -921,19 +915,15 @@ export class WebSocketDurableObject extends DurableObject {
 
   /** Forwards a channel's broadcast items to the shards holding it. Serialised once for all of them. */
   private async handleTopicRoute(request: Request): Promise<Response> {
-    let channel: unknown;
-    let items: BroadcastItem[];
-    try {
-      const body = (await request.json()) as { channel?: unknown; items?: BroadcastItem[] };
-      channel = body.channel;
-      items = Array.isArray(body.items) ? body.items : [];
-    } catch {
-      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
-    }
-    if (typeof channel !== 'string' || !channel || items.length === 0 || items.length > MAX_BROADCAST_ITEMS
-      || items.some((i) => !i || i.channel !== channel || !i.message)) {
+    const input = await request.json().catch(() => undefined) as { channel?: unknown; items?: unknown } | null | undefined;
+    if (input === undefined) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    const parsedChannel = ChannelSchema.safeParse(input?.channel);
+    const parsedItems = BroadcastBatchSchema.safeParse(input?.items);
+    if (!parsedChannel.success || !parsedItems.success || parsedItems.data.some((item) => item.channel !== parsedChannel.data)) {
       return Response.json({ error: 'Missing channel or message' }, { status: 400 });
     }
+    const { data: channel } = parsedChannel;
+    const { data: items } = parsedItems;
     const env = this.env as SocketEnv;
     const holders = await this.ctx.storage.list<string>({ prefix: TOPIC_SHARD_PREFIX });
     const body = JSON.stringify({ items });

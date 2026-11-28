@@ -14,6 +14,7 @@
 //
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
+import { readJobJson } from './request.mjs';
 import { errorReason } from './errors.mjs';
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
@@ -633,16 +634,6 @@ const SAFE_JOB = /^[A-Za-z0-9-]{8,64}$/;
 const SAFE_VIDEO = /^[A-Za-z0-9_-]{1,80}$/;
 const SAFE_TRACK = /^(orig|t[a-z0-9]{6,24})$/;
 
-async function readJson(req) {
-	let raw = '';
-	for await (const c of req) raw += c;
-	try {
-		return JSON.parse(raw || '{}');
-	} catch {
-		return {};
-	}
-}
-
 /** One side job at a time, never beside a transcode. */
 function busy() {
 	return reviewing || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status));
@@ -787,9 +778,8 @@ const server = createServer(async (req, res) => {
 	// Status without the error text: the failure reason goes to the Worker in the 'failed' event only
 	if (req.url === '/status') return send(200, current ? publicState(current) : { status: 'idle' });
 	if (req.url === '/jobs' && req.method === 'POST') {
-		let raw = '';
-		for await (const c of req) raw += c;
-		const job = JSON.parse(raw || '{}');
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '')) return send(400, { error: 'bad job' });
 		if (current && current.jobId === job.jobId) return send(200, publicState(current));
 		if (current && ['downloading', 'transcoding', 'uploading'].includes(current.status)) return send(409, { error: 'busy', current: publicState(current) });
@@ -829,9 +819,8 @@ const server = createServer(async (req, res) => {
 		return;
 	}
 	if (req.url === '/remux' && req.method === 'POST') {
-		let raw = '';
-		for await (const c of req) raw += c;
-		const job = JSON.parse(raw || '{}');
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '') || !Array.isArray(job.rungs)) return send(400, { error: 'bad job' });
 		if (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status)) return send(409, { error: 'busy' });
 		const t0 = Date.now();
@@ -847,9 +836,8 @@ const server = createServer(async (req, res) => {
 	}
 	// Live recording review (VR9): frames and audio from an HLS VOD read through vod.internal
 	if (req.url === '/review' && req.method === 'POST') {
-		let raw = '';
-		for await (const c of req) raw += c;
-		const job = JSON.parse(raw || '{}');
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!/^[A-Za-z0-9-]{8,64}$/.test(job.videoId || '') || !/^[a-z0-9]{8,32}$/.test(job.rev || '') || !/^http:\/\/vod\.internal\/[A-Za-z0-9._-]+\.m3u8$/.test(job.input || '') || job.reviewPrefix !== `review/${job.videoId}/${job.rev}/` || !job.review || typeof job.review !== 'object') {
 			return send(400, { error: 'bad job' });
 		}
@@ -876,9 +864,8 @@ const server = createServer(async (req, res) => {
 	}
 	// Captions (AUN-CAPTIONS §5.2): the audio only, read from source.internal, chunks under captions-work/<jobId>/
 	if (req.url === '/audio' && req.method === 'POST') {
-		let raw = '';
-		for await (const c of req) raw += c;
-		const job = JSON.parse(raw || '{}');
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!/^[A-Za-z0-9-]{8,64}$/.test(job.jobId || '') || !/^[A-Za-z0-9_-]{1,80}$/.test(job.videoId || '') || job.input !== 'http://source.internal/src' || job.prefix !== `captions-work/${job.jobId}/`) {
 			return send(400, { error: 'bad job' });
 		}
@@ -910,7 +897,8 @@ const server = createServer(async (req, res) => {
 	}
 	// Audio tracks (AUN-MULTI-AUDIO): normalise one track, list the source's streams, write the package
 	if (req.url === '/audio-track' && req.method === 'POST') {
-		const job = await readJson(req);
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		const sourceOk = job.input === 'http://audioin.internal/src' || (job.input === 'http://source.internal/src' && Number.isInteger(job.stream) && job.stream >= 0 && job.stream < 64);
 		if (!SAFE_JOB.test(job.jobId || '') || !SAFE_VIDEO.test(job.videoId || '') || !SAFE_TRACK.test(job.trackId || '') || !sourceOk || job.out !== `audio/${job.videoId}/${job.trackId}/${TRACK_FILE}` || !(job.durationSeconds > 0) || (job.reviewPrefix !== undefined && !String(job.reviewPrefix).startsWith(`review/${job.videoId}/audio-${job.trackId}-`))) {
 			return send(400, { error: 'bad job' });
@@ -928,7 +916,8 @@ const server = createServer(async (req, res) => {
 		}
 	}
 	if (req.url === '/audio-probe' && req.method === 'POST') {
-		const job = await readJson(req);
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!SAFE_JOB.test(job.jobId || '') || !SAFE_VIDEO.test(job.videoId || '')) return send(400, { error: 'bad job' });
 		try {
 			const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', 'http://source.internal/src']));
@@ -939,7 +928,8 @@ const server = createServer(async (req, res) => {
 		}
 	}
 	if (req.url === '/audio-package' && req.method === 'POST') {
-		const job = await readJson(req);
+		const job = await readJobJson(req);
+		if (!job) return send(400, { error: 'bad job' });
 		if (!SAFE_JOB.test(job.jobId || '') || !/^(pub|priv)\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(job.prefix || '') || !Number.isInteger(job.version) || job.version < 1 || !Array.isArray(job.tracks) || !job.tracks.length || !job.tracks.every((t) => SAFE_TRACK.test(t?.id || ''))) {
 			return send(400, { error: 'bad job' });
 		}

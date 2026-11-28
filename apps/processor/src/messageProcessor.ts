@@ -121,16 +121,14 @@ export class MessageProcessor {
 
   async processMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<ProcessingResult> {
     const startTime = Date.now();
-    this.logger.debug(`Processing message ${message.id} of type ${message.type}`);
+    if (!this.validateMessage(message)) {
+      return { success: false, error: 'Invalid message structure', shouldRetry: false, processedAt: new Date().toISOString() };
+    }
 
+    this.logger.debug('Processing message', { messageId: message.id, type: message.type });
     try {
-      // Validate message structure
-      if (!this.validateMessage(message)) {
-        throw new Error('Invalid message structure');
-      }
-
       // Archive the message to R2 first (MESSAGE_ARCHIVE decides which types)
-      if (shouldArchiveMessage(message.type, env.MESSAGE_ARCHIVE)) await this.saveMessageToR2(message, env);
+      if (Object.hasOwn(MessageType, message.type) && shouldArchiveMessage(message.type, env.MESSAGE_ARCHIVE)) await this.saveMessageToR2(message, env);
 
       // Process based on message type
       await this.processByType(message, env);
@@ -157,12 +155,14 @@ export class MessageProcessor {
   }
 
   private validateMessage(message: AlUmmahMessage): boolean {
-    return !!(
-      message.id &&
-      message.type !== undefined && message.type !== null &&
-      message.timestamp &&
-      message.payload &&
-      typeof message.payload === 'object'
+    return Boolean(message &&
+      typeof message.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/.test(message.id) &&
+      !message.id.includes('::') &&
+      Number.isSafeInteger(message.type) &&
+      (typeof message.timestamp === 'number' || (typeof message.timestamp === 'string' && message.timestamp.length <= 40)) &&
+      Number.isFinite(new Date(message.timestamp).getTime()) &&
+      message.payload && typeof message.payload === 'object' && !Array.isArray(message.payload) &&
+      (message.retryCount === undefined || (Number.isSafeInteger(message.retryCount) && message.retryCount >= 0))
     );
   }
 

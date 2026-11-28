@@ -1,7 +1,7 @@
 import { OpenAPIRoute } from 'chanfana';
-import { Str, Num } from '../lib/chanfana-params';
+import { Str } from '../lib/chanfana-params';
 import { z } from 'zod';
-import { LOG_APP_NAME } from '../lib/log-record';
+import { LOG_APP_NAME, logLevel } from '../lib/log-record';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -17,9 +17,9 @@ export class GetLogs extends OpenAPIRoute {
         appName: Str({ description: 'App name (without .log extension)', required: true }),
       }),
       query: z.object({
-        lines: Num({ description: 'Number of lines to return', required: false }),
-        level: Str({ description: 'Filter by log level (debug, info, warn, error)', required: false }),
-        tail: Str({ description: 'If "true", return last N lines instead of first N', required: false }),
+        level: logLevel.optional(),
+        lines: z.coerce.number().int().min(1).max(10_000).optional(),
+        tail: z.enum(['true', 'false']).optional(),
       }),
     },
     responses: {
@@ -76,8 +76,8 @@ export class GetLogs extends OpenAPIRoute {
   };
 
   async handle(c: any) {
+    const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const data = await this.getValidatedData<typeof this.schema>();
       const { appName } = data.params;
       const { lines, level, tail } = data.query;
       const isTail = tail === 'true';
