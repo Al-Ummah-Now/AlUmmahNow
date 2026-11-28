@@ -205,3 +205,4 @@ export * from './events-calendar';
 export * from './player-links';
 export * from './cost-billing';
 export * from './cost-fixed';
+export * from './qaf';

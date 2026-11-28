@@ -1,3 +1,5 @@
+import { splitQafQuotes, type QafQuote } from '@al-ummah/shared-types';
+import QafQuotation from './QafQuotation';
 'use client';
 
 import { Fragment, type ReactNode } from 'react';
@@ -43,10 +45,12 @@ function inline(text: string, key: string): ReactNode[] {
 const VIDEO_LINE = /^::video\[([A-Za-z0-9_-]{1,64})\]$/;
 
 export default function PostMarkdown({ source, locale = 'en', watchLabel = 'Watch' }: { source: string; locale?: string; watchLabel?: string }) {
-  const blocks = source.replace(/\r\n?/g, '\n').split(/\n{2,}/);
+  const blocks = splitQafQuotes(source.replace(/\r\n?/g, '\n')).flatMap<string | QafQuote>(({ source, quote }) =>
+    quote ? [quote] : source.split(/\n{2,}/));
   return (
     <div className="space-y-3 text-[var(--fanous-color-text-primary)] break-words">
       {blocks.map((raw, b) => {
+        if (typeof raw === 'object') return <QafQuotation key={b} quote={raw} />;
         const block = raw.trim();
         if (!block) return null;
         const key = `b${b}`;

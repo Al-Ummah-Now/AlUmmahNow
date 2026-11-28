@@ -1,3 +1,4 @@
+import { qafPreviewText } from '@al-ummah/shared-types';
 /**
  * A community post's permalink (/{locale}/post/{id}, wiki AUN-SEO): its title, description, share
  * image and SocialMediaPosting markup. The title is the post's first line, the description its first
@@ -28,7 +29,7 @@ export const postChannelName = (post: PermalinkPost, locale: string) =>
 
 /** The post's own words: its text, else an article's title and excerpt, else a poll's question. */
 function postText(post: PermalinkPost): string {
-  return (post.content || '').trim() || [post.article?.title, post.article?.excerpt].filter(Boolean).join('\n').trim() || (post.poll?.question || '').trim();
+  return qafPreviewText(post.content || '').trim() || [post.article?.title, post.article?.excerpt].filter(Boolean).join('\n').trim() || (post.poll?.question || '').trim();
 }
 
 export function postHeadline(post: PermalinkPost, locale: string): string {

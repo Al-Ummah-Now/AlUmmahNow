@@ -1,10 +1,14 @@
 'use client';
 
+import { useRef } from 'react';
+import { QafSourcePicker } from './QafSourcePicker';
+
 import { charactersLeft, charactersOver } from '@/lib/format/characters';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 interface TextPostFormProps {
+  channelId?: string;
   content: string;
   onChange: (content: string) => void;
   locale: string;
@@ -13,7 +17,8 @@ interface TextPostFormProps {
 
 const MAX_CHARS = 5000;
 
-export function TextPostForm({ content, onChange, locale, error }: TextPostFormProps) {
+export function TextPostForm({ channelId, content, onChange, locale, error }: TextPostFormProps) {
+  const editor = useRef<HTMLTextAreaElement>(null);
   const isRTL = locale === 'ar';
   const remaining = MAX_CHARS - content.length;
   const isNearLimit = remaining < 100;
@@ -25,7 +30,9 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
         {isRTL ? 'المحتوى' : 'Content'}
       </Label>
 
+      {channelId && <QafSourcePicker channelId={channelId} editor={editor} value={content} onChange={onChange} maxLength={MAX_CHARS} />}
       <Textarea
+        ref={editor}
         id="content"
         value={content}
         onChange={(e) => onChange(e.target.value)}

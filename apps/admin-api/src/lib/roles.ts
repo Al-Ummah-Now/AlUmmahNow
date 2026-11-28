@@ -62,6 +62,7 @@ export const PERMISSIONS = {
   'media:read': MODERATOR_ROLE_IDS,
   /** Platform settings: change what opening the notification menu does (and other site-wide behaviour). */
   'settings:manage': ADMIN_ROLE_IDS,
+  'sources:manage': ['super_admin'],
   /** App versions (wiki AUN-APP-UPDATES §4.2, issue #1434): the minimum version, notes overrides and forced-screen message, and marking TestFlight/Amazon uploads available. Reading them needs settings:manage. */
   'app_versions:manage': ['super_admin'],
   /** Operations page (docs/admin/LIVE_OPS.md): platform usage, latency, backlog and estimated cost. */

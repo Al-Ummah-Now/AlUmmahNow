@@ -2,6 +2,8 @@ import {
   getDownloadRateLimitHistory,
   getDownloadRateLimitSettings,
   getNotificationPlatformSettings,
+  getQafSettings,
+  saveQafSettings,
   getNotificationSettingsHistory,
   getYoutubeImportSettings,
   saveDownloadRateLimitSettings,
@@ -9,12 +11,13 @@ import {
   saveYoutubeImportSettings,
 } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
-import { canManageMedia, canManagePlatformSettings } from '@/lib/roles';
+import { canManageMedia, canManagePlatformSettings, isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { NotificationMenuSetting } from './NotificationMenuSetting';
 import { DownloadRateLimitSetting } from './DownloadRateLimitSetting';
+import { QafSetting } from './QafSetting';
 import { YoutubeImportSetting } from './YoutubeImportSetting';
 import { featureStates, type FeatureStates } from '@/lib/features/states';
 
@@ -30,13 +33,15 @@ export default async function PlatformSettingsPage() {
   // YouTube import (wiki AUN-YT-IMPORT): admin-api needs media:manage even to read it, so only those roles load it
   const showYoutube = canManageMedia(session?.user.role);
   const canEditPlatform = canManagePlatformSettings(session?.user.role);
-  const [[settingsResult, historyResult, downloadRateLimitResult, downloadRateLimitHistoryResult, youtubeResult], features] = await Promise.all([
+  const showQaf = isSuperAdmin(session?.user.role);
+  const [[settingsResult, historyResult, downloadRateLimitResult, downloadRateLimitHistoryResult, youtubeResult, qafResult], features] = await Promise.all([
     Promise.allSettled([
       getNotificationPlatformSettings(),
       getNotificationSettingsHistory(),
       getDownloadRateLimitSettings(),
       getDownloadRateLimitHistory(),
       showYoutube ? getYoutubeImportSettings() : Promise.resolve(null),
+      showQaf ? getQafSettings() : Promise.resolve(null),
     ]),
     showYoutube ? featureStates() : Promise.resolve({} as FeatureStates),
   ]);
@@ -79,6 +84,11 @@ export default async function PlatformSettingsPage() {
       ) : (
         <ErrorAlert testId="download-rate-limit-error">{t('platformSettings.downloadRateLimitLoadFailed')}</ErrorAlert>
       )}
+      {showQaf && (qafResult.status === 'fulfilled' && qafResult.value ? (
+        <QafSetting initial={qafResult.value} save={saveQafSettings} />
+      ) : (
+        <ErrorAlert testId="qaf-settings-load-error">{t('qafSettings.loadFailed')}</ErrorAlert>
+      ))}
       {showYoutube &&
         (youtube ? (
           <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} saveSecret={saveYoutubeImportClientSecret} feature={features.youtubeImport} />

@@ -351,6 +351,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
 
                 {selectedType === PostType.TEXT && (
                   <TextPostForm
+                    channelId={id}
                     content={textContent}
                     onChange={setTextContent}
                     locale={locale}

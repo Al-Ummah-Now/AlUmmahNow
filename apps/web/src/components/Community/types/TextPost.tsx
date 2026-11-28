@@ -1,6 +1,8 @@
 'use client';
 
-import { CommunityPost } from '@al-ummah/shared-types';
+import { splitQafQuotes, type CommunityPost } from '@al-ummah/shared-types';
+
+import QafQuotation from './QafQuotation';
 
 interface TextPostProps {
   post: CommunityPost;
@@ -13,11 +15,9 @@ export default function TextPost({ post }: TextPostProps) {
 
   return (
     <div className="prose dark:prose-invert max-w-none">
-      {/* dir="auto": the text keeps its own direction on a page in the other language (an English
-          post on an Arabic page read "?…next", design audit 2026-11-19) */}
-      <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir="auto">
-        {post.content}
-      </p>
+      {splitQafQuotes(post.content).map(({ source, quote }, index) => quote
+        ? <QafQuotation key={index} quote={quote} />
+        : <p key={index} className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir="auto">{source}</p>)}
     </div>
   );
 }

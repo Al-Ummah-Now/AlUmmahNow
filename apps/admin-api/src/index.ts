@@ -44,6 +44,7 @@ import notificationSettingsRouter from './routers/notificationSettings.router';
 import downloadRateLimitRouter from './routers/downloadRateLimit.router';
 import socialRouter from './routers/social.router';
 import videoCategoriesRouter from './routers/videoCategories.router';
+import qafRouter from './routers/qaf.router';
 import translateRouter from './routers/translate.router';
 import emailTemplatesRouter from './routers/emailTemplates.router';
 import appConfigRouter from './routers/appConfig.router';
@@ -313,6 +314,7 @@ app.route('/api/social', socialRouter);
 app.route('/api/video-categories', videoCategoriesRouter);
 app.route('/api/features', featuresRouter);
 // Translate for staff-set en/ar fields (L10N rule; routers/translate.router.ts)
+app.route('/api/qaf', qafRouter);
 app.route('/api/translate', translateRouter);
 // Settings › Emails: admin-edited system emails, versions, preview and test send (emails:manage; routers/emailTemplates.router.ts)
 app.route('/api/email-templates', emailTemplatesRouter);
