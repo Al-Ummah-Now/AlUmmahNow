@@ -1,5 +1,6 @@
 import { DEFAULT_SITE_THEME, isBuiltInSiteTheme, resolveSiteTheme, type PublicSiteTheme } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger';
+import { safeHttpUrl, safeImageUrl, safeSameOriginPath } from '@/lib/security/safe-input';
 
 /** How long a change may take to reach visitors. */
 const TTL_SECONDS = 30;
@@ -93,11 +94,179 @@ async function edge(): Promise<{ cache: EdgeCache; after: AfterResponse } | null
 /** No request can have this URL (.invalid is reserved, RFC 2606): only this code reads or writes it. */
 const keptKey = (adminApi: string) => `https://site-theme.cache.invalid/v1?of=${encodeURIComponent(adminApi)}`;
 
-/** A theme that may be rendered: one of ours, or a package whose CSS stays in its <style> and its scope. */
-const safePackageCss = (id: string, css: string) =>
+const isHexDigit = (ch: string) =>
+  (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+const isCssSpace = (ch: string) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f';
+const isIdentChar = (ch: string) =>
+  (ch >= 'a' && ch <= 'z') ||
+  (ch >= 'A' && ch <= 'Z') ||
+  (ch >= '0' && ch <= '9') ||
+  ch === '_' ||
+  ch === '-' ||
+  ch.charCodeAt(0) >= 0x80;
+
+/** Decode a single CSS backslash escape starting at `pos` (`css[pos] === '\\'`). */
+function decodeCssEscape(css: string, pos: number): { char: string; next: number } {
+  const start = pos + 1;
+  if (start >= css.length) return { char: '\uFFFD', next: css.length };
+  let hexEnd = start;
+  while (hexEnd < css.length && hexEnd - start < 6 && isHexDigit(css[hexEnd]!)) hexEnd += 1;
+  if (hexEnd > start) {
+    const code = Number.parseInt(css.slice(start, hexEnd), 16);
+    let next = hexEnd;
+    if (next < css.length && isCssSpace(css[next]!)) {
+      if (css[next] === '\r' && css[next + 1] === '\n') next += 2;
+      else next += 1;
+    }
+    const char = code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+      ? '\uFFFD'
+      : String.fromCodePoint(code);
+    return { char, next };
+  }
+  return { char: css[start]!, next: start + 1 };
+}
+
+/** Read and decode a CSS identifier token starting at `start`. */
+function readCssIdent(css: string, start: number): { value: string; next: number } {
+  let i = start;
+  let out = '';
+  while (i < css.length) {
+    const ch = css[i]!;
+    if (ch === '\\') {
+      const dec = decodeCssEscape(css, i);
+      out += dec.char;
+      i = dec.next;
+    } else if (isIdentChar(ch)) {
+      out += ch;
+      i += 1;
+    } else {
+      break;
+    }
+  }
+  return { value: out.toLowerCase(), next: i };
+}
+
+/** Read a CSS quoted string starting at the opening quote `css[start]`; null if unclosed. */
+function readCssString(css: string, start: number): { value: string; next: number } | null {
+  const quote = css[start]!;
+  let i = start + 1;
+  let out = '';
+  while (i < css.length) {
+    const ch = css[i]!;
+    if (ch === quote) return { value: out, next: i + 1 };
+    if (ch === '\\') {
+      if (i + 1 < css.length && (css[i + 1] === '\n' || css[i + 1] === '\r' || css[i + 1] === '\f')) {
+        i += css[i + 1] === '\r' && css[i + 2] === '\n' ? 3 : 2;
+        continue;
+      }
+      const dec = decodeCssEscape(css, i);
+      out += dec.char;
+      i = dec.next;
+      continue;
+    }
+    if (ch === '\n' || ch === '\r' || ch === '\f') return null;
+    out += ch;
+    i += 1;
+  }
+  return null;
+}
+
+/** Allowlist for `url(...)` targets inside package CSS: same-origin paths, https:, raster data:image, or #id. */
+function isSafeCssUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('#')) return /^#[A-Za-z0-9_-]+$/.test(trimmed);
+  if (safeSameOriginPath(trimmed)) return true;
+  if (safeHttpUrl(trimmed, { allowHttp: false })) return true;
+  if (safeImageUrl(trimmed, { allowRelative: false, allowHttp: false, allowDataImage: true })) return true;
+  return false;
+}
+
+/** Tokenize CSS to reject `@import`, `expression()`, unsafe `url()` schemes, and script-scheme tokens. */
+function hasSafeCssTokens(css: string): boolean {
+  let i = 0;
+  while (i < css.length) {
+    const ch = css[i]!;
+    if (ch === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2);
+      if (end === -1) return false;
+      i = end + 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      const str = readCssString(css, i);
+      if (!str) return false;
+      const lower = str.value.trim().toLowerCase();
+      if (lower.startsWith('javascript:') || lower.startsWith('vbscript:')) return false;
+      i = str.next;
+      continue;
+    }
+    if (ch === '@') {
+      const ident = readCssIdent(css, i + 1);
+      if (ident.value === 'import') return false;
+      i = ident.next;
+      continue;
+    }
+    if (ch === '\\' || isIdentChar(ch)) {
+      const ident = readCssIdent(css, i);
+      let j = ident.next;
+      while (j < css.length && isCssSpace(css[j]!)) j += 1;
+      if (css[j] === '(') {
+        if (ident.value === 'expression') return false;
+        if (ident.value === 'url') {
+          let argPos = j + 1;
+          while (argPos < css.length && isCssSpace(css[argPos]!)) argPos += 1;
+          let urlVal = '';
+          if (css[argPos] === '"' || css[argPos] === "'") {
+            const quoted = readCssString(css, argPos);
+            if (!quoted) return false;
+            urlVal = quoted.value;
+            argPos = quoted.next;
+            while (argPos < css.length && isCssSpace(css[argPos]!)) argPos += 1;
+            if (css[argPos] !== ')') return false;
+            argPos += 1;
+          } else {
+            while (argPos < css.length && css[argPos] !== ')') {
+              if (css[argPos] === '\\') {
+                const dec = decodeCssEscape(css, argPos);
+                urlVal += dec.char;
+                argPos = dec.next;
+              } else {
+                urlVal += css[argPos]!;
+                argPos += 1;
+              }
+            }
+            if (css[argPos] !== ')') return false;
+            argPos += 1;
+          }
+          if (!isSafeCssUrl(urlVal)) return false;
+          i = argPos;
+          continue;
+        }
+      } else if (css[j] === ':' && (ident.value === 'javascript' || ident.value === 'vbscript')) {
+        return false;
+      }
+      i = ident.next;
+      continue;
+    }
+    i += 1;
+  }
+  return true;
+}
+
+/**
+ * A theme that may be rendered: one of ours, or a package whose CSS stays in its <style> and its scope.
+ * Structurally rejects any `<` (blocks `</style>`, `</style >`, `<script>`, `<!--`) and HTML comment
+ * closers (`-->`, `--!>`) without HTML-filtering regexes, then tokenizes CSS to enforce `@import`,
+ * `expression()`, and `url()` allowlist rules.
+ */
+export const safePackageCss = (id: string, css: string): boolean =>
   css.length <= MAX_CSS_BYTES &&
-  !/<\/?style|<script|<!--|-->|@import\b|expression\s*\(|javascript\s*:/i.test(css) &&
-  css.includes(`html[data-theme='${id}']`);
+  !css.includes('<') &&
+  !css.includes('-->') &&
+  !css.includes('--!>') &&
+  css.includes(`html[data-theme='${id}']`) &&
+  hasSafeCssTokens(css);
 const validTheme = (theme: Partial<ActiveSiteTheme> | null | undefined): theme is ActiveSiteTheme =>
   theme?.css === null ? isBuiltInSiteTheme(theme.id) : typeof theme?.css === 'string' && typeof theme.id === 'string' && PACKAGE_ID.test(theme.id) && safePackageCss(theme.id, theme.css);
 

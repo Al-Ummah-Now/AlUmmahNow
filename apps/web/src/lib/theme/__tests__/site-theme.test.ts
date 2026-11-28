@@ -96,10 +96,31 @@ describe('getSiteTheme', () => {
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
     answers(pkg, "html[data-theme='other']{}");
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
-    answers(pkg, `${css}</style><script>alert(1)</script>`);
-    await expect(getSiteTheme()).resolves.toEqual(fawanees);
+    for (const unsafe of [
+      `${css}</style><script>alert(1)</script>`,
+      `${css}</style >`,
+      `${css}<!-- comment`,
+      `${css}-->`,
+      `${css}--!>`,
+      `@import url('https://evil.example/x.css'); ${css}`,
+      `@\\69mport url('https://evil.example/x.css'); ${css}`,
+      `${css} body{width:expression(alert(1))}`,
+      `${css} body{background:url(javascript:alert(1))}`,
+      `${css} body{background:url("java\\73cript:alert(1)")}`,
+      `${css} body{background:url("data:image/svg+xml,<svg/>")}`,
+    ]) {
+      resetSiteThemeCache();
+      answers(pkg, unsafe);
+      await expect(getSiteTheme()).resolves.toEqual(fawanees);
+    }
     answers({ theme: 'eid-lights' }, css);
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
+  });
+
+  it('allows valid package CSS with child combinators and allowlisted url() assets', async () => {
+    const rich = `${css} html[data-theme='eid-lights'] .sib > h2{background:url('/api/theme-packages/eid-lights/1.0.0/assets/bg.webp')}`;
+    answers(pkg, rich);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css: rich });
   });
 
   it('keeps rendering the last theme when a read does not answer, not the default', async () => {
