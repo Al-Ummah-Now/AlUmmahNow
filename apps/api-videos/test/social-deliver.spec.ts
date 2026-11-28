@@ -481,6 +481,15 @@ describe('outgoing webhooks', () => {
 		assert.equal((await readWebhook(t.env, 'wh_1'))!.last_status, '200');
 	});
 
+	it('refuses an old stored webhook destination before dispatching', async () => {
+		await hook('video.published', 'https://videos.alummahnow.net./receiver');
+		await planEvent(t.env, 'ch1', 'video', 'v1');
+		const id = t.queue.messages[0].payload.deliveryId;
+		const fetcher = fakeFetch([]);
+		assert.deepEqual(await attemptWebhook(t.env, id, fetcher.f), { outcome: 'failed', error: 'own_host' });
+		assert.deepEqual(fetcher.calls, []);
+	});
+
 	it('an unsubscribed event plans nothing', async () => {
 		await hook('post.published');
 		assert.deepEqual(await planEvent(t.env, 'ch1', 'video', 'v1'), { posts: 0, webhooks: 0 });
@@ -527,4 +536,70 @@ describe('the networks Help may name (public)', () => {
 		await writeSetting(env, 'platform', JSON.stringify(normalizeSocialSettings({ enabled: false })), 'test');
 		assert.deepEqual(await list(), []);
 	});
+});
+
+it('validates legacy Studio social requests before applying their settings', async () => {
+	const { Hono } = await import('hono');
+	const t = makeEnv();
+	await t.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'owner', name: 'Fixture' }));
+	const linked = await connect(t.env, 'mastodon');
+	await saveRule(t.env, linked.id, { event: 'video', enabled: true, format: 'link', includeLink: true });
+	await planEvent(t.env, 'ch1', 'video', 'v1');
+	const delivery = t.queue.messages.at(-1)!.payload.deliveryId;
+	const app = new Hono();
+	app.use('*', async (c, next) => { c.set('userId' as never, 'owner' as never); await next(); });
+	app.route('/', socialRouter as never);
+
+	const webhook = await app.request('/channel/ch1/webhooks', {
+		method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.org/feed', events: ['video.published'] }),
+	}, t.env as never);
+	assert.equal(webhook.status, 201);
+	const webhookId = (await webhook.json() as { webhook: { id: string } }).webhook.id;
+	const cases = [
+		['POST', '/channel/ch1/connect', { network: 'mastodon', instance: [] }],
+		['POST', '/channel/ch1/connect/confirm', { id: true }],
+		['PATCH', '/channel/ch1/accounts/' + linked.id, { rules: [{ event: 'video', enabled: 'false', format: 'link' }] }],
+		['PUT', '/channel/ch1/templates', { templates: [null] }],
+		['GET', '/channel/ch1/deliveries?limit=1.5', undefined],
+		['GET', '/channel/ch1/share-kit/v1?clip=other%2Fvideo', undefined],
+		['POST', '/channel/ch1/deliveries/' + delivery + '/retry', { format: {} }],
+		['POST', '/channel/ch1/webhooks', { url: ['https://example.org/feed'], events: ['video.published'] }],
+		['PATCH', '/channel/ch1/webhooks/' + webhookId, { enabled: 'false' }],
+	] as const;
+	for (const [method, path, body] of cases) {
+		const response = await app.request(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }, t.env as never);
+		assert.equal(response.status, 400, path);
+	}
+});
+
+it('validates legacy internal social requests', async () => {
+	const { env } = makeEnv();
+	const cases = [
+		['POST', '/events', { channelId: [], event: 'video', entityId: 'v1' }],
+		['POST', '/deliveries/fixture/attempt', { kind: 'other' }],
+		['POST', '/deliveries/fixture/give-up', { error: [] }],
+		['POST', '/deliveries/retry', { deliveryId: 4 }],
+		['PUT', '/admin/settings', []],
+		['PUT', '/admin/credentials/x', { clientId: ['fixture'], clientSecret: 'synthetic-secret' }],
+	] as const;
+	for (const [method, path, body] of cases) {
+		const response = await socialInternalRouter.request(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, env as never);
+		assert.equal(response.status, 400, path);
+	}
+});
+
+it('ignores malformed Telegram updates without changing the linked account', async () => {
+	const { env } = makeEnv();
+	const linked = await connect(env, 'telegram');
+	const webhookSecret = 'fixture-webhook-secret';
+	await writeCredentials(env, 'telegram', { botToken: '123:abc', botUsername: 'aun_bot', webhookSecret }, 'admin');
+	const update = (id: number | string) => socialRouter.request('/webhooks/telegram', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': webhookSecret },
+		body: JSON.stringify({ update_id: 1, my_chat_member: { chat: { id, type: 'channel' }, new_chat_member: { status: 'left' } } }),
+	}, env as never);
+	assert.equal((await update('-100123')).status, 200);
+	assert.equal((await readAccount(env, linked.id))?.status, 'active');
+	assert.equal((await update(-100123)).status, 200);
+	assert.equal((await readAccount(env, linked.id))?.status, 'revoked');
 });

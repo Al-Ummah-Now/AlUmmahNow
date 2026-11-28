@@ -37,9 +37,13 @@
  *   POST /channels/:channelId/erase      (channel deleted) → { disconnected }
  */
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
+import { RecordId } from '../validation/identifiers';
+import { IntegerQuery, optionalJson } from '../validation/legacy-request';
 import {
 	MAX_WEBHOOKS_PER_CHANNEL,
 	SOCIAL_EVENTS,
+	SOCIAL_FORMATS,
 	SOCIAL_FEED_KINDS,
 	SOCIAL_LANGUAGES,
 	SOCIAL_NETWORKS,
@@ -56,10 +60,7 @@ import {
 	socialFailureReason,
 	spendMonth,
 	templateProblems,
-	webhookUrlProblem,
-	type SocialFormat,
 	type SocialLanguage,
-	type SocialTemplate,
 	type SocialWebhookEvent,
 	type VideoObject,
 	type NamedChannel,
@@ -93,7 +94,7 @@ import {
 	writeSetting,
 } from '../lib/social/store';
 import { randomToken, sealText, socialCryptoReady } from '../lib/social/crypto';
-import { apiOrigin, blueskyClient, blueskyJwks, clearCredentials, networkReadiness, readCredentials, writeCredentials, type SocialEnv } from '../lib/social/platform';
+import { apiOrigin, blueskyClient, blueskyJwks, clearCredentials, networkReadiness, readCredentials, writeCredentials, socialWebhookUrlProblem, type SocialEnv } from '../lib/social/platform';
 import { confirmConnect, disconnect, disconnectChannel, ensureTelegramWebhook, finishOAuth, handleTelegramUpdate, startConnect, studioReturnUrl, telegramCodePending } from '../lib/social/connect';
 import { clientMetadata } from '../lib/social/adapters/bluesky';
 import { attemptPost, attemptWebhook, enqueueDelivery, giveUpPost, giveUpWebhook, planEvent, requeueWebhookDelivery, webhookSecretBound } from '../lib/social/deliver';
@@ -123,7 +124,43 @@ async function requireRole(c: Context<Env>, channelId: string, capability: 'chan
 	return userId;
 }
 
-const body = async <T>(c: Context<Env>): Promise<Partial<T>> => ((await c.req.json().catch(() => null)) ?? {}) as Partial<T>;
+async function body<T>(c: Context<Env>, schema: z.ZodType<T>, code = 'invalid_request'): Promise<T> {
+	const parsed = schema.safeParse(await optionalJson(c.req));
+	if (!parsed.success) throw new SocialError(400, code);
+	return parsed.data;
+}
+
+const Language = z.enum(SOCIAL_LANGUAGES);
+const Events = z.array(z.enum(SOCIAL_WEBHOOK_EVENTS)).min(1).max(SOCIAL_WEBHOOK_EVENTS.length * 2);
+const DeliveryKind = z.enum(['webhook', 'post']).default('post');
+const Format = z.enum(SOCIAL_FORMATS);
+const Rule = z.object({
+	event: z.enum(SOCIAL_EVENTS), enabled: z.boolean(), format: Format, includeLink: z.boolean().optional(),
+}).refine((rule) => formatsFor(rule.event).includes(rule.format));
+const Template = z.object({ event: z.enum(SOCIAL_EVENTS), lang: Language, body: z.string().max(4096) });
+
+const TelegramChat = z.object({ id: z.number().int(), type: z.enum(['private', 'channel', 'group', 'supergroup']),
+	title: z.string().max(256).optional(), username: z.string().regex(/^[A-Za-z0-9_]{1,64}$/).optional() });
+const TelegramAsset = z.object({ file_id: z.string().regex(/^[A-Za-z0-9_-]{1,512}$/),
+	file_size: z.number().int().nonnegative().optional(), mime_type: z.string().max(128).optional() });
+const TelegramMessage = z.object({ chat: TelegramChat, message_id: z.number().int().nonnegative(), text: z.string().max(8192).optional() });
+const TelegramUpdate = z.object({
+	update_id: z.number().int().nonnegative(),
+	message: TelegramMessage.extend({ from: z.object({ id: z.number().int(), is_bot: z.boolean().optional() }).optional() }).optional(),
+	channel_post: TelegramMessage.extend({
+		date: z.number().int().nonnegative().optional(), caption: z.string().max(8192).optional(),
+		media_group_id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+		photo: z.array(TelegramAsset.extend({ width: z.number().int().positive(), height: z.number().int().positive() })).max(32).optional(),
+		video: TelegramAsset.optional(), animation: TelegramAsset.optional(), document: TelegramAsset.optional(),
+		audio: z.object({}).optional(), voice: z.object({}).optional(), sticker: z.object({}).optional(), poll: z.object({}).optional(),
+		entities: z.array(z.object({ type: z.string().max(32), url: z.string().max(4096).optional(), offset: z.number().int().nonnegative(), length: z.number().int().nonnegative() })).max(1000).optional(),
+	}).optional(),
+	my_chat_member: z.object({
+		chat: TelegramChat,
+		new_chat_member: z.object({ status: z.enum(['administrator', 'creator', 'member', 'restricted', 'left', 'kicked']), can_post_messages: z.boolean().optional() }),
+	}).optional(),
+});
+
 const lang = (v: unknown): SocialLanguage => (v === 'ar' ? 'ar' : 'en');
 
 function feedUrls(env: SocialEnv, channelId: string) {
@@ -141,10 +178,6 @@ async function ownedWebhook(c: Context<Env>, channelId: string, id: string) {
 	const hook = await readWebhook(c.env, id);
 	if (!hook || hook.channel_id !== channelId) throw new SocialError(404, 'webhook_not_found');
 	return hook;
-}
-
-function webhookHostsAllowed(env: SocialEnv): string[] {
-	return (env.SOCIAL_WEBHOOK_ALLOW_HOSTS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
 function parseHookEvents(v: unknown): SocialWebhookEvent[] {
@@ -212,8 +245,7 @@ socialRouter.post('/channel/:channelId/connect', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
-		const b = await body<{ network: string; language: string; handle: string; instance: string; returnLang: string }>(c);
-		if (!isSocialNetwork(b.network)) throw new SocialError(400, 'invalid_network');
+		const b = await body(c, z.object({ network: z.enum(SOCIAL_NETWORKS), language: Language.optional(), returnLang: Language.optional(), handle: z.string().max(253).optional(), instance: z.string().max(512).optional() }), 'invalid_network');
 		const [readiness, settings] = await Promise.all([networkReadiness(c.env), readPlatformSettings(c.env)]);
 		if (!readiness[b.network].configured || !settings.enabled || !settings.networks[b.network].enabled) return featureOff(c as never, 'socialAutopost');
 		const result = await startConnect(c.env, { network: b.network, channelId, userId, language: lang(b.language), returnLang: lang(b.returnLang), handle: b.handle, instance: b.instance });
@@ -228,8 +260,8 @@ socialRouter.post('/channel/:channelId/connect/confirm', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
-		const b = await body<{ id: string }>(c);
-		const account = await confirmConnect(c.env, typeof b.id === 'string' ? b.id : '', { userId, channelId });
+		const b = await body(c, z.object({ id: RecordId }), 'expired');
+		const account = await confirmConnect(c.env, b.id, { userId, channelId });
 		return c.json({ account: accountView(account, await listRules(c.env, [account.id])) });
 	} catch (error) {
 		return fail(c, error);
@@ -251,16 +283,10 @@ socialRouter.patch('/channel/:channelId/accounts/:accountId', async (c) => {
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
 		const account = await ownedAccount(c, channelId, c.req.param('accountId'));
-		const b = await body<{ language: string; rules: Array<{ event: string; enabled: boolean; format: string; includeLink: boolean }> }>(c);
-		if (b.language !== undefined) {
-			if (!(SOCIAL_LANGUAGES as readonly string[]).includes(b.language)) throw new SocialError(400, 'invalid_language');
-			await setAccountLanguage(c.env, account.id, b.language as SocialLanguage);
-		}
-		for (const r of Array.isArray(b.rules) ? b.rules.slice(0, SOCIAL_EVENTS.length) : []) {
-			const event = parseEvent(r.event);
-			const format = (formatsFor(event) as readonly string[]).includes(r.format) ? (r.format as SocialFormat) : null;
-			if (!format) throw new SocialError(400, 'invalid_format');
-			await saveRule(c.env, account.id, { event, enabled: r.enabled === true, format, includeLink: account.network === 'x' && r.includeLink === true });
+		const b = await body(c, z.object({ language: Language.optional(), rules: z.array(Rule).max(SOCIAL_EVENTS.length).optional() }));
+		if (b.language !== undefined) await setAccountLanguage(c.env, account.id, b.language);
+		for (const rule of b.rules ?? []) {
+			await saveRule(c.env, account.id, { ...rule, includeLink: account.network === 'x' && rule.includeLink === true });
 		}
 		await audit(c.env, channelId, userId, 'account.update', account.id, { language: b.language, rules: b.rules });
 		const fresh = (await readAccount(c.env, account.id))!;
@@ -286,16 +312,16 @@ socialRouter.put('/channel/:channelId/templates', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
-		const b = await body<{ templates: SocialTemplate[] }>(c);
-		const list = Array.isArray(b.templates) ? b.templates.slice(0, SOCIAL_EVENTS.length * 2) : [];
+		const b = await body(c, z.object({ templates: z.array(Template).max(SOCIAL_EVENTS.length * 2) }));
+		const list = b.templates;
 		const problems: Array<{ event: string; lang: string; problems: string[] }> = [];
 		for (const t of list) {
 			const event = parseEvent(t.event);
-			const p = templateProblems(event, String(t.body ?? ''));
+			const p = templateProblems(event, t.body);
 			if (p.length) problems.push({ event, lang: lang(t.lang), problems: p });
 		}
 		if (problems.length) return c.json({ error: 'invalid_template', problems }, 422);
-		for (const t of list) await saveTemplate(c.env, channelId, { event: parseEvent(t.event), lang: lang(t.lang), body: String(t.body) }, userId);
+		for (const t of list) await saveTemplate(c.env, channelId, { event: parseEvent(t.event), lang: lang(t.lang), body: t.body }, userId);
 		await audit(c.env, channelId, userId, 'templates.update', undefined, { count: list.length });
 		return c.json({ templates: await listTemplates(c.env, channelId) });
 	} catch (error) {
@@ -307,7 +333,9 @@ socialRouter.get('/channel/:channelId/deliveries', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		await requireRole(c, channelId, 'channel.edit');
-		return c.json({ deliveries: await listDeliveries(c.env, channelId, Number(c.req.query('limit')) || 50) });
+		const parsed = z.object({ limit: IntegerQuery.optional() }).safeParse(c.req.query());
+		if (!parsed.success) throw new SocialError(400, 'invalid_request');
+		return c.json({ deliveries: await listDeliveries(c.env, channelId, parsed.data.limit || 50) });
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -319,8 +347,8 @@ socialRouter.post('/channel/:channelId/deliveries/:id/retry', async (c) => {
 		const userId = await requireRole(c, channelId, 'channel.edit');
 		const d = await readDelivery(c.env, c.req.param('id'));
 		if (!d || d.channel_id !== channelId) throw new SocialError(404, 'delivery_not_found');
-		const b = await body<{ format: string }>(c);
-		const format = b.format && (formatsFor(d.event) as readonly string[]).includes(b.format) ? (b.format as SocialFormat) : undefined;
+		const b = await body(c, z.object({ format: Format.optional() }));
+		const format = b.format && formatsFor(d.event).includes(b.format) ? b.format : undefined;
 		if (!(await requeueDelivery(c.env, d.id, { format }))) throw new SocialError(409, 'not_retryable');
 		await enqueueDelivery(c.env, 'post', d.id);
 		await audit(c.env, channelId, userId, 'delivery.retry', d.id, format ? { format } : undefined);
@@ -335,9 +363,9 @@ socialRouter.post('/channel/:channelId/webhooks', async (c) => {
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
 		if (!(await socialCryptoReady(c.env))) return featureOff(c as never, 'socialAutopost');
-		const b = await body<{ url: string; events: string[] }>(c);
-		const url = String(b.url ?? '').trim();
-		const problem = webhookUrlProblem(url, webhookHostsAllowed(c.env));
+		const b = await body(c, z.object({ url: z.string().max(2048), events: Events }));
+		const url = b.url.trim();
+		const problem = socialWebhookUrlProblem(c.env, url);
 		if (problem) throw new SocialError(400, problem);
 		const events = parseHookEvents(b.events);
 		if ((await listWebhooks(c.env, channelId)).length >= MAX_WEBHOOKS_PER_CHANNEL) throw new SocialError(409, 'webhook_limit');
@@ -360,7 +388,7 @@ socialRouter.patch('/channel/:channelId/webhooks/:id', async (c) => {
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
 		const hook = await ownedWebhook(c, channelId, c.req.param('id'));
-		const b = await body<{ enabled: boolean; events: string[] }>(c);
+		const b = await body(c, z.object({ enabled: z.boolean().optional(), events: Events.optional() }));
 		const events = b.events !== undefined ? parseHookEvents(b.events).join(',') : hook.events;
 		const enabled = typeof b.enabled === 'boolean' ? (b.enabled ? 1 : 0) : hook.enabled;
 		await socialDb(c.env).prepare('UPDATE social_webhooks SET events = ?, enabled = ?, failure_count = CASE WHEN ? = 1 THEN 0 ELSE failure_count END, updated_at = ? WHERE id = ?').bind(events, enabled, enabled, Date.now(), hook.id).run();
@@ -449,6 +477,7 @@ socialRouter.get('/channel/:channelId/share-kit/:videoId', async (c) => {
 		);
 		let clip: { videoId: string; title: string; downloadPath: string; width: number | null; height: number | null; durationSeconds: number | null } | null = null;
 		const clipId = event === 'short' ? videoId : c.req.query('clip');
+		if (clipId && !CHANNEL_ID.test(clipId)) throw new SocialError(400, 'invalid_request');
 		if (clipId) {
 			const clipVideo = clipId === videoId ? video : await new R2Repository<VideoObject>(c.env.videos).getObject(clipId);
 			if (!clipVideo || clipVideo.channelId !== channelId || !isShort(clipVideo as never)) throw new SocialError(404, 'clip_not_found');
@@ -565,8 +594,8 @@ socialRouter.post('/webhooks/telegram', async (c) => {
 	try {
 		const creds = await readCredentials(c.env, 'telegram');
 		if (!creds?.webhookSecret || !constantTimeEqual(c.req.header('X-Telegram-Bot-Api-Secret-Token'), creds.webhookSecret)) return c.json({ error: 'unauthorized' }, 401);
-		const update = await c.req.json().catch(() => null);
-		if (update && typeof update === 'object') await handleTelegramUpdate(c.env, update as never);
+		const update = TelegramUpdate.safeParse(await c.req.json().catch(() => null));
+		if (update.success) await handleTelegramUpdate(c.env, update.data);
 		// Telegram resends anything that isn't 200; a failure here is logged, never retried by Telegram
 		return c.json({ ok: true });
 	} catch (error) {
@@ -582,9 +611,8 @@ export const socialInternalRouter = new Hono<Env>();
 
 socialInternalRouter.post('/events', async (c) => {
 	try {
-		const b = await body<{ channelId: string; event: string; entityId: string }>(c);
-		if (!b.channelId || !b.entityId) throw new SocialError(400, 'invalid_event');
-		return c.json(await planEvent(c.env, String(b.channelId), parseEvent(b.event), String(b.entityId)));
+		const b = await body(c, z.object({ channelId: z.string().regex(CHANNEL_ID), entityId: RecordId, event: z.enum(SOCIAL_EVENTS) }), 'invalid_event');
+		return c.json(await planEvent(c.env, b.channelId, b.event, b.entityId));
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -592,7 +620,7 @@ socialInternalRouter.post('/events', async (c) => {
 
 socialInternalRouter.post('/deliveries/:id/attempt', async (c) => {
 	try {
-		const b = await body<{ kind: string }>(c);
+		const b = await body(c, z.object({ kind: DeliveryKind }));
 		const id = c.req.param('id');
 		return c.json(b.kind === 'webhook' ? await attemptWebhook(c.env, id) : await attemptPost(c.env, id));
 	} catch (error) {
@@ -602,9 +630,9 @@ socialInternalRouter.post('/deliveries/:id/attempt', async (c) => {
 
 socialInternalRouter.post('/deliveries/:id/give-up', async (c) => {
 	try {
-		const b = await body<{ kind: string; error: string }>(c);
+		const b = await body(c, z.object({ kind: DeliveryKind, error: z.string().max(1000).default('failed') }));
 		const id = c.req.param('id');
-		const error = String(b.error ?? 'failed');
+		const { error } = b;
 		if (b.kind === 'webhook') {
 			const row = await giveUpWebhook(c.env, id, error);
 			if (!row) throw new SocialError(404, 'delivery_not_found');
@@ -621,8 +649,8 @@ socialInternalRouter.post('/deliveries/:id/give-up', async (c) => {
 
 socialInternalRouter.post('/deliveries/retry', async (c) => {
 	try {
-		const b = await body<{ kind: string; deliveryId: string }>(c);
-		const id = String(b.deliveryId ?? '');
+		const b = await body(c, z.object({ kind: DeliveryKind, deliveryId: RecordId }));
+		const id = b.deliveryId;
 		const ok = b.kind === 'webhook' ? await requeueWebhookDelivery(c.env, id) : await requeueDelivery(c.env, id);
 		// Sent, cancelled or deleted meanwhile: nothing left to retry (the Errors page dismisses the item)
 		if (!ok) return c.json({ success: false, error: 'not_retryable' }, 404);
@@ -685,7 +713,12 @@ socialInternalRouter.put('/admin/settings', async (c) => {
 	try {
 		const actor = c.req.header('X-Admin-Actor')?.slice(0, 128) || 'admin';
 		const before = await readPlatformSettings(c.env);
-		const settings = normalizeSocialSettings(await c.req.json().catch(() => null));
+		const input = await body(c, z.object({
+			enabled: z.boolean().optional(),
+			networks: z.partialRecord(z.enum(SOCIAL_NETWORKS), z.object({ enabled: z.boolean().optional() })).optional(),
+			xMonthlyCapUsd: z.number().nonnegative().optional(),
+		}));
+		const settings = normalizeSocialSettings(input);
 		await writeSetting(c.env, 'platform', JSON.stringify(settings), actor);
 		forgetFeatureSettings();
 		return c.json({ before, settings });
@@ -699,7 +732,7 @@ socialInternalRouter.put('/admin/credentials/:network', async (c) => {
 		const actor = c.req.header('X-Admin-Actor')?.slice(0, 128) || 'admin';
 		const network = c.req.param('network');
 		if (!(await socialCryptoReady(c.env))) throw new SocialError(503, 'token_key_missing');
-		const b = await body<{ clientId: string; clientSecret: string; botToken: string }>(c);
+		const b = await body(c, z.object({ clientId: z.string().max(200).optional(), clientSecret: z.string().max(500).optional(), botToken: z.string().max(120).optional() }), 'invalid_credentials');
 		if (network === 'x') {
 			const clientId = String(b.clientId ?? '').trim();
 			const clientSecret = String(b.clientSecret ?? '').trim();
