@@ -1036,6 +1036,7 @@ const en = {
       billingCancel: 'Cancel a subscription',
       billingRefund: 'Refund a payment',
       billingReconcile: 'Check subscriptions with the provider',
+      cardPublish: 'Publish community card',
       discoveryRank: 'Rank videos for discovery',
       searchRepairObjects: 'Repair index entries',
       searchReconcile: 'Check the search index',

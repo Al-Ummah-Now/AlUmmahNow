@@ -1,3 +1,4 @@
+import { canCreateCard } from '../../lib/cards/source';
 import { postSanitizeOptions, sanitizePostContent } from '../../lib/post-content';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
@@ -197,6 +198,9 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       // (docs/specs/CHANNEL-ROLES.md); channel roles are not site roles
       if (!can(channelRoleOf(channel as never, userId), 'post.manage')) {
         return c.json({ error: 'You cannot post on this channel' }, 403);
+      }
+      if (body.type === PostType.CARDS && (!c.env.SEARCH_DB || !(await canCreateCard(c.env.SEARCH_DB, { userId, roles: this.getAuth(c).payload.roles ?? [] })))) {
+        return c.json({ error: 'Creator access is required for cards', code: 'creator_required' }, 403);
       }
       // The post belongs to the channel's owner, like a member's upload;
       // authorId records the member who wrote it (never in public views)

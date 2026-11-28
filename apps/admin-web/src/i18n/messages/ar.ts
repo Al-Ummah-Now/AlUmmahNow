@@ -1034,6 +1034,7 @@ const ar: Messages = {
       billingCancel: 'إلغاء اشتراك',
       billingRefund: 'استرداد دفعة',
       billingReconcile: 'مطابقة الاشتراكات مع المزوّد',
+      cardPublish: 'نشر بطاقة مجتمع',
       discoveryRank: 'ترتيب المرئيات للاستكشاف',
       searchRepairObjects: 'إصلاح عناصر الفهرس',
       searchReconcile: 'فحص فهرس البحث',

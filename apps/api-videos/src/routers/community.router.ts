@@ -1,3 +1,4 @@
+import { CardAvailability, CardPreview, CardImage, CardPublishStatus, PublishCard } from '../endpoints/community/cards';
 import { QafAvailability, QafCatalogLookup, QafReadPassage, QafSearch } from '../endpoints/community/qaf';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
@@ -44,6 +45,11 @@ communityRouter.get('/posts/:postId', LocateCommunityPost);
 
 // Posts - Create, Update, Delete (auth required)
 communityRouter.post('/channels/:channelId/posts', CreateCommunityPost);
+communityRouter.get('/channels/:channelId/cards', CardAvailability);
+communityRouter.post('/channels/:channelId/cards', PublishCard);
+communityRouter.post('/channels/:channelId/cards/preview', CardPreview);
+communityRouter.get('/channels/:channelId/cards/jobs/:jobId', CardPublishStatus);
+communityRouter.get('/channels/:channelId/cards/:cardId/image', CardImage);
 communityRouter.put('/channels/:channelId/posts/:postId', UpdateCommunityPost);
 communityRouter.delete('/channels/:channelId/posts/:postId', DeleteCommunityPost);
 

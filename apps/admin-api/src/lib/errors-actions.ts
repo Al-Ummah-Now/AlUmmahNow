@@ -63,7 +63,7 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // A social import sync that gave up runs again (api-videos lib/importSources/job.ts, wiki TOOLS-ADMIN
   // TA-9); its Retry also needs import_sources:manage (retrySitePermissions).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/account-events/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/support/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry', '/internal/admin/import/sources/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/account-events/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/support/jobs/retry', '/internal/discovery/rank', '/internal/community/cards/retry', '/internal/admin/import/attach/retry', '/internal/admin/import/sources/retry'] },
 };
 
 /**
