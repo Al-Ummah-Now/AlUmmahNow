@@ -1,8 +1,8 @@
-import { splitQafQuotes, type QafQuote } from '@al-ummah/shared-types';
-import QafQuotation from './QafQuotation';
 'use client';
 
 import { Fragment, type ReactNode } from 'react';
+import { splitQafQuotes, type QafQuote } from '@al-ummah/shared-types';
+import QafQuotation from './QafQuotation';
 
 /**
  * A small, safe markdown renderer for article posts (post-schema.ts: article bodies are markdown;
