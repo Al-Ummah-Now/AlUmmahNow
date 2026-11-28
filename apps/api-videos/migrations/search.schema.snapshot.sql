@@ -89,6 +89,7 @@
 --   apps/api-videos/migrations/search/0135_processing_list_indexes.sql
 --   apps/api-videos/migrations/search/0136_content_ownership_stream_status_idx.sql
 --   apps/api-videos/migrations/search/0137_telemetry_dedupe.sql
+--   apps/api-videos/migrations/search/0138_qaf_sources.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
 CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -176,6 +177,9 @@ CREATE TABLE prayer_fetch_leases (cache_key TEXT PRIMARY KEY, lease_id TEXT NOT 
 CREATE TABLE prayer_provider_gate (provider TEXT PRIMARY KEY, window_start_ms INTEGER NOT NULL DEFAULT 0, window_count INTEGER NOT NULL DEFAULT 0, failures INTEGER NOT NULL DEFAULT 0, open_until_ms INTEGER NOT NULL DEFAULT 0, probe_until_ms INTEGER NOT NULL DEFAULT 0, next_allowed_ms INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE privacy_footprint_sigs (kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
 CREATE TABLE privacy_footprints (user_id TEXT NOT NULL, kind TEXT NOT NULL, target_id TEXT NOT NULL, PRIMARY KEY (user_id, kind, target_id)) WITHOUT ROWID;
+CREATE TABLE qaf_search_cache (hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, response TEXT NOT NULL);
+CREATE TABLE qaf_settings (id INTEGER PRIMARY KEY CHECK (id = 1), ciphertext TEXT, key_version TEXT, user_minute INTEGER NOT NULL DEFAULT 6, global_minute INTEGER NOT NULL DEFAULT 30, user_week INTEGER NOT NULL DEFAULT 25, global_week INTEGER NOT NULL DEFAULT 1000, week_until INTEGER NOT NULL DEFAULT 0, minute_until INTEGER NOT NULL DEFAULT 0, invalid_key INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE qaf_usage (id INTEGER PRIMARY KEY, creator TEXT NOT NULL, at INTEGER NOT NULL, is_search INTEGER NOT NULL);
 CREATE TABLE quran_translation_defaults (lang TEXT PRIMARY KEY, qf_translation_id INTEGER NOT NULL, name TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_channels_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
@@ -415,6 +419,12 @@ CREATE INDEX idx_media_provider_refs_video ON media_provider_refs (video_id);
 CREATE INDEX idx_media_r2_verified_library ON media_r2_verified (library_id, video_id);
 CREATE INDEX idx_prayer_fetch_leases_expires ON prayer_fetch_leases (expires_at_ms);
 CREATE INDEX idx_privacy_footprints_target ON privacy_footprints (kind, target_id);
+CREATE INDEX qaf_search_cache_expiry ON qaf_search_cache (expires_at);
+CREATE INDEX qaf_usage_at ON qaf_usage (at);
+CREATE INDEX qaf_usage_creator_at ON qaf_usage (creator, at);
+CREATE INDEX qaf_usage_other_at ON qaf_usage (at) WHERE is_search = 0;
+CREATE INDEX qaf_usage_search_at ON qaf_usage (at) WHERE is_search = 1;
+CREATE INDEX qaf_usage_search_creator_at ON qaf_usage (creator, at) WHERE is_search = 1;
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
 CREATE INDEX idx_search_channels_popular ON search_channels (visible, views, popularity);
