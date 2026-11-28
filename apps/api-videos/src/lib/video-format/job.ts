@@ -148,7 +148,7 @@ export function playlistLocation(env: Pick<BunnyLibrariesEnv, 'bunny_hostname' |
 }
 
 async function fetchText(url: string, what: string): Promise<string | null> {
-	const res = await fetch(url, { redirect: 'error' });
+	const res = await fetch(url, { redirect: 'manual' });
 	if (res.status === 403 || res.status === 404) return null;
 	if (!res.ok) throw new Error(`${what}: HTTP ${res.status}`);
 	return res.text();
