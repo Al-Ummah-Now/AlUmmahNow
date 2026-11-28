@@ -22,6 +22,7 @@
 import { Hono, type Context } from 'hono';
 import { isCostProvider, parseFixedCostInput, validateCostCredential } from '@al-ummah/shared-types';
 import { createFixedCost, deleteFixedCost, listFixedCosts, updateFixedCost } from '../lib/fixedCosts';
+import { apiError } from '../lib/api-error';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { loadCostSettings } from '../lib/opsCost';
 import { logger } from '../lib/logger';
@@ -134,7 +135,7 @@ app.post('/credentials/:provider/test', async (c) => {
 app.post('/collector/check', async (c) => {
   if (!canManage(c)) return forbidden(c);
   const out = await checkCollectorAgain(c.env as never, actorOf(c.get('auth')));
-  if (!out.queued && !out.tested) return c.json({ success: false, code: 'unavailable', error: 'Nothing to run: no job queue here and no token set' }, 503);
+  if (!out.queued && !out.tested) return apiError(c, 503, 'unavailable', { error: 'Nothing to run: no job queue here and no token set' });
   return c.json({ success: true, result: out });
 });
 
@@ -186,9 +187,9 @@ app.get('/fixed', async (c) => c.json({ success: true, result: await listFixedCo
 app.post('/fixed', async (c) => {
   if (!canManage(c)) return forbidden(c);
   const input = parseFixedCostInput(await c.req.json().catch(() => null));
-  if ('error' in input) return c.json({ success: false, code: 'invalid_fixed_cost', field: input.field, error: input.error }, 400);
+  if ('error' in input) return apiError(c, 400, 'invalid_fixed_cost', { field: input.field, error: input.error });
   const out = await createFixedCost(c.env as never, input, actorOf(c.get('auth')).id);
-  if (out === 'too_many') return c.json({ success: false, code: 'too_many', error: 'Too many fixed costs; remove one first' }, 409);
+  if (out === 'too_many') return apiError(c, 409, 'too_many', { error: 'Too many fixed costs; remove one first' });
   return c.json({ success: true, result: out }, 201);
 });
 
@@ -197,9 +198,9 @@ app.put('/fixed/:id', async (c) => {
   const id = c.req.param('id');
   if (!FIXED_ID.test(id)) return bad(c, 'id must be a fixed cost id');
   const input = parseFixedCostInput(await c.req.json().catch(() => null));
-  if ('error' in input) return c.json({ success: false, code: 'invalid_fixed_cost', field: input.field, error: input.error }, 400);
+  if ('error' in input) return apiError(c, 400, 'invalid_fixed_cost', { field: input.field, error: input.error });
   const out = await updateFixedCost(c.env as never, id, input, actorOf(c.get('auth')).id);
-  if (!out) return c.json({ success: false, code: 'not_found', error: 'No such fixed cost' }, 404);
+  if (!out) return apiError(c, 404, 'not_found', { error: 'No such fixed cost' });
   return c.json({ success: true, result: out });
 });
 
@@ -208,7 +209,7 @@ app.delete('/fixed/:id', async (c) => {
   const id = c.req.param('id');
   if (!FIXED_ID.test(id)) return bad(c, 'id must be a fixed cost id');
   const removed = await deleteFixedCost(c.env as never, id, actorOf(c.get('auth')).id);
-  if (!removed) return c.json({ success: false, code: 'not_found', error: 'No such fixed cost' }, 404);
+  if (!removed) return apiError(c, 404, 'not_found', { error: 'No such fixed cost' });
   return c.json({ success: true, result: { id, removed: true } });
 });
 
