@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType, captionDraftKey, quranTranslationCueText, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
+import { INLINE_TRANSLATE_MODELS, MessageType, captionDraftKey, quranTranslationCueText, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
 import { finishJob, requestTranslationJob, type CaptionJobsEnv } from '../src/lib/captions/jobs';
 import { captionSubject, eraseCaptionMinutes, readUsage } from '../src/lib/captions/minutes';
@@ -235,6 +235,29 @@ describe('inline translation (O5)', () => {
 		assert.equal(out.fairUse.used, 1);
 		assert.equal(out.fairUse.limit, 100);
 		assert.equal(out.fairUse.resetsAt, '2026-11-15T00:00:00.000Z');
+	});
+
+	it('accepts the local player fixture’s English-to-Arabic title response', async () => {
+		const { asEnv, answer } = await setup();
+		const title = 'Tafsir of Al-Ikhlas local-caption m1q2w3';
+		const text = 'ترجمة تجريبية ترجمة تجريبية ترجمة تجريبي';
+		answer(({ items }) => {
+			assert.deepEqual(items, [{ id: 't', text: title }]);
+			return Response.json({ items: [{ id: 't', text }], provider: 'fixture', model: INLINE_TRANSLATE_MODELS.primary, usd: 0 });
+		});
+		const result = await translateInline(asEnv, { userId: 'alice', videoId: 'v1', items: [{ id: 't', text: title }], from: 'en', to: 'ar', field: 'title' }, NOV);
+		assert.deepEqual(result.items, [{ id: 't', text, cached: false }]);
+		assert.equal(result.provider, 'fixture');
+		assert.equal(result.fairUse.used, 1);
+	});
+
+	it('accepts a Quran-only title returned without a translation model', async () => {
+		const { asEnv, answer } = await setup();
+		const text = '{قل هو الله أحد}';
+		answer(() => Response.json({ items: [{ id: 't', text }], provider: 'none', model: 'none', usd: 0 }));
+		const result = await translateInline(asEnv, { userId: 'alice', items: [{ id: 't', text }], from: 'ar', to: 'en', field: 'title' }, NOV);
+		assert.deepEqual(result.items, [{ id: 't', text, cached: false }]);
+		assert.equal(result.provider, 'none');
 	});
 
 	it('a cached answer is reused only for the same field and context (never another creator’s prompt)', async () => {
