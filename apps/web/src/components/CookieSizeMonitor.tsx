@@ -8,7 +8,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSessionCookieSize } from '@/lib/actions/multi-account';
 
 export function CookieSizeMonitor() {
   const [sizeInfo, setSizeInfo] = useState<{
@@ -27,8 +26,15 @@ export function CookieSizeMonitor() {
     // Only show in development
     if (process.env.NODE_ENV !== 'development') return;
 
+    const controller = new AbortController();
+    let latestRequest = 0;
     const loadSizeInfo = async () => {
-      const info = await getSessionCookieSize();
+      const request = ++latestRequest;
+      // Server Actions share the App Router queue and can hold a navigation commit.
+      const info = await fetch('/api/session/cookie-size', { signal: controller.signal })
+        .then((response) => response.ok ? response.json() : null)
+        .catch(() => null);
+      if (controller.signal.aborted || request !== latestRequest) return;
       setSizeInfo(info);
       setIsVisible(!!info);
     };
@@ -47,6 +53,7 @@ export function CookieSizeMonitor() {
     window.addEventListener('session-updated', handleSessionChange);
 
     return () => {
+      controller.abort();
       window.removeEventListener('storage', handleSessionChange);
       window.removeEventListener('session-updated', handleSessionChange);
     };

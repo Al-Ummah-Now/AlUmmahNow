@@ -455,16 +455,3 @@ export async function getActiveSessionInfo() {
 
   return result;
 }
-
-/**
- * Get session cookie size information
- * Useful for monitoring and debugging cookie size issues
- */
-export async function getSessionCookieSize() {
-  try {
-    return await SessionManager.getCookieSizeInfo();
-  } catch (error) {
-    logger.error('[getSessionCookieSize] Error:', error);
-    return null;
-  }
-}

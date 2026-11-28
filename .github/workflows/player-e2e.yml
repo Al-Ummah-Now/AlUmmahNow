@@ -34,6 +34,8 @@ on:
       - 'apps/web/src/components/VideoPlayer/**'
       - 'apps/web/src/components/VideoPagePlayer/**'
       - 'apps/web/src/lib/video/**'
+      - 'apps/web/src/components/CookieSizeMonitor.tsx'
+      - 'apps/web/src/app/api/session/cookie-size/**'
       - 'apps/web/src/components/embed/**'
       - 'apps/web/src/lib/accessibility/**'
       - 'apps/web/src/styles/player-skin.css'
