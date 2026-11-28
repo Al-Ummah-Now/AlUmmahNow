@@ -18,7 +18,6 @@ import {
   createChannelForActiveUserResult,
   logoutCurrentAccount,
   logoutAllAccounts,
-  getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
 import { clearClientAuthToken } from '@/lib/auth/client-token';
 import { stopWebPushOnSignOut } from '@/lib/push/web-push';
@@ -27,7 +26,7 @@ import { markCreatorTermsRequired } from '@/hooks/useCreatorAccess';
 import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
 import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
 import { sameChannelList } from '@/lib/channels/menu';
-import { refreshSessionChannels } from '@/lib/channels/session-refresh';
+import { readSessionInfo, refreshSessionChannels } from '@/lib/channels/session-refresh';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -306,7 +305,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
         logger.debug('[MultiAccountProvider] Fetching session info...');
         const authOrigin = getAuthUrl();
-        const sessionInfo = await getActiveSessionInfo();
+        const sessionInfo = await readSessionInfo();
         logger.debug('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
 
         if (!mountedRef.current) {
@@ -348,7 +347,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
             }
             await switchUserAccount(follow.userId, window.location.pathname);
             clearClientAuthToken();
-            const switched = await getActiveSessionInfo();
+            const switched = await readSessionInfo();
             if (switched && mountedRef.current) {
               applySessionUser(switched.user);
               setAccounts(switched.accounts);
@@ -713,7 +712,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
   const reloadProfile = useCallback(async () => {
     await reloadActiveProfile();
-    const sessionInfo = await getActiveSessionInfo();
+    const sessionInfo = await readSessionInfo();
     if (sessionInfo) {
       applySessionUser(sessionInfo.user);
       setAccounts(sessionInfo.accounts);

@@ -20,6 +20,12 @@
  *   - answered, still streaming: the router's to finish (a page load would ask the same server);
  *   - the data all arrived, or the request failed, and no commit `timeoutMs` later: load the page.
  * A streamed answer can take long: on the CI dev server one answered in 3.2 s and streamed for 6.8 s.
+ *
+ * Once the data has arrived the commit is only a render away, unless Server Actions were sent beside
+ * the move: Next runs them in one queue with navigations, and React commits the move only after they
+ * answer. The header's session read on every page was one (each move waited 4 to 9 s more on the CI
+ * dev server, and this fallback replaced it); it is now a fetch (app/api/session/route.ts). Keep reads
+ * that run on every page out of Server Actions.
  */
 import { logger } from '@/lib/logger-client';
 
