@@ -83,6 +83,17 @@ describe('Log Service E2E Tests', () => {
     }
   });
 
+  it('validates filters on file, snapshot and streaming reads', async () => {
+    for (const path of [
+      '/logs/log-record-test?lines=0',
+      '/logs/stream?tail=maybe',
+      '/logs/stream/realtime?level=notice',
+    ]) {
+      const response = await fetch(BASE_URL + path);
+      expect(response.status).toBe(400);
+    }
+  });
+
   it('preserves a multiline message in one log record', async () => {
     const app = 'log-record-test';
     const response = await fetch(BASE_URL + '/log', {

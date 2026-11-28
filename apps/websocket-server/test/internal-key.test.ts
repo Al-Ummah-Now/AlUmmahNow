@@ -39,3 +39,21 @@ test('constantTimeEqual', () => {
   assert.equal(constantTimeEqual(`${KEY}x`, KEY), false);
   assert.equal(constantTimeEqual('é', 'é'), false);
 });
+
+test('/broadcast rejects malformed authenticated input before it reaches the directory', async () => {
+  const env = { INTERNAL_API_KEY: KEY } as never;
+  for (const body of [
+    '{',
+    'null',
+    JSON.stringify({ channel: 42, message: { type: 'update' } }),
+    JSON.stringify({ channel: 'video:', message: { type: 'update' } }),
+    JSON.stringify({ items: [{ channel: 'video:valid' }] }),
+  ]) {
+    const res = await app.request('/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': KEY },
+      body,
+    }, env);
+    assert.equal(res.status, 400);
+  }
+});

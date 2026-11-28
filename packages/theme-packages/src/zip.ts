@@ -90,6 +90,36 @@ export const MAX_ZIP_ENTRIES = 300;
 export const MAX_UNZIPPED_BYTES = 16 * 1024 * 1024;
 export const MAX_ZIP_BYTES = 16 * 1024 * 1024;
 
+/** Reads a binary theme upload through the same limit at both the proxy and the API. */
+export async function readThemeUpload(request: Pick<Request, 'body' | 'headers'>): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_ZIP_BYTES) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  try {
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_ZIP_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function archivePath(name: string): string {
   const segments = name.replace(/\/$/, '').split('/');
   if (name.length > 512 || /[:%\\\x00-\x1f\x7f]/u.test(name)

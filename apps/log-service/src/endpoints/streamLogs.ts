@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
-import { Str, Num } from '../lib/chanfana-params';
 import { z } from 'zod';
+import { LOG_APP_NAME, logLevel } from '../lib/log-record';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -21,10 +21,10 @@ export class StreamLogs extends OpenAPIRoute {
     description: 'Returns a stream of log entries from all apps, sorted by timestamp',
     request: {
       query: z.object({
-        lines: Num({ description: 'Number of lines to return (default: 100)', required: false }),
-        level: Str({ description: 'Filter by log level (debug, info, warn, error)', required: false }),
-        tail: Str({ description: 'If "true", return last N lines instead of first N (default: true)', required: false }),
-        app: Str({ description: 'Filter by specific app name', required: false }),
+        level: logLevel.optional(),
+        lines: z.coerce.number().int().min(1).max(10_000).optional(),
+        tail: z.enum(['true', 'false']).optional(),
+        app: z.string().regex(LOG_APP_NAME).optional(),
       }),
     },
     responses: {
@@ -67,8 +67,8 @@ export class StreamLogs extends OpenAPIRoute {
   };
 
   async handle(c: any) {
+    const request = await this.getValidatedData<typeof this.schema>();
     try {
-      const request = await this.getValidatedData<typeof this.schema>();
       const { lines, level, tail, app: appFilter } = request.query;
       const isTail = tail !== 'false'; // Default to true
       const maxLines = lines || 100;

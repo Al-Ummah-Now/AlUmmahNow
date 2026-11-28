@@ -307,6 +307,20 @@ describe('MessageProcessor', () => {
       expect(mockEnv.MESSAGES_BUCKET.put).not.toHaveBeenCalled();
     });
 
+    it('validates archive key fields before archiving a message', async () => {
+      const valid = { id: 'video:review-123', type: MessageType.VideoView, timestamp: Date.now(), payload: {} };
+      for (const raw of [
+        null,
+        { ...valid, id: 'unrecognised ID' },
+        { ...valid, timestamp: 'sometime' },
+        { ...valid, payload: [] },
+      ]) {
+        const result = await processor.processMessage(raw as AlUmmahMessage, mockEnv);
+        expect(result).toMatchObject({ success: false, error: 'Invalid message structure', shouldRetry: false });
+      }
+      expect(mockEnv.MESSAGES_BUCKET.put).not.toHaveBeenCalled();
+    });
+
     it('should save message to R2 with correct key structure', async () => {
       const message: AlUmmahMessage = {
         id: 'test-10',

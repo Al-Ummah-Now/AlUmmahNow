@@ -9,7 +9,7 @@ import { parseRefs, toCss } from '../src/refs.ts';
 import { SCHEMA } from '../src/schema.generated.ts';
 import type { ThemePackage } from '../src/types.ts';
 import { svgProblem, validatePackage } from '../src/validate.ts';
-import { createZip, crc32, packageToZip, readZip, zipToPackage } from '../src/zip.ts';
+import { createZip, crc32, readThemeUpload, MAX_ZIP_BYTES, packageToZip, readZip, zipToPackage } from '../src/zip.ts';
 import { BUILT_IN, THEMES_DIR, loadPackageDir } from '../scripts/load.ts';
 
 const fawanees = () => loadPackageDir(`${THEMES_DIR}/fawanees`);
@@ -322,4 +322,20 @@ test('theme CSS accepts package asset references and rejects quoted image source
 test('theme SVG permits local paint references and excludes stylesheet markup', () => {
   assert.equal(svgProblem('<svg xmlns="http://www.w3.org/2000/svg"><path fill="url(#paint)" /></svg>'), undefined);
   assert.ok(svgProblem('<svg xmlns="http://www.w3.org/2000/svg"><style>path { fill: red; }</style><path /></svg>'));
+});
+
+test('theme upload limits are enforced with and without Content-Length', async () => {
+  const headers = new Headers();
+  const small = new Blob([new Uint8Array([1, 2])]).stream();
+  assert.deepEqual(await readThemeUpload({ headers, body: small }), new Uint8Array([1, 2]));
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(MAX_ZIP_BYTES));
+      controller.enqueue(new Uint8Array(1));
+      controller.close();
+    },
+  });
+  assert.equal(await readThemeUpload({ headers, body }), null);
+  headers.set('content-length', String(MAX_ZIP_BYTES + 1));
+  assert.equal(await readThemeUpload({ headers, body: null }), null);
 });

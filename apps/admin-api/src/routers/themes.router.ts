@@ -2,7 +2,7 @@
 // API's auth: moderators may read, only admins (the same role that sets the site theme) may change.
 // Binary bodies (zip, asset files) are plain Hono routes rather than OpenAPI schemas.
 import { Hono, type Context } from 'hono';
-import { BUILT_IN_THEMES, DEFAULT_THEME, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
+import { BUILT_IN_THEMES, DEFAULT_THEME, readThemeUpload, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
 import { cleanTrashReason, parseSiteThemeValue, SITE_THEME_SETTING_KEY } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import type { AuthContext } from '../middleware/auth';
@@ -15,7 +15,6 @@ import { writeTrashAudit } from '../lib/trash-audit';
 type Env = { Bindings: AdminBindings };
 const app = new Hono<Env>();
 
-const MAX_UPLOAD = 16 * 1024 * 1024;
 const store = (c: Context<Env>) => new ThemeStore(c.env.REPORTS_DB, c.env.theme_packages);
 const actor = (c: Context<Env>) => (c.get('auth' as never) as AuthContext | undefined)?.userId ?? 'unknown';
 const now = () => new Date().toISOString();
@@ -42,33 +41,7 @@ async function activeRef(c: Context<Env>) {
 }
 
 async function bodyBytes(c: Context<Env>): Promise<Uint8Array | Response> {
-  const tooLarge = () => c.json({ success: false, error: 'The upload is larger than 16 MB' }, 413);
-  if (Number(c.req.header('content-length') ?? 0) > MAX_UPLOAD) return tooLarge();
-  const reader = c.req.raw.body?.getReader();
-  if (!reader) return new Uint8Array();
-  try {
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_UPLOAD) {
-        await reader.cancel();
-        return tooLarge();
-      }
-      chunks.push(value);
-    }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return bytes;
-  } finally {
-    reader.releaseLock();
-  }
+  return (await readThemeUpload(c.req.raw)) ?? c.json({ success: false, error: 'The upload is larger than 16 MB' }, 413);
 }
 
 /** Built-in and custom themes, each marked active or not. */

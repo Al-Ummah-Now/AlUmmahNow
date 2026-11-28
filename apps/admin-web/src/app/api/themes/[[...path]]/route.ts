@@ -3,6 +3,7 @@
  * here, so the browser never holds the admin API token: the session's bearer token is added on the
  * server and the answer is passed back as is. Server actions carry the JSON calls.
  */
+import { readThemeUpload } from '@al-ummah/theme-packages';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
@@ -18,13 +19,16 @@ async function forward(request: Request, { params }: { params: Promise<{ path?: 
   const target = `${ADMIN_API_URL}/api/themes${path.length ? `/${path.map(encodeURIComponent).join('/')}` : ''}${url.search}`;
   const hasBody = !['GET', 'HEAD'].includes(request.method);
   try {
+    const body = hasBody ? await readThemeUpload(request) : undefined;
+    if (body === null) return Response.json({ success: false, error: 'The upload is larger than 16 MB' }, { status: 413 });
     const upstream = await fetch(target, {
       method: request.method,
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
         ...(request.headers.get('content-type') ? { 'Content-Type': request.headers.get('content-type')! } : {}),
       },
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      body,
+      redirect: 'error',
       cache: 'no-store',
     });
     const headers = new Headers();
