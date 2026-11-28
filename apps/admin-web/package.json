@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
-    "test": "tsx --conditions=import --test test/*.test.ts",
+    "test": "tsx --test test/*.test.ts && tsx --conditions=import --test test/token-key-rotation.integration.ts",
     "theme-kit": "node --experimental-strip-types --no-warnings ../../packages/theme-packages/scripts/admin-kit.ts"
   },
   "dependencies": {
