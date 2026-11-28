@@ -60,7 +60,7 @@ export class BunnyStreamClient {
 
         const response = await fetch(url.toString(), {
             method,
-            redirect: 'error',
+            redirect: 'manual',
             headers: {
                 'AccessKey': this.accessKey,
                 'Content-Type': 'application/json',
@@ -185,7 +185,7 @@ export class BunnyStreamClient {
 
         const response = await fetch(url.toString(), {
             method: 'PUT',
-            redirect: 'error',
+            redirect: 'manual',
             headers: {
                 'AccessKey': this.accessKey,
                 'Content-Type': 'application/octet-stream',

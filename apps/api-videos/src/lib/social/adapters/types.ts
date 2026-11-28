@@ -131,7 +131,12 @@ export async function call(f: typeof fetch, input: string, init: RequestInit, ne
 		throw new NetworkError(`${network} ${what}: Invalid destination`, 'fatal');
 	}
 	try {
-		return await f(url.href, { ...init, redirect: 'error' });
+		const response = await f(url.href, { ...init, redirect: 'manual' });
+		if (response.status >= 300 && response.status < 400) {
+			await response.body?.cancel().catch(() => undefined);
+			throw new Error('Unexpected upstream redirect');
+		}
+		return response;
 	} catch (error) {
 		throw new NetworkError(`${network} ${what}: ${error instanceof Error ? error.message : String(error)}`, 'retry');
 	}

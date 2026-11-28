@@ -102,7 +102,19 @@ it('refuses Bunny upload locations outside the upload service', async (t) => {
 	});
 	const response = await h.post();
 	assert.equal(response.status, 503);
-	assert.equal(redirect, 'error');
+	assert.equal(redirect, 'manual');
+	assert.equal(response.headers.get('Location'), null);
+	assert.equal([...h.kv.data.keys()].some((key) => key.startsWith('tus:upload:')), false);
+});
+
+it('rejects a TUS redirect before recording an upload even when its Location is on Bunny', async (t) => {
+	const h = harness();
+	t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+		assert.equal(init?.redirect, 'manual');
+		return new Response(null, { status: 307, headers: { Location: '/tusupload/fixture' } });
+	});
+	const response = await h.post();
+	assert.equal(response.status, 503);
 	assert.equal(response.headers.get('Location'), null);
 	assert.equal([...h.kv.data.keys()].some((key) => key.startsWith('tus:upload:')), false);
 });

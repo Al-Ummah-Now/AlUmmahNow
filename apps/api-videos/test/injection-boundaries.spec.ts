@@ -41,10 +41,15 @@ it('encodes provider identifiers as one path segment and disables redirects', as
 	const calls: Array<[string, RequestRedirect | undefined]> = [];
 	t.mock.method(globalThis, 'fetch', async (input: RequestInfo, init?: RequestInit) => {
 		calls.push([String(input), init?.redirect]);
-		return Response.json({});
+		return calls.length === 1 ? Response.json({}) : new Response(null, { status: 302, headers: { Location: 'https://example.org/' } });
 	});
-	await new BunnyStreamClient('fixture').getVideo(123, 'video fixture');
-	assert.deepEqual(calls, [['https://video.bunnycdn.com/library/123/videos/video%20fixture', 'error']]);
+	const bunny = new BunnyStreamClient('fixture');
+	await bunny.getVideo(123, 'video fixture');
+	await assert.rejects(bunny.getVideo(123, 'video fixture'), /status: 302/);
+	assert.deepEqual(calls, [
+		['https://video.bunnycdn.com/library/123/videos/video%20fixture', 'manual'],
+		['https://video.bunnycdn.com/library/123/videos/video%20fixture', 'manual'],
+	]);
 });
 
 it('accepts only local references in an uploaded HLS playlist', async () => {
@@ -72,11 +77,12 @@ it('social API requests refuse redirects and require a public HTTPS destination'
 	const visited: RequestRedirect[] = [];
 	const fetchFixture = (async (_input: RequestInfo, init?: RequestInit) => {
 		visited.push(init?.redirect ?? 'follow');
-		return new Response('{}');
+		return visited.length === 1 ? new Response('{}') : new Response(null, { status: 302, headers: { Location: 'https://example.org/' } });
 	}) as typeof fetch;
 	await call(fetchFixture, 'https://example.org/api', {}, 'Fixture', 'read');
+	await assert.rejects(call(fetchFixture, 'https://example.org/api', {}, 'Fixture', 'read'), /Unexpected upstream redirect/);
 	await assert.rejects(call(fetchFixture, 'http://example.org/api', {}, 'Fixture', 'read'), /Invalid destination/);
-	assert.deepEqual(visited, ['error']);
+	assert.deepEqual(visited, ['manual', 'manual']);
 });
 
 it('binds the legacy search offset and page limit as SQL data', async () => {

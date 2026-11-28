@@ -48,6 +48,16 @@ function bunnyUploadLocation(location: string | null): string | undefined {
 }
 
 
+// The Workers runtime supports manual redirects. Reject the response before any TUS state changes.
+async function fetchBunnyUpload(url: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(url, { ...init, redirect: 'manual' });
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('Unexpected upload service redirect');
+  }
+  return response;
+}
+
 /**
  * How long a proxy upload session lives. It is written once (POST) and only
  * read afterwards, so a long life costs nothing; 1 hour made a big file (or a
@@ -552,8 +562,7 @@ export class TusProxy {
 
         let bunnyResponse: Response;
         try {
-          bunnyResponse = await fetch(BUNNY_TUS_ENDPOINT, {
-            redirect: 'error',
+          bunnyResponse = await fetchBunnyUpload(BUNNY_TUS_ENDPOINT, {
             method: 'POST',
             headers: requestHeaders,
           });
@@ -688,8 +697,7 @@ export class TusProxy {
       let bunnyResponse: Response;
       try {
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
-        bunnyResponse = await fetch(upstream, {
-          redirect: 'error',
+        bunnyResponse = await fetchBunnyUpload(upstream, {
           method: 'HEAD',
           headers: {
             ...bunnyHeaders,
@@ -806,8 +814,7 @@ export class TusProxy {
       try {
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
         // Forward PATCH to Bunny.net with streaming
-        bunnyResponse = await fetch(upstream, {
-          redirect: 'error',
+        bunnyResponse = await fetchBunnyUpload(upstream, {
           method: 'PATCH',
           headers: {
             ...bunnyHeaders,
@@ -910,8 +917,7 @@ export class TusProxy {
         const upstream = bunnyUploadLocation(session.bunnyUploadUrl ?? null);
         if (!upstream) return new Response(null, { status: 404 });
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
-        await fetch(upstream, {
-          redirect: 'error',
+        await fetchBunnyUpload(upstream, {
           method: 'DELETE',
           headers: {
             ...bunnyHeaders,

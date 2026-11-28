@@ -164,7 +164,7 @@ describe('POST /api/telemetry/batches (AlUmmahNowCore#8)', () => {
 
 		// Crash forwarded to admin-api /internal/errors with scrubbed message, stack, breadcrumbs, deterministic ref
 		assert.equal(forwarded.length, 1);
-		assert.equal(forwarded[0].redirect, 'error');
+		assert.equal(forwarded[0].redirect, 'manual');
 		assert.equal(forwarded[0].headers.get('x-api-key'), 'internal-secret-key');
 		assert.equal(forwarded[0].headers.get('x-client-ip'), null);
 		assert.equal(forwarded[0].headers.get('x-report-source'), null);
