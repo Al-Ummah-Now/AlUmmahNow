@@ -6,6 +6,11 @@ name: Theme visibility
 
 on:
   workflow_dispatch:
+    inputs:
+      repeat_desktop:
+        description: Run ten desktop repetitions for issue 2122
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
     paths:
@@ -29,12 +34,12 @@ jobs:
   theme-visibility:
     name: Theme visibility - ${{ matrix.project }}
     runs-on: ubuntu-24.04  # Playwright 1.56 has no browser builds for ubuntu-latest (26.04)
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.repeat_desktop && 180 || 45 }}
 
     strategy:
       fail-fast: false
       matrix:
-        project: [desktop, phone]
+        project: ${{ fromJSON(inputs.repeat_desktop && '["desktop"]' || '["desktop","phone"]') }}
 
     env:
       CI: true
@@ -88,7 +93,7 @@ jobs:
 
       - name: Run theme visibility specs
         working-directory: apps/web
-        run: pnpm exec playwright test -c playwright.themes.config.ts --project=${{ matrix.project }}
+        run: pnpm exec playwright test -c playwright.themes.config.ts --project=${{ matrix.project }} ${{ inputs.repeat_desktop && '--repeat-each=10' || '' }}
 
       - name: Upload screenshots and failure artefacts
         if: always()
