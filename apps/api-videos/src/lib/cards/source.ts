@@ -26,7 +26,7 @@ export type CardCopy = {
 
 export async function canCreateCard(
   db: D1Database,
-  actor: { userId: string; roles: readonly string[] },
+  actor: { userId: string; roles?: readonly string[] },
 ): Promise<boolean> {
   if (isSuperAdmin(actor.roles)) return true;
   const { tier } = await resolveCreator(db, actor);

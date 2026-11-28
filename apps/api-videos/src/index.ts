@@ -1,3 +1,4 @@
+import scholarCardsInternalRouter from './routers/scholar-cards-internal.router';
 import { retryCardPublish } from './endpoints/community/cards';
 import { CARD_JOB, flagCardPublishFailed, resolveCardPublishAlert, runCardPublish } from './lib/cards/publish';
 import { onImportAttachFailed } from './lib/admin/importAttach';
@@ -457,6 +458,7 @@ app.route('/internal/translate', createTranslateInternalRouter() as never);
 app.route('/internal/scholars', scholarsInternalRouter as never);
 // Community posts for the CMS (www scholar post pages; wiki AUN-SCHOLAR-SITES §6.3)
 app.route('/internal/posts', postsInternalRouter as never);
+app.route('/internal/scholar-cards', scholarCardsInternalRouter as never);
 // White-label scholar sites (wiki AUN-SCHOLAR-SITES): admin-api grants; the sites Worker and Studio read and edit
 app.route('/internal/sites', sitesInternalRouter as never);
 app.route('/api/sites', sitesRouter as never);

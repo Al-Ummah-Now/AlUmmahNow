@@ -1,3 +1,4 @@
+import { hydrateDesignedCard } from '../lib/cards/publish';
 /**
  * /internal/posts/* — reads of community posts for the CMS (wiki AUN-SCHOLAR-SITES §6.3): www's post
  * page for a scholar post reads the community post through the CMS. Behind the INTERNAL_API_KEY
@@ -76,7 +77,8 @@ app.get('/:channelId/:postId', async (c) => {
 		// Viewer state is never part of this answer (it is cached and shared).
 		delete post.viewerHasLiked;
 		delete post.viewerPollVote;
-		return c.json({ post });
+		if (post.designedCard?.quran) c.header('Cache-Control', 'private, no-store');
+		return c.json({ post: await hydrateDesignedCard(c.env as never, post) });
 	} catch (error) {
 		rethrowBusy(error);
 		logger.error('[PostsInternal] read failed', { channelId, postId, error });

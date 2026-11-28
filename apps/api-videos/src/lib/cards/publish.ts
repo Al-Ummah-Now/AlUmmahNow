@@ -7,6 +7,7 @@ import { getChannelObject } from '../../endpoints/community/post-comment-helpers
 import type { AppBindings } from '../../base/types';
 import { createJob, type JobOutcome } from '../admin/jobs';
 import { channelNameFields } from '../channelName';
+import Queue, { MessageType } from '../queue';
 import { addToChannelIndex, writeCommunityPost, type WritePostEnv } from '../community/writePost';
 import { rememberPostLocation } from '../community-posts';
 import { sanitizePostContent } from '../post-content';
@@ -21,9 +22,9 @@ export const cardRequest = z.strictObject({
   design: cardDesignSchema,
   locale: z.enum(['en', 'ar']),
 });
-const cardJobParams = cardRequest.extend({ origin: z.url(), roles: z.array(z.string()), refreshVersion: z.string().optional() });
+const cardJobParams = cardRequest.extend({ origin: z.url(), roles: z.array(z.string()).optional(), refreshVersion: z.string().optional() });
 
-export async function authorizeCard(env: AppBindings, channelId: string, actorId: string, roles: string[]) {
+export async function authorizeCard(env: AppBindings, channelId: string, actorId: string, roles?: string[]) {
   if (!env.SEARCH_DB || !(await canCreateCard(env.SEARCH_DB, { userId: actorId, roles }))) return null;
   const object = await getChannelObject(env.channels, channelId);
   const channel = await object?.json<Channel & { isDeleted?: boolean }>();
@@ -120,6 +121,9 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
     if (!(await existing.json<CommunityPost>()).designedCard) throw new Error('Card ID already belongs to a post');
     await rememberPostLocation(env.community_posts, params.id, channelId);
     await addToChannelIndex(env.community_posts, channelId, params.id);
+    await new Queue(env.queue as never).send(MessageType.CommunityPostCreated, {
+      postId: params.id, channelId, actor: { userId: job.actorId }, timestamp: job.createdAt, skipSocial: true,
+    });
     return { done: true, result: { postId: params.id } };
   }
 
@@ -135,7 +139,7 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
   const post: CommunityPost = {
     id: params.id, channelId, userId: channel.userId,
     ...(job.actorId !== channel.userId ? { authorId: job.actorId } : {}),
-    type: PostType.CARDS, locale,
+    type: PostType.CARDS, locale, title: locale === 'ar' ? 'بطاقة مجتمع' : 'Community card',
     content: quran ? undefined : source.kind === 'qaf' && copy.sourceUrl
       ? writeQafQuote(copy.text, copy.citation, copy.sourceUrl)
       : sanitizePostContent(cardPostCopy(copy).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')),
@@ -146,7 +150,7 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
     visibility: PostVisibility.PUBLIC, commentsEnabled: true,
     ...channelNameFields(channel), channelAvatar: channel.avatarUrl, channelVerified: channel.isVerified || false,
   };
-  await writeCommunityPost({ env: env as unknown as WritePostEnv, executionCtx: ctx }, post, { userId: job.actorId }, { announce: false });
+  await writeCommunityPost({ env: env as unknown as WritePostEnv, executionCtx: ctx }, post, { userId: job.actorId }, { skipSocial: true });
   return { done: true, result: { postId: params.id } };
 }
 

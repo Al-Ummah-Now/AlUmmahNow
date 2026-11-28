@@ -10,7 +10,7 @@ import { authorizeCard, CARD_JOB, cardImageKey, cardRequest, enqueueCard, flagCa
 const channel = z.object({ channelId: z.string().min(1).max(128).regex(/^[\w-]+$/u) });
 const response = { description: 'Card publish job', content: { 'application/json': { schema: z.any() } } };
 
-function cardsConfigured(env: AppContext['env']) {
+export function cardsConfigured(env: AppContext['env']) {
   return !!(env.CARD_PUBLIC_ORIGIN && env.CARD_RENDER_ACCOUNT && env.CARD_RENDER_TOKEN && env.MEDIA_PRIVATE && env.ADMIN_JOBS_QUEUE);
 }
 

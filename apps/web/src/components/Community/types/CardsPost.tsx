@@ -15,6 +15,16 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
   const strip = useRef<HTMLOListElement>(null);
   const [current, setCurrent] = useState(0);
   const slides = post.slides ?? [];
+  if (post.designedCard) {
+    const image = slides[0]?.image;
+    const src = safeImageUrl(image?.url);
+    return <figure lang={post.locale} dir="auto" className="space-y-3">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {src && <img src={src} alt={image?.alt ?? ''} width={image?.width ?? undefined} height={image?.height ?? undefined} className="w-full h-auto rounded-lg" />}
+      <figcaption className="whitespace-pre-wrap break-words">{image?.alt ?? post.content}</figcaption>
+      {post.designedCard.quran && <a href="https://quran.foundation/" className="underline">{post.locale === 'ar' ? 'مؤسسة القرآن' : 'Quran Foundation'}</a>}
+    </figure>;
+  }
   if (slides.length === 0) return null;
   const lang = post.locale ?? undefined;
 
