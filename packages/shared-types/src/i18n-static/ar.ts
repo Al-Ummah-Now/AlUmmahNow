@@ -1618,6 +1618,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     excerpt: 'الملخص (اختياري)',
     articleBody: 'نص المقال',
     sources: {
+      readInTurath: 'القراءة في تراث',
       find: 'البحث في المصادر',
       hint: 'ابحث في كتب التراث الإسلامي عبر قاف، وأدرج النص مع توثيقه.',
       topic: 'موضوع أو عبارة',

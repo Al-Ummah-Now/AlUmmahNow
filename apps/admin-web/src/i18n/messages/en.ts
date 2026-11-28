@@ -6131,6 +6131,7 @@ const en = {
     historyEmpty: 'No changes yet.',
   },
   qafSettings: {
+    actionTitle: 'Qaf source search needs attention',
     title: 'Qaf source search',
     subtitle: 'Let creators find and cite passages from classical Islamic books in their posts.',
     connected: 'Connected',

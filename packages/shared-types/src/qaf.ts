@@ -45,6 +45,14 @@ export const QAF_LIMITS = {
 const PASSAGE_URL = String.raw`https://qaf\.ai/(?:(?:ar|en)/)?passages/[\da-fA-F-]{36}/?`;
 export const QAF_PASSAGE_URL = new RegExp(`^${PASSAGE_URL}(?![\\s\\S])`);
 
+export const QAF_TURATH_URL = /^https:\/\/app\.turath\.io\/[\w/?%&=.,#-]+(?![\s\S])/;
+
+export const QAF_ERROR_MESSAGES = {
+  title: 'Qaf source search needs attention',
+  week: 'Qaf refused search because the shared account reached its weekly allowance (week).',
+  invalid_keys: 'Qaf refused the API key (invalid_keys). Check or replace the key in Platform settings.',
+} as const;
+
 export interface QafQuote { text: string; label: string; url: string }
 
 /** A plain Markdown blockquote followed by a Qaf citation. Entities keep literal
@@ -55,8 +63,12 @@ export function writeQafQuote(text: string, label: string, url: string): string 
 }
 
 function encodeLiteral(value: string) {
-  return value.replace(/[\t\n\r!-\/:-@\[-`{-~]|^ +| +$/g, (match) =>
-    [...match].map((char) => `&#${char.charCodeAt(0)};`).join(''));
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ' ') start++;
+  while (end > start && value[end - 1] === ' ') end--;
+  const text = value.slice(start, end).replace(/[\t\n\r!-\/:-@\[-`{-~]/g, (char) => `&#${char.charCodeAt(0)};`);
+  return '&#32;'.repeat(start) + text + '&#32;'.repeat(value.length - end);
 }
 
 function decodeLiteral(value: string) {

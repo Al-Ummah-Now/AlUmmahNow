@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { ErrorFilterBar } from './ErrorFilterBar';
 import { FailuresSections, hasFailures, loadFailures } from './FailuresSections';
 import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseErrorFilters, searchedRef } from './filters';
-import { ErrorStatusChip, Sparkline, TestChip, appName, environmentName, errorTitle } from './ui';
+import { ErrorStatusChip, Sparkline, TestChip, appName, environmentName, errorTitle, localizedQafError } from './ui';
 import { LiveRefresh } from '@/components/LiveRefresh';
 
 import { Sep } from '@/components/Sep';
@@ -162,13 +162,15 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
               </thead>
               <tbody className="divide-y divide-border">
                 {data.groups.map((g) => {
+                  const title = errorTitle(g);
+                  const localizedTitle = localizedQafError(t, title);
                   const total14 = g.daily.reduce((a, b) => a + b, 0);
                   return (
                     <tr key={g.id} className="hover:bg-surface-hover" data-testid="errors-row" data-group-id={g.id} data-status={g.status}>
                       <td className="px-4 py-4 align-top max-w-md">
-                        <Link href={`/errors/${encodeURIComponent(g.id)}`} className={`${linkClass} font-medium`} aria-label={t('errorsPage.openGroup', { message: g.message })} data-testid="error-group-row">
-                          <span className="block truncate" dir="ltr">
-                            {errorTitle(g)}
+                        <Link href={`/errors/${encodeURIComponent(g.id)}`} className={`${linkClass} font-medium`} aria-label={t('errorsPage.openGroup', { message: localizedTitle })} data-testid="error-group-row">
+                          <span className="block truncate" dir={localizedTitle === title ? 'ltr' : 'auto'}>
+                            {localizedTitle}
                           </span>
                         </Link>
                         <span className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-fg-subtle mt-1">

@@ -18708,7 +18708,7 @@
                     },
                     "turathUrl": {
                       "type": "string",
-                      "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+$"
+                      "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+(?![\\s\\S])"
                     },
                     "text": {
                       "type": "string"
@@ -18794,7 +18794,7 @@
                           },
                           "turathUrl": {
                             "type": "string",
-                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+$"
+                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+(?![\\s\\S])"
                           },
                           "text": {
                             "type": "string"
@@ -18894,7 +18894,7 @@
                           },
                           "turathUrl": {
                             "type": "string",
-                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+$"
+                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+(?![\\s\\S])"
                           },
                           "text": {
                             "type": "string"
@@ -19312,7 +19312,7 @@
                           },
                           "turathUrl": {
                             "type": "string",
-                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+$"
+                            "pattern": "^https:\\/\\/app\\.turath\\.io\\/[\\w/?%&=.,#-]+(?![\\s\\S])"
                           },
                           "text": {
                             "type": "string"

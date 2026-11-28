@@ -1731,6 +1731,7 @@ export interface AppTranslations {
     excerpt: string;
     articleBody: string;
     sources: {
+      readInTurath: string;
       find: string;
       hint: string;
       topic: string;
