@@ -182,7 +182,7 @@ describe('Component URL/XSS sanitization regressions', () => {
     }
   });
 
-  it('safeBillingRedirectUrl allows only billing API origin, PayGood hosts, and safe relative paths', () => {
+  it('safeBillingRedirectUrl allows only server-gated https URLs, exact billing API origin, and safe relative paths', () => {
     const localApi = 'http://127.0.0.1:8787';
     const qaApi = 'https://videos.api.qa.alummahnow.net';
 
@@ -194,20 +194,21 @@ describe('Component URL/XSS sanitization regressions', () => {
       safeBillingRedirectUrl('https://videos.api.qa.alummahnow.net/webhooks/billing/fake/checkout/bco_123', qaApi),
     ).toBe('https://videos.api.qa.alummahnow.net/webhooks/billing/fake/checkout/bco_123');
 
-    // Allowed: PayGood hosted checkout/portal over https
-    expect(safeBillingRedirectUrl('https://checkout.paygood.co/p/abc', qaApi)).toBe('https://checkout.paygood.co/p/abc');
-    expect(safeBillingRedirectUrl('https://paygood.co/checkout/1', qaApi)).toBe('https://paygood.co/checkout/1');
-    expect(safeBillingRedirectUrl('https://sandbox.paygood.com/c/1', qaApi)).toBe('https://sandbox.paygood.com/c/1');
+    // Allowed: server-validated hosted checkout/portal over https (no credentials, default port)
+    expect(safeBillingRedirectUrl('https://checkout.paygood.co/invoices/inv_123', qaApi)).toBe(
+      'https://checkout.paygood.co/invoices/inv_123',
+    );
+    expect(safeBillingRedirectUrl('https://checkout-sandbox.paygood.co/offerings/off_1', qaApi)).toBe(
+      'https://checkout-sandbox.paygood.co/offerings/off_1',
+    );
 
     // Allowed: safe same-origin relative path
     expect(safeBillingRedirectUrl('/en/upgrade?checkout=bco_1', qaApi)).toBe('/en/upgrade?checkout=bco_1');
 
-    // Rejected: non-allowlisted hosts, http downgrades, wrong local port, credentials, and dangerous schemes
+    // Rejected: http downgrades, wrong local port, custom ports, credentials, and dangerous schemes
     for (const bad of [
-      'https://evil.example/checkout',
-      'https://evilpaygood.co/checkout',
-      'https://paygood.co.evil.example/checkout',
       'http://checkout.paygood.co/p/abc',
+      'http://evil.example/checkout',
       'https://checkout.paygood.co:8443/p/abc',
       'https://user:pass@checkout.paygood.co/p/abc',
       'http://127.0.0.1:9999/webhooks/billing/fake/checkout/bco_123',
@@ -221,7 +222,8 @@ describe('Component URL/XSS sanitization regressions', () => {
     ]) {
       expect(safeBillingRedirectUrl(bad, qaApi)).toBeNull();
     }
-    // Wrong port against localApi is also rejected
+    // Wrong port against localApi and non-local http apiUrl are also rejected
     expect(safeBillingRedirectUrl('http://127.0.0.1:9999/webhooks/billing/fake/checkout/bco_123', localApi)).toBeNull();
+    expect(safeBillingRedirectUrl('http://videos.api.qa.alummahnow.net/checkout', 'http://videos.api.qa.alummahnow.net')).toBeNull();
   });
 });
