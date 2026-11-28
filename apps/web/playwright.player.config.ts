@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * The production player in Chromium, Firefox and WebKit (docs/specs/VIDEO-PLAYER.md section 9).
  *
- * Runs against the development harness at /[locale]/dev/player with local HLS fixtures served by
+ * Runs against a production build with the test harness at /[locale]/dev/player with local HLS fixtures served by
  * the specs' route handler (e2e/player/harness.ts): no backend, no account, no network media.
  * Every browser runs at device scale 2, where sub-pixel seams and clipped handles show.
  *
@@ -12,7 +12,7 @@ import { defineConfig, devices } from '@playwright/test';
  * bundled build cannot play any HLS stream. CI installs Chrome with `playwright install chrome`.
  *
  *   pnpm --filter web exec playwright test -c playwright.player.config.ts
- *   PLAYER_BASE_URL=http://localhost:3101 ... to reuse a running dev server
+ *   PLAYER_BASE_URL=http://localhost:3101 ... to reuse a running harness server
  */
 /** Phone and foldable specs run only in the mobile projects, and only there */
 const MOBILE_SPECS = /\/mobile-[^/]*\.spec\.ts$/;
@@ -71,7 +71,8 @@ export default defineConfig({
   webServer: process.env.PLAYER_BASE_URL
     ? undefined
     : {
-        command: `pnpm exec next dev -p ${port} --webpack`,
+        command: `pnpm run build && pnpm run start -p ${port}`,
+        env: { NEXT_PUBLIC_PLAYER_HARNESS: '1' },
         url: `${baseURL}/en/dev/player`,
         reuseExistingServer: !process.env.CI,
         timeout: 300_000,

@@ -1,7 +1,7 @@
 name: Player E2E
 
 # The video player's behaviour, alignment and end-screen specs (docs/specs/VIDEO-PLAYER.md section 9)
-# in Chrome, Firefox and WebKit. They run against a local `next dev` with the development-only
+# in Chrome, Firefox and WebKit. They run against a local production build with the opt-in
 # harness page and local HLS fixtures, so they need no QA environment and no secrets.
 
 on:
