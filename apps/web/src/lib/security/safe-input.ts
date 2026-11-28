@@ -114,6 +114,63 @@ export function safeNavigationUrl(
   return safeHttpUrl(trimmed, { allowHttp: options.allowHttp ?? false });
 }
 
+/** Configured payment provider checkout/portal root domains (https only). */
+const BILLING_PROVIDER_DOMAINS = ['paygood.co', 'paygood.com'] as const;
+
+function isAllowedBillingProviderHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return BILLING_PROVIDER_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+/**
+ * Validate a checkout or billing-portal redirect URL returned by the billing API.
+ * Allows ONLY:
+ * - safe same-origin relative paths (`/en/upgrade?...`)
+ * - exact origin match against the configured billing API URL (`apiUrl`, e.g. the
+ *   fake test provider at `/webhooks/billing/fake/checkout/...` on local/QA API origin)
+ * - explicit configured payment provider hosts (`paygood.co`, `*.paygood.co`,
+ *   `paygood.com`, `*.paygood.com`) over `https:` without credentials or custom ports.
+ * Rejects all other origins and non-http(s) schemes (`javascript:`, `data:`, etc.).
+ */
+export function safeBillingRedirectUrl(value: unknown, apiUrl?: string | null): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || CONTROL_CHARS_RE.test(trimmed) || trimmed.includes('\\')) return null;
+  if (trimmed.startsWith('/')) {
+    return safeSameOriginPath(trimmed);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.username || parsed.password) return null;
+  const protocol = parsed.protocol.toLowerCase();
+  if (protocol !== 'https:' && protocol !== 'http:') return null;
+
+  // 1. Billing API's own origin (test/fake provider checkout hosted on api-videos)
+  if (apiUrl) {
+    try {
+      const apiParsed = new URL(apiUrl);
+      const apiProto = apiParsed.protocol.toLowerCase();
+      const apiAllowed = apiProto === 'https:' || (apiProto === 'http:' && isLocalHostHeader(apiParsed.host));
+      if (apiAllowed && parsed.origin === apiParsed.origin) {
+        return trimmed;
+      }
+    } catch {
+      // Ignore malformed apiUrl
+    }
+  }
+
+  // 2. Configured hosted payment provider domains (https only, default port)
+  if (protocol === 'https:' && !parsed.port && isAllowedBillingProviderHost(parsed.hostname)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
 /**
  * Strict DNS hostname validator (no `..`, no leading/trailing `.` or `-`, no
  * port, path, whitespace, or control chars). Returns normalized lowercase host.

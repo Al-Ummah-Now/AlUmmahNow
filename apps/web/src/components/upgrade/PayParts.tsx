@@ -14,7 +14,8 @@ import Link from '@/components/common/AppLink';
 import { FILLED, QUIET } from '@/components/upgrade/buttons';
 import { login } from '@/lib/actions';
 import { upgradePath } from '@/lib/auth/sign-in-return';
-import { safeNavigationUrl } from '@/lib/security/safe-input';
+import { getApiUrl } from '@/lib/runtime-config';
+import { safeBillingRedirectUrl } from '@/lib/security/safe-input';
 import { abandonBillingCheckout, fetchMyBilling, fetchMyCheckout, startBillingCheckout } from '@/lib/api/billing-client';
 import type { BillingTranslations as BillingCopy } from '@al-ummah/shared-types';
 import {
@@ -182,7 +183,7 @@ export function useSubscribe({ locale, copy }: { locale: string; copy: BillingCo
       return fail(billingErrorMessage(res.code, copy));
     }
     const { checkoutId, url } = res.result;
-    const safeUrl = safeNavigationUrl(url, { allowRelative: true });
+    const safeUrl = safeBillingRedirectUrl(url, getApiUrl());
     if (safeUrl) {
       window.location.assign(safeUrl);
       return;
