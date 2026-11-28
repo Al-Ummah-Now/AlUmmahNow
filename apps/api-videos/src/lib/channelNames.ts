@@ -8,7 +8,7 @@ import { logger } from './logger';
 import { channelNameFields, type ChannelNameFields, type NamedChannel } from './channelName';
 
 /** Names per channel id; a channel that is missing or unreadable has no entry. */
-export async function channelNamesByIds(channels: R2Bucket | undefined, ids: Iterable<string | null | undefined>): Promise<Map<string, ChannelNameFields>> {
+export async function channelNamesByIds(channels: R2Bucket | undefined, ids: Iterable<string | null | undefined>, onReadFailure?: () => void): Promise<Map<string, ChannelNameFields>> {
   const out = new Map<string, ChannelNameFields>();
   const unique = [...new Set([...ids].filter((id): id is string => !!id))];
   if (!channels || unique.length === 0) return out;
@@ -16,9 +16,10 @@ export async function channelNamesByIds(channels: R2Bucket | undefined, ids: Ite
   await Promise.all(
     unique.map(async (id) => {
       try {
-        const channel = await repo.getObject(id);
+        const channel = await repo.getObject(id, { logLevel: 'warn' });
         if (channel) out.set(id, channelNameFields(channel));
       } catch (error) {
+        onReadFailure?.();
         logger.warn('[ChannelNames] Channel read failed', { channelId: id, error: error instanceof Error ? error.message : String(error) });
       }
     }),

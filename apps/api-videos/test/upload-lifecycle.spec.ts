@@ -140,16 +140,18 @@ describe('hourly stalled-upload sweep', () => {
 	const bunny = (status: number, offset?: number) =>
 		(async () => new Response(null, { status, headers: offset === undefined ? {} : { 'Upload-Offset': String(offset) } })) as unknown as typeof fetch;
 
-	it('flags an upload that never started after a day; leaves a recent one', async () => {
+	it('expires an upload that never started without flagging or notifying', async () => {
 		const e = env({
 			old: videoFixture({ id: 'old', userId: 'alice', uploadStatus: 'initiated', dateModified: new Date(NOW.getTime() - NEVER_STARTED_AFTER_MS - 1).toISOString() }),
 			recent: videoFixture({ id: 'recent', userId: 'alice', uploadStatus: 'initiated', dateModified: hoursAgo(7) }),
 		});
 		const stats = await sweepStalledUploads(e, { now: NOW, fetchImpl: bunny(500) });
-		assert.equal(stats.flagged, 1);
-		assert.equal(e.videos.read('old').processingIssue.kind, 'needs_reupload');
+		assert.equal(stats.expired, 1);
+		assert.equal(stats.flagged, 0);
+		assert.equal(e.videos.read('old').uploadStatus, 'failed');
+		assert.equal(e.videos.read('old').processingIssue, undefined);
 		assert.equal(e.videos.read('recent').uploadStatus, 'initiated');
-		assert.equal(failedMessages(e)[0].payload.source, 'sweep');
+		assert.equal(failedMessages(e).length, 0);
 	});
 
 	it('flags an upload whose bytes Bunny no longer has', async () => {
