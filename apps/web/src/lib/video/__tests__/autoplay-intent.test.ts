@@ -54,8 +54,8 @@ describe('autoplay intent', () => {
     const assign = jest.fn();
     window.history.replaceState(null, '', '/en/video/a');
     intent.requestAutoplay('next', { auto: true });
-    // The countdown's push has not committed after 2 s: the fallback starts loading the page...
-    nav.navigateOrLoad(() => undefined, '/en/video/next', 2000, assign);
+    // The countdown's push has not committed in time: the fallback starts loading the page...
+    nav.navigateOrLoad(() => undefined, '/en/video/next', 2000, assign, 2000);
     jest.advanceTimersByTime(2000);
     expect(assign).toHaveBeenCalled();
     // ...then the client move commits after all and the next video mounts on this page

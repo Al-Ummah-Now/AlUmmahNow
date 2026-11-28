@@ -17,12 +17,72 @@ describe('navigateOrLoad', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
-  it('a move that went nowhere loads the page', () => {
-    navigateOrLoad(() => undefined, '/en/video/b?list=p&index=1', 2000, assign);
-    jest.advanceTimersByTime(1999);
+  it('a move that went nowhere loads the page once it has stalled', () => {
+    navigateOrLoad(() => undefined, '/en/video/b?list=p&index=1', 2000, assign, 10_000);
+    jest.advanceTimersByTime(9_999);
     expect(assign).not.toHaveBeenCalled();
-    jest.advanceTimersByTime(1);
+    jest.advanceTimersByTime(100);
     expect(assign).toHaveBeenCalledWith(expect.stringContaining('/en/video/b?list=p&index=1'));
+  });
+
+  describe('with resource timing', () => {
+    /** A stand-in for the browser's PerformanceObserver: `arrive` reports a finished request */
+    let observers: Array<(list: { getEntries: () => Array<{ name: string }> }) => void> = [];
+    const arrive = (url: string) => {
+      for (const cb of [...observers]) cb({ getEntries: () => [{ name: new URL(url, window.location.href).toString() }] });
+    };
+    const original = (global as { PerformanceObserver?: unknown }).PerformanceObserver;
+    beforeEach(() => {
+      observers = [];
+      class FakeObserver {
+        static supportedEntryTypes = ['resource'];
+        constructor(private cb: (list: { getEntries: () => Array<{ name: string }> }) => void) {}
+        observe() { observers.push(this.cb); }
+        disconnect() { observers = observers.filter((cb) => cb !== this.cb); }
+      }
+      (global as { PerformanceObserver?: unknown }).PerformanceObserver = FakeObserver;
+    });
+    afterEach(() => {
+      (global as { PerformanceObserver?: unknown }).PerformanceObserver = original;
+    });
+
+    it('fetched and never committed: loads the page 2 s after the data arrived (#1137)', () => {
+      navigateOrLoad(() => undefined, '/en/video/b?list=p&index=1', 2000, assign, 10_000);
+      jest.advanceTimersByTime(500);
+      arrive('/en/video/b?list=p&index=1&_rsc=abc12');
+      jest.advanceTimersByTime(1_900);
+      expect(assign).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(200);
+      expect(assign).toHaveBeenCalledWith(expect.stringContaining('/en/video/b?list=p&index=1'));
+    });
+
+    it('a move whose data is slower than 2 s is left to commit, not replaced by a page load', () => {
+      const href = '/en/video/b?list=p&index=1';
+      navigateOrLoad(() => undefined, href, 2000, assign, 10_000);
+      // The server answers after 3 s and the router commits 200 ms later
+      jest.advanceTimersByTime(3_000);
+      arrive(`${href}&_rsc=abc12`);
+      jest.advanceTimersByTime(200);
+      window.history.pushState(null, '', href);
+      jest.advanceTimersByTime(10_000);
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it("another address's data does not count as this move's", () => {
+      navigateOrLoad(() => undefined, '/en/video/b?list=p&index=1', 2000, assign, 10_000);
+      arrive('/en/video/c?list=p&index=2&_rsc=abc12');
+      arrive('/en/video/b?list=p&index=1');
+      jest.advanceTimersByTime(5_000);
+      expect(assign).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(5_100);
+      expect(assign).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops watching once the move commits', () => {
+      navigateOrLoad((href) => window.history.pushState(null, '', href), '/en/video/b?list=p&index=1', 2000, assign, 10_000);
+      jest.advanceTimersByTime(200);
+      expect(observers).toHaveLength(0);
+    });
   });
 
   it('a later move by the viewer wins over the fallback', () => {

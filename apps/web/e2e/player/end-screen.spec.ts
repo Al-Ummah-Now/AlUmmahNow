@@ -263,6 +263,25 @@ test.describe('end screen behaviour', () => {
     await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0), { timeout: 30_000 }).toBeGreaterThan(0.5);
   });
 
+  test('a slow answer for the next page: the move waits for it, with no page load', async ({ page }) => {
+    // The next page's data takes 3 s, longer than the 2 s a move that fetched and never committed is
+    // given: the move is still on its way, so it must commit on its own (no page load, which loses
+    // the viewer's activation and took next dev 15 to 40 s in Firefox, failing the countdown test)
+    await page.route(/[?&]src=bright\b.*[?&]_rsc=/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000)); // the server's answer, late
+      await route.continue();
+    });
+    const documents: string[] = [];
+    const player = await openHarness(page, { src: 'dark' });
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+    });
+    await reachEnd(page, player, { hold: false });
+    await expect(page).toHaveURL(/src=bright/, { timeout: 20_000 });
+    await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0), { timeout: 30_000 }).toBeGreaterThan(0.5);
+    expect(documents, 'the slow move was replaced by a page load').toEqual([]);
+  });
+
   test('Autoplay next off: no countdown, the screen waits for Play now', async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem('aun.player.autoplayNext', '0'));
     const player = await openHarness(page, { src: 'dark' });
