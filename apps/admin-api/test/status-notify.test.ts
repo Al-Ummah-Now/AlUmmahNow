@@ -214,6 +214,19 @@ describe('fan-out and deliveries', () => {
     assert.equal((await db.prepare('SELECT status FROM deliveries').first<{ status: string }>())?.status, 'sent');
   });
 
+  it('revalidates the destination loaded from storage before sending a webhook', async () => {
+    const s = setup();
+    const created = await (await s.req('/api/status/webhooks', send('POST', {
+      name: 'Ops', url: 'https://hooks.example.com/valid',
+    }))).json() as { result: { id: string } };
+    await s.env.STATUS_DB.prepare('UPDATE subscribers SET address = ? WHERE id = ?')
+      .bind('http://hooks.example.com/legacy', created.result.id).run();
+    await s.req('/api/status/incidents', send('POST', incident));
+    const { f, calls } = fakeFetch();
+    assert.deepEqual(await drain(s, f), ['done', 'failed']);
+    assert.equal(calls.length, 0);
+  });
+
   it('a webhook 4xx fails at once (no retry)', async () => {
     const s = setup();
     await s.req('/api/status/webhooks', send('POST', { name: 'Gone', url: 'https://hooks.example.com/gone' }));
