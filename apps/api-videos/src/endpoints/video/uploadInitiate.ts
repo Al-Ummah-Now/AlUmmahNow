@@ -308,7 +308,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 
 		// Creates the Bunny video and its record (the claim, when there is
 		// one, guarantees this runs once per file).
-		const create = async (): Promise<string> => {
+		const create = async (reserveVideoId?: (videoId: string) => Promise<void>): Promise<string> => {
 			// Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
 			const plan = await planIngest(c.env as never, channelId, async () => {
 				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
@@ -357,6 +357,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				...importFields,
 			};
 			try {
+				await reserveVideoId?.(videoId);
 				await repository.putObject(videoId, video as VideoType);
 				logger.debug('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
 			} catch (error) {
@@ -372,7 +373,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			// what the uploader kept; without a category and without a suggestion, request one
 			adoptOrRequestSuggestion(c, { videoId, userId, channelId, category: category ?? null, draftKey: categorySuggestionKey });
 
-			// An analytics outage must not release the file claim after its record was written.
+			// Send analytics event for upload initiation
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoUploadStarted, {
 				videoId,
@@ -382,8 +383,6 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				fileSize,
 				mimeType,
 				timestamp: now,
-			}).catch((error) => {
-				logger.warn('[UploadInitiate] Could not queue upload analytics', { videoId, error: String(error) });
 			});
 
 			// AI moderation of the metadata (queued, never fails the upload). Only a newly
