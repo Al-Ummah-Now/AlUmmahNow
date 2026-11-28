@@ -183,6 +183,7 @@ export async function queryQaf(env: QafEnv, creator: string, request: QafRequest
     if (hit) return qafSearchResult.parse(JSON.parse(hit.response));
   }
 
+  let retriedMinute = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     await reserve(db, settings, creator, search, attempt === 0);
     if (attempt === 0) await prune(db, now()).catch(() => logger.warn('[Qaf] Could not prune expired records'));
@@ -232,7 +233,8 @@ export async function queryQaf(env: QafEnv, creator: string, request: QafRequest
       const seconds = Math.min(MINUTE, retryAfter);
       await db.prepare('UPDATE qaf_settings SET minute_until = max(minute_until, ?) WHERE key_version = ?')
         .bind(now() + seconds, settings.key_version).run();
-      if (attempt === 2 || seconds > 2) throw new QafError(429, 'minute', seconds);
+      if (attempt === 2 || retriedMinute) throw new QafError(429, 'minute', seconds);
+      retriedMinute = true;
       await (hooks.sleep ?? delay)(seconds);
       continue;
     }
