@@ -64,14 +64,14 @@ export function svgProblem(text: string): string | undefined {
   if (/(?:href|src)\s*=\s*["'](?!#)/i.test(svg)) return 'contains an external reference';
 
   // Admit passive SVG markup only. Disallow CSS syntax that could conceal a URL.
-  const tags = /<\/?([a-zA-Z][\w-]*)((?:\s+[\w:-]+\s*=\s*(?:"[^"<]*"|'[^'<]*'))*)\s*\/?>/gy;
+  const tags = /<\/?([a-zA-Z][\w-]{0,63})((?:\s+[\w:-]{1,63}\s*=\s*(?:"[^"<]*"|'[^'<]*')){0,64})\s*\/?>/gy;
   let at = 0;
   while ((at = svg.indexOf('<', at)) !== -1) {
     tags.lastIndex = at;
     const tag = tags.exec(svg);
     if (!tag || !SVG_ELEMENTS.has(tag[1])) return 'contains unsupported SVG markup';
     at = tags.lastIndex;
-    for (const [, name, doubleQuoted, singleQuoted] of tag[2].matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+    for (const [, name, doubleQuoted, singleQuoted] of tag[2].matchAll(/([\w:-]{1,63})\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
       const value = doubleQuoted ?? singleQuoted;
       if (/^(?:on|style$|xml:base$)/i.test(name)) return 'contains unsupported SVG attributes';
       if (/^(?:href|xlink:href|src)$/i.test(name) && !/^#[\w.-]+$/.test(value)) return 'contains an external reference';
