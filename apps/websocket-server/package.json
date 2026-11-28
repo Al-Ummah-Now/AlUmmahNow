@@ -16,7 +16,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@al-ummah-now/openauth": "1.0.15",
+    "@al-ummah-now/openauth": "1.2.3",
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "hono": "^4.13.19",

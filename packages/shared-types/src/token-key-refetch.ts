@@ -2,12 +2,10 @@
  * Signing-key rotation (AlUmmahNowAuth#13): Auth publishes a new signing key
  * an hour before it signs, signs with it, and retires the old key a day later.
  *
- * The openauth client caches the issuer's JWKS inside the client object and,
- * in the version these apps use, never refetches it: a client built before a
- * new key was published rejects every token the new key signs until the
- * client is rebuilt. withKeyRefetch rebuilds the client once when a token
- * that has not expired fails to verify (its key may be new), at most once
- * per KEY_REFETCH_GAP_MS, and verifies again with fresh keys.
+ * For clients with an instance-local JWKS cache, withKeyRefetch rebuilds the
+ * client after a live token fails verification, at most once per
+ * KEY_REFETCH_GAP_MS. OpenAuth 1.2.3 shares its cache by issuer and refreshes
+ * keys internally.
  */
 
 /** Minimum gap between two rebuilds, so bad tokens cannot force a JWKS fetch per request. */

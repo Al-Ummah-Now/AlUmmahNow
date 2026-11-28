@@ -3,7 +3,7 @@
  * or logger here: the middleware (edge) uses it too.
  */
 import { createClient } from '@al-ummah-now/openauth/client';
-import { audienceMode, withAudienceCheck, withKeyRefetch } from '@al-ummah/shared-types';
+import { audienceMode, withAudienceCheck } from '@al-ummah/shared-types';
 import { subjects } from '@/interfaces/subjects';
 import type { VerifyOutcome } from './session-state';
 
@@ -13,16 +13,14 @@ export function adminAuth(warn: (message: string, fields: Record<string, unknown
   let authClient: AuthClient | null = null;
 
   /**
-   * The client is cached per isolate so its JWKS cache survives across
-   * requests instead of re-fetching the auth server keys on every page view.
-   * withKeyRefetch rebuilds it when a live token fails to verify, so a new
-   * signing key is picked up (AlUmmahNowAuth#13).
+   * Reuse the client per isolate. OpenAuth caches discovery and JWKS by issuer
+   * and refreshes keys after a signature or key lookup failure, with a cooldown.
    */
   async function getAuthClient(): Promise<AuthClient> {
     if (!authClient) {
       // verify() also checks aud: only admin-web's own client's tokens (AUD_MODE log|enforce|off)
       authClient = withAudienceCheck(
-        withKeyRefetch(() => createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! })),
+        createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! }),
         { service: 'admin-web', issuer: process.env.Issuer, mode: () => audienceMode(process.env.AUD_MODE), route: 'admin-web session' },
         warn,
       );
