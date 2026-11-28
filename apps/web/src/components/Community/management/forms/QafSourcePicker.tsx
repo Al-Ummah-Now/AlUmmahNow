@@ -36,20 +36,24 @@ function useQafError() {
     switch (error instanceof QafRequestError ? error.code : '') {
       case 'minute': return copy.minute;
       case 'week': return copy.week;
+      case 'user_week': return copy.userWeek;
+      case 'invalid_keys': return copy.invalidKey;
+      case 'not_configured': return copy.notConfigured;
       case 'no_matching_books': return copy.noBooks;
       default: return copy.unavailable;
     }
   };
 }
 
-export function QafSourcePicker({ channelId, editor, value, onChange, maxLength }: {
+export function QafSourcePicker({ channelId, postLocale, editor, value, onChange, maxLength }: {
   channelId: string;
+  postLocale: 'ar' | 'en';
   editor: RefObject<HTMLTextAreaElement | null>;
   value: string;
   onChange: (value: string) => void;
   maxLength: number;
 }) {
-  const { t, lang, dir } = useLanguage();
+  const { t, dir } = useLanguage();
   const copy = t.community.sources;
   const [enabledChannel, setEnabledChannel] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -76,8 +80,8 @@ export function QafSourcePicker({ channelId, editor, value, onChange, maxLength 
       {open && <DialogContent dir={dir} className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-[760px] overflow-y-auto text-start">
         <DialogTitle className="pe-10">{copy.find}</DialogTitle>
         <DialogDescription>{copy.hint}</DialogDescription>
-        <SourceSearch channelId={channelId} topic={topic} onInsert={(passage) => {
-          const quote = writeQafQuote(passage.text, citation(passage, lang), passage.url);
+        <SourceSearch key={postLocale} channelId={channelId} postLocale={postLocale} topic={topic} onInsert={(passage) => {
+          const quote = writeQafQuote(passage.text, citation(passage, postLocale), passage.url);
           const candidate = value.trimEnd() ? `${value.trimEnd()}\n\n${quote}` : quote;
           if (candidate.length > maxLength) return false;
           onChange(candidate);
@@ -89,10 +93,10 @@ export function QafSourcePicker({ channelId, editor, value, onChange, maxLength 
   );
 }
 
-function SourceSearch({ channelId, topic, onInsert }: {
-  channelId: string; topic: string; onInsert: (passage: QafPassage) => boolean;
+function SourceSearch({ channelId, postLocale, topic, onInsert }: {
+  channelId: string; postLocale: 'en' | 'ar'; topic: string; onInsert: (passage: QafPassage) => boolean;
 }) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const copy = t.community.sources;
   const explain = useQafError();
   const id = useId();
@@ -124,7 +128,7 @@ function SourceSearch({ channelId, topic, onInsert }: {
     setPending(true);
     try {
       const data = await requestSource<{ results: QafPassage[] }>(channelId, '/search', {
-        body: { query, locale: lang, limit: 8, filters: {
+        body: { query, locale: postLocale, limit: 8, filters: {
           genres: genre ? [genre] : undefined,
           authorIds: author?.type === 'author' ? [author.id] : undefined,
           bookIds: book?.type === 'book' ? [book.id] : undefined,
@@ -159,8 +163,9 @@ function SourceSearch({ channelId, topic, onInsert }: {
                 {genres.map(([slug, key]) => <option key={slug} value={slug}>{copy[key]}</option>)}
               </select>
             </div>
-            <CatalogField type="author" channelId={channelId} onChange={setAuthor} />
-            <CatalogField type="book" channelId={channelId} onChange={setBook} />
+            <p id={`${id}-lookup-hint`} className="text-xs text-muted-foreground sm:col-span-2">{copy.lookupHint}</p>
+            <CatalogField type="author" channelId={channelId} postLocale={postLocale} hintId={`${id}-lookup-hint`} onChange={setAuthor} />
+            <CatalogField type="book" channelId={channelId} postLocale={postLocale} hintId={`${id}-lookup-hint`} onChange={setBook} />
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-from`}>{copy.fromYear}</Label>
               <Input id={`${id}-from`} inputMode="numeric" maxLength={8} value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -177,7 +182,7 @@ function SourceSearch({ channelId, topic, onInsert }: {
       {results?.length === 0 && <p role="status" className="text-sm text-muted-foreground">{copy.noResults}</p>}
       {!!results?.length && (
         <ul className="space-y-3" aria-live="polite">
-          {results.map((passage) => <li key={passage.id}><SourceResult channelId={channelId} passage={passage} onInsert={() => {
+          {results.map((passage) => <li key={passage.id}><SourceResult channelId={channelId} postLocale={postLocale} passage={passage} onInsert={() => {
             if (!onInsert(passage)) setInsertError(copy.tooLong);
           }} /></li>)}
         </ul>
@@ -186,8 +191,11 @@ function SourceSearch({ channelId, topic, onInsert }: {
   );
 }
 
-function CatalogField({ type, channelId, onChange }: { type: 'author' | 'book'; channelId: string; onChange: (value: QafCandidate | null) => void }) {
-  const { t, lang } = useLanguage();
+function CatalogField({ type, channelId, postLocale, hintId, onChange }: {
+  type: 'author' | 'book'; channelId: string; postLocale: 'en' | 'ar'; hintId: string;
+  onChange: (value: QafCandidate | null) => void;
+}) {
+  const { t } = useLanguage();
   const copy = t.community.sources;
   const explain = useQafError();
   const id = useId();
@@ -202,7 +210,7 @@ function CatalogField({ type, channelId, onChange }: { type: 'author' | 'book'; 
     onChange(null);
     setPending(true);
     try {
-      const params = new URLSearchParams({ type, query, locale: lang });
+      const params = new URLSearchParams({ type, query, locale: postLocale });
       const data = await requestSource<{ candidates: QafCandidate[] }>(channelId, `/catalog?${params}`);
       setChoices(data.candidates);
     } catch (error) {
@@ -225,7 +233,12 @@ function CatalogField({ type, channelId, onChange }: { type: 'author' | 'book'; 
           if (query.trim() && !pending) void lookup();
         }
       }} maxLength={200} />
-      <Button type="button" size="sm" variant="outline" disabled={pending || !query.trim()} onClick={lookup}>{copy.lookup}</Button>
+      <Button
+        type="button" size="sm" variant="outline" disabled={pending || !query.trim()}
+        aria-describedby={query.trim() ? undefined : hintId}
+        className="disabled:opacity-100 disabled:bg-[var(--fanous-c-button-secondary-disabled-bg)] disabled:text-[var(--fanous-c-button-secondary-disabled-text)]"
+        onClick={lookup}
+      >{pending ? copy.searching : copy.lookup}</Button>
     </div>
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     {choices?.length === 0 && <p role="status" className="text-xs text-muted-foreground">{copy.emptyCatalog}</p>}
@@ -235,14 +248,14 @@ function CatalogField({ type, channelId, onChange }: { type: 'author' | 'book'; 
       <option value="">{type === 'author' ? copy.chooseAuthor : copy.chooseBook}</option>
       {choices.map((choice) => <option value={choice.id} key={choice.id}>{[
         choice.label, choice.type === 'book' ? choice.authorLabel : '',
-        choice.deathYearAH === null ? choice.deathInexactLabel : localizeDigits(lang, choice.deathYearAH),
-      ].filter(Boolean).join(lang === 'ar' ? '، ' : ', ')}</option>)}
+        choice.deathYearAH === null ? choice.deathInexactLabel : localizeDigits(postLocale, choice.deathYearAH),
+      ].filter(Boolean).join(postLocale === 'ar' ? '، ' : ', ')}</option>)}
     </select>}
   </div>;
 }
 
-function SourceResult({ passage, channelId, onInsert }: { passage: QafPassage; channelId: string; onInsert: () => void }) {
-  const { t, lang } = useLanguage();
+function SourceResult({ passage, channelId, postLocale, onInsert }: { passage: QafPassage; channelId: string; postLocale: 'en' | 'ar'; onInsert: () => void }) {
+  const { t } = useLanguage();
   const copy = t.community.sources;
   const explain = useQafError();
   const [expanded, setExpanded] = useState(false);
@@ -256,7 +269,7 @@ function SourceResult({ passage, channelId, onInsert }: { passage: QafPassage; c
     setPending(true);
     setError('');
     try {
-      setContext(await requestSource<QafContext>(channelId, `/passages/${encodeURIComponent(passage.id)}?radius=2&locale=${lang}`));
+      setContext(await requestSource<QafContext>(channelId, `/passages/${encodeURIComponent(passage.id)}?radius=2&locale=${postLocale}`));
     } catch (error) {
       setError(explain(error));
     } finally {
@@ -266,7 +279,7 @@ function SourceResult({ passage, channelId, onInsert }: { passage: QafPassage; c
   const safeCitation = QAF_PASSAGE_URL.test(passage.url);
   const prose = 'whitespace-pre-wrap break-words text-start';
   return <div className="space-y-2 rounded-lg border bg-[var(--fanous-color-surface-raised)] p-4">
-    {safeCitation ? <a className={`${link} block text-sm font-medium`} dir="auto" href={passage.url} rel="noopener noreferrer nofollow" target="_blank">{citation(passage, lang)}</a> : <p dir="auto" className="text-sm font-medium">{citation(passage, lang)}</p>}
+    {safeCitation ? <a className={`${link} block text-sm font-medium`} dir="auto" href={passage.url} rel="noopener noreferrer nofollow" target="_blank">{citation(passage, postLocale)}</a> : <p dir="auto" className="text-sm font-medium">{citation(passage, postLocale)}</p>}
     {expanded && context?.before.map((item) => <p key={item.id} className={`${prose} text-sm text-muted-foreground`} lang="ar" dir="rtl">{item.text}</p>)}
     <p lang="ar" dir="rtl" className={prose}>{passage.text}</p>
     {expanded && context?.after.map((item) => <p key={item.id} className={`${prose} text-sm text-muted-foreground`} lang="ar" dir="rtl">{item.text}</p>)}

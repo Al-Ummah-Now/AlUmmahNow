@@ -1743,6 +1743,7 @@ export interface AppTranslations {
       author: string;
       book: string;
       lookup: string;
+      lookupHint: string;
       emptyCatalog: string;
       chooseAuthor: string;
       chooseBook: string;
@@ -1759,6 +1760,9 @@ export interface AppTranslations {
       unavailable: string;
       minute: string;
       week: string;
+      userWeek: string;
+      invalidKey: string;
+      notConfigured: string;
       hanafi: string;
       maliki: string;
       shafii: string;

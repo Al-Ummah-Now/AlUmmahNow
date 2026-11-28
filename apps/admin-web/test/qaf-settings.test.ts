@@ -25,7 +25,14 @@ test('Qaf settings group the English quota and use ungrouped Arabic digits and �
   assert.match(card('en'), />2,499<\/dd>/);
   const arabic = card('ar');
   assert.match(arabic, />٢٤٩٩<\/dd>/);
+  assert.match(arabic, /تتيح لصنّاع المحتوى البحث/);
   assert.match(arabic, /قاف/);
+  const fields = (arabic.match(/<input[^>]*>/g) ?? []).filter((field) => /inputmode="numeric"/i.test(field));
+  assert.equal(fields.length, 4);
+  for (const field of fields) {
+    assert.match(field, / dir="ltr"/);
+    assert.match(field, /\btext-left\b/);
+  }
   assert.doesNotMatch(arabic, /\bQaf\b|٬/);
 });
 

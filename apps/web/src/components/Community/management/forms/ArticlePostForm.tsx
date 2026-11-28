@@ -48,7 +48,7 @@ export function ArticlePostForm({ channelId, data, onChange, postLocale, error }
       <div className="space-y-2">
         <Label htmlFor="article-body" className="text-sm md:text-base">{t.community.articleBody} *</Label>
         <p id="article-body-hint" className="text-xs md:text-sm text-muted-foreground">{t.community.articleBodyHint}</p>
-        <QafSourcePicker channelId={channelId} editor={editor} value={data.body} onChange={(body) => onChange({ ...data, body })} maxLength={POST_LIMITS.articleBody} />
+        <QafSourcePicker channelId={channelId} postLocale={postLocale} editor={editor} value={data.body} onChange={(body) => onChange({ ...data, body })} maxLength={POST_LIMITS.articleBody} />
         <Textarea
           ref={editor}
           id="article-body"

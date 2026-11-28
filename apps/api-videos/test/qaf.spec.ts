@@ -40,7 +40,7 @@ test('normalised searches hit the cache and user and global weekly caps apply ac
   const search = (user: string, query: string) => queryQaf(env, user, { kind: 'search', input: { query } }, { fetch: fake });
   assert.deepEqual(await search('a', 'الصبر عند المصيبة'), { results: [passage] });
   assert.deepEqual(await search('a', ' الصبر  عند المصيبة '), { results: [passage] });
-  await assert.rejects(search('a', 'النية'), (e) => e instanceof QafError && e.code === 'week');
+  await assert.rejects(search('a', 'النية'), (e) => e instanceof QafError && e.code === 'user_week');
   await search('b', 'النية');
   await assert.rejects(search('c', 'الزكاة'), (e) => e instanceof QafError && e.code === 'week');
   assert.equal(calls, 2);

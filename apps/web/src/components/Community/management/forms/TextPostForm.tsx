@@ -12,12 +12,13 @@ interface TextPostFormProps {
   content: string;
   onChange: (content: string) => void;
   locale: string;
+  postLocale: 'en' | 'ar';
   error?: string;
 }
 
 const MAX_CHARS = 5000;
 
-export function TextPostForm({ channelId, content, onChange, locale, error }: TextPostFormProps) {
+export function TextPostForm({ channelId, content, onChange, locale, postLocale, error }: TextPostFormProps) {
   const editor = useRef<HTMLTextAreaElement>(null);
   const isRTL = locale === 'ar';
   const remaining = MAX_CHARS - content.length;
@@ -30,7 +31,7 @@ export function TextPostForm({ channelId, content, onChange, locale, error }: Te
         {isRTL ? 'المحتوى' : 'Content'}
       </Label>
 
-      {channelId && <QafSourcePicker channelId={channelId} editor={editor} value={content} onChange={onChange} maxLength={MAX_CHARS} />}
+      {channelId && <QafSourcePicker channelId={channelId} postLocale={postLocale} editor={editor} value={content} onChange={onChange} maxLength={MAX_CHARS} />}
       <Textarea
         ref={editor}
         id="content"

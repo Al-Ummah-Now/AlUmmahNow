@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const id = 'd9335f69-e54b-59ae-a78c-50db734b8d50';
 const url = `https://qaf.ai/passages/${id}`;
+const arabicUrl = `https://qaf.ai/ar/passages/${id}`;
 const turathUrl = 'https://app.turath.io/book/21660?print_page=4%2C233';
 const passage = {
   turathUrl,
@@ -43,7 +44,7 @@ for (const locale of ['en', 'ar'] as const) {
     await page.route('**/api/studio/sources/qaf-test-channel', (route) => route.fulfill({ json: { enabled: true } }));
     await page.route('**/api/studio/sources/qaf-test-channel/search', (route) => {
       expect(route.request().postDataJSON()).toMatchObject({ query: ar ? 'الصبر عند المصيبة' : 'patience', locale });
-      return route.fulfill({ json: { results: [passage] } });
+      return route.fulfill({ json: { results: [{ ...passage, url: ar ? arabicUrl : url }] } });
     });
     await page.route('**/api/studio/sources/qaf-test-channel/passages/*', (route) =>
       route.fulfill({ json: { ...passage, before: [context], after: [] } }));
@@ -61,13 +62,30 @@ for (const locale of ['en', 'ar'] as const) {
     await panel.getByRole('button', { name: labels.search, exact: true }).click();
     await panel.getByRole('button', { name: labels.context }).click();
     await expect(panel.getByText(context.text)).toBeVisible();
-    await expect(panel.getByRole('link', { name: ar ? 'القراءة في تراث' : 'Read in Turath' })).toHaveAttribute('href', turathUrl);
+    await expect(panel.getByRole('link', { name: ar ? 'اقرأ في موقع تراث' : 'Read in Turath' })).toHaveAttribute('href', turathUrl);
     await expect(panel.getByRole('button', { name: labels.insert })).toHaveClass(/\bbg-primary\b/);
     if (ar) {
       await expect(panel.getByText(/عبر قاف/)).toBeVisible();
       await expect(panel.getByText(/\bQaf\b/)).toHaveCount(0);
     }
     await panel.getByText(ar ? 'عوامل التصفية' : 'Filters', { exact: true }).click();
+    const lookup = panel.getByRole('button', { name: ar ? 'بحث' : 'Look up', exact: true }).and(panel.locator('button[aria-describedby]'));
+    await expect(lookup).toHaveCount(2);
+    for (const button of await lookup.all()) {
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveAccessibleDescription(ar ? 'أدخل اسم المؤلف أو الكتاب للبحث عنه.' : 'Enter an author or book name to look it up.');
+      const ratio = await button.evaluate((element) => {
+        const style = getComputedStyle(element);
+        function luminance(color: string) {
+          const channels = (color.match(/\d+/g) ?? []).slice(0, 3).map((part) => Number(part) / 255);
+          const [r, g, b] = channels.map((s) => s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4);
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        const values = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => b - a);
+        return style.opacity === '1' ? (values[0] + 0.05) / (values[1] + 0.05) : 0;
+      });
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    }
     await shot(panel, `composer-panel-${locale}`);
     await panel.getByRole('button', { name: labels.insert }).click();
     await expect(editor).toHaveValue(new RegExp(`> ${passage.text.slice(0, 12)}`));
@@ -77,7 +95,7 @@ for (const locale of ['en', 'ar'] as const) {
     await expect(quote).toHaveAttribute('dir', 'rtl');
     expect(await quote.textContent()).toBe(passage.text);
     const citation = figure.getByRole('link');
-    await expect(citation).toHaveAttribute('href', url);
+    await expect(citation).toHaveAttribute('href', ar ? arabicUrl : url);
     await expect(citation).toHaveAttribute('rel', 'noopener noreferrer nofollow');
     await expect(citation).toContainText(ar ? 'ج ٤، ص ٢٣٣' : 'vol. 4, p. 233');
     await expect(citation).toContainText(ar ? 'ص ٢٣٤' : 'p. 234');
@@ -124,3 +142,47 @@ test('renders adversarial Qaf results as plain text and prevents unsafe citation
   expect(await figure.locator('blockquote').textContent()).toBe(text);
   await expect(figure.locator('img, script, strong')).toHaveCount(0);
 });
+
+test('an Arabic post composed in the English UI stores an Arabic citation and passage link', async ({ page }) => {
+  await page.route('**/api/studio/sources/qaf-test-channel', (route) => route.fulfill({ json: { enabled: true } }));
+  await page.route('**/api/studio/sources/qaf-test-channel/search', (route) => {
+    expect(route.request().postDataJSON().locale).toBe('ar');
+    return route.fulfill({ json: { results: [{ ...passage, url: arabicUrl }] } });
+  });
+  await page.goto('/en/dev/qaf?postLocale=ar');
+  await page.getByRole('button', { name: 'Find a source' }).click();
+  const panel = page.getByRole('dialog', { name: 'Find a source' });
+  await expect(panel).toHaveAttribute('dir', 'ltr');
+  await panel.getByLabel('Topic or phrase').fill('patience');
+  await panel.getByRole('button', { name: 'Search', exact: true }).click();
+  await panel.getByRole('button', { name: 'Insert quotation' }).click();
+  const label = 'فيض القدير — عبد الرؤوف المناوي، ج ٤، ص ٢٣٣؛ ج ٤، ص ٢٣٤';
+  await expect(page.locator('textarea#content')).toHaveValue(`> ${passage.text.replace('.', '&#46;')}\n\n[${label}](${arabicUrl})`);
+  await page.getByTestId('qaf-harness-publish').click();
+  const citation = page.getByTestId('qaf-quotation').getByRole('link');
+  await expect(citation).toHaveAttribute('href', arabicUrl);
+  await expect(citation).toHaveText(label);
+});
+
+for (const [locale, expected] of [
+  ['en', { user_week: 'You’ve reached your weekly search limit.', invalid_keys: 'The Qaf key isn’t valid. An admin needs to update it.' }],
+  ['ar', { user_week: 'بلغت حدّك الأسبوعي لعمليات البحث.', invalid_keys: 'مفتاح قاف غير صالح. على أحد المشرفين تحديثه.' }],
+] as const) {
+  test(`explains personal quota and invalid credentials separately (${locale})`, async ({ page }) => {
+    await page.route('**/api/studio/sources/qaf-test-channel', (route) => route.fulfill({ json: { enabled: true } }));
+    let reason: keyof typeof expected = 'user_week';
+    await page.route('**/api/studio/sources/qaf-test-channel/search', (route) =>
+      route.fulfill({ status: reason === 'user_week' ? 429 : 503, json: { error: reason } }));
+    await page.goto(`/${locale}/dev/qaf`);
+    const ar = locale === 'ar';
+    await page.getByRole('button', { name: ar ? 'البحث في المصادر' : 'Find a source' }).click();
+    const panel = page.getByRole('dialog');
+    await panel.getByLabel(ar ? 'موضوع أو عبارة' : 'Topic or phrase').fill('patience');
+    const submit = panel.getByRole('button', { name: ar ? 'بحث' : 'Search', exact: true });
+    await submit.click();
+    await expect(panel.getByRole('alert')).toHaveText(expected.user_week);
+    reason = 'invalid_keys';
+    await submit.click();
+    await expect(panel.getByRole('alert')).toHaveText(expected.invalid_keys);
+  });
+}

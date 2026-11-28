@@ -156,7 +156,8 @@ async function reserve(db: D1Database, settings: SettingsRow, creator: string, s
       SELECT count(*) AS total, count(CASE WHEN creator = ?1 THEN 1 END) AS personal
       FROM qaf_usage WHERE is_search = 1 AND at > ?2
     `).bind(creator, at - WEEK).first<{ total: number; personal: number }>();
-    if (cap && (cap.total >= current.global_week || cap.personal >= current.user_week)) throw new QafError(429, 'week');
+    if (cap && cap.total >= current.global_week) throw new QafError(429, 'week');
+    if (cap && cap.personal >= current.user_week) throw new QafError(429, 'user_week');
   }
   throw new QafError(429, 'minute', 60);
 }
