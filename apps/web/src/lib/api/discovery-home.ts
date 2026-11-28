@@ -10,8 +10,9 @@ import { HOME_RAIL_LIMIT, parseHomeRails, type HomeRail } from '@/lib/discovery/
 
 /** The home rails for a viewer language (its videos rank higher), or null when the API failed. */
 export async function getHomeRails(language: 'en' | 'ar'): Promise<HomeRail[] | null> {
+  const safeLanguage = language === 'ar' ? 'ar' : 'en';
   try {
-    const response = await fetch(buildApiUrl(`/api/discovery/home?language=${language}&limit=${HOME_RAIL_LIMIT}`), {
+    const response = await fetch(buildApiUrl(`/api/discovery/home?language=${safeLanguage}&limit=${HOME_RAIL_LIMIT}`), {
       method: 'GET',
       headers: { Accept: 'application/json' },
     });

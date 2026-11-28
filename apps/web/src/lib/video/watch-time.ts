@@ -61,12 +61,14 @@ export interface WatchTimeEvent {
   data?: { seconds?: unknown };
 }
 
+import { isValidContentId } from '@/lib/embed/params';
+
 /** The reports in a batch that api-videos accepts (0 < seconds <= 60, a session). */
 export function watchTimeReports(events: WatchTimeEvent[]): Array<{ videoId: string; sessionId: string; seconds: number }> {
   return events.flatMap((e) => {
     const seconds = Number(e?.data?.seconds);
-    if (e?.eventType !== 'watch_time' || typeof e.videoId !== 'string' || !e.videoId) return [];
-    if (typeof e.sessionId !== 'string' || !e.sessionId) return [];
+    if (e?.eventType !== 'watch_time' || typeof e.videoId !== 'string' || !isValidContentId(e.videoId)) return [];
+    if (typeof e.sessionId !== 'string' || !e.sessionId || e.sessionId.length > 128) return [];
     if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_REPORT_SECONDS) return [];
     return [{ videoId: e.videoId, sessionId: e.sessionId, seconds }];
   });

@@ -10,6 +10,7 @@ import type { Comments } from '@/interfaces';
 import { apiRequestServer, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import { logger } from '@/lib/logger-server';
+import { encodePathSegment, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 export type CommentSort = 'top' | 'newest';
 export type CommentSettings = 'on' | 'held' | 'off';
@@ -90,17 +91,21 @@ export async function createComment(
   /** Turnstile token (hooks/useHumanCheck) when the account's first comment needs one */
   turnstileToken?: string,
 ): Promise<CreateCommentResult> {
+  const safeVideoId = encodePathSegment(videoId);
+  if (!safeVideoId || typeof text !== 'string') return { ok: false, error: 'failed' };
   const auth = await getServerAuthContext();
   if (!auth?.accessToken) return { ok: false, error: 'failed' };
+  const safeChannelId = sanitizeHeaderValue(auth.channelId || channelId, 128);
+  const safeTurnstile = sanitizeHeaderValue(turnstileToken, 2048);
   try {
-    const response = await fetch(buildApiUrl(`/api/videos/${encodeURIComponent(videoId)}/comments`), {
+    const response = await fetch(buildApiUrl(`/api/videos/${safeVideoId}/comments`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${auth.accessToken}`,
         // No channel: no header, the member comments as themselves
-        ...((auth.channelId || channelId) ? { channelId: auth.channelId || channelId } : {}),
-        ...(turnstileToken ? { 'X-Turnstile-Token': turnstileToken } : {}),
+        ...(safeChannelId ? { channelId: safeChannelId } : {}),
+        ...(safeTurnstile ? { 'X-Turnstile-Token': safeTurnstile } : {}),
       },
       body: JSON.stringify({ text, ...(parentCommentId ? { parentCommentId } : {}) }),
     });

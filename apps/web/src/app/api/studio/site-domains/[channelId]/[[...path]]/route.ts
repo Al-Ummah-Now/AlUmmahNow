@@ -4,6 +4,8 @@ import { SessionManager } from '@/lib/auth/session-manager';
 import { logger } from '@/lib/logger';
 import { upstreamPath } from '@/lib/studio/site-domains';
 import { FEATURE_OFF_BODY } from '@al-ummah/shared-types';
+import * as v from 'valibot';
+import { siteDomainHostBodySchema } from '@/lib/security/safe-input';
 
 /**
  * Studio → Site → Domains (wiki AUN-SCHOLAR-SITES §4.2, #1212): this site's pages call here, and the
@@ -45,8 +47,22 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ channelId: stri
 
   let body: string | undefined;
   if (req.method === 'POST' || req.method === 'PUT') {
-    body = await req.text();
-    if (body.length > MAX_BODY_BYTES) return NextResponse.json({ code: 'too_large' }, { status: 413 });
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_BYTES) return NextResponse.json({ code: 'too_large' }, { status: 413 });
+    const needsHostBody = (req.method === 'POST' && path.length === 0) || (req.method === 'PUT' && path.length === 1 && path[0] === 'primary');
+    if (needsHostBody) {
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch {
+        return NextResponse.json({ code: 'invalid_json' }, { status: 400 });
+      }
+      const checked = v.safeParse(siteDomainHostBodySchema, parsedJson);
+      if (!checked.success) return NextResponse.json({ code: 'invalid_host' }, { status: 400 });
+      body = JSON.stringify(checked.output);
+    } else if (raw.length > 0) {
+      body = raw;
+    }
   }
   const session = await SessionManager.ensureFreshActiveSession().catch(() => null);
   if (!session?.accessToken) return NextResponse.json({ code: 'unauthorized' }, { status: 401 });

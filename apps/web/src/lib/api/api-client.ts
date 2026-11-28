@@ -17,6 +17,8 @@ import {
   logApiAuth
 } from "./logger";
 import { reportError } from "@/lib/errors/reporter";
+import { apiSegment, sanitizeHeaderValue } from "@/lib/security/safe-input";
+export { apiSegment };
 
 /**
  * A failed API call made from the browser → admin Errors page (kind "fetch"),
@@ -91,11 +93,13 @@ async function sendApiRequest<T>(
 
     // Add authentication headers if context provided
     if (authContext) {
-      if (authContext.accessToken) {
-        requestHeaders['Authorization'] = `Bearer ${authContext.accessToken}`;
+      const safeToken = sanitizeHeaderValue(authContext.accessToken, 4096);
+      if (safeToken) {
+        requestHeaders['Authorization'] = `Bearer ${safeToken}`;
       }
-      if (authContext.channelId) {
-        requestHeaders['channelId'] = authContext.channelId;
+      const safeChannelId = sanitizeHeaderValue(authContext.channelId, 128);
+      if (safeChannelId) {
+        requestHeaders['channelId'] = safeChannelId;
       }
 
       // Log auth only if we have actual auth data
@@ -254,9 +258,17 @@ export async function apiRequestServerResult<T>(
 }
 
 /**
- * Helper to build full API URL
+ * Helper to build full API URL. Guards against path traversal (`..`),
+ * protocol-relative paths (`//`), backslashes, and control characters.
  */
 export function buildApiUrl(path: string): string {
+  if (path.startsWith('//') || path.includes('\\') || /[\u0000-\u001F\u007F]/.test(path)) {
+    throw new Error('Invalid API path');
+  }
+  const pathname = path.split(/[?#]/, 1)[0];
+  if (pathname && pathname.split('/').some((seg) => seg === '..' || seg === '.')) {
+    throw new Error('Invalid API path');
+  }
   return `${getApiUrl()}${path}`;
 }
 

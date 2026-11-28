@@ -14,6 +14,7 @@ import {
   TemplateListResponse,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl } from './api-client';
+import { apiSegment } from '@/lib/security/safe-input';
 import { getServerAuthContext } from './server-auth-v2';
 
 /**
@@ -40,7 +41,7 @@ export async function getTemplate(templateId: string): Promise<{ template: Uploa
   return apiRequestServer<{ template: UploadTemplate }>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/upload-defaults/${templateId}`),
+      url: buildApiUrl(`/api/upload-defaults/${apiSegment(templateId)}`),
       functionName: 'getTemplate',
     },
     getServerAuthContext,
@@ -78,7 +79,7 @@ export async function updateTemplate(
   return apiRequestServer<{ template: UploadTemplate }>(
     {
       method: 'PUT',
-      url: buildApiUrl(`/api/upload-defaults/${templateId}`),
+      url: buildApiUrl(`/api/upload-defaults/${apiSegment(templateId)}`),
       body: updates,
       functionName: 'updateTemplate',
     },
@@ -95,7 +96,7 @@ export async function deleteTemplate(templateId: string): Promise<{ success: boo
   return apiRequestServer<{ success: boolean }>(
     {
       method: 'DELETE',
-      url: buildApiUrl(`/api/upload-defaults/${templateId}`),
+      url: buildApiUrl(`/api/upload-defaults/${apiSegment(templateId)}`),
       functionName: 'deleteTemplate',
     },
     getServerAuthContext,
@@ -111,7 +112,7 @@ export async function setDefaultTemplate(templateId: string): Promise<{ success:
   return apiRequestServer<{ success: boolean }>(
     {
       method: 'PUT',
-      url: buildApiUrl(`/api/upload-defaults/${templateId}/default`),
+      url: buildApiUrl(`/api/upload-defaults/${apiSegment(templateId)}/default`),
       functionName: 'setDefaultTemplate',
     },
     getServerAuthContext,

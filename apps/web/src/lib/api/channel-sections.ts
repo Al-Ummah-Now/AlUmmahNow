@@ -7,6 +7,7 @@ import {
   ChannelSectionReorderInput,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, apiRequestServerResult, buildApiUrl, type ApiResult } from './api-client';
+import { apiSegment } from '@/lib/security/safe-input';
 import { getServerAuthContext } from './server-auth';
 import { logger } from '@/lib/logger';
 
@@ -28,7 +29,7 @@ export async function listChannelSections(
       }
     }>({
       method: 'GET',
-      url: buildApiUrl(`/api/channels/${channelId}/sections`),
+      url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections`),
       functionName: 'listChannelSections'
     }, getServerAuthContext, false);
 
@@ -73,7 +74,7 @@ export async function listChannelSectionsPopulated(
       }
     }>({
       method: 'GET',
-      url: buildApiUrl(`/api/channels/${channelId}/sections/populated`),
+      url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections/populated`),
       functionName: 'listChannelSectionsPopulated'
     }, getServerAuthContext, false);
 
@@ -113,7 +114,7 @@ export async function getChannelSection(
     result: { section: ChannelSection };
   }>({
     method: 'GET',
-    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections/${apiSegment(sectionId)}`),
     functionName: 'getChannelSection'
   }, getServerAuthContext, false);
 
@@ -152,7 +153,7 @@ export async function createChannelSection(
 ): Promise<SectionWriteResult> {
   return toWriteResult(await apiRequestServerResult<{ success: boolean; result?: { section: ChannelSection } }>({
     method: 'POST',
-    url: buildApiUrl(`/api/channels/${channelId}/sections`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections`),
     body: data,
     functionName: 'createChannelSection'
   }, getServerAuthContext, true));
@@ -169,7 +170,7 @@ export async function updateChannelSection(
 ): Promise<SectionWriteResult> {
   return toWriteResult(await apiRequestServerResult<{ success: boolean; result?: { section: ChannelSection } }>({
     method: 'PUT',
-    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections/${apiSegment(sectionId)}`),
     body: data,
     functionName: 'updateChannelSection'
   }, getServerAuthContext, true));
@@ -188,7 +189,7 @@ export async function deleteChannelSection(
     result?: { message: string };
   }>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections/${apiSegment(sectionId)}`),
     functionName: 'deleteChannelSection'
   }, getServerAuthContext, true);
 
@@ -212,7 +213,7 @@ export async function reorderChannelSections(
     result: { sections: ChannelSection[] };
   }>({
     method: 'PATCH',
-    url: buildApiUrl(`/api/channels/${channelId}/sections/reorder`),
+    url: buildApiUrl(`/api/channels/${apiSegment(channelId)}/sections/reorder`),
     body: data,
     functionName: 'reorderChannelSections'
   }, getServerAuthContext, true);

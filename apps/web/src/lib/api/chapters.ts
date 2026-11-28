@@ -1,6 +1,7 @@
 'use server';
 
 import { apiRequestServer, buildApiUrl } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 
 export interface Chapter {
@@ -36,7 +37,7 @@ export async function getChapters(
   // The API responds with { success, chapters } (result kept for compatibility)
   return apiRequestServer<{ success: boolean; chapters?: ChapterData; result?: ChapterData; error?: string }>({
     method: 'GET',
-    url: buildApiUrl(`/api/videos/${videoId}/chapters`),
+    url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/chapters`),
     functionName: 'getChapters'
   }, async () => {
     const auth = await getServerAuthContext();
@@ -59,7 +60,7 @@ export async function updateChapters(
 ): Promise<{ success: boolean; result?: ChapterData; error?: string } | null> {
   return apiRequestServer<{ success: boolean; result?: ChapterData; error?: string }>({
     method: 'PUT',
-    url: buildApiUrl(`/api/videos/${videoId}/chapters`),
+    url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/chapters`),
     body: { chapters, source },
     functionName: 'updateChapters'
   }, async () => {

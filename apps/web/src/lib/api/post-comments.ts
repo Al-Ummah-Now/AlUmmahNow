@@ -11,6 +11,7 @@ import {
   PostCommentHeartResponse,
 } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl, buildQueryParams } from './api-client';
+import { apiSegment } from '@/lib/security/safe-input';
 import { getServerAuthContext } from './server-auth';
 import { ApiHeaders } from './types';
 
@@ -33,7 +34,7 @@ export async function listPostComments(
   return apiRequestServer<PostCommentListResponse>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments${queryString}`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments${queryString}`),
       functionName: 'listPostComments',
     },
     async () => ({
@@ -63,7 +64,7 @@ export async function listCommentReplies(
   return apiRequestServer<PostCommentListResponse>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/replies${queryString}`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}/replies${queryString}`),
       functionName: 'listCommentReplies',
     },
     async () => ({
@@ -89,7 +90,7 @@ export async function createPostComment(
   return apiRequestServer<PostCommentCreateResponse>(
     {
       method: 'POST',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments`),
       body: data,
       ...(turnstileToken ? { headers: { 'X-Turnstile-Token': turnstileToken } } : {}),
       functionName: 'createPostComment',
@@ -117,7 +118,7 @@ export async function updatePostComment(
   return apiRequestServer<PostCommentCreateResponse>(
     {
       method: 'PUT',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}`),
       body: data,
       functionName: 'updatePostComment',
     },
@@ -143,7 +144,7 @@ export async function deletePostComment(
   return apiRequestServer<{ success: boolean }>(
     {
       method: 'DELETE',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}`),
       functionName: 'deletePostComment',
     },
     async () => ({
@@ -168,7 +169,7 @@ export async function likePostComment(
   return apiRequestServer<PostCommentLikeResponse>(
     {
       method: 'POST',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/like`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}/like`),
       functionName: 'likePostComment',
     },
     async () => ({
@@ -193,7 +194,7 @@ export async function unlikePostComment(
   return apiRequestServer<PostCommentLikeResponse>(
     {
       method: 'DELETE',
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/like`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}/like`),
       functionName: 'unlikePostComment',
     },
     async () => ({
@@ -219,7 +220,7 @@ function moderatePostComment<T>(
   return apiRequestServer<T>(
     {
       method,
-      url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments/${commentId}/${action}`),
+      url: buildApiUrl(`/api/community/channels/${apiSegment(channelId)}/posts/${apiSegment(postId)}/comments/${apiSegment(commentId)}/${apiSegment(action)}`),
       functionName,
     },
     async () => ({

@@ -5,10 +5,12 @@
  * for the Translate button, GET /api/videos/:id/translated-metadata for viewers, and the channel's
  * viewer-title opt-out.
  */
+import * as v from 'valibot';
 import type { InlineTranslateField } from '@al-ummah/shared-types';
 import { buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import { logger } from '@/lib/logger-server';
+import { encodePathSegment, translateTextsSchema } from '@/lib/security/safe-input';
 
 export type TranslateResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; resetsAt?: string };
 
@@ -43,7 +45,9 @@ export interface InlineTranslation {
 
 /** Translate one or more texts (the Translate button). Text inside {…} is a Quran quotation and stays as written. */
 export async function translateTexts(input: { items: Array<{ id: string; text: string }>; from: string; to: string; field?: InlineTranslateField; videoId?: string }): Promise<TranslateResult<InlineTranslation>> {
-  return call<InlineTranslation>('/api/translate', { method: 'POST', body: { ...input, field: input.field ?? 'title' } });
+  const checked = v.safeParse(translateTextsSchema, input);
+  if (!checked.success) return { ok: false, status: 400, error: 'invalid_input' };
+  return call<InlineTranslation>('/api/translate', { method: 'POST', body: { ...checked.output, field: checked.output.field ?? 'title' } });
 }
 
 export interface ViewerTranslation {
@@ -53,7 +57,9 @@ export interface ViewerTranslation {
 
 /** A public video's title and description translated for a viewer (O6: on unless the channel opted out or an admin paused it). */
 export async function getTranslatedMetadata(videoId: string, lang: string): Promise<TranslateResult<ViewerTranslation>> {
-  return call<ViewerTranslation>(`/api/videos/${encodeURIComponent(videoId)}/translated-metadata?lang=${encodeURIComponent(lang)}`, { auth: false });
+  const safeId = encodePathSegment(videoId);
+  if (!safeId) return { ok: false, status: 400, error: 'invalid_video_id' };
+  return call<ViewerTranslation>(`/api/videos/${safeId}/translated-metadata?lang=${encodeURIComponent(lang)}`, { auth: false });
 }
 
 export interface ChannelTranslationSettings {
@@ -62,11 +68,15 @@ export interface ChannelTranslationSettings {
 }
 
 export async function getChannelTranslationSettings(channelId: string): Promise<TranslateResult<ChannelTranslationSettings>> {
-  return call<ChannelTranslationSettings>(`/api/channels/${encodeURIComponent(channelId)}/translation-settings`);
+  const safeChannelId = encodePathSegment(channelId);
+  if (!safeChannelId) return { ok: false, status: 400, error: 'invalid_channel_id' };
+  return call<ChannelTranslationSettings>(`/api/channels/${safeChannelId}/translation-settings`);
 }
 
 export async function setChannelTranslationSettings(channelId: string, viewerTitles: boolean): Promise<TranslateResult<ChannelTranslationSettings>> {
-  return call<ChannelTranslationSettings>(`/api/channels/${encodeURIComponent(channelId)}/translation-settings`, { method: 'PUT', body: { viewerTitles } });
+  const safeChannelId = encodePathSegment(channelId);
+  if (!safeChannelId) return { ok: false, status: 400, error: 'invalid_channel_id' };
+  return call<ChannelTranslationSettings>(`/api/channels/${safeChannelId}/translation-settings`, { method: 'PUT', body: { viewerTitles: Boolean(viewerTitles) } });
 }
 
 export interface QuranEdition {

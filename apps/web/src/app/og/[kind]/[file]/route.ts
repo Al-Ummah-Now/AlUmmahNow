@@ -13,7 +13,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { logger } from '@/lib/logger-server';
 import { loadPublicChannelImages, loadPublicVideo } from '@/lib/embed/content';
-import { hasExpiringToken, isAllowedImageSource } from '@/lib/embed/share-image';
+import { fetchAllowedImageSource, hasExpiringToken, isAllowedImageSource } from '@/lib/embed/share-image';
 import { isValidContentId } from '@/lib/embed/params';
 import { composeChannelCard, composeImageCard, type ImagesLike } from '@/lib/share-card/compose';
 import { CARD_TYPE, fromBase64Url, parseCardPath, SITE_CARD_PATH } from '@/lib/share-card/layout';
@@ -71,7 +71,8 @@ function jpeg(body: ArrayBuffer, maxAge: number): Response {
 
 async function fetchImage(url: string): Promise<ArrayBuffer | null> {
   try {
-    const res = await fetch(url, { headers: { Accept: 'image/*' }, redirect: 'follow', cache: 'no-store' });
+    const res = await fetchAllowedImageSource(url, { headers: { Accept: 'image/*' }, cache: 'no-store' });
+    if (!res) return null;
     const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
     if (!res.ok || !IMAGE_TYPE.test(type)) return null;
     const body = await res.arrayBuffer();

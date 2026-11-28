@@ -9,6 +9,7 @@ import {
   LiveStreamQueryParams,
 } from "./types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
@@ -150,7 +151,7 @@ export async function updateLiveStream(
 
   return apiRequestServer<ApiResponse<{ stream: LiveStream }>>({
     method: 'PATCH',
-    url: buildApiUrl(`/api/live-streams/${streamId}`),
+    url: buildApiUrl(`/api/live-streams/${apiSegment(streamId)}`),
     body: data,
     functionName: 'updateLiveStream'
   }, getServerAuthContext, true);

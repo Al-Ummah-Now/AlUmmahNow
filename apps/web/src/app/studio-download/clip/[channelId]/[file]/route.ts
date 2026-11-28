@@ -7,7 +7,7 @@
  */
 import { buildApiUrl, apiRequestServerResult } from '@/lib/api/api-client';
 import { getServerAuthContext } from '@/lib/api/server-auth';
-import { isAllowedImageSource } from '@/lib/embed/share-image';
+import { fetchAllowedImageSource, isAllowedImageSource } from '@/lib/embed/share-image';
 import { logger } from '@/lib/logger-server';
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
@@ -37,9 +37,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cha
   }
 
   try {
-    const upstream = await fetch(url, { redirect: 'follow' });
-    if (!upstream.ok || !upstream.body) {
-      logger.error('[studio-download] clip fetch failed', { channelId, shortId, status: upstream.status });
+    const upstream = await fetchAllowedImageSource(url);
+    if (!upstream || !upstream.ok || !upstream.body) {
+      logger.error('[studio-download] clip fetch failed', { channelId, shortId, status: upstream?.status ?? 0 });
       return status(502, 'Unavailable');
     }
     const headers = new Headers({ ...NO_STORE, 'Content-Type': 'video/mp4', 'Content-Disposition': `attachment; filename="${shortId}.mp4"` });

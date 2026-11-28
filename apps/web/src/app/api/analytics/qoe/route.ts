@@ -4,17 +4,16 @@
  * api-videos POST /api/videos/:id/qoe with the viewer's country.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import * as v from 'valibot';
 import { logger } from '@/lib/logger-client';
-
-const ID = /^[A-Za-z0-9-]{8,64}$/;
+import { qoeBeaconSchema } from '@/lib/security/safe-input';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json().catch(() => null)) as ({ videoId?: unknown } & Record<string, unknown>) | null;
-    const videoId = typeof body?.videoId === 'string' ? body.videoId : '';
-    if (!body || !ID.test(videoId)) return NextResponse.json({ success: false }, { status: 400 });
-    const { videoId: _omit, ...report } = body;
-    void _omit;
+    const raw = await request.json().catch(() => null);
+    const parsed = v.safeParse(qoeBeaconSchema, raw);
+    if (!parsed.success) return NextResponse.json({ success: false }, { status: 400 });
+    const { videoId, ...report } = parsed.output;
     const country = request.headers.get('cf-ipcountry') || undefined;
     const res = await fetch(`${process.env.API_URL || ''}/api/videos/${encodeURIComponent(videoId)}/qoe`, {
       method: 'POST',

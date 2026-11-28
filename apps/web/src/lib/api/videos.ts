@@ -19,6 +19,7 @@ import {
 } from "./types";
 import { isShort, type BatchUploadInitiateResponse } from "@al-ummah/shared-types";
 import { apiRequestServer, apiRequestServerResult, buildApiUrl } from "./api-client";
+import { apiSegment } from "@/lib/security/safe-input";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
@@ -66,14 +67,18 @@ export async function getVideoById(
   /** edit: editors get Bunny's playUrl (its encoding frames feed the thumbnail picker), never for playback */
   purpose?: 'edit'
 ): Promise<VideoObject | null> {
-  return apiRequestServer<VideoObject>({
-    method: 'GET',
-    url: buildApiUrl(`/api/videos/${id}${purpose === 'edit' ? '?for=edit' : ''}`),
-    functionName: 'getVideoById'
-  }, async () => ({
-    channelId: headers?.channelId || '',
-    accessToken: (await getServerAuthContext())?.accessToken || '',
-  }), false);
+  try {
+    return await apiRequestServer<VideoObject>({
+      method: 'GET',
+      url: buildApiUrl(`/api/videos/${apiSegment(id)}${purpose === 'edit' ? '?for=edit' : ''}`),
+      functionName: 'getVideoById'
+    }, async () => ({
+      channelId: headers?.channelId || '',
+      accessToken: (await getServerAuthContext())?.accessToken || '',
+    }), false);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -121,7 +126,7 @@ export async function updateVideo(
     const response = await apiRequestServerResult<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
       {
         method: 'PUT',
-        url: buildApiUrl(`/api/videos/${videoId}`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}`),
         body: data,
         functionName: 'updateVideo',
       },
@@ -155,7 +160,7 @@ export async function deleteVideo(
     return apiRequestServer<ApiResponse<{ success: boolean }>>(
       {
         method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}`),
         functionName: 'deleteVideo',
       },
       async () => ({
@@ -387,7 +392,7 @@ export async function listVideoComments(
   return apiRequestServer<CommentListResponse>(
     {
       method: 'GET',
-      url: buildApiUrl(`/api/videos/${videoId}/comments${qs ? `?${qs}` : ''}`),
+      url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments${qs ? `?${qs}` : ''}`),
       functionName: 'listVideoComments',
     },
     async () => {
@@ -414,7 +419,7 @@ export async function createVideoComment(
     return apiRequestServer<CommentMutationResponse>(
       {
         method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/comments`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments`),
         body: { text: data.content, content: data.content },
         functionName: 'createVideoComment',
       },
@@ -443,7 +448,7 @@ export async function updateVideoComment(
     return apiRequestServer<CommentMutationResponse>(
       {
         method: 'PUT',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments/${apiSegment(commentId)}`),
         body: { text: data.content, content: data.content },
         functionName: 'updateVideoComment',
       },
@@ -471,7 +476,7 @@ export async function deleteVideoComment(
     return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments/${apiSegment(commentId)}`),
         functionName: 'deleteVideoComment',
       },
       () => commentAuthContext(headers?.channelId),
@@ -497,7 +502,7 @@ export async function likeVideo(
     return apiRequestServer<{ success: boolean }>(
       {
         method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/likes`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/likes`),
         functionName: 'likeVideo',
       },
       async () => ({
@@ -526,7 +531,7 @@ export async function unlikeVideo(
     return apiRequestServer<{ success: boolean }>(
       {
         method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/likes`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/likes`),
         functionName: 'unlikeVideo',
       },
       async () => ({
@@ -556,7 +561,7 @@ export async function likeVideoComment(
     return apiRequestServer<CommentReactionResponse>(
       {
         method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments/${apiSegment(commentId)}/likes`),
         functionName: 'likeVideoComment',
       },
       () => commentAuthContext(headers?.channelId),
@@ -583,7 +588,7 @@ export async function unlikeVideoComment(
     return apiRequestServer<CommentReactionResponse>(
       {
         method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/likes`),
+        url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/comments/${apiSegment(commentId)}/likes`),
         functionName: 'unlikeVideoComment',
       },
       () => commentAuthContext(headers?.channelId),
@@ -1022,7 +1027,7 @@ export async function getVideoUploadStatusApi(
     error?: string;
   }>({
     method: 'GET',
-    url: buildApiUrl(`/api/videos/${videoId}/upload-status`),
+    url: buildApiUrl(`/api/videos/${apiSegment(videoId)}/upload-status`),
     functionName: 'getVideoUploadStatusApi'
   }, async () => ({
     

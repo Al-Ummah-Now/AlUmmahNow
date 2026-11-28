@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import * as v from 'valibot';
 import { SessionManager } from '@/lib/auth/session-manager';
 import { logger } from '@/lib/logger';
+import { jsonObjectSchema, sanitizeHeaderValue } from '@/lib/security/safe-input';
 
 /**
  * Contact us form endpoint (same origin, so no CORS and no extra CSP host).
@@ -32,12 +34,15 @@ export async function POST(req: NextRequest) {
 
   const text = await req.text();
   if (text.length > MAX_BODY_BYTES) return NextResponse.json({ error: 'too_large' }, { status: 413 });
-  let body: unknown;
+  let parsedJson: unknown;
   try {
-    body = JSON.parse(text);
+    parsedJson = JSON.parse(text);
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
+  const checked = v.safeParse(jsonObjectSchema, parsedJson);
+  if (!checked.success) return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  const body = checked.output;
 
   const adminApi = process.env.ADMIN_API_URL;
   const key = await internalApiKey();
@@ -47,11 +52,13 @@ export async function POST(req: NextRequest) {
   }
 
   const session = await SessionManager.ensureFreshActiveSession().catch(() => null);
+  const clientIp = sanitizeHeaderValue(req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0], 128) || 'unknown';
+  const clientUa = sanitizeHeaderValue(req.headers.get('user-agent'), 512) || '';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-API-Key': key,
-    'X-Client-IP': req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
-    'X-Client-User-Agent': (req.headers.get('user-agent') || '').slice(0, 512),
+    'X-Client-IP': clientIp,
+    'X-Client-User-Agent': clientUa,
   };
   if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
 
