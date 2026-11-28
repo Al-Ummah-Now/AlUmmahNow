@@ -19,7 +19,7 @@
     "@al-ummah-now/openauth": "1.2.3",
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
-    "hono": "^4.13.19",
+    "hono": "^4.13.22",
     "jose": "5.9.6",
     "ws": "^8.23.0",
     "zod": "^4.6.7"
