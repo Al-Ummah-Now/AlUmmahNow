@@ -44,7 +44,7 @@ jobs:
     env:
       LOCAL_STACK_AUTH_DIR: ${{ github.workspace }}/.local-stack/repos/auth
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: The Auth repo's last released bundle
         id: refs
