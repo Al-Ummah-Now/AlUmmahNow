@@ -5,7 +5,18 @@ name: Player E2E
 # harness page and local HLS fixtures, so they need no QA environment and no secrets.
 
 on:
+  # By hand, also for flake statistics on Linux runners (not on a laptop): repeat_each runs every
+  # matching test that many times with no retry, so a flake shows as a failure
   workflow_dispatch:
+    inputs:
+      repeat_each:
+        description: 'Run each test this many times, no retries (empty: once, with the usual retry)'
+        required: false
+        default: ''
+      grep:
+        description: 'Only tests whose title matches this pattern (playwright --grep)'
+        required: false
+        default: ''
   # Every push to main, whatever it touched: the player broke on main through a dependency bump
   # (next 16.4's React, #1696) that no player path below matched, and nothing ran it for five days
   push:
@@ -153,7 +164,18 @@ jobs:
 
       - name: Run player specs
         working-directory: apps/web
-        run: pnpm exec playwright test -c playwright.player.config.ts --project=${{ matrix.project }} ${{ matrix.half && format('--shard={0}/2', matrix.half) || '' }}
+        env:
+          REPEAT_EACH: ${{ inputs.repeat_each }}
+          GREP: ${{ inputs.grep }}
+        run: |
+          args=(-c playwright.player.config.ts --project=${{ matrix.project }} ${{ matrix.half && format('--shard={0}/2', matrix.half) || '' }})
+          if [ -n "$REPEAT_EACH" ]; then
+            [[ "$REPEAT_EACH" =~ ^[0-9]+$ ]] || { echo "::error::repeat_each must be a number"; exit 1; }
+            args+=(--repeat-each="$REPEAT_EACH" --retries=0)
+          fi
+          # A pattern may match nothing in a project (the phone projects run only mobile specs)
+          if [ -n "$GREP" ]; then args+=(--grep "$GREP" --pass-with-no-tests); fi
+          pnpm exec playwright test "${args[@]}"
 
       - name: Upload report and failure artefacts
         if: always()
