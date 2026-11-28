@@ -5,7 +5,7 @@
  * Credentials live in D1 (encrypted with SOCIAL_TOKEN_KEK) rather than as Worker secrets so that the owner can
  * create the X app and the Telegram bot and switch them on without a deploy, and replace them the same way.
  */
-import type { ErrorReporterEnv, SocialNetwork } from '@al-ummah/shared-types';
+import { webhookUrlProblem, type ErrorReporterEnv, type SocialNetwork } from '@al-ummah/shared-types';
 import { openJson, sealJson, socialCryptoReady, type SocialCryptoEnv } from './crypto';
 import { deleteSetting, readSetting, writeSetting, type SocialDbEnv } from './store';
 import type { SocialContentEnv } from './content';
@@ -20,6 +20,21 @@ export interface SocialEnv extends SocialDbEnv, SocialCryptoEnv, SocialContentEn
 	/** Local stack / tests: webhook receiver hosts allowed although not public https */
 	SOCIAL_WEBHOOK_ALLOW_HOSTS?: string;
 	ENVIRONMENT?: string;
+}
+
+export function socialWebhookUrlProblem(env: SocialEnv, raw: string): string | null {
+	let url: URL;
+	try {
+		url = new URL(raw);
+	} catch {
+		return 'invalid_url';
+	}
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'https_required';
+	if (url.username || url.password) return 'credentials_not_allowed';
+	if (raw.length > 2000) return 'too_long';
+	url.hostname = url.hostname.replace(/\.$/, '');
+	const allowed = (env.SOCIAL_WEBHOOK_ALLOW_HOSTS ?? '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+	return webhookUrlProblem(url.toString(), allowed);
 }
 
 export function apiOrigin(env: Pick<SocialEnv, 'VIDEOS_API_URL'>, fallback?: string): string {

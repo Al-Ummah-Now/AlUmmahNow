@@ -44,7 +44,7 @@ import {
 } from './store';
 import { loadSocialContent, webhookData, type SocialContent } from './content';
 import { mastodonCharLimit } from './limits';
-import { blueskyClient, readCredentials, type SocialEnv } from './platform';
+import { blueskyClient, readCredentials, socialWebhookUrlProblem, type SocialEnv } from './platform';
 import { tokenBound } from './connect';
 import { mediaSize, NetworkError, type Adapter, type PostRequest, type TokenSet } from './adapters/types';
 import { xAdapter, xRefresh } from './adapters/x';
@@ -343,6 +343,12 @@ export async function attemptWebhook(env: SocialEnv, deliveryId: string, f: type
 		await finish('failed', null, 'webhook_disabled');
 		return { outcome: 'skipped' };
 	}
+	const problem = socialWebhookUrlProblem(env, hook.url);
+	if (problem) {
+		await finish('failed', null, problem);
+		return { outcome: 'failed', error: problem };
+	}
+
 	const payload = await buildWebhookPayload(env, row);
 	if (!payload) {
 		await finish('failed', null, 'no_longer_public');
