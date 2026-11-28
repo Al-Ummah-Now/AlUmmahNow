@@ -29,11 +29,11 @@
 import {
 	classifyVideoFormat,
 	EMPTY_PAGE_COUNTS,
-	isVideoFormatJobMessage,
 	newVideoFormatRun,
 	readVideoFormatRunFrom,
 	startVideoFormatRunWith,
 	VIDEO_FORMAT_APPLIED_KEY,
+	VIDEO_FORMAT_JOB_KIND,
 	VIDEO_FORMAT_PAGE_DELAY_SECONDS,
 	VIDEO_FORMAT_PAGE_SIZE,
 	wasShortByOldRule,
@@ -43,13 +43,15 @@ import {
 	type VideoFormatPageCounts,
 	type VideoFormatRun,
 } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
 import { bunnyRef } from '../media/providers';
 import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import { fetchBunnyVideo, startProcessingLoop, type ProcessingEnv } from '../processing/loop';
-import { bunnyLibraryForHost, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
+import { bunnyHostOf, bunnyLibraryForHost, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { backfillOwnershipPage, ownershipIdForKey } from '../search/ownership';
 import { backfillSearchPage } from '../search/backfill';
 
@@ -134,16 +136,19 @@ export function firstMediaPlaylist(master: string): string | null {
  * The Bunny CDN host and Bunny's id of the video (its playUrl, else the configured library). Bunny's
  * id is bunnyRef: the id on a legacy row, the stored GUID on a new one; null when Bunny holds no copy.
  */
-export function playlistLocation(env: Pick<VideoFormatEnv, 'bunny_hostname'>, video: Pick<FormatVideo, 'id' | 'playUrl' | 'media'>): { host: string; id: string } | null {
+export function playlistLocation(env: Pick<BunnyLibrariesEnv, 'bunny_hostname' | 'BUNNY_LEGACY_HOSTNAME'>, video: Pick<FormatVideo, 'id' | 'playUrl' | 'media'>): { host: string; id: string } | null {
 	const bunnyId = bunnyRef(video as never);
-	if (!bunnyId) return null;
+	if (!bunnyId || !/^[A-Za-z0-9-]+$/.test(bunnyId)) return null;
 	const match = /^https:\/\/([^/]+)\/([A-Za-z0-9-]+)\/playlist\.m3u8$/.exec(video.playUrl ?? '');
-	if (match) return match[2] === bunnyId ? { host: match[1], id: match[2] } : null;
+	if (match && match[2] === bunnyId) {
+		const host = bunnyHostOf(video.playUrl) ?? [env.bunny_hostname, env.BUNNY_LEGACY_HOSTNAME].find((h) => h === match[1]);
+		if (host) return { host, id: bunnyId };
+	}
 	return env.bunny_hostname ? { host: env.bunny_hostname, id: bunnyId } : null;
 }
 
 async function fetchText(url: string, what: string): Promise<string | null> {
-	const res = await fetch(url);
+	const res = await fetch(url, { redirect: 'error' });
 	if (res.status === 403 || res.status === 404) return null;
 	if (!res.ok) throw new Error(`${what}: HTTP ${res.status}`);
 	return res.text();
@@ -158,7 +163,7 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: {
 	const where = playlistLocation(env, video);
 	if (!where) return null;
 	const { host, id } = where;
-	let url = `https://${host}/${id}/playlist.m3u8`;
+	let url = `https://${host}/${encodeURIComponent(id)}/playlist.m3u8`;
 	// Signed with the token key of the library serving that host (lib/bunny/libraries.ts)
 	const library = await bunnyLibraryForHost(env as BunnyLibrariesEnv, host);
 	if (library?.tokenKey) {
@@ -171,7 +176,14 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: {
 	let duration: number | undefined;
 	if (opts.needDuration) {
 		const media = firstMediaPlaylist(master);
-		if (media) duration = playlistDuration((await fetchText(new URL(media, url).toString(), `media playlist ${id}`)) ?? '') ?? undefined;
+		if (media) {
+			const masterUrl = new URL(url);
+			const mediaUrl = URL.parse(media, masterUrl.href);
+			if (mediaUrl?.origin === masterUrl.origin && !mediaUrl.username && !mediaUrl.password &&
+				mediaUrl.pathname.startsWith(`/${encodeURIComponent(id)}/`)) {
+				duration = playlistDuration((await fetchText(mediaUrl.href, `media playlist ${id}`)) ?? '') ?? undefined;
+			}
+		}
 	}
 	if (!size && !duration) return null;
 	return { ...(size ?? {}), duration, source: 'playlist' };
@@ -386,14 +398,25 @@ interface QueueMessageLike {
 	retry(options?: { delaySeconds?: number }): void;
 }
 
+const VideoFormatBody = z.object({
+	kind: z.literal(VIDEO_FORMAT_JOB_KIND),
+	runId: RecordId.min(8).max(64),
+	page: z.number().int().nonnegative(),
+	cursor: z.string().max(4096).nullable(),
+	dryRun: z.boolean(),
+	limit: z.number().int().positive(),
+	requestedBy: RecordId.optional(),
+});
+
 /** Consumer for one video-format message (see index.ts queue()). */
 export async function handleVideoFormatMessage(env: VideoFormatEnv, msg: QueueMessageLike, now = new Date()): Promise<void> {
-	const body = msg.body;
-	if (!isVideoFormatJobMessage(body)) {
-		logger.error('[VideoFormat] Malformed message dropped', { body });
+	const parsed = VideoFormatBody.safeParse(msg.body);
+	if (!parsed.success) {
+		logger.error('[VideoFormat] Malformed message dropped');
 		msg.ack();
 		return;
 	}
+	const body: VideoFormatJobMessage = { ...parsed.data, cursor: parsed.data.cursor ?? null };
 	try {
 		const run = (await readVideoFormatRun(env, body.runId)) ?? newVideoFormatRun(body.runId, body.dryRun, now, body.requestedBy);
 		const pagesDone = Object.keys(run.pages).length;

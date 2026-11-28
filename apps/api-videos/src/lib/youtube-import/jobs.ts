@@ -24,7 +24,6 @@ import {
 	SUPPORTED_SUBTITLE_LANGUAGES,
 	bestThumbnail,
 	isImportableCaptionTrack,
-	isYtImportJob,
 	parseIsoDuration,
 	pickLocalizations,
 	reportNeedsAction,
@@ -35,6 +34,8 @@ import {
 	type VideoObject,
 	type YtImportJob,
 } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import R2Repository from '../r2Repo';
 import Queue from '../queue';
 import { logger } from '../logger';
@@ -105,14 +106,23 @@ interface MessageLike {
 /** A failure that more tries cannot fix (the job gives up at once). */
 class PermanentError extends Error {}
 
+const YtImportMessage = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('yt-list'), importId: RecordId, phase: z.enum(['videos', 'playlists', 'playlist-items']), pageToken: z.string().max(4096).optional(), playlistIndex: z.number().int().nonnegative().optional() }),
+	z.object({ kind: z.literal('yt-captions'), importId: RecordId, itemId: RecordId }),
+	z.object({ kind: z.literal('yt-finalize'), importId: RecordId, itemId: RecordId }),
+	z.object({ kind: z.literal('yt-playlists'), importId: RecordId }),
+	z.object({ kind: z.literal('yt-close'), importId: RecordId }),
+]);
+
 export async function handleYtImportBatch(batch: { messages: readonly MessageLike[] }, env: YtJobsEnv, ctx: Ctx): Promise<void> {
 	for (const msg of batch.messages) {
-		if (!isYtImportJob(msg.body)) {
-			logger.warn('[YouTubeImport] Unknown message dropped', { kind: (msg.body as { kind?: unknown } | null)?.kind });
+		const parsed = YtImportMessage.safeParse(msg.body);
+		if (!parsed.success) {
+			logger.warn('[YouTubeImport] Invalid message dropped');
 			msg.ack();
 			continue;
 		}
-		const job = msg.body;
+		const job = parsed.data;
 		try {
 			await runYtJob(env, job, ctx);
 			msg.ack();
@@ -198,8 +208,9 @@ async function giveUp(env: YtJobsEnv, job: YtImportJob, error: unknown, ctx: Ctx
  * gone or over (nothing left to retry).
  */
 export async function retryYtJob(env: YtJobsEnv, body: unknown, ctx: Ctx): Promise<boolean> {
-	const job = (body as { job?: unknown } | null)?.job;
-	if (!isYtImportJob(job)) return false;
+	const parsed = YtImportMessage.safeParse((body as { job?: unknown } | null)?.job);
+	if (!parsed.success) return false;
+	const job = parsed.data;
 	const db = ytDb(env);
 	const row = await readImportRow(db, job.importId);
 	if (!row || row.status === 'cancelled' || row.status === 'finished') return false;
@@ -438,7 +449,7 @@ export function isYoutubeThumbnailUrl(url: string | null | undefined): url is st
 	if (!url) return false;
 	try {
 		const u = new URL(url);
-		return u.protocol === 'https:' && THUMBNAIL_HOSTS.includes(u.hostname);
+		return u.protocol === 'https:' && !u.port && !u.username && !u.password && THUMBNAIL_HOSTS.includes(u.hostname);
 	} catch {
 		return false;
 	}
@@ -481,8 +492,9 @@ async function importThumbnail(env: YtJobsEnv, item: ItemRow, video: VideoObject
 		await touchItem(db, item.id, { thumbnail_state: video.thumbnailType === 'custom' ? 'done' : 'failed' });
 		return;
 	}
-	const res = await fetch(item.thumbnail_url);
-	if (res.status === 404) {
+	const res = await fetch(item.thumbnail_url, { redirect: 'manual' });
+	if (res.status === 404 || (res.status >= 300 && res.status < 400)) {
+		await res.body?.cancel();
 		await touchItem(db, item.id, { thumbnail_state: 'failed' });
 		return;
 	}

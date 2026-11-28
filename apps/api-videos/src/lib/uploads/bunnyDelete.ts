@@ -16,6 +16,7 @@
  * queue dead-letters the message (processor DLQ consumer → dead_letters).
  */
 
+import { z } from 'zod';
 import { logger } from '../logger';
 import { deleteBunnyVideo, type ReaperEnv } from './reaper';
 
@@ -34,8 +35,13 @@ export interface BunnyDeleteMessage {
 type QueueLike = { send(body: unknown, options?: { delaySeconds?: number }): Promise<void> };
 export type BunnyDeleteEnv = Pick<ReaperEnv, 'videos' | 'bunny-stream-key' | 'bunny_stream_library_id'>;
 
+const BunnyDeleteBody = z.object({
+	kind: z.literal(BUNNY_DELETE_KIND),
+	videoId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/), reason: z.string().max(256), at: z.iso.datetime(),
+});
+
 export function isBunnyDeleteMessage(body: unknown): body is BunnyDeleteMessage {
-	return !!body && typeof body === 'object' && (body as { kind?: unknown }).kind === BUNNY_DELETE_KIND;
+	return BunnyDeleteBody.safeParse(body).success;
 }
 
 /**
@@ -72,8 +78,8 @@ interface QueueMessageLike<T> {
 export async function handleBunnyDeleteBatch(batch: { messages: readonly QueueMessageLike<unknown>[] }, env: BunnyDeleteEnv): Promise<void> {
 	for (const msg of batch.messages) {
 		const body = msg.body as BunnyDeleteMessage;
-		if (!isBunnyDeleteMessage(body) || typeof body.videoId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(body.videoId)) {
-			logger.error('[BunnyDelete] Malformed message dropped', { body });
+		if (!isBunnyDeleteMessage(body)) {
+			logger.error('[BunnyDelete] Malformed message dropped');
 			msg.ack();
 			continue;
 		}

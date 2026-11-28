@@ -144,6 +144,16 @@ describe('every library, every legacy record', () => {
 		assert.deepEqual(rows.results.map((r: any) => r.id), ['k-legacy-api', 'l-other-lib']);
 	});
 
+	it('uses dimensions without following a media playlist on another host', async () => {
+		const id = 'another-host';
+		const video = ready(id, { playUrl: `https://vz-other.b-cdn.net/${id}/playlist.m3u8` });
+		const env = makeEnv({ [id]: video });
+		playlists[`/${id}/playlist.m3u8`] = '#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=720x1280\nhttps://example.org/video.m3u8\n';
+		await runVideoFormatPage(env, message(), { now: NOW });
+		assert.equal((await stored(env, id)).width, 720);
+		assert.equal(fetched.some((url) => new URL(url).hostname === 'example.org'), false);
+	});
+
 	it('pages wait between each other (rate limit) and the daily run starts only after an applied run', async () => {
 		const videos: Record<string, unknown> = {};
 		for (let i = 0; i < 3; i++) videos[`v${i}`] = ready(`v${i}`, { duration: 30, width: 720, height: 1280 });

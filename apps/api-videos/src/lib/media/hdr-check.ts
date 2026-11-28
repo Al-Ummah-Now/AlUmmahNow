@@ -7,6 +7,8 @@
  * encode makes every rung, so one rung tells). One page per message on the processing-check queue
  * (index.ts queue()), like the MP4 backfill. The latest run is in global_settings `ops/hdr-check/latest.json`.
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { hdrKindOf, HDR_CHECK_MAX_ITEMS, initColors, mediaPrefix, shownR2, underHold, type HdrCheckCounts, type HdrCheckItem, type HdrCheckRun } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -42,9 +44,13 @@ const outOfReach = (video: Video | null): boolean => !video || !!video.isDeleted
 /** Stored with the run: pages already done, so a redelivered page counts nothing twice. */
 type StoredRun = HdrCheckRun & { nextPage: number };
 
+const HdrCheckBody = z.object({
+	kind: z.literal(HDR_CHECK_KIND),
+	runId: RecordId.min(8).max(64), page: z.number().int().nonnegative(), cursor: z.string().max(4096).nullable(),
+}).strict();
+
 export function isHdrCheckMessage(body: unknown): body is HdrCheckMessage {
-	const m = body as Partial<HdrCheckMessage> | null;
-	return !!m && m.kind === HDR_CHECK_KIND && typeof m.runId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.runId) && Number.isInteger(m.page) && (m.page as number) >= 0;
+	return HdrCheckBody.safeParse(body).success;
 }
 
 /** The ready rendition. A video being encoded (again) is skipped: what comes out is SDR. */

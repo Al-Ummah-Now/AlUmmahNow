@@ -1,4 +1,6 @@
 import type { ErrorReporterEnv, ExecutionContextLike } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { RecordId } from '../../../validation/identifiers';
 import type { BunnyLibrariesEnv } from '../../bunny/libraries';
 import type { MediaEnv } from '../r2-delivery';
 
@@ -27,15 +29,14 @@ export interface BackfillMessage {
 	offset?: number;
 }
 
-const SAFE = /^[A-Za-z0-9-]{8,64}$/;
+const BackfillBody = z.object({
+	kind: z.literal(BACKFILL_KIND),
+	runId: RecordId.min(8).max(64).optional(), videoId: RecordId.min(8).max(64).optional(),
+	op: z.enum(['estimate', 'tick', 'copy', 'verify', 'removal']), offset: z.number().int().nonnegative().optional(),
+});
 
 export function isBackfillMessage(body: unknown): body is BackfillMessage {
-	const m = body as Partial<BackfillMessage> | null;
-	if (!m || m.kind !== BACKFILL_KIND) return false;
-	if (!['estimate', 'tick', 'copy', 'verify', 'removal'].includes(m.op as string)) return false;
-	if (m.runId !== undefined && !SAFE.test(m.runId)) return false;
-	if (m.videoId !== undefined && !SAFE.test(m.videoId)) return false;
-	return true;
+	return BackfillBody.safeParse(body).success;
 }
 
 /** Queue deliveries of one message: 1 + max_retries (processing-check queue: 5). The last one dead-letters. */

@@ -10,6 +10,8 @@
  *
  * Bunny is never touched here: every Bunny path works exactly as before.
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { r2ThumbnailPrefix } from '../thumbnail/store';
 import { isR2FrameOf } from '../thumbnail/shape';
 import { isStale as isPrebuiltStale } from './prebuilt';
@@ -190,9 +192,14 @@ export interface MediaMoveMessage {
 	rev?: string;
 	from?: MediaAccess;
 }
+const MediaMoveBody = z.object({
+	kind: z.literal(MEDIA_MOVE_KIND),
+	videoId: z.string().refine(isMediaVideoId), moveId: RecordId, rev: z.string().refine(isMediaRev).optional(),
+	to: z.enum(['pub', 'priv']), from: z.enum(['pub', 'priv']).optional(),
+});
+
 export function isMediaMoveMessage(body: unknown): body is MediaMoveMessage {
-	const b = body as Partial<MediaMoveMessage> | null;
-	return !!b && b.kind === MEDIA_MOVE_KIND && typeof b.videoId === 'string' && (b.to === 'pub' || b.to === 'priv');
+	return MediaMoveBody.safeParse(body).success;
 }
 
 interface MediaRetireMessage {

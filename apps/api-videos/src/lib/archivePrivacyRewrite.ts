@@ -27,6 +27,8 @@
  * content exists any more (deleted, or its owner erased) the titles become placeholders at once.
  * Entries without titles are left as they are.
  */
+import { z } from 'zod';
+import { RecordId } from '../validation/identifiers';
 import {
 	ARCHIVE_PRIVACY_VERSION,
 	archivePseudonym,
@@ -126,10 +128,14 @@ interface Env {
 
 const EMPTY: PrefixCounts = { listed: 0, stamped: 0, clean: 0, rewritten: 0, deleted: 0, unreadable: 0 };
 
+const ArchivePrivacyBody = z.object({
+	kind: z.literal(ARCHIVE_PRIVACY_REWRITE_KIND),
+	runId: RecordId.min(8).max(64), lane: z.number().int().nonnegative(), prefixIndex: z.number().int().nonnegative(), cursor: z.string().max(4096).nullable(),
+	start: z.object({ dryRun: z.boolean(), lanes: z.number().int().positive(), limit: z.number().int().positive().optional(), mode: z.enum(['privacy', 'titles']).optional() }).optional(),
+}).strict();
+
 export function isArchivePrivacyMessage(body: unknown): body is ArchivePrivacyMessage {
-	const m = body as Partial<ArchivePrivacyMessage> | null;
-	return !!m && m.kind === ARCHIVE_PRIVACY_REWRITE_KIND && typeof m.runId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.runId)
-		&& Number.isInteger(m.lane) && (m.lane as number) >= 0 && Number.isInteger(m.prefixIndex) && (m.prefixIndex as number) >= 0;
+	return ArchivePrivacyBody.safeParse(body).success;
 }
 
 /** Day prefixes of the dated archive (`YYYY-MM-DD`), oldest first, then the extra prefixes. */

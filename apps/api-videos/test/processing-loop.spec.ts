@@ -1210,3 +1210,20 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		assert.ok(!errIdx.result.videos.some((x: any) => x.id === readyStalledId), '/errors must exclude ready video with stale issue');
 	});
 });
+
+it('acknowledges malformed queue records without reading processing state or retrying', async () => {
+	const valid = { kind: 'processing-check', videoId: ID, loopId: 'loop-id', attempt: 0, startedAt: NOW.toISOString() };
+	let acknowledged = 0;
+	const rejectAccess = () => assert.fail('malformed messages must not reach a processing binding');
+	const messages = [
+		{ ...valid, videoId: 123 },
+		{ ...valid, loopId: 'x'.repeat(129) },
+		{ ...valid, attempt: '0' },
+		{ ...valid, startedAt: 'yesterday' },
+	].map((body) => ({ body, attempts: 1, ack: () => { acknowledged++; }, retry: rejectAccess }));
+	await handleProcessingCheckBatch({ messages }, {
+		get global_settings() { return rejectAccess(); },
+		get videos() { return rejectAccess(); },
+	} as never);
+	assert.equal(acknowledged, messages.length);
+});

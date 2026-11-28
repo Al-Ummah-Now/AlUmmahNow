@@ -27,6 +27,8 @@
  * again when the add runs. The upload itself never fails because of an add.
  */
 
+import { z } from 'zod';
+import { RecordId } from '../validation/identifiers';
 import { PLAYLIST_MAX_VIDEOS, playlistSortOf, reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import R2Repository from './r2Repo';
@@ -106,8 +108,13 @@ export function isValidOrderKey(key: unknown): key is string {
 	return typeof key === 'string' && ORDER_KEY_PATTERN.test(key);
 }
 
+const PlaylistAddBody = z.object({
+	kind: z.literal(PLAYLIST_ADD_KIND),
+	videoId: RecordId, playlistId: RecordId, loopId: RecordId,
+});
+
 export function isPlaylistAddMessage(body: unknown): body is PlaylistAddMessage {
-	return !!body && typeof body === 'object' && (body as { kind?: unknown }).kind === PLAYLIST_ADD_KIND;
+	return PlaylistAddBody.safeParse(body).success;
 }
 
 /** Backoff between deliveries of a failing add: 30 s, 2 m, 8 m, 32 m, then hourly. */
@@ -399,8 +406,8 @@ interface QueueMessageLike<T> {
 export async function handlePlaylistAddBatch(batch: { messages: readonly QueueMessageLike<unknown>[] }, env: PlaylistAddEnv, ctx?: ExecutionContextLike): Promise<void> {
 	for (const msg of batch.messages) {
 		const body = msg.body as PlaylistAddMessage;
-		if (!isPlaylistAddMessage(body) || !isValidId(body.videoId) || !isValidId(body.playlistId) || typeof body.loopId !== 'string') {
-			logger.error('[PlaylistAdds] Malformed message dropped', { body });
+		if (!isPlaylistAddMessage(body)) {
+			logger.error('[PlaylistAdds] Malformed message dropped');
 			msg.ack();
 			continue;
 		}

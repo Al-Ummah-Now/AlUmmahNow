@@ -11,6 +11,7 @@
  * admin Errors page, whose Retry queues it again (POST /internal/account-events/retry). An event whose message was
  * lost is queued again by the hourly sweep.
  */
+import { z } from 'zod';
 import { reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { AccountEventType, SetEnv } from './set';
@@ -58,8 +59,12 @@ export const KEEP_MS = 35 * 24 * 60 * 60_000;
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 export const accountEventKey = (jti: string) => `account-event:${jti}`;
 export const isAccountEventQueue = (queue: string) => queue.startsWith('al-ummah-now-account-events');
+const AccountEventBody = z.object({
+	kind: z.literal('account-event'),
+	jti: z.string().regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/),
+});
 export const isAccountEventMessage = (body: unknown): body is AccountEventMessage =>
-	(body as AccountEventMessage | null)?.kind === 'account-event' && typeof (body as AccountEventMessage).jti === 'string';
+	AccountEventBody.safeParse(body).success;
 
 export function dbOf(env: AccountEventsEnv): D1Database {
 	if (!env.SEARCH_DB) throw new Error('SEARCH_DB is not bound');

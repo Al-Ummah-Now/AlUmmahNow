@@ -11,6 +11,8 @@
  * Start a run by sending { kind: 'published-at-backfill', runId, page: 0, cursor: null, dryRun,
  * limit } to the env's processing-check queue (scripts/release/published-at-backfill.ts).
  */
+import { z } from 'zod';
+import { RecordId } from '../validation/identifiers';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { isPublishedState, type PublishableState } from './published';
@@ -62,10 +64,14 @@ type Video = PublishableState & { id?: string; dateCreated?: string; playableAt?
 
 const EMPTY: PublishedAtPageCounts = { scanned: 0, fromPlayable: 0, fromCreated: 0, alreadySet: 0, notPublished: 0, noDate: 0 };
 
+const PublishedAtBackfillBody = z.object({
+	kind: z.literal(PUBLISHED_AT_BACKFILL_KIND),
+	runId: RecordId.min(8).max(64), page: z.number().int().nonnegative(), cursor: z.string().max(4096).nullable(),
+	dryRun: z.boolean().optional(), limit: z.number().int().positive().optional(),
+}).strict();
+
 export function isPublishedAtBackfillMessage(body: unknown): body is PublishedAtBackfillMessage {
-	const m = body as Partial<PublishedAtBackfillMessage> | null;
-	return !!m && m.kind === PUBLISHED_AT_BACKFILL_KIND && typeof m.runId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.runId)
-		&& Number.isInteger(m.page) && (m.page as number) >= 0;
+	return PublishedAtBackfillBody.safeParse(body).success;
 }
 
 const validTime = (value: unknown): string | null =>

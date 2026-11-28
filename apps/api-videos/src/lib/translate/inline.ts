@@ -19,6 +19,7 @@ import {
 	type MetadataTranslatePayload,
 	type VideoObject,
 } from '@al-ummah/shared-types';
+import { z } from 'zod';
 import { logger } from '../logger';
 import { readCaptionSettings, translationProviderFor, type CaptionJobsEnv, type CaptionSettings } from '../captions/jobs';
 
@@ -171,6 +172,18 @@ async function apiKey(env: CaptionJobsEnv): Promise<string> {
 	return typeof v === 'string' ? v : ((await v?.get()) ?? '');
 }
 
+const TranslateAnswer = z.object({
+	items: z.array(z.object({
+		id: z.string().min(1).max(80),
+		text: z.string().max(INLINE_TRANSLATE_LIMITS.textChars * 4),
+		quran: z.array(z.object({ range: z.string().max(40), label: z.string().max(80) })).max(500).optional(),
+		refused: z.literal('quran').optional(),
+	})).max(INLINE_TRANSLATE_LIMITS.texts),
+	provider: z.enum(['workers-ai', 'deepl']),
+	model: z.string().min(1).max(256),
+	usd: z.number().nonnegative(),
+});
+
 export async function callProcessor(
 	env: InlineTranslateEnv,
 	body: { items: InlineTranslateItem[]; from: string; to: string; field: InlineTranslateField; provider: 'workers-ai' | 'deepl'; dailyBudgetUsd: number; context?: { title?: string; channel?: string }; mode?: 'admin_field' },
@@ -186,7 +199,11 @@ export async function callProcessor(
 		throw new TranslateHttpError(503, answer?.error === 'budget_spent' ? 'budget_spent' : 'unavailable');
 	}
 	if (!res.ok) throw new TranslateHttpError(502, 'translation_failed');
-	return (await res.json()) as InternalTranslateResponse;
+	const parsed = TranslateAnswer.safeParse(await res.json().catch(() => null));
+	if (!parsed.success) throw new TranslateHttpError(502, 'translation_failed');
+	const requestedIds = new Set(body.items.map(({ id }) => id));
+	if (!parsed.data.items.every(({ id }) => requestedIds.delete(id))) throw new TranslateHttpError(502, 'translation_failed');
+	return parsed.data;
 }
 
 // ---------------------------------------------------------------------------

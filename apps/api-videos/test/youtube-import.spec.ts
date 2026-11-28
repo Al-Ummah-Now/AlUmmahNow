@@ -171,7 +171,10 @@ function installGoogle() {
 				return new Response(`WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n${resource}\n`, { headers: { 'content-type': 'text/vtt' } });
 			}
 		}
-		if (url.host === 'i.ytimg.com') return new Response(THUMB, { headers: { 'content-type': 'image/jpeg' } });
+		if (url.host === 'i.ytimg.com') {
+			assert.equal(init?.redirect, 'manual');
+			return new Response(THUMB, { headers: { 'content-type': 'image/jpeg' } });
+		}
 		return new Response('unexpected fetch', { status: 599 });
 	}) as typeof fetch;
 }

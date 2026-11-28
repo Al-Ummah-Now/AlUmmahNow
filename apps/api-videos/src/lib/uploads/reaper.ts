@@ -35,6 +35,8 @@
  * queue dead-letters the message (processor DLQ consumer → dead_letters).
  */
 
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { bunnyRef } from '../media/providers';
 import { readRecordByBunnyGuid, videoIdForRef } from '../media/refs';
 import { r2UploadOffset } from '../media/r2-tus';
@@ -651,8 +653,14 @@ interface QueueMessageLike<T> {
 	retry(options?: { delaySeconds?: number }): void;
 }
 
+const ReaperBody = z.object({
+	kind: z.literal(REAPER_KIND),
+	videoId: RecordId, target: z.enum(['abandoned', 'orphan']), loopId: RecordId,
+	check: z.number().int().nonnegative(), force: z.boolean().optional(), actor: RecordId.optional(), startedAt: z.iso.datetime(),
+});
+
 export function isReaperMessage(body: unknown): body is ReaperMessage {
-	return !!body && typeof body === 'object' && (body as { kind?: unknown }).kind === REAPER_KIND;
+	return ReaperBody.safeParse(body).success;
 }
 
 /** Backoff between deliveries of a failing check: 1 m, 4 m, 16 m, then hourly. */
@@ -664,8 +672,8 @@ export function reaperRetryDelaySeconds(attempts: number): number {
 export async function handleReaperBatch(batch: { messages: readonly QueueMessageLike<unknown>[] }, env: ReaperEnv): Promise<void> {
 	for (const msg of batch.messages) {
 		const body = msg.body as ReaperMessage;
-		if (!isReaperMessage(body) || !body.videoId || !body.loopId || (body.target !== 'abandoned' && body.target !== 'orphan')) {
-			logger.error('[UploadReaper] Malformed message dropped', { body });
+		if (!isReaperMessage(body)) {
+			logger.error('[UploadReaper] Malformed message dropped');
 			msg.ack();
 			continue;
 		}

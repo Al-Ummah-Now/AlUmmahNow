@@ -419,6 +419,14 @@ describe('signing, thumbnails, originals', () => {
 		assert.equal((await enqueueTranscode(e as never, ID, 'upload')).queued, true);
 	});
 
+	it('playlist locations only use Bunny CDN hosts or the configured hostname', () => {
+		const settings = { bunny_hostname: BUNNY_HOST };
+		assert.deepEqual(playlistLocation(settings, {
+			id: ID, playUrl: `https://example.org/${ID}/playlist.m3u8`,
+		}), { host: BUNNY_HOST, id: ID });
+		assert.equal(playlistLocation({}, { id: ID, playUrl: `https://example.org/${ID}/playlist.m3u8` }), null);
+	});
+
 	it('the Short/format check reads Bunny under the GUID, and an R2-only video from its transcode', async () => {
 		const bunnyVideo = { id: ID, playUrl: `https://${BUNNY_HOST}/${GUID}/playlist.m3u8`, media: initialMedia(['bunny'], { videoId: ID, bunnyGuid: GUID }) };
 		assert.deepEqual(playlistLocation({ bunny_hostname: BUNNY_HOST }, bunnyVideo), { host: BUNNY_HOST, id: GUID });

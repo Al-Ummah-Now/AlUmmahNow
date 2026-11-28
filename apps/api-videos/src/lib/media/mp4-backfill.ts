@@ -17,6 +17,8 @@
  * Start a run with scripts/release/mp4-backfill.ts (sends { kind: 'mp4-backfill', runId, page: 0,
  * cursor: null, dryRun, limit } to the env's processing-check queue).
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import type { MediaAccess, Mp4JobMessage, VideoR2State } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -94,9 +96,14 @@ interface Video {
 
 const EMPTY: Mp4BackfillCounts = { scanned: 0, candidate: 0, candidatePublic: 0, hasMp4: 0, notReady: 0, deleted: 0, missing: 0, queued: 0 };
 
+const Mp4BackfillBody = z.object({
+	kind: z.literal(MP4_BACKFILL_KIND),
+	runId: RecordId.min(8).max(64), page: z.number().int().nonnegative(), cursor: z.string().max(4096).nullable(),
+	dryRun: z.boolean().optional(), limit: z.number().int().positive().optional(),
+}).strict();
+
 export function isMp4BackfillMessage(body: unknown): body is Mp4BackfillMessage {
-	const m = body as Partial<Mp4BackfillMessage> | null;
-	return !!m && m.kind === MP4_BACKFILL_KIND && typeof m.runId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(m.runId) && Number.isInteger(m.page) && (m.page as number) >= 0;
+	return Mp4BackfillBody.safeParse(body).success;
 }
 
 /** The rung the transcoder remuxes (apps/media/container/ladder.mjs mp4Rung): 480p, else 360p, else the first. */
