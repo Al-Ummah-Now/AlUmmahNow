@@ -18,6 +18,7 @@ import { CAPTION_JOB_ERRORS, captionWorkPrefix, type VideoObject } from '@al-umm
 import R2Repository from '../../lib/r2Repo';
 import { CaptionJobHttpError, finishJob, onAudioReport, onProgress, readJob, retryJob, type CaptionJobsEnv } from '../../lib/captions/jobs';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { isVideoPubliclyVisible } from '../../lib/visibility';
 import { saveViewerTranslation, TranslateHttpError } from '../../lib/translate/inline';
 
@@ -105,7 +106,7 @@ export function createCaptionJobsInternalRouter() {
 		const jobId = c.req.param('jobId');
 		if (!parsed.success || !RecordId.safeParse(jobId).success ||
 			('manifestKey' in parsed.data && parsed.data.manifestKey !== captionWorkPrefix(jobId) + 'manifest.json')) {
-			return c.json({ success: false, error: 'invalid_report' }, 400);
+			return apiError(c, 400, 'invalid_report', { error: 'invalid_report' });
 		}
 		const report = parsed.data;
 		const job = await readJob(c.env, jobId);

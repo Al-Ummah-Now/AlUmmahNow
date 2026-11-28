@@ -26,6 +26,7 @@ import { RecordId } from '../../validation/identifiers';
 import { IntegerQuery, optionalJson } from '../../validation/legacy-request';
 import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import R2Repository from '../../lib/r2Repo';
 import {
 	fetchBunnyVideo,
@@ -467,7 +468,7 @@ export function createProcessingInternalRouter() {
 
 	app.get('/videos', async (c) => {
 		const parsed = VideoQuery.safeParse(c.req.query());
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid video filters' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid video filters' });
 		const { status = 'stuck', channelId, bunny, offset = 0 } = parsed.data;
 		const withBunny = bunny === '1';
 		const limit = Math.min(Math.max(parsed.data.limit || 100, 1), 500);
@@ -517,7 +518,7 @@ export function createProcessingInternalRouter() {
 	// syncs it now and keeps checking until Bunny finishes (retry, backoff, DLQ).
 	app.post('/sync', async (c) => {
 		const parsed = Sync.safeParse(await c.req.json().catch(() => null));
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid sync options' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid sync options' });
 		const { ids, dryRun = true } = parsed.data;
 		const results = await mapLimited(ids, PROCESSING_BUNNY_CONCURRENCY, async (id) => {
 			try {
@@ -535,7 +536,7 @@ export function createProcessingInternalRouter() {
 	// processing checks (stored by the processor's DLQ consumer in NOTIFICATIONS_DB).
 	app.get('/errors', async (c) => {
 		const parsed = Limit.safeParse(c.req.query());
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid limit' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid limit' });
 		const limit = Math.min(Math.max(parsed.data.limit || 100, 1), 500);
 		const { items: videos, next, truncated } = await loadProcessingCandidates(c.env, 'errors', limit);
 		const moreVideos = next !== null || truncated || videos.length === limit;
@@ -604,7 +605,7 @@ export function createProcessingInternalRouter() {
 	// Thumbnail aspect repair (lib/thumbnail/repair.ts): an admin job, dry run first
 	app.get('/thumbnails', async (c) => {
 		const parsed = Limit.safeParse(c.req.query());
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid limit' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid limit' });
 		const limit = Math.min(Math.max(parsed.data.limit || 1, 1), 20);
 		const runs = await listJobs(c.env as unknown as JobEnv, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit });
 		return c.json({ success: true, result: { runs } });
@@ -612,7 +613,7 @@ export function createProcessingInternalRouter() {
 
 	app.post('/thumbnails', async (c) => {
 		const parsed = ThumbnailJob.safeParse(await optionalJson(c.req));
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid thumbnail repair options' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid thumbnail repair options' });
 		const { ids, dryRun = true, actorId = 'admin' } = parsed.data;
 		const job = await createJob(c.env as unknown as JobEnv, {
 			kind: THUMBNAIL_REPAIR_JOB,
@@ -628,7 +629,7 @@ export function createProcessingInternalRouter() {
 	app.post('/thumbnails/:jobId/retry', async (c) => {
 		const env = c.env as unknown as JobEnv;
 		const jobId = RecordId.safeParse(c.req.param('jobId'));
-		if (!jobId.success) return c.json({ success: false, error: 'Invalid job id' }, 400);
+		if (!jobId.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid job id' });
 		const existing = await getJob(env, jobId.data);
 		if (!existing || existing.kind !== THUMBNAIL_REPAIR_JOB) return c.json({ success: false, error: 'Unknown thumbnail run' }, 404);
 		if (existing.status !== 'failed') return c.json({ success: false, error: 'Only a failed run can be retried' }, 409);
@@ -639,7 +640,7 @@ export function createProcessingInternalRouter() {
 	// (lib/search/ownershipRebuild.ts) or a search table (`search:<entity>`, lib/search/backfill.ts)
 	app.post('/index-rebuild', async (c) => {
 		const parsed = IndexRebuild.safeParse(await c.req.json().catch(() => null));
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid rebuild options' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid rebuild options' });
 		const body = parsed.data;
 		const searchEntity = typeof body.kind === 'string' && body.kind.startsWith('search:') ? body.kind.slice('search:'.length) : null;
 		if (!isOwnershipKind(body.kind) && !isSearchEntity(searchEntity)) {
@@ -700,7 +701,7 @@ export function createProcessingInternalRouter() {
 
 	app.post('/mark-failed', async (c) => {
 		const parsed = MarkFailed.safeParse(await c.req.json().catch(() => null));
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid failure options' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid failure options' });
 		const { ids } = parsed.data;
 		const reason = parsed.data.reason?.trim() || 'Marked by an admin: upload again';
 		const now = new Date().toISOString();

@@ -12,6 +12,7 @@ import { optionalJson } from '../../validation/legacy-request';
 import { Hono } from 'hono';
 import { videoFormatRunView as view } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { readVideoFormatRun, startVideoFormatRun, type VideoFormatEnv } from '../../lib/video-format/job';
 
 const Backfill = z.object({ dryRun: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional() });
@@ -21,7 +22,7 @@ export function createVideoFormatInternalRouter() {
 
 	app.post('/backfill', async (c) => {
 		const parsed = Backfill.safeParse(await optionalJson(c.req));
-		if (!parsed.success) return c.json({ success: false, error: 'Invalid backfill options' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'Invalid backfill options' });
 		const { dryRun = true, limit } = parsed.data;
 		try {
 			const run = await startVideoFormatRun(c.env, { dryRun, limit, requestedBy: 'ops' });

@@ -123,12 +123,12 @@ apps/api-videos/src/endpoints/live/liveStreamCreate.ts 2
 apps/api-videos/src/endpoints/live/liveStreamsList.ts 1
 apps/api-videos/src/endpoints/live/liveStreamUpdate.ts 6
 apps/api-videos/src/endpoints/media/backfillInternal.ts 7
-apps/api-videos/src/endpoints/media/mediaInternal.ts 26
+apps/api-videos/src/endpoints/media/mediaInternal.ts 18
 apps/api-videos/src/endpoints/moderation/reportCreate.ts 3
 apps/api-videos/src/endpoints/monitoring/statusPage.ts 1
 apps/api-videos/src/endpoints/monitoring/sync-r2.ts 1
 apps/api-videos/src/endpoints/notifications/notifications.ts 4
-apps/api-videos/src/endpoints/notifications/notificationsInternal.ts 2
+apps/api-videos/src/endpoints/notifications/notificationsInternal.ts 1
 apps/api-videos/src/endpoints/playlist/playlistAddsInternal.ts 2
 apps/api-videos/src/endpoints/playlist/playlistAddVideo.ts 5
 apps/api-videos/src/endpoints/playlist/playlistBulk.ts 6
@@ -174,7 +174,7 @@ apps/api-videos/src/endpoints/video/commentModeration.ts 3
 apps/api-videos/src/endpoints/video/commentReaction.ts 1
 apps/api-videos/src/endpoints/video/commentRepliesList.ts 2
 apps/api-videos/src/endpoints/video/commentUpdate.ts 8
-apps/api-videos/src/endpoints/video/processingInternal.ts 10
+apps/api-videos/src/endpoints/video/processingInternal.ts 7
 apps/api-videos/src/endpoints/video/publicPlay.ts 2
 apps/api-videos/src/endpoints/video/renditions.ts 1
 apps/api-videos/src/endpoints/video/scheduleCreate.ts 6
@@ -194,7 +194,7 @@ apps/api-videos/src/endpoints/video/uploadComplete.ts 5
 apps/api-videos/src/endpoints/video/uploadFailed.ts 6
 apps/api-videos/src/endpoints/video/uploadInitiate.ts 10
 apps/api-videos/src/endpoints/video/uploadResume.ts 6
-apps/api-videos/src/endpoints/video/uploadsInternal.ts 6
+apps/api-videos/src/endpoints/video/uploadsInternal.ts 5
 apps/api-videos/src/endpoints/video/videoBulkDelete.ts 2
 apps/api-videos/src/endpoints/video/videoBulkStudio.ts 6
 apps/api-videos/src/endpoints/video/videoBulkUpdate.ts 7
