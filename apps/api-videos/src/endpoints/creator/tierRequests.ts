@@ -22,6 +22,7 @@ import { createTierRequest, decodeTierRequestCursor, listMyRequests, ownRequest,
 import { readTier } from '../../lib/creatorTiers';
 import { enqueueNotification, type NotificationsEnv } from '../../lib/notifications';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { turnstileMode } from '../../lib/bot-guard';
 import { upgradeMode } from '../../lib/upgradeMode';
 import { featureOff } from '../../lib/features/off';
@@ -99,7 +100,7 @@ export async function handleMyTierRequests(c: Context) {
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
 		const parsed = HistoryQuery.safeParse(c.req.query());
-		if (!parsed.success) return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'Invalid request history query' }, 400);
+		if (!parsed.success) return apiError(c, 400, TIER_REQUEST_ERRORS.invalid, { error: 'Invalid request history query' });
 		const result = await listMyRequests(c.env.SEARCH_DB, userId, parsed.data);
 		return c.json({ success: true, result }, 200, { 'Cache-Control': 'private, no-store' });
 	} catch (error) {
@@ -112,7 +113,7 @@ export async function handleWithdrawTierRequest(c: Context) {
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
 		const parsed = RequestId.safeParse(c.req.param('id'));
-		if (!parsed.success) return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'Invalid request ID' }, 400);
+		if (!parsed.success) return apiError(c, 400, TIER_REQUEST_ERRORS.invalid, { error: 'Invalid request ID' });
 		const request = await withdrawTierRequest(c.env.SEARCH_DB, userId, parsed.data);
 		return c.json({ success: true, result: { request: ownRequest(request) } });
 	} catch (error) {

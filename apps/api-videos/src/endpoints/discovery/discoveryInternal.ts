@@ -12,6 +12,7 @@ import { RecordId } from '../../validation/identifiers';
 import { IntegerQuery, optionalJson } from '../../validation/legacy-request';
 import { Hono } from 'hono';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { DISCOVERY_NEEDS_ACTION_KEY, RAIL_IDS, discoveryJobs, readLastRun, startDiscoveryRank, type DiscoveryEnv } from '../../lib/ranking/job';
 import { railPage } from '../../lib/ranking/serve';
 
@@ -52,7 +53,7 @@ export function createDiscoveryInternalRouter() {
 
 	app.post('/rank', async (c) => {
 		const parsed = Rank.safeParse(await optionalJson(c.req));
-		if (!parsed.success) return c.json({ success: false, error: 'invalid_request' }, 400);
+		if (!parsed.success) return apiError(c, 400, 'invalid_request', { error: 'invalid_request' });
 		const actorId = parsed.data.actorId ?? 'admin';
 		const { job, existing } = await startDiscoveryRank(c.env, actorId);
 		return c.json({ success: true, result: { job, existing } }, 202);

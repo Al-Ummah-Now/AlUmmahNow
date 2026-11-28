@@ -12,6 +12,7 @@ import { RecordId } from '../../validation/identifiers';
 import { ObjectKey } from '../../validation/legacy-request';
 import { isAudioTrackId, isMediaRev } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { onPackageReport, onProbeReport, onTrackPrepared, retryAudio, type AudioTracksEnv } from '../../lib/audio-tracks/service';
 
 type Ctx = { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -90,7 +91,7 @@ export function createAudioTracksInternalRouter() {
 		if (!isAudioTrackId(trackId)) return c.json({ success: false, error: 'invalid_track' }, 400);
 		if ('reviewManifestKey' in report && report.reviewManifestKey !== undefined &&
 			report.reviewManifestKey !== ['review', videoId, 'audio-' + trackId + '-' + report.jobId.slice(0, 8), 'manifest.json'].join('/')) {
-			return c.json({ success: false, error: 'invalid_report' }, 400);
+			return apiError(c, 400, 'invalid_report', { error: 'invalid_report' });
 		}
 		const out = await onTrackPrepared(c.env, ctxOf(c as never), videoId, trackId, report);
 		// Stale or already applied: nothing to do, the media worker stops resending
