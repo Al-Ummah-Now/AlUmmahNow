@@ -1,3 +1,4 @@
+import { QafAvailability, QafCatalogLookup, QafReadPassage, QafSearch } from '../endpoints/community/qaf';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 
@@ -79,6 +80,12 @@ communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/h
 communityRouter.post('/media/upload/images', UploadCommunityPostImages);
 communityRouter.post('/media/upload/gif', UploadCommunityPostGif);
 communityRouter.post('/media/link-preview', CommunityLinkPreview);
+
+// Source helper for the channel composer
+communityRouter.get('/channels/:channelId/sources', QafAvailability);
+communityRouter.post('/channels/:channelId/sources/search', QafSearch);
+communityRouter.get('/channels/:channelId/sources/passages/:id', QafReadPassage);
+communityRouter.get('/channels/:channelId/sources/catalog', QafCatalogLookup);
 
 // Default export
 export default communityRouter;

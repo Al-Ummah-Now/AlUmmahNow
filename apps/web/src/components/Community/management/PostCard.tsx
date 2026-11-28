@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
 import { useState } from 'react';
-import { CommunityPost, PostType, PostStatus, formatNumber, formatTimeAgo } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, PostStatus, formatNumber, formatTimeAgo, qafPreviewText } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -119,7 +119,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </div>
 
               <p className="text-sm md:text-base line-clamp-2 mb-2">
-                {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
+                {qafPreviewText(post.content ?? '') || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 
               <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground">

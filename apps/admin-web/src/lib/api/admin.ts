@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, HdrCheckRun, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
+import type { QafLimits, QafSettings, AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, HdrCheckRun, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView, VideoFailure } from '@al-ummah/shared-types';
 import { VIDEO_FAILURES_MAX } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
@@ -955,4 +955,12 @@ export async function saveYoutubeImportClientSecret(value: string): Promise<Acti
 /** Puts failed per-object index repairs back in the repair job's queue: one, or all when `target` is omitted. */
 export async function retryIndexRepairs(target?: { entity: string; id: string }): Promise<ActionResult<{ rearmed: number; job: AdminJob | null }>> {
   return mutate('/api/processing/index-repairs/retry', 'POST', target ?? {});
+}
+
+export async function getQafSettings(): Promise<QafSettings> {
+  return fetchAdmin<QafSettings>('/api/qaf');
+}
+
+export async function saveQafSettings(input: Partial<QafLimits> & { key?: string | null }): Promise<ActionResult<QafSettings>> {
+  return mutate<QafSettings>('/api/qaf', 'PUT', input);
 }

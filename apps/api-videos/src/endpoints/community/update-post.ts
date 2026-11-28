@@ -1,3 +1,4 @@
+import { sanitizePostContent } from '../../lib/post-content';
 import { withPostViews } from '../../lib/post-views';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { z } from 'zod';
@@ -192,7 +193,7 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
       const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted'>(postKey, (fresh) => {
         if (fresh.status === PostStatus.DELETED) return { reject: 'deleted' };
         if (body.content !== undefined) {
-          fresh.content = body.content;
+          fresh.content = sanitizePostContent(body.content);
         }
         if (body.visibility !== undefined) {
           fresh.visibility = body.visibility;

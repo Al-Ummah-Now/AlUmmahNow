@@ -1,3 +1,4 @@
+import { postSanitizeOptions, sanitizePostContent } from '../../lib/post-content';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import {
@@ -19,17 +20,6 @@ import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
 import { can, channelRoleOf, parsePostFields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
-
-// Sanitization configuration for community posts
-// Allows basic formatting while preventing XSS attacks
-const sanitizeOptions = {
-  allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
-  allowedAttributes: {
-    'a': ['href']
-  },
-  allowedSchemes: ['http', 'https'],
-  disallowedTagsMode: 'discard' as const
-};
 
 // Every PostV2 kind (packages/shared-types/src/post-schema.ts). Article, cards and link content is
 // checked by parsePostFields, the one validator shared with the CMS and www.
@@ -225,18 +215,18 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         ...(ownerId !== userId ? { authorId: userId } : {}),
         type: body.type,
         ...v2.value,
-        content: body.content ? sanitizeHtml(body.content, sanitizeOptions) : undefined,
+        content: body.content ? sanitizePostContent(body.content) : undefined,
         images: body.images, // Images should be pre-uploaded via /api/community/media/upload/images
         videoId: body.videoId,
         gif: body.gif, // GIF should be pre-uploaded via /api/community/media/upload/gif
         poll: body.poll ? {
           ...body.poll,
-          question: sanitizeHtml(body.poll.question, sanitizeOptions),
+          question: sanitizeHtml(body.poll.question, postSanitizeOptions),
           totalVotes: 0,
           showResults: false,
           options: body.poll.options.map((opt, idx) => ({
             id: `option-${idx}`,
-            text: opt.text ? sanitizeHtml(opt.text, sanitizeOptions) : undefined,
+            text: opt.text ? sanitizeHtml(opt.text, postSanitizeOptions) : undefined,
             image: opt.image, // Poll option images should be pre-uploaded
             votes: 0,
             percentage: 0
@@ -244,13 +234,13 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         } : undefined,
         quiz: body.quiz ? {
           ...body.quiz,
-          question: sanitizeHtml(body.quiz.question, sanitizeOptions),
-          explanation: body.quiz.explanation ? sanitizeHtml(body.quiz.explanation, sanitizeOptions) : undefined,
+          question: sanitizeHtml(body.quiz.question, postSanitizeOptions),
+          explanation: body.quiz.explanation ? sanitizeHtml(body.quiz.explanation, postSanitizeOptions) : undefined,
           totalAttempts: 0,
           correctAttempts: 0,
           options: body.quiz.options.map((opt, idx) => ({
             id: `quiz-option-${idx}`,
-            text: sanitizeHtml(opt.text, sanitizeOptions),
+            text: sanitizeHtml(opt.text, postSanitizeOptions),
             image: opt.image, // Quiz option images should be pre-uploaded
           }))
         } : undefined,
