@@ -112,6 +112,15 @@ describe('SC-1: publish is a conditional write', () => {
 });
 
 describe('SC-2: the due scan is bounded and complete', () => {
+  it('only selects a schedule whose stored identity agrees with the object key', async () => {
+    const now = new Date('2026-11-09T12:30:00Z');
+    const bucket = new FakeR2(0);
+    bucket.set(buildScheduleKey(now, 'right'), meta('other', now));
+    bucket.set(buildScheduleKey(now, 'ok'), meta('ok', now));
+    const scan = await listDueSchedules(bucket as never, now);
+    assert.deepEqual(scan.due.map((row) => row.videoId), ['ok']);
+  });
+
   it('3000 entries over 4 days: oldest first, bounded reads, every due one is reached in a few runs', async () => {
     const now = new Date('2026-11-09T12:30:00Z');
     const bucket = new FakeR2(0);

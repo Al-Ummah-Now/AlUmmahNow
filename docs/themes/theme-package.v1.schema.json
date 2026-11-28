@@ -2115,8 +2115,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4000,
-      "pattern": "^(?![\\s\\S]*(?:url\\(|expression\\(|javascript:|var\\(--(?:fanous|m|r)-))(?:[^;{}<>\\\\@]|\\{(?:(?:color|brand|component|material|radius|spacing)\\.[a-zA-Z0-9.]+|asset:assets/[A-Za-z0-9._/-]+)\\})*$",
-      "description": "One CSS value. No ; { } < > \\ @ or url(). Tokens are {color.x}, {brand.x}, {component.part.name}, {material.x}, {radius.x}, {spacing.x}; images are {asset:assets/file.svg}. var() is only for layout variables a component sets (for example var(--from))."
+      "pattern": "^(?![\\s\\S]*(?:[iI][mM][aA][gG][eE](?:-[sS][eE][tT])?|[sS][rR][cC])\\([\\s\\S]*[\"'])(?![\\s\\S]*(?:[uU][rR][lL]\\(|[eE][xX][pP][rR][eE][sS][sS][iI][oO][nN]\\(|/\\*|javascript:|var\\(--(?:fanous|m|r)-))(?:[^;{}<>\\\\@]|\\{(?:(?:color|brand|component|material|radius|spacing)\\.[a-zA-Z0-9.]+|asset:assets/[A-Za-z0-9._/-]+)\\})*$",
+      "description": "One CSS value. No ; { } < > \\ @ comments, url() or quoted image sources. Tokens are {color.x}, {brand.x}, {component.part.name}, {material.x}, {radius.x}, {spacing.x}; images are {asset:assets/file.svg}. var() is only for layout variables a component sets (for example var(--from))."
     },
     "asset": {
       "type": "string",

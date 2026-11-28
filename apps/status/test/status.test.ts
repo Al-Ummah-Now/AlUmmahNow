@@ -182,9 +182,9 @@ describe('probes', () => {
     const calls: string[] = [];
     const f = fakeFetch(
       {
-        'https://videos.api.qa.alummahnow.net/api/videos': () => json({ data: [{ id: 'v1', playUrl: 'https://vz.b-cdn.net/tok/v1/playlist.m3u8', r2: { status: 'ready', rev: 'r1', access: 'pub' } }] }),
-        'https://media.qa.alummahnow.net/pub/v1/r1/master.m3u8': () => new Response('#EXTM3U\n'),
-        'https://vz.b-cdn.net/': () => new Response('#EXTM3U\n'),
+        'https://videos.api.qa.alummahnow.net/api/videos': () => json({ data: [{ id: 'video-01', playUrl: 'https://vz-cb79844a-c5d.b-cdn.net/tok/v1/playlist.m3u8', r2: { status: 'ready', rev: 'revision01', access: 'pub' } }] }),
+        'https://media.qa.alummahnow.net/pub/video-01/revision01/master.m3u8': () => new Response('#EXTM3U\n'),
+        'https://vz-cb79844a-c5d.b-cdn.net/': () => new Response('#EXTM3U\n'),
       },
       calls,
     );
@@ -192,6 +192,18 @@ describe('probes', () => {
     assert.deepEqual(probes.map((p) => [p.name, p.ok]), [['R2 media manifest', true], ['Bunny CDN manifest', true]]);
     const down = await playbackProbes({ fetch: fakeFetch({}) }, 'qa');
     assert.equal(classify('playback', down).raw, 'unknown');
+  });
+
+  it('does not probe URLs outside the media delivery hosts', async () => {
+    const calls: string[] = [];
+    const f = fakeFetch({
+      'https://videos.api.qa.alummahnow.net/api/videos': () => json({ data: [
+        { id: 'video-01', playUrl: 'https://other.example.test/playlist.m3u8', r2: { status: 'ready', rev: 'unknown format', access: 'pub' } },
+      ] }),
+    }, calls);
+    const results = await playbackProbes({ fetch: f }, 'qa');
+    assert.equal(results[0]?.skipped, true);
+    assert.equal(calls.length, 1);
   });
 
   it('uploads never create anything: only an unauthenticated POST that must get 401', async () => {

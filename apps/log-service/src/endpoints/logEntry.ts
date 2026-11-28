@@ -1,5 +1,5 @@
 import { OpenAPIRoute } from 'chanfana';
-import { Str } from '../lib/chanfana-params';
+import { formatLogLine, logEntry } from '../lib/log-record';
 import { z } from 'zod';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,12 +14,7 @@ export class LogEntry extends OpenAPIRoute {
       body: {
         content: {
           'application/json': {
-            schema: z.object({
-              app: Str({ description: 'App name (e.g., "api-videos", "websocket-server")' }),
-              level: Str({ description: 'Log level (debug, info, warn, error)' }),
-              message: Str({ description: 'Log message' }),
-              data: z.unknown().optional().describe('Optional data object'),
-            }),
+            schema: logEntry,
           },
         },
       },
@@ -61,18 +56,12 @@ export class LogEntry extends OpenAPIRoute {
   };
 
   async handle(c: any) {
+    const { body: log } = await this.getValidatedData<typeof this.schema>();
     try {
-      const request = await this.getValidatedData<typeof this.schema>();
-      const { app: appName, level, message, data: logData } = request.body;
-
-      // Build log line
-      const timestamp = new Date().toISOString();
-      const dataStr = logData ? ` ${JSON.stringify(logData)}` : '';
-      const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}${dataStr}\n`;
 
       // Write to app-specific log file
-      const logFilePath = join(LOG_DIR, `${appName}.log`);
-      await appendFile(logFilePath, logLine, 'utf8');
+      const logFilePath = join(LOG_DIR, `${log.app}.log`);
+      await appendFile(logFilePath, formatLogLine(log), 'utf8');
 
       return c.json({ success: true });
     } catch (error) {

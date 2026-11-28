@@ -4,7 +4,7 @@
  * without a token), nothing created anywhere. Results go through
  * classify() into a raw component state, then state.ts debounces it.
  */
-import type { StatusComponentId } from '@al-ummah/shared-types';
+import { isBunnyMediaHost, isMediaRev, isMediaVideoId, type StatusComponentId } from '@al-ummah/shared-types';
 
 export type StatusEnvName = 'production' | 'stage' | 'qa';
 
@@ -151,16 +151,29 @@ export async function playbackProbes(deps: CheckDeps, env: StatusEnvName): Promi
   const list = await httpProbe(deps, 'latest public video', `${host(env, 'videos.api')}/api/videos?limit=5`, {
     status: [200],
     body: (b) => {
-      videos = ((b as { data?: ListedVideo[] })?.data ?? []).filter((v) => v && typeof v === 'object');
-      return Array.isArray((b as { data?: unknown })?.data);
+      const data = (b as { data?: unknown })?.data;
+      if (!Array.isArray(data)) return false;
+      videos = data.filter((v): v is ListedVideo => v !== null && typeof v === 'object');
+      return true;
     },
   });
   if (!list.ok) return [{ ...list, ok: false, skipped: true, detail: `videos API unavailable (${list.detail})` }];
   const out: ProbeResult[] = [];
-  const r2 = videos.find((v) => v.id && v.r2?.status === 'ready' && v.r2.access === 'pub' && v.r2.rev);
+  const r2 = videos.find((v) => typeof v.id === 'string' && isMediaVideoId(v.id)
+    && v.r2?.status === 'ready' && v.r2.access === 'pub' && typeof v.r2.rev === 'string' && isMediaRev(v.r2.rev));
   if (r2) out.push(await httpProbe(deps, 'R2 media manifest', `${host(env, 'media')}/pub/${r2.id}/${r2.r2!.rev}/master.m3u8`, { status: [200], body: isM3u8 }));
-  const bunny = videos.find((v) => typeof v.playUrl === 'string' && v.playUrl.startsWith('https://'));
-  if (bunny) out.push(await httpProbe(deps, 'Bunny CDN manifest', bunny.playUrl!, { status: [200], body: isM3u8 }));
+  for (const video of videos) {
+    if (typeof video.playUrl !== 'string') continue;
+    let url: URL;
+    try {
+      url = new URL(video.playUrl);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || !isBunnyMediaHost(url.hostname)) continue;
+    out.push(await httpProbe(deps, 'Bunny CDN manifest', url.href, { status: [200], body: isM3u8 }));
+    break;
+  }
   if (!out.length) out.push({ name: 'playable video', ok: true, skipped: true, latencyMs: 0, detail: 'no public video to play' });
   return out;
 }

@@ -13,8 +13,11 @@
 import {
   BUILT_IN_IDS,
   ID_PATTERN,
+  SCHEMA,
+  checkSchema,
   artSvgPaths,
   MAX_ASSET_BYTES,
+  MAX_PACKAGE_BYTES,
   sniff,
   svgProblem,
   compilePackage,
@@ -284,11 +287,18 @@ export class ThemeStore {
     const existing = await this.row(theme.id);
     if (existing?.deleted_at) throw new ThemeError(409, `A deleted theme with id ${theme.id} is in Recently deleted; restore it or choose another id`);
     if (existing) throw new ThemeError(409, `A theme with id ${theme.id} already exists`);
-    for (const path of Object.keys(files.assets)) if (!ASSET_PATH.test(path)) throw new ThemeError(400, `${path} is not an allowed asset path`);
+    let size = 0;
+    for (const [path, bytes] of Object.entries(files.assets)) {
+      checkAsset(path, bytes);
+      size += bytes.byteLength;
+    }
+    if (size > MAX_PACKAGE_BYTES) throw new ThemeError(413, 'The assets are larger than 12 MB');
     const draft: ThemePackage = { ...theme, kind: 'custom' };
     const validation = validatePackage(draft, { assets: files.assets });
     // A draft may be incomplete; only the schema's shape for the list (id and names) is required
-    if (!draft.name?.en || !draft.name?.ar) throw new ThemeError(422, 'The package needs name.en and name.ar', validation.errors);
+    if (!hasThemeNames(draft) || (draft.basedOn !== undefined && checkSchema(draft.basedOn, SCHEMA.properties.basedOn).length)) {
+      throw new ThemeError(422, 'The package needs valid metadata', validation.errors);
+    }
     const at = prefix(theme.id, 'draft');
     await Promise.all(Object.entries(files.assets).map(([path, bytes]) => this.bucket.put(`${at}${path}`, bytes, { httpMetadata: { contentType: contentTypeOf(path) } })));
     await this.bucket.put(`${at}theme.json`, bytesOf(JSON.stringify(draft, null, 2)), { httpMetadata: { contentType: 'application/json' } });
@@ -306,6 +316,7 @@ export class ThemeStore {
     if (!row) throw new ThemeError(404, `No custom theme ${id}`);
     if (theme?.id !== id) throw new ThemeError(400, `theme.json id must stay ${id}`);
     const draft: ThemePackage = { ...theme, kind: 'custom' };
+    if (!hasThemeNames(draft)) throw new ThemeError(422, 'The package needs name.en and name.ar');
     const assets = await this.files(`${prefix(id, 'draft')}assets/`);
     const validation = validatePackage(draft, { assets: Object.fromEntries(Object.entries(assets).map(([k, v]) => [`assets/${k}`, v])) });
     await this.bucket.put(`${prefix(id, 'draft')}theme.json`, bytesOf(JSON.stringify(draft, null, 2)), { httpMetadata: { contentType: 'application/json' } });
@@ -318,9 +329,7 @@ export class ThemeStore {
 
   async putAsset(id: string, path: string, bytes: Uint8Array, actor: string, now: string): Promise<void> {
     if (!(await this.get(id))) throw new ThemeError(404, `No custom theme ${id}`);
-    if (!ASSET_PATH.test(path)) throw new ThemeError(400, `${path} is not an allowed asset path (assets/…, .svg .png .jpg .webp .ico .woff2)`);
-    const check = assetProblem(path, bytes);
-    if (check) throw new ThemeError(check.startsWith('is ') && check.includes('MB') ? 413 : 422, `${path} ${check}`);
+    checkAsset(path, bytes);
     await this.bucket.put(`${prefix(id, 'draft')}${path}`, bytes, { httpMetadata: { contentType: contentTypeOf(path) } });
     await this.db.prepare('UPDATE theme_packages SET draft_updated_by = ?, draft_updated_at = ? WHERE id = ?').bind(actor, now, id).run();
   }
@@ -376,10 +385,14 @@ export class ThemeStore {
     try { files = await zipToPackage(zip); } catch (e) { throw new ThemeError(400, (e as Error).message); }
     if (rename === NEW_THEME_ID) {
       const name = files.theme?.name;
-      if (!name?.en?.trim() || !name?.ar?.trim()) throw new ThemeError(422, 'The package needs name.en and name.ar');
+      if (typeof name?.en !== 'string' || typeof name.ar !== 'string' || !name.en.trim() || !name.ar.trim()) {
+        throw new ThemeError(422, 'The package needs name.en and name.ar');
+      }
       rename = await this.newId(name.en);
     }
     if (rename) files = { ...files, theme: { ...files.theme, id: rename } };
+    const issues = checkSchema({ ...files.theme, kind: 'custom' }, SCHEMA);
+    if (issues.length) throw new ThemeError(422, 'Invalid theme.json', issues);
     const validation = await this.create(files, actor, now);
     return { id: files.theme.id, validation };
   }
@@ -482,4 +495,18 @@ export function assetProblem(path: string, bytes: Uint8Array): string | undefine
   if (sniff(bytes) !== EXPECTED[ext]) return `is not a real .${ext} file`;
   if (ext === 'svg') return svgProblem(new TextDecoder().decode(bytes));
   return undefined;
+}
+
+function hasThemeNames(theme: ThemePackage): boolean {
+  return typeof theme.name?.en === 'string' && typeof theme.name?.ar === 'string'
+    && theme.name.en.length <= 80 && theme.name.ar.length <= 80;
+}
+
+function checkAsset(path: string, bytes: Uint8Array): void {
+  if (!ASSET_PATH.test(path) || path.split('/').some((part) => !part || part === '.')) {
+    throw new ThemeError(400, 'The package contains an invalid asset path');
+  }
+  if (bytes.byteLength > MAX_ASSET_BYTES) throw new ThemeError(413, 'The asset is larger than 2 MB');
+  const problem = assetProblem(path, bytes);
+  if (problem) throw new ThemeError(422, `${path} ${problem}`);
 }

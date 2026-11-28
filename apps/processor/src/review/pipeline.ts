@@ -7,6 +7,7 @@
  * scoring ≥ nsfwScreen → audio chunks → transcript text. A metadata edit checks text and thumbnail
  * only. Missing review media makes the check "partial", which routes to a person (fail safe).
  */
+import { isBunnyMediaHost } from '@al-ummah/shared-types';
 import type { ReviewFinding, ReviewMediaManifest, VideoReviewScanPayload, VideoReviewThresholds } from '@al-ummah/shared-types';
 import type { ImageScores, ModerationProvider, ReviewImage, TranscriptSegment, Usage } from './provider';
 import { FixtureModerationProvider, ProviderError } from './provider';
@@ -53,13 +54,25 @@ async function readImage(media: ReviewMediaBucket | undefined, key: string): Pro
   return { contentType: object.httpMetadata?.contentType || 'image/jpeg', base64: toBase64(await object.arrayBuffer()) };
 }
 
-async function fetchImage(fetchImpl: typeof fetch, url: string): Promise<ReviewImage | null> {
-  const full = /^https?:\/\//.test(url) ? url : `https://${url}`;
-  const res = await fetchImpl(full, { headers: { Accept: 'image/*' } });
+// The image and media delivery hosts, including the Bunny libraries used by existing videos.
+const REVIEW_IMAGE_HOSTS = new Set([
+  'images.alummahnow.net', 'images.qa.alummahnow.net', 'images.stage.alummahnow.net',
+  'media.alummahnow.net', 'media.qa.alummahnow.net', 'media.stage.alummahnow.net',
+]);
+
+export async function fetchReviewImage(fetchImpl: typeof fetch, raw: string): Promise<ReviewImage | null> {
+  let url: URL;
+  try {
+    url = new URL(raw.includes('://') ? raw : 'https://' + raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || (!REVIEW_IMAGE_HOSTS.has(url.hostname) && !isBunnyMediaHost(url.hostname))) return null;
+  const res = await fetchImpl(url.href, { headers: { Accept: 'image/*' }, redirect: 'error' });
   if (!res.ok) return null;
-  const contentType = res.headers.get('content-type') ?? 'image/jpeg';
-  if (!/^image\/(jpeg|png|webp)/.test(contentType)) return null;
-  return { contentType: contentType.split(';')[0] ?? 'image/jpeg', base64: toBase64(await res.arrayBuffer()) };
+  const contentType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0] ?? 'image/jpeg';
+  if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return null;
+  return { contentType, base64: toBase64(await res.arrayBuffer()) };
 }
 
 /** Text in windows of ~1,500 characters, each with the time of its first segment. */
@@ -188,7 +201,7 @@ export async function runReviewPipeline(
 
   // 2. Thumbnail (stage 2 directly: it is what everyone sees first)
   if (payload.thumbnail) {
-    const image = payload.thumbnail.key ? await readImage(deps.media, payload.thumbnail.key) : payload.thumbnail.url ? await fetchImage(fetchImpl, payload.thumbnail.url).catch(() => null) : null;
+    const image = payload.thumbnail.key ? await readImage(deps.media, payload.thumbnail.key) : payload.thumbnail.url ? await fetchReviewImage(fetchImpl, payload.thumbnail.url).catch(() => null) : null;
     if (image) {
       const verdict = await provider.reviewImage(image, usage);
       if (verdict.category !== 'none' && verdict.score >= KEEP_SCORE) findings.push({ source: 'thumbnail', category: verdict.category, score: verdict.score, model: models.imageReview, rationale: verdict.rationale, mediaKey: payload.thumbnail.key });

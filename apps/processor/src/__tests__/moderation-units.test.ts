@@ -34,7 +34,9 @@ describe('parseGuardResponse', () => {
     expect(parseGuardResponse({ response: 'unsafe\nS1,S10' })).toEqual({ safe: false, categories: ['S1', 'S10'] });
   });
   it('throws on anything else', () => {
-    expect(() => parseGuardResponse({ response: 'maybe' })).toThrow();
+    for (const response of ['maybe', 'safely formatted', 'unsafe', { safe: false, categories: [] }]) {
+      expect(() => parseGuardResponse({ response })).toThrow();
+    }
   });
 });
 

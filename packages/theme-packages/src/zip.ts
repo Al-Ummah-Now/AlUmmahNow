@@ -88,45 +88,87 @@ async function inflateRaw(data: Uint8Array, limit: number): Promise<Uint8Array> 
 
 export const MAX_ZIP_ENTRIES = 300;
 export const MAX_UNZIPPED_BYTES = 16 * 1024 * 1024;
+export const MAX_ZIP_BYTES = 16 * 1024 * 1024;
+
+function archivePath(name: string): string {
+  const segments = name.replace(/\/$/, '').split('/');
+  if (name.length > 512 || /[:%\\\x00-\x1f\x7f]/u.test(name)
+    || segments.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('the zip contains an invalid archive path');
+  }
+  return segments.join('/');
+}
 
 /** Every file in a zip. Rejects encryption, zip64, unknown methods and archives that inflate past 16 MB. */
 export async function readZip(zip: Uint8Array): Promise<Record<string, Uint8Array>> {
+  if (zip.byteLength > MAX_ZIP_BYTES) throw new Error('the zip is larger than 16 MB');
   const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   let end = -1;
-  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 65535); i--) if (view.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 65535); i--) {
+    if (view.getUint32(i, true) === 0x06054b50 && i + 22 + view.getUint16(i + 20, true) === zip.length) {
+      end = i;
+      break;
+    }
+  }
   if (end < 0) throw new Error('not a zip file');
   const count = view.getUint16(end + 10, true);
   if (count > MAX_ZIP_ENTRIES) throw new Error(`the zip has ${count} files; the limit is ${MAX_ZIP_ENTRIES}`);
-  let at = view.getUint32(end + 16, true);
-  const files: Record<string, Uint8Array> = {};
+  const centralAt = view.getUint32(end + 16, true);
+  const damaged = () => new Error('the zip is damaged');
+  if (view.getUint32(end + 4, true) !== 0 || view.getUint16(end + 8, true) !== count
+    || centralAt + view.getUint32(end + 12, true) !== end) throw damaged();
+
+  let at = centralAt;
+  const files: Record<string, Uint8Array> = Object.create(null);
+  const names = new Set<string>();
   let total = 0;
   for (let n = 0; n < count; n++) {
-    if (view.getUint32(at, true) !== 0x02014b50) throw new Error('the zip is damaged');
+    if (at + 46 > end || view.getUint32(at, true) !== 0x02014b50) throw damaged();
     const flags = view.getUint16(at + 8, true);
     const method = view.getUint16(at + 10, true);
+    const crc = view.getUint32(at + 16, true);
     const compSize = view.getUint32(at + 20, true);
     const size = view.getUint32(at + 24, true);
     const nameLen = view.getUint16(at + 28, true);
     const extraLen = view.getUint16(at + 30, true);
     const commentLen = view.getUint16(at + 32, true);
+    const disk = view.getUint16(at + 34, true);
+    const fileType = view.getUint16(at + 40, true) & 0o170000;
     const localAt = view.getUint32(at + 42, true);
-    const name = new TextDecoder().decode(zip.subarray(at + 46, at + 46 + nameLen));
-    at += 46 + nameLen + extraLen + commentLen;
+    const nameAt = at + 46;
+    at = nameAt + nameLen + extraLen + commentLen;
+    if (at > end || disk !== 0) throw damaged();
+    const name = decoder.decode(zip.subarray(nameAt, nameAt + nameLen));
+    const path = archivePath(name);
+    if (names.has(path)) throw new Error('the zip contains a duplicate archive path');
+    names.add(path);
+    const directory = name.endsWith('/');
+    if (fileType && fileType !== (directory ? 0o040000 : 0o100000)) {
+      throw new Error('the zip must contain only regular files and directories');
+    }
     if (flags & 1) throw new Error('encrypted zips are not supported');
-    if (name.endsWith('/')) continue;
     if (size === 0xffffffff || compSize === 0xffffffff) throw new Error('zip64 archives are not supported');
     total += size;
     if (total > MAX_UNZIPPED_BYTES) throw new Error('the package is larger than 16 MB unzipped');
-    const dataAt = localAt + 30 + view.getUint16(localAt + 26, true) + view.getUint16(localAt + 28, true);
-    if (dataAt + compSize > zip.length) throw new Error(`${name} is damaged`);
+
+    if (localAt + 30 > centralAt || view.getUint32(localAt, true) !== 0x04034b50
+      || view.getUint16(localAt + 6, true) !== flags || view.getUint16(localAt + 8, true) !== method
+      || view.getUint16(localAt + 26, true) !== nameLen) throw damaged();
+    const dataAt = localAt + 30 + nameLen + view.getUint16(localAt + 28, true);
+    if (dataAt + compSize > centralAt
+      || decoder.decode(zip.subarray(localAt + 30, localAt + 30 + nameLen)) !== name) throw damaged();
+    if (directory && size !== 0) throw damaged();
     const compressed = zip.subarray(dataAt, dataAt + compSize);
     let data: Uint8Array;
-    if (method === 0) data = compressed.slice();
+    if (method === 0 && compSize === size) data = compressed.slice();
     else if (method === 8) data = await inflateRaw(compressed, size);
+    else if (method === 0) throw damaged();
     else throw new Error(`zip compression method ${method} is not supported`);
-    if (data.length !== size) throw new Error(`${name} is damaged`);
-    files[name] = data;
+    if (data.length !== size || crc32(data) !== crc) throw damaged();
+    if (!directory) files[name] = data;
   }
+  if (at !== end) throw damaged();
   return files;
 }
 
@@ -143,7 +185,8 @@ export function packageToZip({ theme, assets }: PackageFiles): Uint8Array {
  */
 export async function zipToPackage(zip: Uint8Array): Promise<PackageFiles> {
   const all = Object.entries(await readZip(zip)).filter(([name]) => !name.startsWith('__MACOSX/') && !name.split('/').pop()!.startsWith('.'));
-  const themeEntry = all.find(([name]) => /^(?:[^/]+\/)?theme\.json$/.test(name));
+  const [themeEntry, ...otherThemes] = all.filter(([name]) => /^(?:[^/]+\/)?theme\.json$/.test(name));
+  if (otherThemes.length) throw new Error('the zip contains multiple theme.json files');
   if (!themeEntry) throw new Error('the zip has no theme.json (at the root or in one folder)');
   const prefix = themeEntry[0].slice(0, -'theme.json'.length);
   let theme: ThemePackage;

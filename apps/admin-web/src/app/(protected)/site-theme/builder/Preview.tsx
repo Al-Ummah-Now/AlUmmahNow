@@ -2,7 +2,7 @@
 // The live preview: the package compiled in the browser on every edit, rendered into an iframe with
 // the videos site's own component stylesheets. Phone or desktop, light or dark, English or Arabic.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { artSvgPaths, compilePackage, type ThemePackage } from '@al-ummah/theme-packages';
+import { artSvgPaths, compilePackage, svgProblem, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { previewDocument, type PreviewPage } from './preview-document';
 
@@ -35,7 +35,10 @@ export function Preview({ theme, assetUrl, followMode }: { theme: ThemePackage; 
   // The theme's art (the sign-in banner's, from imagery.headerGraphic) is compiled from the SVG text with the
   // theme's colours written in, as publishing does: fetch the files it names, once per file
   const [svgs, setSvgs] = useState<Record<string, string>>({});
-  const artPaths = artSvgPaths(theme).join('\n');
+  // Contrast errors can be previewed so editors can adjust colours in context.
+  const canPreview = useMemo(() => validatePackage(theme).errors.every((issue) =>
+    issue.code === 'contrast' || issue.code === 'headerContrast' || issue.code === 'bannerText'), [theme]);
+  const artPaths = canPreview ? artSvgPaths(theme).join('\n') : '';
   useEffect(() => {
     let live = true;
     const wanted = artPaths ? artPaths.split('\n') : [];
@@ -43,20 +46,22 @@ export function Preview({ theme, assetUrl, followMode }: { theme: ThemePackage; 
       const url = assetUrl(path);
       try {
         const res = await fetch(url);
-        return [url, res.ok ? await res.text() : ''] as const;
+        const svg = res.ok ? await res.text() : '';
+        return [url, svg && !svgProblem(svg) ? svg : ''] as const;
       } catch { return [url, ''] as const; }
     })).then((loaded) => { if (live) setSvgs(Object.fromEntries(loaded)); });
     return () => { live = false; };
   }, [artPaths, assetUrl]);
 
-  // Compiling may throw on a half-typed value; keep the last good CSS
+  // Keep the last validated CSS while a value is being edited.
   const [css, setCss] = useState('');
   useEffect(() => {
+    if (!canPreview) return;
     const timer = setTimeout(() => {
       try { setCss(compilePackage(theme, { assetUrl, svgText: (path) => svgs[assetUrl(path)] || undefined }).css); } catch { /* the validator names the problem */ }
     }, 120);
     return () => clearTimeout(timer);
-  }, [theme, assetUrl, svgs]);
+  }, [theme, assetUrl, svgs, canPreview]);
 
   const width = device === 'phone' ? 390 : 1280;
   const height = device === 'phone' ? 844 : 860;
@@ -91,6 +96,7 @@ export function Preview({ theme, assetUrl, followMode }: { theme: ThemePackage; 
           ref={frame}
           title={t('themeBuilder.preview')}
           srcDoc={doc}
+          sandbox="allow-same-origin"
           onLoad={() => { const s = frame.current?.contentDocument?.getElementById('pv-theme'); if (s) s.textContent = css; }}
           data-testid="theme-preview-frame"
           style={{ width, height, transform: `scale(${scale})`, transformOrigin: locale === 'ar' ? 'top right' : 'top left', border: 0, display: 'block', marginInlineStart: device === 'phone' ? `calc(50% - ${(width * scale) / 2}px)` : 0 }}

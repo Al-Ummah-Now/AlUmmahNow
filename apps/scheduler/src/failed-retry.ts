@@ -6,7 +6,7 @@
  */
 import { constantTimeEqual, type ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env } from './types';
-import { buildScheduleKey, FAILED_PREFIX } from './publisher';
+import { buildScheduleKey, FAILED_PREFIX, readScheduleMetadata } from './publisher';
 import { logger } from './lib/logger';
 
 export type FailedRetryOutcome = 'rescheduled' | 'not_found';
@@ -26,7 +26,8 @@ export async function retryFailedSchedule(
   const failedKey = `${FAILED_PREFIX}${buildScheduleKey(when, input.videoId)}`;
   const entry = await bucket.get(failedKey);
   if (!entry) return 'not_found';
-  const metadata = (await entry.json()) as ScheduledVideoMetadata;
+  const metadata = readScheduleMetadata(await entry.json().catch(() => null), failedKey.slice(FAILED_PREFIX.length));
+  if (!metadata) return 'not_found';
   // Back on the schedule: the last failure is cleared
   const next: ScheduledVideoMetadata = { ...metadata, retryCount: 0, scheduledPublishDate: now.toISOString() };
   delete next.error;
@@ -59,7 +60,7 @@ export async function handleSchedulerRequest(request: Request, env: Env): Promis
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const body = (await request.json().catch(() => null)) as { videoId?: unknown; scheduledPublishDate?: unknown } | null;
-  if (!body || typeof body.videoId !== 'string' || !/^[\w-]{1,64}$/.test(body.videoId) || typeof body.scheduledPublishDate !== 'string') {
+  if (!body || typeof body.videoId !== 'string' || !/^[\w-]{1,64}$/.test(body.videoId) || typeof body.scheduledPublishDate !== 'string' || body.scheduledPublishDate.length > 40) {
     return json({ error: 'videoId and scheduledPublishDate are required' }, 400);
   }
   const outcome = await retryFailedSchedule(env.SCHEDULED_VIDEOS, { videoId: body.videoId, scheduledPublishDate: body.scheduledPublishDate });

@@ -125,6 +125,7 @@ describe('RFC 8291 encryption', () => {
     const good = JSON.parse(browser().token);
     expect(parseSubscription(JSON.stringify(good))).not.toBeNull();
     expect(parseSubscription('not json')).toBeNull();
+    expect(parseSubscription(JSON.stringify({ ...good, endpoint: 'https://other.example.test/endpoint' }))).toBeNull();
     expect(parseSubscription(JSON.stringify({ ...good, endpoint: 'http://fcm.googleapis.com/x' }))).toBeNull();
     expect(parseSubscription(JSON.stringify({ ...good, keys: { ...good.keys, auth: base64url(new Uint8Array(8)) } }))).toBeNull();
     expect(parseSubscription(JSON.stringify({ ...good, keys: { ...good.keys, p256dh: base64url(new Uint8Array(65)) } }))).toBeNull();

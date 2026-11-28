@@ -256,3 +256,15 @@ describe('routes', () => {
     assert.equal((await call(e, '/', { method: 'POST' })).status, 405);
   });
 });
+
+it('keeps the English canonical redirect on the status origin', async () => {
+  const { env: bindings } = env();
+  const ctx = {} as ExecutionContext;
+  for (const path of ['/en/subscribe', '/en//subscribe']) {
+    const res = await worker.fetch(new Request('https://status.example.test' + path), bindings, ctx);
+    assert.equal(res.status, 301);
+    const target = new URL(res.headers.get('location')!);
+    assert.equal(target.origin, 'https://status.example.test');
+    assert.equal(target.pathname, '/subscribe');
+  }
+});

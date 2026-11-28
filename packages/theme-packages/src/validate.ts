@@ -44,16 +44,44 @@ export function sniff(bytes: Uint8Array): 'png' | 'jpeg' | 'webp' | 'ico' | 'svg
   if (b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0) return 'ico';
   if (b[0] === 0x77 && b[1] === 0x4f && b[2] === 0x46 && b[3] === 0x32) return 'woff2';
   const head = new TextDecoder().decode(b.subarray(0, 4096));
-  return /<svg[\s>]/.test(head) ? 'svg' : 'unknown';
+  return /<svg[\s/>]/.test(head) ? 'svg' : 'unknown';
 }
+
+const SVG_ELEMENTS = new Set([
+  'svg', 'g', 'defs', 'symbol', 'use', 'title', 'desc', 'path', 'rect', 'circle', 'ellipse',
+  'line', 'polyline', 'polygon', 'text', 'tspan', 'clipPath', 'mask', 'pattern', 'marker',
+  'linearGradient', 'radialGradient', 'stop',
+]);
 
 /** Why an SVG is unsafe to serve from the site, or undefined. */
 export function svgProblem(text: string): string | undefined {
-  if (!/<svg[\s>]/.test(text)) return 'is not an SVG';
-  if (/<script|<foreignObject|\son[a-z]+\s*=|<!ENTITY/i.test(text)) return 'contains a script or entity';
-  if (/(?:href|src)\s*=\s*["'](?!#)|url\(\s*["']?(?!#)/i.test(text)) return 'contains an external reference';
+  const svg = text.trim().replace(/^<\?xml\s+version=["']1\.0["'](?:\s+encoding=["']UTF-8["'])?\s*\?>/i, '')
+    .replace(/<!--[^]*?-->/g, '').trim();
+  if (!/^<svg[\s/>]/.test(svg)) return 'is not an SVG';
+  if (/<[!?]|<script|<foreignObject|\son[a-z]+\s*=|&/i.test(svg)) return 'contains a script or entity';
+  if (/(?:href|src)\s*=\s*["'](?!#)/i.test(svg)) return 'contains an external reference';
+
+  // Admit passive SVG markup only. Disallow CSS syntax that could conceal a URL.
+  const tags = /<\/?([a-zA-Z][\w-]*)((?:\s+[\w:-]+\s*=\s*(?:"[^"<]*"|'[^'<]*'))*)\s*\/?>/gy;
+  let at = 0;
+  while ((at = svg.indexOf('<', at)) !== -1) {
+    tags.lastIndex = at;
+    const tag = tags.exec(svg);
+    if (!tag || !SVG_ELEMENTS.has(tag[1])) return 'contains unsupported SVG markup';
+    at = tags.lastIndex;
+    for (const [, name, doubleQuoted, singleQuoted] of tag[2].matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+      const value = doubleQuoted ?? singleQuoted;
+      if (/^(?:on|style$|xml:base$)/i.test(name)) return 'contains unsupported SVG attributes';
+      if (/^(?:href|xlink:href|src)$/i.test(name) && !/^#[\w.-]+$/.test(value)) return 'contains an external reference';
+      if (/\\|\/\*|(?:image|image-set|src)\s*\(/i.test(value)) return 'contains an external reference';
+      const withoutLocalUrls = value.replace(/url\(\s*#[\w.-]+\s*\)/gi, '');
+      if (/url\s*\(/i.test(withoutLocalUrls)) return 'contains an external reference';
+    }
+  }
   return undefined;
 }
+
+const ASSET_FILE = /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*\.(svg|png|jpg|jpeg|webp|ico|woff2)$/;
 
 const EXPECTED: Record<string, string[]> = { svg: ['svg'], png: ['png'], jpg: ['jpeg'], jpeg: ['jpeg'], webp: ['webp'], ico: ['ico'], woff2: ['woff2'] };
 
@@ -71,7 +99,7 @@ function checkAssets(pkg: ThemePackage, assets: Record<string, Uint8Array>, erro
   let total = 0;
   for (const [file, bytes] of Object.entries(assets)) {
     total += bytes.byteLength;
-    if (!/^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*\.(svg|png|jpg|jpeg|webp|ico|woff2)$/.test(file)) { errors.push({ path: file, message: 'is not an allowed asset name (assets/…, .svg .png .jpg .webp .ico .woff2)', code: 'fileName' }); continue; }
+    if (!ASSET_FILE.test(file)) { errors.push({ path: file, message: 'is not an allowed asset name (assets/…, .svg .png .jpg .webp .ico .woff2)', code: 'fileName' }); continue; }
     if (bytes.byteLength > MAX_ASSET_BYTES) errors.push({ path: file, message: `is ${(bytes.byteLength / 1048576).toFixed(1)} MB; the limit is 2 MB per file`, code: 'fileSize', params: { max: 2 } });
     const ext = file.split('.').pop()!.toLowerCase();
     const kind = sniff(bytes);
@@ -90,6 +118,7 @@ function checkRefs(pkg: ThemePackage, errors: Issue[]) {
     for (const ref of parseRefs(value)) {
       if (!isKnownKind(ref.kind)) { errors.push({ path, message: `${ref.raw} is not a known reference`, code: 'unknownReference', params: { ref: ref.raw } }); continue; }
       const bad = (what: string) => errors.push({ path, message: `${ref.raw} names an unknown ${what}`, code: 'unknownReference', params: { ref: ref.raw } });
+      if (ref.kind === 'asset' && !ASSET_FILE.test(ref.name)) bad('asset path');
       if (ref.kind === 'color' && !ROLE_NAMES.has(ref.name)) bad('colour role');
       if (ref.kind === 'brand' && !BRAND_NAMES.includes(ref.name)) bad('brand colour');
       if (ref.kind === 'component' && !PART_NAMES.has(ref.name)) bad('component colour');

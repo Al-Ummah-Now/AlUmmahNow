@@ -24,7 +24,7 @@ import { reserveBudget, settleBudget } from '../moderation/budget';
 import { neuronsFor, usdFor, USD_PER_NEURON } from '../moderation/pricing';
 import { recordUsage } from '../moderation/usage';
 import { FixtureModerationProvider, ProviderError, WorkersAiModerationProvider, fixtureFrom, type AiRunner, type ModerationProvider, type Usage } from './provider';
-import { runReviewPipeline, type ReviewMediaBucket } from './pipeline';
+import { fetchReviewImage, runReviewPipeline, type ReviewMediaBucket } from './pipeline';
 import { alertRecipients, finishReviewRow, getReviewRow, openAppealRow, startReviewRow } from './store';
 
 export const REVIEW_FEATURE = 'video_review';
@@ -247,17 +247,6 @@ export function isImageReviewPayload(value: unknown): value is ImageReviewScanPa
   return !!p && typeof p.subjectId === 'string' && typeof p.reviewId === 'string' && Array.isArray(p.images) && !!p.settings && typeof p.subject === 'string';
 }
 
-async function fetchImage(fetchImpl: typeof fetch, url: string) {
-  const res = await fetchImpl(url, { headers: { Accept: 'image/*' } });
-  if (!res.ok) return null;
-  const contentType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0] ?? 'image/jpeg';
-  if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return null;
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return { contentType, base64: btoa(binary) };
-}
-
 /** Same rules as a video: fixtures in tests, fail safe, budget, alerts. Routes on NSFW only (VR16). */
 export async function handleImageReviewScan(
   p: ImageReviewScanPayload,
@@ -304,8 +293,8 @@ export async function handleImageReviewScan(
     try {
       const provider = providerFor(env, { ...asVideo, metadataText: `${p.text ?? ''} ${p.images.join(' ')}` });
       for (const url of p.images.slice(0, 10)) {
-        const image = provider.kind === 'fixture' ? { contentType: 'image/jpeg', base64: url.includes('nsfw') ? 'HIT' : 'clean' } : await fetchImage(opts.fetchImpl ?? fetch, url);
-        if (!image) throw new ProviderError(`image unreadable: ${url}`, false);
+        const image = provider.kind === 'fixture' ? { contentType: 'image/jpeg', base64: url.includes('nsfw') ? 'HIT' : 'clean' } : await fetchReviewImage(opts.fetchImpl ?? fetch, url);
+        if (!image) throw new ProviderError('Image could not be read from the delivery service', false);
         const verdict = await provider.reviewImage(image, usage);
         if (verdict.category !== 'none') findings.push({ source: 'image', category: verdict.category, score: verdict.score, mediaKey: url, model: m.imageReview, rationale: verdict.rationale });
         if (verdict.minorPresent > p.settings.thresholds.escalate) findings.push({ source: 'image', category: 'minor_present', score: verdict.minorPresent, mediaKey: url, model: m.imageReview });

@@ -470,6 +470,17 @@ export const MEDIA_ACCESS_FOR =(visibility: { isPublic?: boolean; visibility?: s
 	return visibility.isPublic === false ? 'priv' : 'pub';
 };
 
+// Production, retained legacy library, and the library shared by QA and stage.
+const BUNNY_MEDIA_HOSTS = new Set([
+	'vz-25839d05-80d.b-cdn.net',
+	'vz-215a1ffd-a5a.b-cdn.net',
+	'vz-cb79844a-c5d.b-cdn.net',
+]);
+
+export function isBunnyMediaHost(hostname: string): boolean {
+	return BUNNY_MEDIA_HOSTS.has(hostname);
+}
+
 const SAFE_ID = /^[A-Za-z0-9-]{8,64}$/;
 const SAFE_REV = /^[a-z0-9]{8,32}$/;
 

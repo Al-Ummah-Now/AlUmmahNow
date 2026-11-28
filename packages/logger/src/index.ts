@@ -271,11 +271,12 @@ export class Logger {
    * Write log entry to file (Node.js local development only)
    */
   private async writeToFile(entry: LogEntry): Promise<void> {
-    if (!this.fileLogging) return;
+    if (!this.fileLogging || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(this.appName)) return;
     try {
       const { appendFile } = await import('fs/promises');
       const { join } = await import('path');
-      const logLine = `[${new Date().toISOString()}] [${entry.level.toUpperCase()}] ${entry.msg} ${JSON.stringify(entry)}\n`;
+      const safeMessage = entry.msg.replace(/[\p{Cc}\u2028\u2029]/gu, (char) => char === '\n' ? '\\n' : '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'));
+      const logLine = `[${new Date().toISOString()}] [${entry.level.toUpperCase()}] ${safeMessage} ${JSON.stringify(entry)}\n`;
       const logFilePath = join(process.cwd(), '../../logs', `${this.appName}.log`);
       await appendFile(logFilePath, logLine, 'utf8');
     } catch {

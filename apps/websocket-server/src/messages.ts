@@ -24,31 +24,33 @@ export type {
 // Type alias for backwards compatibility
 export type { WebSocketChannelType as ChannelType } from '@al-ummah/shared-types';
 
+const channel = z.string().max(100).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*(?::[A-Za-z0-9][A-Za-z0-9_.-]*)*$/);
+
 // Zod schema for validating client messages (server-side only)
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('authenticate'),
-    token: z.string().min(1),
+    token: z.string().min(1).max(16_384),
   }),
   z.object({
     type: z.literal('subscribe'),
-    channel: z.string().min(1).max(100),
+    channel,
   }),
   z.object({
     type: z.literal('unsubscribe'),
-    channel: z.string().min(1).max(100),
+    channel,
   }),
   z.object({
     type: z.literal('message'),
-    channel: z.string().min(1).max(100),
-    data: z.any(),
+    channel,
+    data: z.unknown().refine((value) => value !== undefined),
   }),
   z.object({
     type: z.literal('ping'),
-    timestamp: z.number(),
+    timestamp: z.number().finite(),
   }),
   z.object({
     type: z.literal('heartbeat'),
-    timestamp: z.number(),
+    timestamp: z.number().finite(),
   }),
 ]);

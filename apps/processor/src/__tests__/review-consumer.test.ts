@@ -6,7 +6,8 @@
 import { createLogger } from '@al-ummah/logger';
 import { DEFAULT_VIDEO_REVIEW_SETTINGS, MessageType, normaliseVideoReviewSettings, type VideoReviewScanPayload } from '@al-ummah/shared-types';
 import { handleImageReviewScan, handleVideoReviewAppeal, handleVideoReviewScan, type ReviewConsumerEnv } from '../review/consumer';
-import { WorkersAiModerationProvider, assertRealAiAllowed } from '../review/provider';
+import { fetchReviewImage } from '../review/pipeline';
+import { parseTextPolicyVerdict, reviewPolicyInput, WorkersAiModerationProvider, assertRealAiAllowed } from '../review/provider';
 import { createSqliteD1, REPORTS_MIGRATIONS_DIR } from './sqlite-d1';
 
 const logger = createLogger('processor-test', { logLevel: 'error' });
@@ -289,5 +290,36 @@ describe('image review (VR16)', () => {
     expect(imageRow(t).subject_type).toBe('avatar');
     expect(imageRow(t).status).toBe('shadow');
     expect(t.outcomes).toHaveLength(0);
+  });
+});
+
+describe('review text policy boundary', () => {
+  it('wraps the classifier input as data and preserves its text', () => {
+    const text = 'A lesson about <angles> and Arabic: مرحبا';
+    expect(reviewPolicyInput(text)).toBe('<content>A lesson about ‹angles› and Arabic: مرحبا</content>');
+  });
+
+  it('requires a complete scorecard and drops unknown categories', () => {
+    expect(() => parseTextPolicyVerdict({ scores: { spam: 0 } })).toThrow(/incomplete verdict/);
+    const scores = {
+      sexual_explicit_language: 0, hate: 0, sectarian_hate: 0, violent_extremism: 0,
+      harassment: 0, charity_scam: 0, spam: 0.9, impersonation: 0, misinfo_health: 0, self_harm: 0,
+    };
+    expect(parseTextPolicyVerdict({ scores: { ...scores, unrelated: 1 } }).scores).toEqual(scores);
+    expect(() => parseTextPolicyVerdict({ scores: { ...scores, spam: 'high' } })).toThrow(/incomplete verdict/);
+  });
+});
+
+describe('review image fetch', () => {
+  it('fetches a recognised delivery origin without following redirects', async () => {
+    const fetcher = jest.fn(async () => new Response(null, { status: 302, headers: { Location: 'https://other.example.test/image.jpg' } }));
+    await expect(fetchReviewImage(fetcher, 'https://images.alummahnow.net/image.jpg')).resolves.toBeNull();
+    expect(fetcher).toHaveBeenCalledWith('https://images.alummahnow.net/image.jpg', expect.objectContaining({ redirect: 'error' }));
+  });
+
+  it('refuses an unrecognised origin before sending a request', async () => {
+    const fetcher = jest.fn();
+    await expect(fetchReviewImage(fetcher, 'https://other.example.test/image.jpg')).resolves.toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

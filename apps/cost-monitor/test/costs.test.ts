@@ -139,6 +139,9 @@ describe('jobs', () => {
     assert.deepEqual(plannedJobs('daily', at).map((j) => `${j.job}:${j.day ?? ''}`), ['daily:', 'containers:2026-11-13', 'bunny:2026-11-13', 'resend:2026-11-13', 'resend:2026-11-14']);
     for (const j of plannedJobs('daily', at)) assert.ok(isCostJob(j));
     assert.equal(isCostJob({ v: 1, job: 'rm -rf', at: 'x' }), false);
+    assert.equal(isCostJob({ v: 1, job: ['hourly'], at: at.toISOString() }), false);
+    assert.equal(isCostJob({ v: 1, job: 'hourly', at: 'sometime' }), false);
+    assert.equal(isCostJob({ v: 1, job: 'resend', at: at.toISOString(), day: '2026-02-30' }), false);
   });
 
   it('crons only enqueue when the queue is bound', async () => {

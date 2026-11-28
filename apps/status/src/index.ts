@@ -148,7 +148,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     locale = 'ar';
     path = path.slice(3) || '/';
   } else if (path === '/en' || path.startsWith('/en/')) {
-    return Response.redirect(new URL(path.slice(3) || '/', url).toString(), 301);
+    const target = new URL(url.origin);
+    target.pathname = '/' + path.slice(3).replace(/^\/+/, '');
+    return Response.redirect(target.toString(), 301);
   }
 
   if (path === '/healthz') {

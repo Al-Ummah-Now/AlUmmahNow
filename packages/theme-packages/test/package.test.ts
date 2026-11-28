@@ -9,7 +9,7 @@ import { parseRefs, toCss } from '../src/refs.ts';
 import { SCHEMA } from '../src/schema.generated.ts';
 import type { ThemePackage } from '../src/types.ts';
 import { svgProblem, validatePackage } from '../src/validate.ts';
-import { createZip, packageToZip, readZip, zipToPackage } from '../src/zip.ts';
+import { createZip, crc32, packageToZip, readZip, zipToPackage } from '../src/zip.ts';
 import { BUILT_IN, THEMES_DIR, loadPackageDir } from '../scripts/load.ts';
 
 const fawanees = () => loadPackageDir(`${THEMES_DIR}/fawanees`);
@@ -177,9 +177,9 @@ test('zip: reads deflated entries and rejects bad archives', async () => {
   const zip = createZip({ 'assets/a.svg': deflated });
   // Mark the entry as deflated with the real size, in both headers
   const view = new DataView(zip.buffer);
-  view.setUint16(8, 8, true); view.setUint32(22, data.length, true);
+  view.setUint16(8, 8, true); view.setUint32(22, data.length, true); view.setUint32(14, crc32(data), true);
   const central = zip.length - 22 - (46 + 'assets/a.svg'.length);
-  view.setUint16(central + 10, 8, true); view.setUint32(central + 24, data.length, true);
+  view.setUint16(central + 10, 8, true); view.setUint32(central + 24, data.length, true); view.setUint32(central + 16, crc32(data), true);
   assert.deepEqual((await readZip(zip))['assets/a.svg'], data);
   await assert.rejects(readZip(new Uint8Array(10)), /not a zip/);
   // A deflated entry that inflates past its declared size is stopped, not inflated in full
@@ -288,4 +288,38 @@ test('street: its art must be in the package and its colours #rrggbbaa', () => {
   const u = clone(theme);
   (u.street!.line as Record<string, string>).light = 'tan';
   assert.equal(validatePackage(u).ok, false);
+});
+
+test('zip: accepts only unique, relative regular-file names', async () => {
+  const bytes = new Uint8Array([1]);
+  for (const path of ['/theme.json', 'assets/../theme.json', 'assets//file.svg', 'assets/./file.svg']) {
+    await assert.rejects(readZip(createZip({ [path]: bytes })), /archive path/);
+  }
+
+  const zip = createZip({ 'assets/link.svg': bytes });
+  const central = zip.length - 22 - 46 - 'assets/link.svg'.length;
+  const view = new DataView(zip.buffer);
+  view.setUint16(central + 4, (3 << 8) | 20, true);
+  view.setUint32(central + 38, 0o120777 << 16, true);
+  await assert.rejects(readZip(zip), /regular files/);
+
+  const duplicates = createZip({ 'one.txt': bytes, 'two.txt': bytes });
+  const second = duplicates.length - 22 - 46 - 'two.txt'.length;
+  duplicates.set(new TextEncoder().encode('one.txt'), second + 46);
+  await assert.rejects(readZip(duplicates), /duplicate/i);
+});
+
+test('theme CSS accepts package asset references and rejects quoted image sources', () => {
+  const { theme, assets } = fawanees();
+  theme.components.page.style!.background = 'image-set({asset:assets/pattern.svg} 1x)';
+  assert.ok(validatePackage(theme, { assets, builtIn: true }).ok);
+  theme.components.page.style!.background = '{asset:assets/./pattern.svg}';
+  assert.ok(validatePackage(theme, { builtIn: true }).errors.some((issue) => issue.path === 'components.page.style.background'));
+  theme.components.page.style!.background = 'image-set("https://example.test/image.png" 1x)';
+  assert.ok(validatePackage(theme, { assets, builtIn: true }).errors.some((issue) => issue.path === 'components.page.style.background'));
+});
+
+test('theme SVG permits local paint references and excludes stylesheet markup', () => {
+  assert.equal(svgProblem('<svg xmlns="http://www.w3.org/2000/svg"><path fill="url(#paint)" /></svg>'), undefined);
+  assert.ok(svgProblem('<svg xmlns="http://www.w3.org/2000/svg"><style>path { fill: red; }</style><path /></svg>'));
 });

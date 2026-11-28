@@ -47,11 +47,11 @@ export function checkSchema(value: unknown, schema: Schema, root: Schema = schem
   }
   if (typeOf(value) === 'object') {
     const obj = value as Record<string, unknown>;
-    for (const key of schema.required ?? []) if (!(key in obj)) err(`is missing`, 'missing', undefined, join(path, key));
+    for (const key of schema.required ?? []) if (!Object.hasOwn(obj, key)) err(`is missing`, 'missing', undefined, join(path, key));
     for (const [key, v] of Object.entries(obj)) {
       const at = join(path, key);
       if (schema.propertyNames) for (const e of checkSchema(key, schema.propertyNames, root, at)) err(`name ${e.message}`, 'unknownField', undefined, at);
-      if (schema.properties?.[key]) { errors.push(...checkSchema(v, schema.properties[key], root, at)); continue; }
+      if (schema.properties && Object.hasOwn(schema.properties, key)) { errors.push(...checkSchema(v, schema.properties[key], root, at)); continue; }
       const pattern = Object.entries<Schema>(schema.patternProperties ?? {}).find(([p]) => new RegExp(p, 'u').test(key));
       if (pattern) { errors.push(...checkSchema(v, pattern[1], root, at)); continue; }
       if (schema.additionalProperties === false) err('is not a known field', 'unknownField', undefined, at);
