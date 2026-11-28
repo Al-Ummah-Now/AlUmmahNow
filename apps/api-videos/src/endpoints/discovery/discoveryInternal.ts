@@ -7,12 +7,18 @@
  *   POST /internal/discovery/rank              { actorId? } → 202 { job, existing } a run now (admin-jobs queue)
  *   GET  /internal/discovery/preview?rail=&scope=&limit=   a rail's first items with why they are there
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { IntegerQuery, optionalJson } from '../../validation/legacy-request';
 import { Hono } from 'hono';
 import { logger } from '../../lib/logger';
-import { DISCOVERY_NEEDS_ACTION_KEY, RAIL_IDS, discoveryJobs, readLastRun, startDiscoveryRank, type DiscoveryEnv, type RailId } from '../../lib/ranking/job';
+import { DISCOVERY_NEEDS_ACTION_KEY, RAIL_IDS, discoveryJobs, readLastRun, startDiscoveryRank, type DiscoveryEnv } from '../../lib/ranking/job';
 import { railPage } from '../../lib/ranking/serve';
 
 const SCOPE = /^(|lang:(ar|en)|only:(ar|en)|cat:[a-z0-9_-]{1,64})$/;
+
+const Rank = z.object({ actorId: RecordId.optional() });
+const Preview = z.object({ rail: z.enum(RAIL_IDS), scope: z.string().regex(SCOPE).default(''), limit: IntegerQuery.optional() });
 
 export function createDiscoveryInternalRouter() {
 	const app = new Hono<{ Bindings: DiscoveryEnv & { videos: R2Bucket; channels?: R2Bucket } }>();
@@ -45,17 +51,18 @@ export function createDiscoveryInternalRouter() {
 	});
 
 	app.post('/rank', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as { actorId?: unknown };
-		const actorId = typeof body?.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const parsed = Rank.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return c.json({ success: false, error: 'invalid_request' }, 400);
+		const actorId = parsed.data.actorId ?? 'admin';
 		const { job, existing } = await startDiscoveryRank(c.env, actorId);
 		return c.json({ success: true, result: { job, existing } }, 202);
 	});
 
 	app.get('/preview', async (c) => {
-		const rail = c.req.query('rail') as RailId;
-		const scope = c.req.query('scope') ?? '';
-		if (!(RAIL_IDS as readonly string[]).includes(rail) || !SCOPE.test(scope)) return c.json({ success: false, error: 'invalid_rail' }, 400);
-		const limit = Math.min(50, Math.max(1, Number(c.req.query('limit')) || 24));
+		const parsed = Preview.safeParse(c.req.query());
+		if (!parsed.success) return c.json({ success: false, error: 'invalid_rail' }, 400);
+		const { rail, scope } = parsed.data;
+		const limit = Math.min(50, Math.max(1, parsed.data.limit || 24));
 		const page = await railPage(c.env as never, { rail, scope, limit });
 		if (!page) return c.json({ success: true, result: { rail, scope, meta: null, items: [] } });
 		return c.json({

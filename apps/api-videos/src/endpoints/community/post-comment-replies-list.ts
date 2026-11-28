@@ -1,4 +1,4 @@
-import { Str } from '../../lib/chanfana-params';
+import { RecordId } from '../../validation/identifiers';
 import { z } from 'zod';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -30,13 +30,13 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
       description: 'Returns paginated replies to a top-level comment in chronological order.',
       request: {
         params: z.object({
-          channelId: Str({ description: 'Channel ID that owns the post' }),
-          postId: Str({ description: 'Post ID' }),
-          commentId: Str({ description: 'Top-level comment ID' }),
+          channelId: RecordId.describe('Channel ID that owns the post'),
+          postId: RecordId.describe('Post ID'),
+          commentId: RecordId.describe('Top-level comment ID'),
         }),
         query: z.object({
-          limit: z.string().optional().describe(`Number of replies (default ${DEFAULT_REPLIES_LIMIT}, max ${MAX_REPLIES_LIMIT})`),
-          cursor: Str({ description: 'Pagination cursor (last reply ID)' }).optional(),
+          limit: z.string().max(12).regex(/^[0-9]+$/).optional().describe(`Number of replies (default ${DEFAULT_REPLIES_LIMIT}, max ${MAX_REPLIES_LIMIT})`),
+          cursor: RecordId.describe('Pagination cursor (last reply ID)').optional(),
         }),
       },
       responses: {
@@ -63,8 +63,7 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
   );
 
   async handle(c: AppContext) {
-    const { channelId: postChannelId, postId, commentId } = c.req.param();
-    const query = c.req.query();
+    const { params: { channelId: postChannelId, postId, commentId }, query } = await this.getValidatedData<typeof this.schema>();
     const parsedLimit = parseInt(query.limit || `${DEFAULT_REPLIES_LIMIT}`, 10);
     const limit = Math.min(Math.max(Number.isNaN(parsedLimit) ? DEFAULT_REPLIES_LIMIT : parsedLimit, 1), MAX_REPLIES_LIMIT);
     const cursor = query.cursor;

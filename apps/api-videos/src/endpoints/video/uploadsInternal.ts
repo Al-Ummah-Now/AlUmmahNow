@@ -16,7 +16,10 @@
  * See lib/uploads/reaper.ts for the loop and its rules.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { IntegerQuery, optionalJson } from '../../validation/legacy-request';
 import { apiError } from '../../lib/api-error';
 import { logger } from '../../lib/logger';
 import {
@@ -35,21 +38,24 @@ import {
 import { purgeAllowed, readPurgeState, startPurge, stopPurge, type PurgeEnv } from '../../lib/uploads/testLibraryPurge';
 
 const MAX_IDS = 100;
-const STATUSES = new Set(['checking', 'would_delete', 'deleted', 'kept', 'skipped', 'failed']);
+const STATUSES = ['checking', 'would_delete', 'deleted', 'kept', 'skipped', 'failed'] as const;
 
 type Env = PurgeEnv & { NOTIFICATIONS_DB?: D1Database };
 
-function parseIds(body: unknown): string[] | null {
-	const ids = (body as { ids?: unknown })?.ids;
-	if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_IDS) return null;
-	const clean = ids.filter((id): id is string => typeof id === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(id));
-	return clean.length === ids.length ? [...new Set(clean)] : null;
-}
-
-function actorOf(body: unknown): string {
-	const actor = (body as { actor?: unknown })?.actor;
-	return typeof actor === 'string' && actor.trim() ? actor.trim().slice(0, 200) : 'admin';
-}
+const Actor = z.object({ actor: RecordId.default('admin') });
+const Batch = Actor.extend({ ids: z.array(z.string().regex(/^[A-Za-z0-9-]{8,64}$/)).min(1).max(MAX_IDS).transform((ids) => [...new Set(ids)]) });
+const Mode = Actor.extend({ mode: z.enum(['dry-run', 'live']) });
+const Status = z.enum([...STATUSES, 'open', 'all']).optional();
+const StaleQuery = z.object({ status: Status, limit: IntegerQuery.optional() });
+const StaleBody = z.object({ status: Status, limit: z.number().int().nonnegative().or(IntegerQuery).nullish(), hide: z.array(RecordId) });
+const Purge = z.discriminatedUnion('action', [
+	Actor.extend({ action: z.literal('stop') }),
+	Actor.extend({
+		action: z.literal('start'), dryRun: z.boolean().optional(), resume: z.boolean().optional(),
+		minAgeMinutes: z.number().int().nonnegative().optional(), concurrency: z.number().int().positive().optional(),
+		pageSize: z.number().int().positive().optional(), statuses: z.array(z.number().int().min(0).max(10)).max(32).optional(),
+	}),
+]);
 
 /** Most videos one list may leave out (POST /stale) */
 export const MAX_HIDE = 10_000;
@@ -61,15 +67,15 @@ export function createUploadsInternalRouter() {
 	 * The list. GET for a reader who sees everything; POST { status?, limit?, hide: string[] } with the videos the
 	 * reader may not see (admin-api: those a case keeps), which are neither listed nor counted.
 	 */
-	const stale = async (c: { env: Env; json: (b: unknown, s?: number) => Response }, q: { status?: string; limit?: string }, hide: ReadonlySet<string>) => {
+	const stale = async (c: { env: Env; json: (b: unknown, s?: number) => Response }, q: { status?: string; limit?: number }, hide: ReadonlySet<string>) => {
 		const status = q.status;
-		const limit = Math.min(Math.max(parseInt(q.limit || '200', 10) || 200, 1), 500);
+		const limit = Math.min(Math.max(q.limit || 200, 1), 500);
 		const listed = (await listItems(c.env, 2000)).filter((i) => !hide.has(i.videoId));
 		// Every status over all items the reader may see, whatever is shown (the tabs; a status without items is missing)
 		const counts: Record<string, number> = {};
 		for (const item of listed) counts[item.status] = (counts[item.status] ?? 0) + 1;
 		let items = listed;
-		if (status && STATUSES.has(status)) items = items.filter((i) => i.status === status);
+		if (status && (STATUSES as readonly string[]).includes(status)) items = items.filter((i) => i.status === status);
 		else if (status === 'open') items = items.filter((i) => i.status !== 'deleted' && i.status !== 'skipped');
 		items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
@@ -108,29 +114,32 @@ export function createUploadsInternalRouter() {
 			},
 		});
 	};
-	app.get('/stale', (c) => stale(c as never, { status: c.req.query('status'), limit: c.req.query('limit') }, new Set()));
+	app.get('/stale', (c) => {
+		const parsed = StaleQuery.safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		return stale(c as never, parsed.data, new Set());
+	});
 	app.post('/stale', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { status?: unknown; limit?: unknown; hide?: unknown } | null;
-		// Never a list without them: a hide that is not a list of ids is refused, and so is one too long to take whole
-		if (!body || typeof body !== 'object' || !Array.isArray(body.hide) || !body.hide.every((id) => typeof id === 'string')) {
-			return apiError(c, 400, 'bad_request', { error: 'hide must be a list of video ids' });
-		}
-		if (body.hide.length > MAX_HIDE) return apiError(c, 413, 'too_many', { error: `hide takes at most ${MAX_HIDE} ids` });
-		const hide = body.hide as string[];
-		return stale(c as never, { status: typeof body?.status === 'string' ? body.status : undefined, limit: body?.limit == null ? undefined : String(body.limit) }, new Set(hide));
+		const body: unknown = await c.req.json().catch(() => null);
+		const hide = (body as { hide?: unknown } | null)?.hide;
+		// Keep the existing response for the endpoint's explicit list-size limit.
+		if (Array.isArray(hide) && hide.length > MAX_HIDE) return apiError(c, 413, 'too_many', { error: 'Too many video ids' });
+		const parsed = StaleBody.safeParse(body);
+		if (!parsed.success) return apiError(c, 400, 'bad_request', { error: 'Invalid filters or video ids' });
+		return stale(c as never, { status: parsed.data.status, limit: parsed.data.limit ?? undefined }, new Set(parsed.data.hide));
 	});
 
 	app.post('/scan', async (c) => {
-		const body = await c.req.json().catch(() => ({}));
-		const stats = await sweepStaleUploads(c.env, { actor: actorOf(body) });
+		const parsed = Actor.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const stats = await sweepStaleUploads(c.env, { actor: parsed.data.actor });
 		return c.json({ success: true, result: stats });
 	});
 
-	const loopAction = (force: boolean, reason: string) => async (c: { req: { json(): Promise<unknown> }; env: Env; json: (b: unknown, s?: number) => Response }) => {
-		const body = await c.req.json().catch(() => null);
-		const ids = parseIds(body);
-		if (!ids) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
-		const actor = actorOf(body);
+	const loopAction = (force: boolean, reason: string) => async (c: Context<{ Bindings: Env }>) => {
+		const parsed = Batch.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid video ids or actor' }, 400);
+		const { ids, actor } = parsed.data;
 		const results = [];
 		for (const id of ids) {
 			const item = await readItem(c.env, id);
@@ -154,9 +163,9 @@ export function createUploadsInternalRouter() {
 	// Delete now: forced (skips the 24 h wait and dry-run), still a confirming
 	// second check, and still never deletes a ready/encoding video or a record
 	// that finished.
-	app.post('/delete', (c) => loopAction(true, 'admin-delete')(c as never));
+	app.post('/delete', loopAction(true, 'admin-delete'));
 	// Retry keeps the item's earlier force (a failed Delete now retries the delete)
-	app.post('/retry', (c) => loopAction(false, 'admin-retry')(c as never));
+	app.post('/retry', loopAction(false, 'admin-retry'));
 
 	// QA/stage only: removes every Bunny video of this environment without a record
 	app.get('/test-library-purge', async (c) =>
@@ -164,11 +173,12 @@ export function createUploadsInternalRouter() {
 	);
 
 	app.post('/test-library-purge', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as { action?: unknown; dryRun?: unknown; resume?: unknown; minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown; statuses?: unknown };
-		const actor = actorOf(body);
 		if (!purgeAllowed(c.env)) return c.json({ success: false, error: 'The test-library purge runs only on QA / stage' }, 403);
+		const parsed = Purge.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const body = parsed.data;
+		const actor = body.actor;
 		if (body.action === 'stop') return c.json({ success: true, result: { state: await stopPurge(c.env, actor) } });
-		if (body.action !== 'start') return c.json({ success: false, error: 'action must be start or stop' }, 400);
 		try {
 			const state = await startPurge(c.env, { actor, dryRun: body.dryRun !== false, resume: body.resume === true, minAgeMinutes: body.minAgeMinutes, concurrency: body.concurrency, pageSize: body.pageSize, statuses: body.statuses });
 			return c.json({ success: true, result: { state } });
@@ -178,20 +188,18 @@ export function createUploadsInternalRouter() {
 	});
 
 	app.post('/keep', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		const ids = parseIds(body);
-		if (!ids) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
-		const actor = actorOf(body);
+		const parsed = Batch.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid video ids or actor' }, 400);
+		const { ids, actor } = parsed.data;
 		const results = [];
 		for (const id of ids) results.push({ videoId: id, kept: await keepItem(c.env, id, actor) });
 		return c.json({ success: true, result: { results } });
 	});
 
 	app.post('/mode', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		const mode = (body as { mode?: unknown })?.mode;
-		if (mode !== 'dry-run' && mode !== 'live') return c.json({ success: false, error: 'mode must be dry-run or live' }, 400);
-		return c.json({ success: true, result: await writeReaperConfig(c.env, mode, actorOf(body)) });
+		const parsed = Mode.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'mode must be dry-run or live and actor must be valid' }, 400);
+		return c.json({ success: true, result: await writeReaperConfig(c.env, parsed.data.mode, parsed.data.actor) });
 	});
 
 	return app;

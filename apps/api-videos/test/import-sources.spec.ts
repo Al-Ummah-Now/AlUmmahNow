@@ -1183,3 +1183,15 @@ describe('why a sync failed, in codes the apps translate', () => {
 		});
 	}
 });
+
+it('checks channel ID format and rejects unreadable patches before any lookup', async () => {
+	const cases = [
+		{ path: '/', method: 'POST', body: JSON.stringify({ channelId: 'ch1/other', network: 'rss', address: FEED }) },
+		{ path: '/source-1', method: 'PATCH', body: '{' },
+	];
+	for (const { path, method, body } of cases) {
+		const env = new Proxy({}, { get: () => assert.fail('invalid input reached a service binding') });
+		const response = await importSourcesRouter.request(path, { method, headers: { 'content-type': 'application/json', 'X-Admin-Actor': ADMIN }, body }, env);
+		assert.equal(response.status, 400);
+	}
+});

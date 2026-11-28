@@ -13,6 +13,8 @@
  *   GET  /api/me/support/checkouts/:id                     open / completed / expired
  *   POST /api/me/support/pledges/:id/stop                  stops a monthly pledge at once
  */
+import { z } from 'zod';
+import { IntegerQuery } from '../../validation/legacy-request';
 import type { Context } from 'hono';
 import { type AppSupportDecision, CLIENT_HEADER, channelRoleOf, isSupportCurrency, STOREFRONT_HEADER } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
@@ -110,16 +112,37 @@ export async function handleSupportSheet(c: Context) {
 	});
 }
 
+const Currency = z.string().regex(/^[A-Za-z]{3}$/).transform((value) => value.toUpperCase());
+const Method = z.string().regex(/^[a-z_]{1,30}$/);
+const Quote = z.object({
+	amount: IntegerQuery, currency: Currency.default('USD'),
+	coverFees: z.enum(['0', '1']).optional(), method: Method.optional(),
+});
+const Checkout = z.object({
+	kind: z.enum(['one_time', 'monthly']), amount: z.number().int().or(IntegerQuery),
+	currency: Currency.default('USD'), coverFees: z.boolean().optional(), anonymous: z.boolean().optional(),
+	message: z.string().max(10_000).nullish(), ageConfirmed: z.boolean().optional(), consent: z.boolean().optional(),
+	locale: z.enum(['en', 'ar']).default('en'), method: Method.nullish(), returnPath: z.string().max(300).optional(),
+	turnstileToken: z.string().max(4096).optional(),
+});
+const Settings = z.object({
+	enabled: z.boolean().optional(), oneTime: z.boolean().optional(), monthly: z.boolean().optional(),
+	currency: Currency.optional(), presets: z.array(z.number().int()).max(6).optional(),
+	thankYouNote: z.string().max(1000).nullish(),
+});
+
 export async function handleSupportQuote(c: Context) {
 	const env = c.env as Env;
 	if (!(await supportSwitch(env)).on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
 	if (!(await receivingChannel(c, env))) return featureOff(c, 'creatorSupport');
+	const parsed = Quote.safeParse(c.req.query());
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	try {
 		const config = await readSupportConfig(env.SEARCH_DB);
 		// MEM-D15: an app whose platform and storefront have no mode gets nothing here either
 		if (appDecisionFor(config, { userId: null, ...where(c) })?.mode === 'hidden') return featureOff(c, 'creatorSupport');
 		const now = new Date();
-		const q = await quote(env, config, { amount: Number(c.req.query('amount')), currency: (c.req.query('currency') ?? 'USD').toUpperCase(), supporterTicked: c.req.query('coverFees') === '1', method: c.req.query('method') ?? null }, lang(c), vendorContext(env, config.mode, () => now), now);
+		const q = await quote(env, config, { amount: parsed.data.amount, currency: parsed.data.currency, supporterTicked: parsed.data.coverFees === '1', method: parsed.data.method ?? null }, lang(c), vendorContext(env, config.mode, () => now), now);
 		return c.json({ success: true, result: q });
 	} catch (error) {
 		return failure(c, error);
@@ -132,7 +155,7 @@ export async function handleSupportCheckout(c: Context) {
 	if (!sw.on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return apiError(c, 401, 'authentication_required');
-	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+	const input: unknown = await c.req.json().catch(() => null);
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
 	const request: SupportRequest = { userId, ...where(c) };
@@ -141,11 +164,13 @@ export async function handleSupportCheckout(c: Context) {
 	// channel record already read, so a storage error can't let a team member through.
 	const role = channelRoleOf(channel.record, userId);
 	if (!supporter.ok || role || channel.ownerId === userId) return featureOff(c, 'creatorSupport');
+	const parsed = Checkout.safeParse(input);
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
+	const body = parsed.data;
 	// The human check comes after: someone who may not support here gets feature_off, not a captcha refusal
 	const human = await checkHuman(env as never, c.req.raw, typeof body.turnstileToken === 'string' ? body.turnstileToken : (c.req.header(TURNSTILE_HEADER) ?? null), 'support-checkout');
 	if (!human.allowed) return apiError(c, 403, 'human_check_failed');
-	const kind = body.kind === 'monthly' ? 'monthly' : body.kind === 'one_time' ? 'one_time' : null;
-	if (!kind) return apiError(c, 400, 'invalid_request');
+	const { kind } = body;
 	const app = appDecisionFor(await readSupportConfig(env.SEARCH_DB), request);
 	// MEM-D15 cadence: an app limited to one-time gifts can't start monthly support
 	if (kind === 'monthly' && app && app.cadence !== 'one_time_and_monthly') return apiError(c, 400, 'invalid_request');
@@ -161,15 +186,15 @@ export async function handleSupportCheckout(c: Context) {
 			{ userId, channelId: channel.channelId },
 			{
 				kind,
-				amount: Number(body.amount),
-				currency: typeof body.currency === 'string' ? body.currency.toUpperCase() : 'USD',
+				amount: body.amount,
+				currency: body.currency,
 				coverFees: body.coverFees === true,
 				anonymous: body.anonymous === true,
-				message: typeof body.message === 'string' ? body.message : null,
+				message: body.message ?? null,
 				ageConfirmed: body.ageConfirmed === true,
 				consent: body.consent === true,
-				locale: body.locale === 'ar' ? 'ar' : 'en',
-				method: typeof body.method === 'string' && /^[a-z_]{1,30}$/.test(body.method) ? body.method : null,
+				locale: body.locale,
+				method: body.method ?? null,
 				returnUrl: `${web}${path}${path.includes('?') ? '&' : '?'}support=`,
 			},
 			vendorContext(env, config.mode, () => now),
@@ -189,8 +214,9 @@ export async function handleSupportSettingsSave(c: Context) {
 	const channelId = c.req.param('channelId') ?? '';
 	if ((await roleOnChannel(env as unknown as ChannelAccessEnv, channelId, userId).catch(() => null)) !== 'owner') return apiError(c, 404, 'channel_not_found');
 	try {
-		const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
-		return c.json({ success: true, result: await saveChannelSupportSettings(env.SEARCH_DB, channelId, userId, body, new Date()) });
+		const parsed = Settings.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'invalid_request');
+		return c.json({ success: true, result: await saveChannelSupportSettings(env.SEARCH_DB, channelId, userId, parsed.data, new Date()) });
 	} catch (error) {
 		return failure(c, error);
 	}

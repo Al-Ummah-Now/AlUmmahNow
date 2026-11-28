@@ -21,6 +21,9 @@
 import type { VideoStates } from '../../lib/media/failures';
 import { bunnyRef } from '../../lib/media/providers';
 import { Hono } from 'hono';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { IntegerQuery, optionalJson } from '../../validation/legacy-request';
 import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
 import { logger } from '../../lib/logger';
 import R2Repository from '../../lib/r2Repo';
@@ -83,7 +86,6 @@ const LISTED = {
 	flagged: { states: [...PROCESSING_STATUSES], oldest: true },
 } satisfies Record<string, VideoStates>;
 
-const pageStart = (value: string | undefined) => Math.min(Math.max(parseInt(value || '0', 10) || 0, 0), 100_000);
 
 interface HealthVideo {
 	id: string;
@@ -106,12 +108,21 @@ interface HealthVideo {
 	r2?: { status: string };
 }
 
-function parseIds(body: unknown): string[] | null {
-	const ids = (body as { ids?: unknown })?.ids;
-	if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_IDS) return null;
-	const clean = ids.filter((id): id is string => typeof id === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(id));
-	return clean.length === ids.length ? [...new Set(clean)] : null;
-}
+const Ids = z.array(z.string().regex(/^[A-Za-z0-9-]{8,64}$/)).min(1).max(MAX_IDS).transform((ids) => [...new Set(ids)]);
+const Limit = z.object({ limit: IntegerQuery.optional() });
+const VideoQuery = Limit.extend({
+	status: z.enum(['all', 'stuck', 'processing', 'failed', 'r2_failed', 'stalled', 'needs_reupload', 'flagged', 'errors']).optional(),
+	channelId: RecordId.optional(), bunny: z.enum(['0', '1']).optional(), offset: IntegerQuery.optional(),
+});
+const Sync = z.object({ ids: Ids, dryRun: z.boolean().optional() });
+const ThumbnailJob = z.object({ ids: Ids.optional(), dryRun: z.boolean().optional(), actorId: RecordId.optional() });
+const IndexRebuild = z.object({ kind: z.string().min(1).max(24), actorId: RecordId.optional() });
+const RepairTarget = z.union([
+	z.object({ entity: z.enum(INDEX_REPAIR_ENTITIES), id: RecordId }),
+	z.strictObject({}),
+]);
+const MarkFailed = z.object({ ids: Ids, reason: z.string().max(300).optional() });
+const Retry = z.object({ ids: Ids });
 
 function matches(video: HealthVideo, status: string): boolean {
 	if (video.isDeleted) return false;
@@ -455,11 +466,12 @@ export function createProcessingInternalRouter() {
 	const app = new Hono<{ Bindings: ProcessingEnv }>();
 
 	app.get('/videos', async (c) => {
-		const status = c.req.query('status') || 'stuck';
-		const withBunny = c.req.query('bunny') === '1';
-		const channelId = c.req.query('channelId');
-		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
-		const from = pageStart(c.req.query('offset'));
+		const parsed = VideoQuery.safeParse(c.req.query());
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid video filters' }, 400);
+		const { status = 'stuck', channelId, bunny, offset = 0 } = parsed.data;
+		const withBunny = bunny === '1';
+		const limit = Math.min(Math.max(parsed.data.limit || 100, 1), 500);
+		const from = Math.min(offset, 100_000);
 		const [{ items: page, scanned, truncated, next }, reconciler] = await Promise.all([
 			loadProcessingCandidates(c.env, status, limit, channelId, from),
 			readSweepStats(c.env),
@@ -504,10 +516,9 @@ export function createProcessingInternalRouter() {
 	// Apply: each video's check loop is (re)started through the queue, which
 	// syncs it now and keeps checking until Bunny finishes (retry, backoff, DLQ).
 	app.post('/sync', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		const ids = parseIds(body);
-		if (!ids) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
-		const dryRun = (body as { dryRun?: unknown }).dryRun !== false;
+		const parsed = Sync.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid sync options' }, 400);
+		const { ids, dryRun = true } = parsed.data;
 		const results = await mapLimited(ids, PROCESSING_BUNNY_CONCURRENCY, async (id) => {
 			try {
 				if (dryRun) return await syncVideoFromBunny(c.env, id, { dryRun: true });
@@ -523,7 +534,9 @@ export function createProcessingInternalRouter() {
 	// Failures that need an admin: flagged / failed videos and dead-lettered
 	// processing checks (stored by the processor's DLQ consumer in NOTIFICATIONS_DB).
 	app.get('/errors', async (c) => {
-		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
+		const parsed = Limit.safeParse(c.req.query());
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid limit' }, 400);
+		const limit = Math.min(Math.max(parsed.data.limit || 100, 1), 500);
 		const { items: videos, next, truncated } = await loadProcessingCandidates(c.env, 'errors', limit);
 		const moreVideos = next !== null || truncated || videos.length === limit;
 		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
@@ -590,17 +603,17 @@ export function createProcessingInternalRouter() {
 
 	// Thumbnail aspect repair (lib/thumbnail/repair.ts): an admin job, dry run first
 	app.get('/thumbnails', async (c) => {
-		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '1', 10) || 1, 1), 20);
+		const parsed = Limit.safeParse(c.req.query());
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid limit' }, 400);
+		const limit = Math.min(Math.max(parsed.data.limit || 1, 1), 20);
 		const runs = await listJobs(c.env as unknown as JobEnv, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit });
 		return c.json({ success: true, result: { runs } });
 	});
 
 	app.post('/thumbnails', async (c) => {
-		const body = ((await c.req.json().catch(() => null)) ?? {}) as { ids?: unknown; dryRun?: unknown; actorId?: unknown };
-		const ids = body.ids === undefined ? undefined : parseIds(body);
-		if (ids === null) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids (omit for every video)` }, 400);
-		const dryRun = body.dryRun !== false;
-		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const parsed = ThumbnailJob.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid thumbnail repair options' }, 400);
+		const { ids, dryRun = true, actorId = 'admin' } = parsed.data;
 		const job = await createJob(c.env as unknown as JobEnv, {
 			kind: THUMBNAIL_REPAIR_JOB,
 			targetKind: 'video',
@@ -614,7 +627,9 @@ export function createProcessingInternalRouter() {
 
 	app.post('/thumbnails/:jobId/retry', async (c) => {
 		const env = c.env as unknown as JobEnv;
-		const existing = await getJob(env, c.req.param('jobId'));
+		const jobId = RecordId.safeParse(c.req.param('jobId'));
+		if (!jobId.success) return c.json({ success: false, error: 'Invalid job id' }, 400);
+		const existing = await getJob(env, jobId.data);
 		if (!existing || existing.kind !== THUMBNAIL_REPAIR_JOB) return c.json({ success: false, error: 'Unknown thumbnail run' }, 404);
 		if (existing.status !== 'failed') return c.json({ success: false, error: 'Only a failed run can be retried' }, 409);
 		return c.json({ success: true, result: { job: await retryJob(env, existing.id) } });
@@ -623,14 +638,16 @@ export function createProcessingInternalRouter() {
 	// Index rebuild: the Errors page's "Index out of sync" Rebuild. Ownership kinds
 	// (lib/search/ownershipRebuild.ts) or a search table (`search:<entity>`, lib/search/backfill.ts)
 	app.post('/index-rebuild', async (c) => {
-		const body = ((await c.req.json().catch(() => null)) ?? {}) as { kind?: unknown; actorId?: unknown };
+		const parsed = IndexRebuild.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid rebuild options' }, 400);
+		const body = parsed.data;
 		const searchEntity = typeof body.kind === 'string' && body.kind.startsWith('search:') ? body.kind.slice('search:'.length) : null;
 		if (!isOwnershipKind(body.kind) && !isSearchEntity(searchEntity)) {
 			return c.json({ success: false, error: 'kind must be video, channel, profile or search:<video|channel|playlist|post>' }, 400);
 		}
 		const env = c.env as unknown as OwnershipRebuildEnv & SearchReconcileEnv;
 		if (!env.SEARCH_DB) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
-		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const actorId = body.actorId ?? 'admin';
 		const { job, existing } = isSearchEntity(searchEntity)
 			? await startSearchReconcile(env, searchEntity, actorId, { fresh: true })
 			: await startOwnershipRebuild(env, body.kind as never, actorId);
@@ -639,23 +656,19 @@ export function createProcessingInternalRouter() {
 
 	// Per-object index repairs that failed after their retries (Errors page): back to pending, job started
 	app.post('/index-repairs/retry', async (c) => {
-		const body = ((await c.req.json().catch(() => null)) ?? {}) as { entity?: unknown; id?: unknown };
+		const parsed = RepairTarget.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return c.json({ success: false, error: 'entity and id name one repair (omit both to retry every failed one)' }, 400);
 		const env = c.env as unknown as RepairJobEnv;
 		if (!env.SEARCH_DB) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
-		let target: { entity: IndexRepairEntity; id: string } | undefined;
-		if (body.entity !== undefined || body.id !== undefined) {
-			if (typeof body.entity !== 'string' || !(INDEX_REPAIR_ENTITIES as readonly string[]).includes(body.entity) || typeof body.id !== 'string' || !body.id || body.id.length > 200) {
-				return c.json({ success: false, error: 'entity and id name one repair (omit both to retry every failed one)' }, 400);
-			}
-			target = { entity: body.entity as IndexRepairEntity, id: body.id };
-		}
+		const target = typeof parsed.data.entity === 'string' ? { entity: parsed.data.entity as IndexRepairEntity, id: String(parsed.data.id) } : undefined;
 		const result = await retryIndexRepairs(env, target);
 		return c.json({ success: true, result });
 	});
 
 	app.post('/retry', async (c) => {
-		const ids = parseIds(await c.req.json().catch(() => null));
-		if (!ids) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
+		const parsed = Retry.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid video ids' }, 400);
+		const { ids } = parsed.data;
 		const results = [];
 		for (const id of ids) {
 			try {
@@ -686,11 +699,10 @@ export function createProcessingInternalRouter() {
 	});
 
 	app.post('/mark-failed', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		const ids = parseIds(body);
-		if (!ids) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
-		const reasonRaw = (body as { reason?: unknown }).reason;
-		const reason = typeof reasonRaw === 'string' && reasonRaw.trim() ? reasonRaw.trim().slice(0, 300) : 'Marked by an admin: upload again';
+		const parsed = MarkFailed.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid failure options' }, 400);
+		const { ids } = parsed.data;
+		const reason = parsed.data.reason?.trim() || 'Marked by an admin: upload again';
 		const now = new Date().toISOString();
 		const repo = new R2Repository<HealthVideo>(c.env.videos);
 		const results = [];

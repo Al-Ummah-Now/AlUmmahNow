@@ -34,7 +34,7 @@ type Env = ReturnType<typeof env>;
 const checking = (extra: Record<string, unknown> = {}) => ({ review: { status: 'checking', reviewId: 'r1', timing: 'pre', since: '2026-11-13T12:00:00.000Z', etaAt: '2026-11-13T12:05:00.000Z', ...extra } });
 const fanouts = (e: Env) => e.queue.messages.filter((m) => m.type === MessageType.NotificationFanout);
 const notices = (e: Env) => e.queue.messages.filter((m) => m.type === MessageType.NotificationCreate).map((m) => m.payload.notificationKey);
-const outcome = (route: 'approve' | 'hold', extra: Record<string, unknown> = {}) => ({ reviewId: 'r1', mode: 'enforce' as const, timing: 'pre' as const, routing: { route, risk: 0.1, nsfw: false, escalate: false, ...extra }, findingsCount: 0, checkedAt: 'x' });
+const outcome = (route: 'approve' | 'hold', extra: Record<string, unknown> = {}) => ({ reviewId: 'r1', mode: 'enforce' as const, timing: 'pre' as const, routing: { route, risk: 0.1, nsfw: false, escalate: false, ...extra }, findingsCount: 0, checkedAt: new Date().toISOString() });
 
 describe('queueing the scan', () => {
 	it('sends one VideoReviewScan per review, with the settings snapshot and the manifest', async () => {

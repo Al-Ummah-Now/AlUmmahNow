@@ -37,6 +37,7 @@ import { confirmTakeoutFile, listTakeoutFiles, markTakeoutUploaded, openTakeoutU
 import { deleteSource, insertSource, listItems, listSources, readSource, SourceError, updateSource, viewSource } from '../lib/importSources/store';
 import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
+import { optionalJson } from '../validation/legacy-request';
 
 type Env = { Bindings: Record<string, unknown> };
 const app = new Hono<Env>();
@@ -48,7 +49,7 @@ const actorOf = (c: Context<Env>) => {
 	return id;
 };
 const ok = (c: Context<Env>, result: unknown, status: 200 | 201 | 202 = 200) => c.json({ success: true, result }, status);
-const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
+const body = (c: Context<Env>) => optionalJson(c.req);
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 	const r = schema.safeParse(value);
 	if (!r.success) throw new SourceError(400, 'invalid_request', r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
@@ -62,7 +63,7 @@ app.onError((error, c) => {
 });
 
 const Create = z.object({
-	channelId: z.string().min(1).max(200),
+	channelId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
 	network: z.enum(IMPORT_SOURCE_NETWORKS),
 	address: z.string().min(1).max(500),
 	label: z.string().max(120).optional(),
@@ -127,8 +128,8 @@ app.post('/retry', async (c) => {
 app.get('/:id', async (c) => ok(c, { source: await viewSource(c.env, (await sourceOr404(c)).id) }));
 
 app.patch('/:id', async (c) => {
-	const row = await sourceOr404(c);
 	const patch = parse(Patch, await body(c));
+	const row = await sourceOr404(c);
 	// A connected source turns back on only while the owner's connection is there
 	if (patch.enabled && !row.enabled && !(await stillAuthorized(c.env, row))) throw new SourceError(409, 'not_connected', "The owner's connection to this account is gone; they need to connect it again");
 	await updateSource(c.env, row.id, patch);

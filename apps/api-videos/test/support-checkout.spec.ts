@@ -127,6 +127,14 @@ describe('the owner’s tier is only read', () => {
 	});
 });
 
+it('rejects mistyped public support quote, checkout and settings fields', async () => {
+	const t = await setup();
+	const path = '/api/channels/' + CH + '/support';
+	assert.equal((await t.as(FAN)('GET', path + '/quote?amount=1.5')).status, 400);
+	assert.equal((await t.as(FAN)('POST', path + '/checkout', { ...GIFT, amount: [500] })).status, 400);
+	assert.equal((await t.as(OWNER)('PUT', path + '/settings', { enabled: 'false' })).status, 400);
+});
+
 describe('checkout', () => {
 	it('a one-time gift: hosted test checkout → Pay → webhook → ledger; the supporter sees it', async () => {
 		const t = await setup();

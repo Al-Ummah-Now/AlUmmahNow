@@ -41,7 +41,7 @@ function env(stream: Record<string, unknown> = {}, mode: VideoReviewMode = 'enfo
 type Env = ReturnType<typeof env>;
 const record = (e: Env) => e.videos.read(`livestream:${SID}`);
 const held = (status: string, extra: Record<string, unknown> = {}) => ({ review: { status, reviewId: 'r1', timing: 'post', since: '2026-11-13T12:00:00.000Z', ...extra } });
-const outcome = (route: 'approve' | 'hold', extra: Record<string, unknown> = {}) => ({ reviewId: 'r1', mode: 'enforce' as const, timing: 'post' as const, routing: { route, risk: 0.9, nsfw: false, escalate: false, ...extra }, findingsCount: 1, checkedAt: 'x' });
+const outcome = (route: 'approve' | 'hold', extra: Record<string, unknown> = {}) => ({ reviewId: 'r1', mode: 'enforce' as const, timing: 'post' as const, routing: { route, risk: 0.9, nsfw: false, escalate: false, ...extra }, findingsCount: 1, checkedAt: new Date().toISOString() });
 const post = (e: Env, path: string, body: unknown) =>
 	createReviewInternalRouter().request(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, e as never);
 
