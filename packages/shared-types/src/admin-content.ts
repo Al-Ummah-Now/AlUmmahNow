@@ -707,6 +707,7 @@ export const ADMIN_JOB_KINDS = [
    * rewrite the rails that changed. Queued hourly by the cron and by an admin's "Run now".
    * Target 'video' / 'discovery-rails'.
    */
+  'card.publish',
   'discovery.rank',
   /**
    * Re-read objects whose index write failed (index_repairs) from R2 and
@@ -842,6 +843,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'billing.cancel': ['billing:manage'],
   'billing.refund': ['billing:refund'],
   'billing.reconcile': ['billing:manage'],
+  'card.publish': ['videos:manage'],
   'discovery.rank': ['videos:manage'],
   'search.repair-objects': ['videos:manage'],
   'search.reconcile': ['videos:manage'],

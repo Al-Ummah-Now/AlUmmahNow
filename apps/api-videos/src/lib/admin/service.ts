@@ -2776,7 +2776,7 @@ export async function startLegacyRestore(env: AdminServiceEnv, requested: Approv
 }
 
 /** The admin-jobs queue consumer's handlers, one per job kind (lib/admin/jobs.ts). */
-export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
+export const ADMIN_JOB_HANDLERS: Record<Exclude<AdminJobKind, 'card.publish'>, JobHandler> = {
 	'channel.sync-holds': (env, job) => syncChannelHolds(env as AdminServiceEnv, job),
 	'channel.purge': (env, job) => purgeChannel(env as AdminServiceEnv, job),
 	'channel.transfer': (env, job) => runTransfer(env as AdminServiceEnv, job),

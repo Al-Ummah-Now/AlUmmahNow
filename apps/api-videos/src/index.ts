@@ -1,3 +1,5 @@
+import { retryCardPublish } from './endpoints/community/cards';
+import { CARD_JOB, flagCardPublishFailed, resolveCardPublishAlert, runCardPublish } from './lib/cards/publish';
 import { onImportAttachFailed } from './lib/admin/importAttach';
 import { onSourceSyncFailed, queueDueSources, SOURCE_SYNC_JOB_KIND } from './lib/importSources/job';
 import { onTakeoutFailed, TAKEOUT_JOB_KIND } from './lib/importSources/takeout';
@@ -348,6 +350,7 @@ app.use('/api/channels/', channelCreateGate);
 // Video categories (admin-managed; edge-cached for a minute) and the admin-api invalidation hook
 app.get('/api/categories', handleListCategories);
 app.post('/internal/categories/invalidate', handleInvalidateCategories);
+app.post('/internal/community/cards/retry', retryCardPublish);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
 app.post('/api/me/creator/terms', authMiddleware, handleAcceptCreatorTerms);
@@ -1137,8 +1140,14 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		// Run-account erasures (#887) are admin jobs on their own capped queue
 		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
 			const jobEnv = withSearchSync(env, ctx) as never;
-			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, jobEnv, ADMIN_JOB_HANDLERS, (job, error) =>
-				job.kind.startsWith('billing.')
+			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, jobEnv, { ...ADMIN_JOB_HANDLERS, [CARD_JOB]: async (_env, job) => {
+				const result = await runCardPublish(jobEnv, job, ctx);
+				await resolveCardPublishAlert(jobEnv, ctx, job);
+				return result;
+			} }, (job, error) =>
+				job.kind === CARD_JOB
+					? Promise.resolve(flagCardPublishFailed(jobEnv, job, error))
+					: job.kind.startsWith('billing.')
 					? onBillingJobFailed(jobEnv, job, error)
 					: job.kind.startsWith('support.')
 						? onSupportJobFailed(jobEnv, job, error)

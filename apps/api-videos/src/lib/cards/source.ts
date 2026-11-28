@@ -56,14 +56,14 @@ export async function readQuranCard(
   };
 }
 
-export function formatCardQafCitation(passage: QafPassage, locale: Locale): string {
+export function formatCardQafCitation(passage: Omit<QafPassage, 'pages'> & { pages: Partial<QafPassage['pages'][number]>[] }, locale: Locale): string {
   const arabic = locale === 'ar';
   const separator = arabic ? '، ' : ', ';
   const book = arabic ? passage.book.titleArabic : passage.book.title;
   const author = arabic ? passage.author.nameArabic : passage.author.name;
   const pages = passage.pages.map(({ vol, page }) => [
-    vol === null ? '' : `${arabic ? 'ج' : 'vol.'} ${localizeDigits(locale, vol)}`,
-    page === null ? '' : `${arabic ? 'ص' : 'p.'} ${localizeDigits(locale, page)}`,
+    vol == null ? '' : `${arabic ? 'ج' : 'vol.'} ${localizeDigits(locale, vol)}`,
+    page == null ? '' : `${arabic ? 'ص' : 'p.'} ${localizeDigits(locale, page)}`,
   ].filter(Boolean).join(separator)).filter(Boolean);
   return [[book, author].filter(Boolean).join(' — '), pages.join(arabic ? '؛ ' : '; ')]
     .filter(Boolean).join(separator);

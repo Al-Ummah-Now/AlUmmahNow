@@ -1,4 +1,5 @@
 import { isPostHeldByReview } from '@al-ummah/shared-types';
+import { hydrateDesignedCard } from '../../lib/cards/publish';
 import { isChannelDeleted, managesChannelPosts, postForViewer } from '../../lib/community-posts';
 import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
@@ -179,9 +180,11 @@ export class ListCommunityPosts extends OptionalAuthRoute {
         );
       }
 
+      if (posts.some((post) => post.designedCard?.quran)) c.header('Cache-Control', 'private, no-store');
+      const hydrated = await Promise.all(posts.map((post) => hydrateDesignedCard(c.env, post)));
       return c.json({
         // The channel's name in every language (lib/channelNames.ts), posts stored before it included
-        posts: await withChannelNames(c.env.channels, posts),
+        posts: await withChannelNames(c.env.channels, hydrated),
         pagination: {
           page,
           limit,

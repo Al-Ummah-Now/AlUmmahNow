@@ -16,6 +16,9 @@ export interface CommunityPost extends SoftDelete, Moderation, Omit<PostV2Fields
   type: PostType;                    // text, image, poll, quiz, video, gif
   content?: string;                  // Text content (optional for image-only posts)
 
+  /** A generated card. Quran content stays in Content Sync and is hydrated for readers. */
+  designedCard?: { quran?: { surah: number; ayah: number }; design?: { template: string; palette: number; format: string } };
+
   // Media attachments
   images?: PostImage[];              // Up to 10 images
   videoId?: string;                  // For video link posts

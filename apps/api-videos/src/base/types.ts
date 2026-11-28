@@ -35,6 +35,10 @@ export interface AppBindings {
   /** R2 delivery beside Bunny (epic #687): public / private renditions. Optional: no dual write without them. */
   MEDIA?: R2Bucket;
   MEDIA_PRIVATE?: R2Bucket;
+  CARD_RENDER_ACCOUNT?: string;
+  CARD_RENDER_TOKEN?: string | { get(): Promise<string> };
+  CARD_PUBLIC_ORIGIN?: string;
+  ADMIN_JOBS_QUEUE?: Queue;
   /** R2 transcode jobs for apps/media */
   TRANSCODE_QUEUE?: Queue;
   MEDIA_SIGN_KEY?: { get(): Promise<string> } | string;

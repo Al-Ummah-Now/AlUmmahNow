@@ -190,6 +190,8 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         v2 = parsed.value;
       }
 
+      if (post.designedCard) return c.json({ error: 'Generated cards cannot be edited', code: 'immutable_card' }, 409);
+
       const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted'>(postKey, (fresh) => {
         if (fresh.status === PostStatus.DELETED) return { reject: 'deleted' };
         if (body.content !== undefined) {

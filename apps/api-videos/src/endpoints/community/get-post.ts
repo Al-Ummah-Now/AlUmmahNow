@@ -1,3 +1,4 @@
+import { hydrateDesignedCard } from '../../lib/cards/publish';
 import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { isChannelDeleted, managesChannelPosts, postForViewer } from '../../lib/community-posts';
 import { recordPostView, withPostViews } from '../../lib/post-views';
@@ -86,7 +87,8 @@ export class GetCommunityPost extends OptionalAuthRoute {
 
       // The channel's name in every language (lib/channelNames.ts)
       const [named] = await withChannelNames(c.env.channels, [postForViewer(post, manager)]);
-      return c.json(named);
+      if (post.designedCard?.quran) c.header('Cache-Control', 'private, no-store');
+      return c.json(await hydrateDesignedCard(c.env, named));
     } catch (error) {
       logger.error('Error getting community post:', error);
       return c.json({ error: 'Failed to get post' }, 500);
