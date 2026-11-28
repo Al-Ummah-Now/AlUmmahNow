@@ -95,7 +95,7 @@ class R2Repository<T> {
     };
   }
 
-  async getObject(id: string): Promise<T | null> {
+  async getObject(id: string, options?: { logLevel: 'warn' }): Promise<T | null> {
     if (this.foreign(id)) return null;
     try {
       // R2 sometimes fails a read that succeeds a moment later (10001): retried twice, then thrown
@@ -110,11 +110,11 @@ class R2Repository<T> {
         const bodyContent = await object.json<T>();
         return bodyContent;
       } catch (error) {
-        logger.error(`Failed to parse object ${id} as JSON:`, error);
+        (options?.logLevel === 'warn' ? logger.warn : logger.error)(`Failed to parse object ${id} as JSON:`, error);
         return null;
       }
     } catch (error) {
-      logger.error(`Failed to fetch object ${id} from R2 bucket:`, error);
+      (options?.logLevel === 'warn' ? logger.warn : logger.error)(`Failed to fetch object ${id} from R2 bucket:`, error);
       throw error;
     }
   }

@@ -315,6 +315,48 @@ describe('home rails', () => {
 		for (const r of data.rails) assert.ok(r.data.length >= MIN_HOME_ITEMS);
 	});
 
+	it('reuses cached public cards across limits and returns a partial feed after an R2 failure', async (t) => {
+		const { env } = await library(80);
+		await runDiscoveryRank(env, NOW);
+		const app = buildApp((r: any) => r.get('/api/discovery/home', DiscoveryHome));
+		const cache = new Map<string, Response>();
+		const previousCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+		Object.defineProperty(globalThis, 'caches', { configurable: true, value: { default: {
+			match: async (key: string) => cache.get(key)?.clone(),
+			put: async (key: string, value: Response) => { cache.set(key, value); },
+		} } });
+		t.after(() => {
+			if (previousCaches) Object.defineProperty(globalThis, 'caches', previousCaches);
+			else Reflect.deleteProperty(globalThis, 'caches');
+		});
+		const get = env.videos.get.bind(env.videos);
+		let reads = 0;
+		env.videos.get = (id: string) => { reads++; return get(id); };
+		const first = await app.request('/api/discovery/home?limit=8', {}, env);
+		assert.equal(first.status, 200);
+		const coldReads = reads;
+		assert.ok(coldReads > 0);
+		reads = 0;
+		const second = await app.request('/api/discovery/home?limit=4', {}, env);
+		assert.equal(second.status, 200);
+		assert.equal(reads, 0);
+		const { data } = await second.json() as any;
+		assert.ok(data.rails.length > 0);
+
+		cache.clear();
+		const failedId = data.rails[0].data[0].id;
+		env.videos.get = async (id: string) => {
+			if (id === failedId) throw new Error('Network connection lost.');
+			return get(id);
+		};
+		const degraded = await app.request('/api/discovery/home?limit=4', {}, env);
+		assert.equal(degraded.status, 200);
+		assert.equal(degraded.headers.get('Cache-Control'), 'no-store');
+		const partial = await degraded.json() as any;
+		assert.ok(partial.data.rails.length > 0);
+		assert.ok(partial.data.rails.every((rail: any) => rail.data.every((video: any) => video.id !== failedId)));
+	});
+
 	it('the admin order and switches decide the rails', async () => {
 		const { search, env } = await library(80);
 		await runDiscoveryRank(env, NOW);

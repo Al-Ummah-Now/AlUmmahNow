@@ -102,7 +102,7 @@ async function readMeta(db: Db, rail: RailId, scope: string): Promise<RailMeta |
  */
 export async function railPage(
 	env: { SEARCH_DB?: unknown; videos: R2Bucket; channels?: R2Bucket },
-	options: { rail: RailId; scope: string; limit: number; cursor?: string | null; readVideo?: (id: string) => Promise<VideoObject | null> },
+	options: { rail: RailId; scope: string; limit: number; cursor?: string | null; readVideo?: (id: string) => Promise<VideoObject | null>; onReadFailure?: () => void },
 ): Promise<RailPage | null> {
 	const db = env.SEARCH_DB as Db | undefined;
 	if (!db) return null;
@@ -124,6 +124,7 @@ export async function railPage(
 			.all<{ position: number; video_id: string; reason: ItemReason; score: number }>();
 		rows = results;
 	} catch (error) {
+		options.onReadFailure?.();
 		// Not migrated yet, or D1 unavailable: the caller serves its previous query
 		logger.warn('[Discovery] Rail read failed', { rail: options.rail, scope, error: error instanceof Error ? error.message : String(error) });
 		return null;

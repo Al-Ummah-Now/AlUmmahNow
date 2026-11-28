@@ -10,6 +10,7 @@
  */
 import type { VideoObject } from '@al-ummah/shared-types';
 import { channelNamesByIds } from '../../lib/channelNames';
+import { isVideoPubliclyVisible } from '../../lib/visibility';
 import R2Repository from '../../lib/r2Repo';
 import { z } from 'zod';
 import { PublicRoute, type AppContext } from '../../base';
@@ -36,7 +37,8 @@ const HOME_RAIL_ID: Record<Exclude<HomeRailKey, 'categories'>, RailId> = {
 export const MIN_HOME_ITEMS = 4;
 /** Category rails shown at most (the admin's category order). */
 export const MAX_CATEGORY_RAILS = 4;
-const HOME_TTL = 120;
+const VIDEO_TTL = 30;
+const HOME_TTL = 120 - VIDEO_TTL;
 
 const HomeRailSchema = z.object({
 	key: z.enum(HOME_RAIL_KEYS).describe('The home rail (admin order)'),
@@ -155,17 +157,39 @@ export class DiscoveryHome extends PublicRoute {
 			}
 		}
 		const repo = new R2Repository<VideoObject>(c.env.videos);
+		const waitUntil = waitUntilOf(c as never);
+		let degraded = false;
+		const loadVideo = async (id: string) => {
+			const key = edgeCacheUrl(c.req.url, `discovery-home-video/${encodeURIComponent(id)}`);
+			const cached = await readEdgeCache<VideoObject>(key);
+			if (cached) return cached;
+			try {
+				const video = await repo.getObject(id, { logLevel: 'warn' });
+				if (video && isVideoPubliclyVisible(video)) writeEdgeCache(key, {
+					...feedItem(video as never),
+					isPublic: true,
+					uploadStatus: 'ready',
+				}, VIDEO_TTL, waitUntil);
+				return video;
+			} catch {
+				degraded = true;
+				return null;
+			}
+		};
 		const reads = new Map<string, Promise<VideoObject | null>>();
 		const readVideo = (id: string) => {
 			let pending = reads.get(id);
 			if (!pending) {
-				pending = repo.getObject(id);
+				pending = loadVideo(id);
 				reads.set(id, pending);
 			}
 			return pending;
 		};
 		const railEnv = { SEARCH_DB: db, videos: c.env.videos };
-		const pages = await Promise.all(wanted.map((w) => railPage(railEnv, { rail: w.rail, scope: w.scope, limit: read, readVideo }).catch(() => null)));
+		const pages = await Promise.all(wanted.map((w) => railPage(railEnv, { rail: w.rail, scope: w.scope, limit: read, readVideo, onReadFailure: () => { degraded = true; } }).catch(() => {
+			degraded = true;
+			return null;
+		})));
 		const found: HomeRailOut[] = [];
 		wanted.forEach((w, i) => {
 			const page = pages[i];
@@ -173,7 +197,11 @@ export class DiscoveryHome extends PublicRoute {
 		});
 		let categories = 0;
 		const displayed = dedupeHome(found, limit).filter((r) => r.key !== 'categories' || ++categories <= MAX_CATEGORY_RAILS);
-		const names = await channelNamesByIds(c.env.channels, displayed.flatMap((rail) => rail.videos.map((entry) => entry.video.channelId)));
+		const names = await channelNamesByIds(
+			c.env.channels,
+			displayed.flatMap((rail) => rail.videos.map((entry) => entry.video.channelId)),
+			() => { degraded = true; },
+		);
 		const rails = displayed.map((r) => ({
 			key: r.key,
 			rail: r.rail,
@@ -186,9 +214,9 @@ export class DiscoveryHome extends PublicRoute {
 			...(r.page.nextCursor ? { cursor: r.page.nextCursor } : {}),
 		}));
 		const body = { success: true, data: { rails } };
-		if (rails.length) writeEdgeCache(cacheUrl, body, HOME_TTL, waitUntilOf(c as never));
-		else logger.debug('[Discovery] Home has no rails yet (no ranking run)');
-		c.header('Cache-Control', `public, max-age=${HOME_TTL}`);
+		if (rails.length && !degraded) writeEdgeCache(cacheUrl, body, HOME_TTL, waitUntil);
+		if (!rails.length) logger.debug('[Discovery] Home has no rails yet (no ranking run)');
+		c.header('Cache-Control', degraded ? 'no-store' : `public, max-age=${HOME_TTL}`);
 		return c.json(body);
 	}
 }

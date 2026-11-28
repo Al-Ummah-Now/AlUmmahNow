@@ -218,7 +218,7 @@ export async function flagNeedsReupload(
   if (result !== 'flagged' || !flagged) return result;
 
   const video = flagged as UploadVideo;
-  logger.error('[Uploads] Upload needs a re-upload', { videoId, userId: video.userId, source: opts.source, reason: opts.reason });
+  logger.warn('[Uploads] Upload needs a re-upload', { videoId, userId: video.userId, source: opts.source, reason: opts.reason });
   // The failed upload gives its session back to the tier holder it was counted against
   await refundUploadSession(env.SEARCH_DB, await uploadSubjectOf(env, video), video.dateCreated, { source: opts.source, nowMs: now.getTime() }).catch((error) =>
     logger.error('[Uploads] Upload session refund failed', { videoId, error: error instanceof Error ? error.message : String(error) }),
@@ -270,6 +270,7 @@ export interface StalledSweepStats {
   watching: number;
   completed: number;
   flagged: number;
+  expired: number;
   skipped: number;
   errors: number;
 }
@@ -284,7 +285,7 @@ function ageMs(iso: string | undefined, now: Date): number {
  * initiated/uploading, not modified for STALLED_AFTER_MS). For each, Bunny
  * decides: every byte there -> complete; upload gone -> flag; offset unchanged
  * since the last sweep for STALLED_AFTER_MS -> flag (the user can still resume
- * by picking the same file); never started for NEVER_STARTED_AFTER_MS -> flag.
+ * by picking the same file); never started for NEVER_STARTED_AFTER_MS -> expire quietly.
  * Bunny or storage trouble skips the video until the next run.
  */
 export async function sweepStalledUploads(
@@ -293,7 +294,7 @@ export async function sweepStalledUploads(
 ): Promise<StalledSweepStats> {
   const now = opts.now ?? new Date();
   const doFetch = opts.fetchImpl ?? fetch;
-  const stats: StalledSweepStats = { candidates: 0, watching: 0, completed: 0, flagged: 0, skipped: 0, errors: 0 };
+  const stats: StalledSweepStats = { candidates: 0, watching: 0, completed: 0, flagged: 0, expired: 0, skipped: 0, errors: 0 };
   if (!env.SEARCH_DB) return stats;
 
   const cutoff = now.getTime() - STALLED_AFTER_MS;
@@ -312,14 +313,31 @@ export async function sweepStalledUploads(
       const object = await env.videos.get(videoId);
       if (!object) { stats.skipped++; continue; }
       const video = (await object.json()) as UploadVideo;
+      if (isStoppedUpload(video)) { stats.skipped++; continue; }
       if (video.uploadStatus !== 'initiated' && video.uploadStatus !== 'uploading') { stats.skipped++; continue; }
 
       const upload = video.tusUpload;
       const ownTarget = upload?.target === 'r2';
       if (!upload || (!ownTarget && !upload.bunnyUploadUrl)) {
         if (ageMs(video.dateModified || video.dateCreated, now) < NEVER_STARTED_AFTER_MS) { stats.skipped++; continue; }
-        const r = await flagNeedsReupload(env, videoId, { reason: 'The upload never started. Upload the video file again.', source: 'sweep', now });
-        if (r === 'flagged') stats.flagged++; else stats.skipped++;
+        let expired = false;
+        const saved = await repository.updateObject(videoId, (fresh) => {
+          expired = false;
+          if (isStoppedUpload(fresh) || (fresh.uploadStatus !== 'initiated' && fresh.uploadStatus !== 'uploading')) return false;
+          if (fresh.tusUpload?.target === 'r2' || fresh.tusUpload?.bunnyUploadUrl) return false;
+          if (ageMs(fresh.dateModified || fresh.dateCreated, now) < NEVER_STARTED_AFTER_MS) return false;
+          // Leave the record eligible for the existing abandoned-upload reaper.
+          fresh.uploadStatus = 'failed';
+          fresh.dateModified = now.toISOString();
+          delete fresh.uploadWatch;
+          expired = true;
+        });
+        if (expired && saved) {
+          stats.expired++;
+          await refundUploadSession(env.SEARCH_DB, await uploadSubjectOf(env, saved), saved.dateCreated, { source: 'sweep', nowMs: now.getTime() });
+        } else {
+          stats.skipped++;
+        }
         continue;
       }
 
