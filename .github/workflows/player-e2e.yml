@@ -17,6 +17,11 @@ on:
         description: 'Only tests whose title matches this pattern (playwright --grep)'
         required: false
         default: ''
+      trace:
+        description: 'Record a trace of every test, for failures that never retry (off: as the config says)'
+        required: false
+        default: false
+        type: boolean
   # Every push to main, whatever it touched: the player broke on main through a dependency bump
   # (next 16.4's React, #1696) that no player path below matched, and nothing ran it for five days
   push:
@@ -167,6 +172,7 @@ jobs:
         env:
           REPEAT_EACH: ${{ inputs.repeat_each }}
           GREP: ${{ inputs.grep }}
+          TRACE: ${{ inputs.trace }}
         run: |
           args=(-c playwright.player.config.ts --project=${{ matrix.project }} ${{ matrix.half && format('--shard={0}/2', matrix.half) || '' }})
           if [ -n "$REPEAT_EACH" ]; then
@@ -175,6 +181,7 @@ jobs:
           fi
           # A pattern may match nothing in a project (the phone projects run only mobile specs)
           if [ -n "$GREP" ]; then args+=(--grep "$GREP" --pass-with-no-tests); fi
+          if [ "$TRACE" = true ]; then args+=(--trace on); fi
           pnpm exec playwright test "${args[@]}"
 
       - name: Upload report and failure artefacts
