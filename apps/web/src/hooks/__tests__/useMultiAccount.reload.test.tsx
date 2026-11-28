@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MultiAccountProvider, useMultiAccount } from '../useMultiAccount';
-import { getActiveSessionInfo, switchChannel } from '@/lib/actions/multi-account';
+import { switchChannel } from '@/lib/actions/multi-account';
+import { readSessionInfo } from '@/lib/channels/session-refresh';
 import { fetchChannelAccess } from '@/lib/channels/access';
 import { CHANNEL_ACCESS_CHANGED_EVENT } from '@/lib/notifications/channel-access';
 
@@ -15,6 +16,7 @@ jest.mock('@/lib/runtime-config', () => ({ getAuthUrl: () => 'https://auth.examp
 jest.mock('@/lib/logger-client', () => ({
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
+jest.mock('@/lib/channels/session-refresh', () => ({ readSessionInfo: jest.fn(), refreshSessionChannels: jest.fn() }));
 jest.mock('@/lib/actions/multi-account', () => ({
   addUserAccount: jest.fn(),
   switchUserAccount: jest.fn(),
@@ -24,7 +26,6 @@ jest.mock('@/lib/actions/multi-account', () => ({
   createChannelForActiveUser: jest.fn(),
   logoutCurrentAccount: jest.fn(),
   logoutAllAccounts: jest.fn(),
-  getActiveSessionInfo: jest.fn(),
 }));
 jest.mock('@/lib/channels/access', () => ({
   ...jest.requireActual('@/lib/channels/access'),
@@ -62,7 +63,7 @@ describe('MultiAccountProvider - session reloads', () => {
   it('reloads after a load that was already running when the channel switched', async () => {
     // The page-load read is slow and returns the session from before the switch
     const firstLoad = deferred<ReturnType<typeof session>>();
-    (getActiveSessionInfo as jest.Mock).mockReturnValueOnce(firstLoad.promise).mockResolvedValue(session(null));
+    (readSessionInfo as jest.Mock).mockReturnValueOnce(firstLoad.promise).mockResolvedValue(session(null));
     (switchChannel as jest.Mock).mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useMultiAccount(), { wrapper });
@@ -78,12 +79,12 @@ describe('MultiAccountProvider - session reloads', () => {
 
     // The switch's own reload was not dropped: the menu shows "no channel"
     await waitFor(() => expect(result.current.user?.channel).toBeNull());
-    expect(getActiveSessionInfo).toHaveBeenCalledTimes(2);
+    expect(readSessionInfo).toHaveBeenCalledTimes(2);
   });
 
   it('shares one queued reload between calls made during the same load', async () => {
     const firstLoad = deferred<ReturnType<typeof session>>();
-    (getActiveSessionInfo as jest.Mock).mockReturnValueOnce(firstLoad.promise).mockResolvedValue(session(channelOne));
+    (readSessionInfo as jest.Mock).mockReturnValueOnce(firstLoad.promise).mockResolvedValue(session(channelOne));
 
     const { result } = renderHook(() => useMultiAccount(), { wrapper });
 
@@ -98,12 +99,12 @@ describe('MultiAccountProvider - session reloads', () => {
       await Promise.all([a, b]);
     });
 
-    expect(getActiveSessionInfo).toHaveBeenCalledTimes(2);
+    expect(readSessionInfo).toHaveBeenCalledTimes(2);
     expect(result.current.loading).toBe(false);
   });
 
   it('reloads the live channel list when a channel-access notice fires the access-changed event (AUN-CHANNEL-CLAIM CC-2)', async () => {
-    (getActiveSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
+    (readSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
     renderHook(() => useMultiAccount(), { wrapper });
     await waitFor(() => expect(fetchChannelAccess).toHaveBeenCalledTimes(1));
     act(() => {
@@ -113,22 +114,22 @@ describe('MultiAccountProvider - session reloads', () => {
   });
 
   it('does not reload on Back/Forward inside the app, only on a back/forward cache restore', async () => {
-    (getActiveSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
+    (readSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
     renderHook(() => useMultiAccount(), { wrapper });
-    await waitFor(() => expect(getActiveSessionInfo).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(readSessionInfo).toHaveBeenCalledTimes(1));
 
     // Server actions during the router's popstate committed the page being left back into history
     act(() => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     await new Promise((r) => setTimeout(r, 20));
-    expect(getActiveSessionInfo).toHaveBeenCalledTimes(1);
+    expect(readSessionInfo).toHaveBeenCalledTimes(1);
 
     act(() => {
       const restored = new Event('pageshow') as PageTransitionEvent;
       Object.defineProperty(restored, 'persisted', { value: true });
       window.dispatchEvent(restored);
     });
-    await waitFor(() => expect(getActiveSessionInfo).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(readSessionInfo).toHaveBeenCalledTimes(2));
   });
 });

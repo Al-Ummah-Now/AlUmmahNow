@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { MultiAccountProvider, useMultiAccount } from '../useMultiAccount';
-import { getActiveSessionInfo } from '@/lib/actions/multi-account';
+import { readSessionInfo } from '@/lib/channels/session-refresh';
 
 const router = { refresh: jest.fn(), push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({
@@ -14,6 +14,7 @@ jest.mock('@/lib/runtime-config', () => ({ getAuthUrl: () => 'https://auth.examp
 jest.mock('@/lib/logger-client', () => ({
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
+jest.mock('@/lib/channels/session-refresh', () => ({ readSessionInfo: jest.fn(), refreshSessionChannels: jest.fn() }));
 jest.mock('@/lib/actions/multi-account', () => ({
   addUserAccount: jest.fn(),
   switchUserAccount: jest.fn(),
@@ -23,7 +24,6 @@ jest.mock('@/lib/actions/multi-account', () => ({
   createChannelForActiveUser: jest.fn(),
   logoutCurrentAccount: jest.fn(),
   logoutAllAccounts: jest.fn(),
-  getActiveSessionInfo: jest.fn(),
 }));
 jest.mock('@/lib/auth/auth-accounts', () => ({
   ...jest.requireActual('@/lib/auth/auth-accounts'),
@@ -36,7 +36,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <MultiAccountProvider
 describe('MultiAccountProvider - back from sign-in (?session_updated=true)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (getActiveSessionInfo as jest.Mock).mockResolvedValue(null);
+    (readSessionInfo as jest.Mock).mockResolvedValue(null);
   });
   afterEach(() => window.history.replaceState(null, '', '/'));
 
@@ -57,7 +57,7 @@ describe('MultiAccountProvider - back from sign-in (?session_updated=true)', () 
   it('leaves other pages alone', async () => {
     window.history.replaceState(null, '', '/en?session=other');
     renderHook(() => useMultiAccount(), { wrapper });
-    await waitFor(() => expect(getActiveSessionInfo).toHaveBeenCalled());
+    await waitFor(() => expect(readSessionInfo).toHaveBeenCalled());
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
