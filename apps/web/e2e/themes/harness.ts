@@ -7,7 +7,7 @@ export const MODES = ['light', 'dark'] as const;
 export const LANGS = ['en', 'ar'] as const;
 export type Mode = (typeof MODES)[number];
 
-const USER_ID = 'theme-sweep-user';
+export const USER_ID = 'theme-sweep-user';
 
 /** A local signed-in session (SessionManager reads the cookie as is; nothing is verified or sent anywhere). */
 export async function signIn(context: BrowserContext, baseURL: string, opts: { channel?: boolean } = {}) {
@@ -24,13 +24,7 @@ export async function signIn(context: BrowserContext, baseURL: string, opts: { c
     },
   };
   await context.addCookies([{ name: 'al_ummah_session', value: encodeURIComponent(JSON.stringify(session)), url: baseURL }, consentCookie(baseURL)]);
-  // The dev server's error badge and the dev-only cookie-size monitor are not part of the site
   await context.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      const s = document.createElement('style');
-      s.textContent = 'nextjs-portal,.fixed.bottom-4.right-4.z-50.max-w-sm{display:none!important}';
-      document.head.append(s);
-    });
     // Who starts a navigation (#1941): a page that reloads in the middle of a test ("Execution context
     // was destroyed") is told apart from one the test moved. The stack is the script that asked for it
     // (empty for the browser's own: a typed URL, page.goto); it lands in the failing test's trace.
@@ -58,26 +52,8 @@ export const NOTIFICATIONS = Array.from({ length: 8 }, (_, i) => ({
   createdAt: hoursAgo(i === 0 ? 1 : 24 * i),
 }));
 
-/**
- * Hot updates from the dev server never reach the page (#1941). The server sends its webpack hash
- * ("sync") to every open page each time any page connects, and Next's dev client takes a changed hash
- * for a restarted server: `window.location.reload()` (next/dist/client/dev/hot-reloader/app/web-socket.js).
- * The two workers share one server, so one worker's first visit to a route, which compiles it, reloaded
- * the other worker's page between two lines of its test. No source changes during a run, so nothing sent
- * as text (sync, building, built, reloadPage, addedPage, ...) is for a test. Binary messages pass: React
- * waits for its debug chunks before it hydrates (without them the page never does). So does everything the
- * page sends: its pings keep the route compiled, and its console goes to the server's log.
- */
-export async function holdHotUpdates(page: Page) {
-  await page.routeWebSocket((u) => u.pathname.endsWith('/_next/hmr'), (ws) => {
-    const server = ws.connectToServer();
-    server.onMessage((message) => { if (typeof message !== 'string') ws.send(message); });
-  });
-}
-
 /** Answers every API call the browser makes; nothing leaves the machine. */
 export async function mockApi(page: Page) {
-  await holdHotUpdates(page);
   // The local mock (mock-server.mjs) answers the API; nothing else may leave the machine
   await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
   await page.route(/^https?:\/\/127\.0\.0\.1:\d+\/api\/notifications(\?.*)?$/, (route) =>
@@ -88,7 +64,7 @@ export async function mockApi(page: Page) {
 /**
  * GET through a Playwright APIRequestContext without pooling keep-alive sockets.
  * Playwright shares one process-wide `http.Agent({ keepAlive: true })` across all
- * APIRequestContext instances, while local Node servers (`next dev`, `mock-server.mjs`) close
+ * APIRequestContext instances, while local Node servers (`next start`, `mock-server.mjs`) close
  * idle keep-alive sockets after 5 s (`keepAliveTimeout`). Sending `Connection: close` stops
  * sockets from idling in the pool between steps; `maxRetries: 2` covers a transport-level
  * `ECONNRESET` only and never retries HTTP 4xx/5xx responses or other errors.
@@ -113,26 +89,13 @@ export function localGet(
  * The page is usable: React has hydrated it (a click before that is lost: the notifications bell
  * was clicked, focused and never opened) and the header's account area has loaded the session (a
  * pulsing placeholder until then: the account menu trigger and the realtime socket come after).
- * On the CI dev server that takes several seconds, longer while the other worker compiles, and
- * different specs failed with "0 elements" each time (#1141).
  */
 export async function waitForApp(page: Page, timeout = 60_000) {
-  // The CI dev server can reload the page while a check runs (a webpack hot update): the
-  // evaluate then loses its context. That is "not hydrated yet", so the poll asks again on the
-  // reloaded page instead of failing the test (theme pass, retries: 0).
-  const hydrated = () =>
-    page
-      .evaluate(() => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$'))))
-      .catch((error: unknown) => {
-        if (/Execution context was destroyed|navigation/i.test(String(error))) return false;
-        throw error;
-      });
-  await expect
-    .poll(hydrated, {
-      message: 'the page never hydrated',
-      timeout,
-    })
-    .toBe(true);
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$'))),
+    undefined,
+    { timeout },
+  );
   await expect(page.locator('span.aun-acct-btn[aria-hidden="true"]'), 'the header never loaded the session').toHaveCount(0, { timeout });
 }
 

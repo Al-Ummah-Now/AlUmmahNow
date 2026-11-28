@@ -2,11 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Theme visibility sweep (e2e/themes): every built-in site theme x light/dark x en/ar x desktop/phone,
- * against a local dev server and a local mock API (e2e/themes/mock-server.mjs): no QA, no network.
+ * against a local production server and a local mock API (e2e/themes/mock-server.mjs): no QA, no network.
  * The session is a local cookie, never a real account.
  *
  *   pnpm --filter web exec playwright test -c playwright.themes.config.ts
- *   THEMES_BASE_URL=http://localhost:3157 ... to reuse a running dev server
+ *   THEMES_BASE_URL=http://localhost:3157 ... to reuse a running production server
  */
 const port = Number(process.env.THEMES_PORT || 3157);
 const baseURL = process.env.THEMES_BASE_URL || `http://localhost:${port}`;
@@ -15,11 +15,10 @@ export const MOCK_API = `http://127.0.0.1:${mockPort}`;
 
 export default defineConfig({
   testDir: './e2e/themes',
-  globalSetup: './e2e/themes/warm-up.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: process.env.CI ? 2 : 2,
+  workers: process.env.CI ? 2 : 1,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
@@ -40,7 +39,7 @@ export default defineConfig({
       stderr: 'pipe',
     },
     ...(process.env.THEMES_BASE_URL ? [] : [{
-        command: `pnpm exec next dev -p ${port} --webpack`,
+        command: `pnpm run build && pnpm run start -p ${port}`,
         url: `${baseURL}/en`,
         reuseExistingServer: !process.env.CI,
         timeout: 300_000,
