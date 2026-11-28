@@ -148,7 +148,7 @@ jobs:
           mkdir -p census && cp "$RUNNER_TEMP/listing.json" "$RUNNER_TEMP/runs.json" "$RUNNER_TEMP/owners.json" "$RUNNER_TEMP/census.md" census/
 
       - name: Keep the census
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bunny-census-${{ github.run_id }}
           path: census/

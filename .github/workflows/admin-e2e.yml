@@ -192,7 +192,7 @@ jobs:
 
       - name: Upload HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: admin-e2e-report-${{ matrix.project }}
           path: apps/admin-web/playwright-report/
@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload test results (traces, videos, JUnit)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: admin-e2e-results-${{ matrix.project }}
           path: apps/admin-web/test-results/

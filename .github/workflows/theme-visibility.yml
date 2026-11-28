@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload screenshots and failure artefacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: theme-visibility-${{ matrix.project }}
           path: apps/web/test-results-themes/

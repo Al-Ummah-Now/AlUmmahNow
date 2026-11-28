@@ -107,7 +107,7 @@ jobs:
           python3 -I scripts/ci/scan-artifacts-for-secrets.py --env E2E_TEST_PASSWORD --env RESEND_API_KEY
           --remove "$SUITE/release-report" "$SUITE/test-results"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: prod-signed-in

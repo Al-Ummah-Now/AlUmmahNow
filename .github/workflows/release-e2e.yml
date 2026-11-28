@@ -466,7 +466,7 @@ jobs:
           "$SUITE/release-report-encode" "$SUITE/test-results-encode" "$SUITE/release-outcomes-encode.json"
           < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: release-regressions-${{ env.E2E_ENV }}${{ matrix.part == 'encode' && '-encode' || '' }}
@@ -481,7 +481,7 @@ jobs:
 
       # Per-test outcomes (titles and first error lines, scanned above), pass or fail:
       # the nightly job reads them to file flaky specs (release-e2e-nightly.yml)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: release-outcomes-${{ env.E2E_ENV }}${{ matrix.part == 'encode' && '-encode' || '' }}

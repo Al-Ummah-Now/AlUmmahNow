@@ -332,7 +332,7 @@ jobs:
 
       - name: Upload HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ steps.art.outputs.name }}
           path: |
@@ -342,7 +342,7 @@ jobs:
 
       - name: Upload traces, screenshots and videos
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ steps.art.outputs.name }}
           path: |
@@ -493,7 +493,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.project }}
           path: |
@@ -560,7 +560,7 @@ jobs:
       # The new baselines are always kept as an artifact as well
       - name: Upload the snapshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-snapshots-${{ github.run_id }}
           path: apps/web/e2e/visual/__screenshots__
@@ -639,7 +639,7 @@ jobs:
 
       - name: Upload Lighthouse reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lighthouse-reports
           path: apps/web/.lighthouseci/
