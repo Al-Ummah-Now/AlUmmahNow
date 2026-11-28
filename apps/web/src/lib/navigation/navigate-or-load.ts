@@ -27,6 +27,18 @@
  * dev server, and this fallback replaced it); it is now a fetch (app/api/session/route.ts). Keep reads
  * that run on every page out of Server Actions.
  */
+import { getCurrentAppRouterState } from 'next/dist/client/components/app-router-instance';
+
+function diag(event: string, details: Record<string, unknown> = {}) {
+  console.warn('[nav-diag]', JSON.stringify({
+    t: Math.round(performance.now()),
+    event,
+    canonical: getCurrentAppRouterState()?.canonicalUrl,
+    address: location.pathname + location.search,
+    ...details,
+  }));
+}
+
 import { logger } from '@/lib/logger-client';
 
 /** How long a move whose page data has arrived may take to commit */
@@ -95,6 +107,15 @@ function observeRouterFetches(): void {
   const original = window.fetch;
   window.fetch = function observedFetch(this: unknown, ...args: Parameters<typeof fetch>) {
     const result = original.apply(this, args);
+    const url = String(args[0] instanceof Request ? args[0].url : args[0]);
+    const action = new Headers(args[1]?.headers ?? (args[0] instanceof Request ? args[0].headers : undefined)).has('next-action');
+    if (action || routerRequestKey(args[0])) {
+      diag('sent', { url, action });
+      result.then(
+        (response) => diag('answered', { url, status: response.status, type: response.headers.get('content-type'), redirected: response.redirected }),
+        (error) => diag('failed', { url, error: String(error) }),
+      );
+    }
     if (watchers.size === 0) return result;
     const key = routerRequestKey(args[0]);
     const waiting = key ? watchers.get(key) : undefined;
@@ -119,6 +140,7 @@ function watchDataEnd(target: string, onEnd: () => void): { stop: () => void; su
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       if (entry.startTime >= since && routerRequestKey(entry.name) === target) {
+        diag('response ended', { url: entry.name, duration: entry.duration });
         onEnd();
         return;
       }
@@ -181,9 +203,17 @@ export function navigateOrLoad(
     waiting.delete(events);
     if (waiting.size === 0 && watchers.get(key) === waiting) watchers.delete(key);
   };
+  diag('push', { href });
   push(href);
+  let canonical = getCurrentAppRouterState()?.canonicalUrl;
   const check = () => {
+    const nextCanonical = getCurrentAppRouterState()?.canonicalUrl;
+    if (nextCanonical !== canonical) {
+      canonical = nextCanonical;
+      diag('canonical changed');
+    }
     if (address() !== from) {
+      diag('committed');
       stop();
       return;
     }
@@ -192,6 +222,7 @@ export function navigateOrLoad(
       return;
     }
     stop();
+    diag('FALLBACK', { streaming, expiredBy: Date.now() - deadline });
     logger.warn('[Navigation] Client navigation did not commit; loading the page', { href });
     pageLoadPending = true;
     load(target.toString());
