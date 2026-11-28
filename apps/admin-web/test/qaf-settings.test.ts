@@ -17,7 +17,7 @@ const initial: QafSettings = {
 
 function card(locale: 'en' | 'ar') {
   const Provider = I18nProvider as unknown as React.FC<{ locale: 'en' | 'ar'; theme: 'dark'; children?: React.ReactNode }>;
-  const setting = React.createElement(QafSetting, { initial, save: async () => ({ ok: true, data: initial }) });
+  const setting = React.createElement(QafSetting, { initial, save: async () => ({ ok: true as const, data: initial }) });
   return renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'dark' }, setting));
 }
 
