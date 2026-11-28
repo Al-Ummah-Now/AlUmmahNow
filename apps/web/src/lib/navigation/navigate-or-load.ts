@@ -13,14 +13,19 @@
  * same request again, slower, and loses the viewer's activation. Until 2026-11-28 the fallback fired
  * 2 s after the push whatever the request was doing: a slow server or network got a full page load
  * in place of a move that committed a moment later (Player E2E Firefox: the dev server's answer took
- * 2.2 s, and the page load that replaced it 15 to 40 s). A push that fetches nothing at all, or
- * whose request never answers, still falls back, after `stallMs`.
+ * 2.2 s, and the page load that replaced it 15 to 40 s). The move's request (the router asks for the
+ * page's data at its address with `_rsc` added) is followed from start to end:
+ *   - no request after `stallMs`: the router did nothing, load the page;
+ *   - asked, no answer `stallMs` after the request: the server is not answering, load the page;
+ *   - answered, still streaming: the router's to finish (a page load would ask the same server);
+ *   - the data all arrived, or the request failed, and no commit `timeoutMs` later: load the page.
+ * A streamed answer can take long: on the CI dev server one answered in 3.2 s and streamed for 6.8 s.
  */
 import { logger } from '@/lib/logger-client';
 
 /** How long a move whose page data has arrived may take to commit */
 export const NAVIGATION_FALLBACK_MS = 2000;
-/** How long a move may wait for its page data before the page is loaded anyway */
+/** How long a move may wait for its request to start, and then for the server to answer */
 export const NAVIGATION_STALL_MS = 10_000;
 /** How often the address is checked for the move having committed */
 const MOVE_POLL_MS = 100;
@@ -39,32 +44,76 @@ export function resetPageLoadPending(): void {
   pageLoadPending = false;
 }
 
+/** The address a request or move is for, without the router's cache-busting `_rsc` */
+function moveKey(url: URL): string {
+  const query = new URLSearchParams(url.search);
+  query.delete('_rsc');
+  query.sort();
+  return `${url.origin}${url.pathname}?${query}`;
+}
+
+/** Whether `url` is the router's request for a page's data (Next adds `_rsc` to every one) */
+function routerRequestKey(input: unknown): string | null {
+  try {
+    const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as { url?: unknown } | null)?.url;
+    if (typeof raw !== 'string') return null;
+    const url = new URL(raw, window.location.href);
+    return url.searchParams.has('_rsc') ? moveKey(url) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What a move's request has done so far */
+interface MoveEvents {
+  /** The router asked for the page's data */
+  asked: () => void;
+  /** The server answered (status and headers; the body may still be streaming) */
+  answered: () => void;
+  /** All of the data arrived, or the request failed: the router has everything it will get */
+  done: () => void;
+}
+
+const watchers = new Map<string, Set<MoveEvents>>();
+let fetchObserved = false;
+
 /**
- * Watches for the router's request for `target` (Next fetches the page's data from its address
- * with `_rsc` added) and reports when its answer has arrived. Resource timing reports a request once
- * its response has ended, which is what "fetched" means here. Without resource timing (old browsers,
- * jsdom) it reports nothing, and only `stallMs` applies.
+ * Follows the router's requests through window.fetch, which Next's client router calls for every
+ * page-data request (next/dist/client/components/segment-cache/fetch.js). It passes every call
+ * through untouched and returns the same promise and response; it only notes when a request that a
+ * move is waiting for starts, is answered and fails. Installed once, on the first move.
  */
-function watchPageData(target: URL, onArrived: () => void): () => void {
-  if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('resource')) return () => undefined;
-  const key = (url: URL) => {
-    const query = new URLSearchParams(url.search);
-    query.delete('_rsc');
-    query.sort();
-    return `${url.origin}${url.pathname}?${query}`;
-  };
-  const wanted = key(target);
+function observeRouterFetches(): void {
+  if (fetchObserved || typeof window.fetch !== 'function') return;
+  fetchObserved = true;
+  const original = window.fetch;
+  window.fetch = function observedFetch(this: unknown, ...args: Parameters<typeof fetch>) {
+    const result = original.apply(this, args);
+    if (watchers.size === 0) return result;
+    const key = routerRequestKey(args[0]);
+    const waiting = key ? watchers.get(key) : undefined;
+    if (!waiting) return result;
+    const each = (event: keyof MoveEvents) => {
+      for (const w of [...waiting]) w[event]();
+    };
+    each('asked');
+    result.then(() => each('answered'), () => each('done'));
+    return result;
+  } as typeof fetch;
+}
+
+/**
+ * Reports when a request for `target` made from now on has ended, response body included: resource
+ * timing lists a request once its last byte has arrived (a prefetch started earlier does not count).
+ * `supported` is false where resource timing is not available.
+ */
+function watchDataEnd(target: string, onEnd: () => void): { stop: () => void; supported: boolean } {
+  if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('resource')) return { stop: () => undefined, supported: false };
+  const since = typeof performance !== 'undefined' ? performance.now() : 0;
   const observer = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      let url: URL;
-      try {
-        url = new URL(entry.name);
-      } catch {
-        continue;
-      }
-      if (url.searchParams.has('_rsc') && key(url) === wanted) {
-        observer.disconnect();
-        onArrived();
+      if (entry.startTime >= since && routerRequestKey(entry.name) === target) {
+        onEnd();
         return;
       }
     }
@@ -72,9 +121,9 @@ function watchPageData(target: URL, onArrived: () => void): () => void {
   try {
     observer.observe({ type: 'resource' });
   } catch {
-    return () => undefined;
+    return { stop: () => undefined, supported: false };
   }
-  return () => observer.disconnect();
+  return { stop: () => observer.disconnect(), supported: true };
 }
 
 export function navigateOrLoad(
@@ -95,22 +144,48 @@ export function navigateOrLoad(
   // address is the starting one again) would load the target over the page the viewer went back to.
   const address = () => window.location.pathname + window.location.search;
   const from = address();
-  // The deadline starts at the push, and moves to `timeoutMs` after the page data arrives
-  let deadline = Date.now() + Math.max(stallMs, timeoutMs);
-  const stopWatching = watchPageData(target, () => {
+  const key = moveKey(target);
+  let deadline = Date.now() + stallMs;
+  /** Set once the server has answered: no deadline while its data streams in (see the top) */
+  let streaming = false;
+  const ended = () => {
+    streaming = false;
     deadline = Math.min(deadline, Date.now() + timeoutMs);
-  });
+  };
+  const dataEnd = watchDataEnd(key, ended);
+  const events: MoveEvents = {
+    asked: () => {
+      if (!streaming) deadline = Date.now() + stallMs;
+    },
+    answered: () => {
+      // Without resource timing the end of the data is never seen: give the stream `stallMs`
+      if (dataEnd.supported) {
+        streaming = true;
+        deadline = Infinity;
+      } else deadline = Date.now() + stallMs;
+    },
+    done: ended,
+  };
+  observeRouterFetches();
+  const waiting = watchers.get(key) ?? new Set<MoveEvents>();
+  waiting.add(events);
+  watchers.set(key, waiting);
+  const stop = () => {
+    dataEnd.stop();
+    waiting.delete(events);
+    if (waiting.size === 0 && watchers.get(key) === waiting) watchers.delete(key);
+  };
   push(href);
   const check = () => {
     if (address() !== from) {
-      stopWatching();
+      stop();
       return;
     }
     if (Date.now() < deadline) {
-      window.setTimeout(check, Math.min(MOVE_POLL_MS, deadline - Date.now()));
+      window.setTimeout(check, Math.max(0, Math.min(MOVE_POLL_MS, deadline - Date.now())));
       return;
     }
-    stopWatching();
+    stop();
     logger.warn('[Navigation] Client navigation did not commit; loading the page', { href });
     pageLoadPending = true;
     load(target.toString());
