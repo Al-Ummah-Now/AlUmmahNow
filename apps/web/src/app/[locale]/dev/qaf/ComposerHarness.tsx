@@ -6,7 +6,7 @@ import { TextPostForm } from '@/components/Community/management/forms/TextPostFo
 import TextPost from '@/components/Community/types/TextPost';
 import { Button } from '@/components/ui/button';
 
-export function ComposerHarness({ locale }: { locale: string }) {
+export function ComposerHarness({ locale, postLocale }: { locale: string; postLocale: 'en' | 'ar' }) {
   const ar = locale === 'ar';
   const [content, setContent] = useState('');
   const [post, setPost] = useState<CommunityPost>();
@@ -18,7 +18,7 @@ export function ComposerHarness({ locale }: { locale: string }) {
         event.preventDefault();
         setPost({ type: PostType.TEXT, content } as CommunityPost);
       }}>
-        <TextPostForm channelId="qaf-test-channel" content={content} onChange={setContent} locale={locale} />
+        <TextPostForm channelId="qaf-test-channel" content={content} onChange={setContent} locale={locale} postLocale={postLocale} />
         <Button data-testid="qaf-harness-publish" type="submit">{ar ? 'نشر' : 'Publish'}</Button>
       </form>}
   </main>;

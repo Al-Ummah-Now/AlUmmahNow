@@ -87,7 +87,7 @@ export function QafSetting({ initial, save }: { initial: QafSettings; save: (inp
           </label>
           {fields.map((field) => <label className="grid gap-1 text-sm text-fg" key={field}>
             <span className="font-medium">{t(`qafSettings.${field}`)}</span>
-            <input className={fieldClass} inputMode="numeric" maxLength={8} value={limits[field]} onChange={(event) => setLimits((previous) => ({ ...previous, [field]: event.target.value }))} />
+            <input dir="ltr" className={`${fieldClass} text-left`} inputMode="numeric" maxLength={8} value={limits[field]} onChange={(event) => setLimits((previous) => ({ ...previous, [field]: event.target.value }))} />
             <span className="text-xs text-fg-muted">{t('qafSettings.range', { min: 1, max: QAF_LIMITS[field].max })}</span>
           </label>)}
         </fieldset>
