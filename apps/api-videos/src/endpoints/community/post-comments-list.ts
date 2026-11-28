@@ -1,4 +1,4 @@
-import { Str } from '../../lib/chanfana-params';
+import { RecordId } from '../../validation/identifiers';
 import { z } from 'zod';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -19,12 +19,12 @@ import {
 
 const listCommentsSchema = {
   params: z.object({
-    channelId: Str({ description: 'Channel ID that owns the post' }),
-    postId: Str({ description: 'Post ID' }),
+    channelId: RecordId.describe('Channel ID that owns the post'),
+    postId: RecordId.describe('Post ID'),
   }),
   query: z.object({
-    limit: z.string().optional().describe('Number of comments to return (default: 20, max: 100)'),
-    cursor: Str({ description: 'Pagination cursor (last comment ID)' }).optional(),
+    limit: z.string().max(12).regex(/^[0-9]+$/).optional().describe('Number of comments to return (default: 20, max: 100)'),
+    cursor: RecordId.describe('Pagination cursor (last comment ID)').optional(),
     sortBy: z
       .enum(['top', 'newest'])
       .optional()
@@ -77,9 +77,8 @@ export class ListPostComments extends OptionalAuthRoute {
   );
 
   async handle(c: AppContext) {
-    const { channelId: postChannelId, postId } = c.req.param();
-    const query = c.req.query();
-    const limit = Math.min(parseInt(query.limit || '20'), 100);
+    const { params: { channelId: postChannelId, postId }, query } = await this.getValidatedData<typeof this.schema>();
+    const limit = Math.min(Math.max(Number(query.limit ?? 20), 1), 100);
     const cursor = query.cursor;
     const sortBy = query.sortBy || 'top';
 

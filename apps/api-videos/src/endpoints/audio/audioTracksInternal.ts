@@ -7,7 +7,10 @@
  *   POST /internal/audio-tracks/retry                        { videoId, trackId? } the admin Errors page's Retry
  */
 import { Hono } from 'hono';
-import { isAudioTrackId, type AudioPackageReport, type AudioProbeReport, type AudioTrackReport } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { ObjectKey } from '../../validation/legacy-request';
+import { isAudioTrackId, isMediaRev } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { onPackageReport, onProbeReport, onTrackPrepared, retryAudio, type AudioTracksEnv } from '../../lib/audio-tracks/service';
 
@@ -19,8 +22,27 @@ const ctxOf = (c: { executionCtx: Ctx }): Ctx => {
 		return undefined;
 	}
 };
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-const VIDEO_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const VideoId = RecordId.max(80);
+const TrackId = z.string().refine(isAudioTrackId);
+const Retry = z.object({ videoId: VideoId, trackId: TrackId.optional() });
+const Callback = { jobId: RecordId };
+const Failure = { ok: z.literal(false), error: z.string().max(300).default('failed') };
+const PackageTarget = { ...Callback, rev: z.string().refine(isMediaRev), access: z.enum(['pub', 'priv']) };
+const Package = z.discriminatedUnion('ok', [
+	z.object({ ...PackageTarget, ok: z.literal(true), master: z.string().regex(/^master_a[0-9]{1,12}\.m3u8$/), trackIds: z.array(TrackId.or(z.literal('orig'))).max(32) }),
+	z.object({ ...PackageTarget, ...Failure, retryable: z.boolean().default(false) }),
+]);
+const Probe = z.discriminatedUnion('ok', [
+	z.object({ ...Callback, ok: z.literal(true), streams: z.array(z.object({
+		index: z.number().int().min(0).max(63), language: z.string().max(32).optional(),
+		title: z.string().max(1000).optional(), channels: z.number().int().min(0).max(64).optional(), codec: z.string().max(64).optional(),
+	})).max(64) }),
+	z.object({ ...Callback, ...Failure }),
+]);
+const Track = z.discriminatedUnion('ok', [
+	z.object({ ...Callback, ok: z.literal(true), durationSeconds: z.number().nonnegative(), reviewManifestKey: ObjectKey.optional() }),
+	z.object({ ...Callback, ...Failure, retryable: z.boolean().default(false) }),
+]);
 
 export function createAudioTracksInternalRouter() {
 	const app = new Hono<{ Bindings: AudioTracksEnv }>();
@@ -31,10 +53,9 @@ export function createAudioTracksInternalRouter() {
 	});
 
 	app.post('/retry', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { videoId?: unknown; trackId?: unknown } | null;
-		const videoId = typeof body?.videoId === 'string' && VIDEO_ID.test(body.videoId) ? body.videoId : '';
-		const trackId = body?.trackId === undefined ? undefined : isAudioTrackId(body.trackId) ? body.trackId : null;
-		if (!videoId || trackId === null) return c.json({ success: false, error: 'videoId (and an optional trackId) are required' }, 400);
+		const parsed = Retry.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'videoId (and an optional trackId) are required' }, 400);
+		const { videoId, trackId } = parsed.data;
 		const out = await retryAudio(c.env, ctxOf(c as never), videoId, trackId);
 		// Nothing left to retry: the Errors page dismisses the item on 404
 		if (out.retried === 'nothing') return c.json({ success: false, error: 'nothing_to_retry' }, 404);
@@ -42,40 +63,36 @@ export function createAudioTracksInternalRouter() {
 	});
 
 	app.post('/:videoId/package', async (c) => {
-		const b = (await c.req.json().catch(() => null)) as Partial<AudioPackageReport> | null;
-		if (!isObject(b) || typeof b.jobId !== 'string' || typeof b.rev !== 'string' || (b.access !== 'pub' && b.access !== 'priv') || typeof b.ok !== 'boolean') {
-			return c.json({ success: false, error: 'invalid_report' }, 400);
-		}
-		const report: AudioPackageReport = b.ok
-			? { jobId: b.jobId, rev: b.rev, access: b.access, ok: true, master: String((b as { master?: unknown }).master ?? ''), trackIds: Array.isArray((b as { trackIds?: unknown }).trackIds) ? ((b as { trackIds: unknown[] }).trackIds.filter((x) => typeof x === 'string') as string[]) : [] }
-			: { jobId: b.jobId, rev: b.rev, access: b.access, ok: false, error: String((b as { error?: unknown }).error ?? 'failed').slice(0, 300), retryable: (b as { retryable?: unknown }).retryable === true };
-		const out = await onPackageReport(c.env, ctxOf(c as never), c.req.param('videoId'), report);
+		const parsed = Package.safeParse(await c.req.json().catch(() => null));
+		const videoId = c.req.param('videoId');
+		if (!parsed.success || !VideoId.safeParse(videoId).success) return c.json({ success: false, error: 'invalid_report' }, 400);
+		const report = parsed.data;
+		const out = await onPackageReport(c.env, ctxOf(c as never), videoId, report);
 		// Stale or refused reports are answered 200 too: resending them would change nothing
 		return c.json({ success: true, result: out });
 	});
 
 	app.post('/:videoId/detected', async (c) => {
-		const b = (await c.req.json().catch(() => null)) as Partial<AudioProbeReport> | null;
-		if (!isObject(b) || typeof b.jobId !== 'string' || typeof b.ok !== 'boolean') return c.json({ success: false, error: 'invalid_report' }, 400);
-		const report: AudioProbeReport = b.ok ? { jobId: b.jobId, ok: true, streams: (b as { streams?: never }).streams ?? [] } : { jobId: b.jobId, ok: false, error: String((b as { error?: unknown }).error ?? 'failed') };
-		const out = await onProbeReport(c.env, c.req.param('videoId'), report);
+		const parsed = Probe.safeParse(await c.req.json().catch(() => null));
+		const videoId = c.req.param('videoId');
+		if (!parsed.success || !VideoId.safeParse(videoId).success) return c.json({ success: false, error: 'invalid_report' }, 400);
+		const report = parsed.data;
+		const out = await onProbeReport(c.env, videoId, report);
 		return c.json({ success: true, result: out });
 	});
 
 	app.post('/:videoId/:trackId/prepared', async (c) => {
-		const b = (await c.req.json().catch(() => null)) as Partial<AudioTrackReport> | null;
-		if (!isObject(b) || typeof b.jobId !== 'string' || typeof b.ok !== 'boolean') return c.json({ success: false, error: 'invalid_report' }, 400);
+		const parsed = Track.safeParse(await c.req.json().catch(() => null));
+		const videoId = c.req.param('videoId');
+		if (!parsed.success || !VideoId.safeParse(videoId).success) return c.json({ success: false, error: 'invalid_report' }, 400);
+		const report = parsed.data;
 		const trackId = c.req.param('trackId');
 		if (!isAudioTrackId(trackId)) return c.json({ success: false, error: 'invalid_track' }, 400);
-		const report: AudioTrackReport = b.ok
-			? {
-					jobId: b.jobId,
-					ok: true,
-					durationSeconds: Math.max(0, Number((b as { durationSeconds?: unknown }).durationSeconds) || 0),
-					...(typeof (b as { reviewManifestKey?: unknown }).reviewManifestKey === 'string' ? { reviewManifestKey: (b as { reviewManifestKey: string }).reviewManifestKey } : {}),
-				}
-			: { jobId: b.jobId, ok: false, error: String((b as { error?: unknown }).error ?? 'failed').slice(0, 300), retryable: (b as { retryable?: unknown }).retryable === true };
-		const out = await onTrackPrepared(c.env, ctxOf(c as never), c.req.param('videoId'), trackId, report);
+		if ('reviewManifestKey' in report && report.reviewManifestKey !== undefined &&
+			report.reviewManifestKey !== ['review', videoId, 'audio-' + trackId + '-' + report.jobId.slice(0, 8), 'manifest.json'].join('/')) {
+			return c.json({ success: false, error: 'invalid_report' }, 400);
+		}
+		const out = await onTrackPrepared(c.env, ctxOf(c as never), videoId, trackId, report);
 		// Stale or already applied: nothing to do, the media worker stops resending
 		return c.json({ success: true, result: out });
 	});

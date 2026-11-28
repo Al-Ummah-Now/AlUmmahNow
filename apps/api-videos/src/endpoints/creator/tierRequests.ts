@@ -16,8 +16,9 @@
  *   GET  /api/me/tier-requests               the user's own requests, newest first (?cursor=)
  */
 import type { Context } from 'hono';
+import { z } from 'zod';
 import { TIER_REQUEST_ERRORS, type TierRequestInput } from '@al-ummah/shared-types';
-import { createTierRequest, listMyRequests, ownRequest, receivedNotificationPayload, TierRequestError, upgradeOverview, withdrawTierRequest } from '../../lib/tierRequests';
+import { createTierRequest, decodeTierRequestCursor, listMyRequests, ownRequest, receivedNotificationPayload, TierRequestError, upgradeOverview, withdrawTierRequest } from '../../lib/tierRequests';
 import { readTier } from '../../lib/creatorTiers';
 import { enqueueNotification, type NotificationsEnv } from '../../lib/notifications';
 import { logger } from '../../lib/logger';
@@ -25,6 +26,11 @@ import { turnstileMode } from '../../lib/bot-guard';
 import { upgradeMode } from '../../lib/upgradeMode';
 import { featureOff } from '../../lib/features/off';
 import { soldTierIds, type ServiceEnv } from '../../lib/billing/service';
+
+import { IntegerQuery } from '../../validation/legacy-request';
+
+const HistoryQuery = z.object({ cursor: z.string().max(128).refine((value) => decodeTierRequestCursor(value) !== null).optional(), limit: IntegerQuery.optional() });
+const RequestId = z.uuid();
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;
@@ -67,7 +73,7 @@ export async function handleCreateTierRequest(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	const body = (await c.req.json().catch(() => null)) as Partial<TierRequestInput> | null;
-	if (!body || typeof body !== 'object') return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'A JSON body is required' }, 400);
+	if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'A JSON body is required' }, 400);
 	try {
 		// Only in request mode: no provider enabled and the admin allows requests (owner rule 2026-11-15)
 		const { mode } = await upgradeMode(c.env);
@@ -92,7 +98,9 @@ export async function handleMyTierRequests(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
-		const result = await listMyRequests(c.env.SEARCH_DB, userId, { cursor: c.req.query('cursor') ?? null, limit: Number(c.req.query('limit') ?? '') || undefined });
+		const parsed = HistoryQuery.safeParse(c.req.query());
+		if (!parsed.success) return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'Invalid request history query' }, 400);
+		const result = await listMyRequests(c.env.SEARCH_DB, userId, parsed.data);
 		return c.json({ success: true, result }, 200, { 'Cache-Control': 'private, no-store' });
 	} catch (error) {
 		return failure(c, error, 'History');
@@ -103,7 +111,9 @@ export async function handleWithdrawTierRequest(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
-		const request = await withdrawTierRequest(c.env.SEARCH_DB, userId, c.req.param('id') ?? '');
+		const parsed = RequestId.safeParse(c.req.param('id'));
+		if (!parsed.success) return c.json({ success: false, code: TIER_REQUEST_ERRORS.invalid, error: 'Invalid request ID' }, 400);
+		const request = await withdrawTierRequest(c.env.SEARCH_DB, userId, parsed.data);
 		return c.json({ success: true, result: { request: ownRequest(request) } });
 	} catch (error) {
 		return failure(c, error, 'Withdraw');

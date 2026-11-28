@@ -16082,6 +16082,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Channel ID that owns the post"
             },
             "required": true,
@@ -16092,6 +16095,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Post ID"
             },
             "required": true,
@@ -16102,6 +16108,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 12,
+              "pattern": "^[0-9]+$",
               "description": "Number of comments to return (default: 20, max: 100)"
             },
             "required": false,
@@ -16112,6 +16120,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Pagination cursor (last comment ID)"
             },
             "required": false,
@@ -17537,6 +17548,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Channel ID that owns the post"
             },
             "required": true,
@@ -17547,6 +17561,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Post ID"
             },
             "required": true,
@@ -17557,6 +17574,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Top-level comment ID"
             },
             "required": true,
@@ -17567,6 +17587,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 12,
+              "pattern": "^[0-9]+$",
               "description": "Number of replies (default 10, max 50)"
             },
             "required": false,
@@ -17577,6 +17599,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Pagination cursor (last reply ID)"
             },
             "required": false,
@@ -66233,7 +66258,7 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
+              "type": "integer",
               "minimum": 1,
               "maximum": 100,
               "default": 20,
@@ -66247,6 +66272,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 12,
+              "pattern": "^[0-9]+$",
               "description": "Cursor for pagination"
             },
             "required": false,
@@ -66256,9 +66283,10 @@
           },
           {
             "schema": {
-              "type": [
-                "boolean",
-                "null"
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
               ],
               "description": "Filter by completion status"
             },

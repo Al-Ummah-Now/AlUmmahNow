@@ -14,16 +14,36 @@
  * api-videos is the only writer of a video's `review` field; these are the only ways in.
  */
 import { Hono } from 'hono';
-import type { ImageReviewResultRequest, LiveVodReviewMediaRequest, ReviewDecisionRequest, ReviewOutcomeRequest } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { ObjectKey } from '../../validation/legacy-request';
 import { applyLiveReviewDecision, applyLiveReviewMedia, applyLiveReviewOutcome, liveReviewSubject, type LiveReviewEnv } from '../../lib/review/live';
 import { applyImageResult } from '../../lib/review/images';
 import { logger } from '../../lib/logger';
 import { applyReviewDecision, applyReviewOutcome, type ReviewApplyEnv } from '../../lib/review/apply';
 import { queueReviewScan } from '../../lib/review/scan';
 import { applyAudioTrackDecision, applyAudioTrackOutcome, audioTrackReviewSubject } from '../../lib/review/audio-track';
-import { audioTrackFileKey, isAudioTrackId } from '@al-ummah/shared-types';
+import { audioTrackFileKey, isAudioTrackId, isReviewReasonCode } from '@al-ummah/shared-types';
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+const ReasonCode = z.custom<import('@al-ummah/shared-types').VideoReviewReasonCode>(isReviewReasonCode);
+const Outcome = z.object({
+	reviewId: RecordId, mode: z.enum(['shadow', 'enforce_nsfw', 'enforce']), timing: z.enum(['pre', 'post']),
+	routing: z.object({
+		route: z.enum(['approve', 'hold']), risk: z.number().min(0).max(1), nsfw: z.boolean(), escalate: z.boolean(),
+		holdCause: z.enum(['nsfw', 'risk', 'escalation', 'check_failed', 'budget', 'appeal']).optional(),
+	}),
+	findingsCount: z.number().int().nonnegative(), checkedAt: z.iso.datetime({ offset: true }),
+});
+const Decision = z.object({
+	reviewId: RecordId, reviewerId: RecordId, decision: z.enum(['approve', 'reject', 'undo']),
+	reasonCode: ReasonCode.optional(), note: z.string().max(1000).optional(), decidedAt: z.iso.datetime({ offset: true }).default(() => new Date().toISOString()),
+});
+const ImageResult = z.object({
+	subject: z.enum(['post', 'avatar', 'banner', 'profile_picture', 'profile_banner']),
+	subjectId: RecordId, reviewId: RecordId, result: z.enum(['approve', 'hold', 'reject']),
+	reviewerId: RecordId.optional(), reasonCode: ReasonCode.optional(),
+});
+const LiveMedia = z.object({ reviewId: RecordId, manifestKey: z.string().max(512).optional(), error: z.string().max(500).optional() });
 
 export function createReviewInternalRouter() {
 	const app = new Hono<{ Bindings: ReviewApplyEnv }>();
@@ -31,11 +51,12 @@ export function createReviewInternalRouter() {
 	// Images (VR16): posts, avatars, banners, profile pictures; outcome = processor, decision = admin-api
 	for (const kind of ['outcome', 'decision'] as const) {
 		app.post(`/images/${kind}`, async (c) => {
-			const body = (await c.req.json().catch(() => null)) as ImageReviewResultRequest | null;
+			const parsed = ImageResult.safeParse(await c.req.json().catch(() => null));
 			const allowed = kind === 'outcome' ? ['approve', 'hold'] : ['approve', 'reject'];
-			if (!isObject(body) || typeof body.subjectId !== 'string' || typeof body.reviewId !== 'string' || !['post', 'avatar', 'banner', 'profile_picture', 'profile_banner'].includes(String(body.subject)) || !allowed.includes(String(body.result))) {
-				return c.json({ success: false, error: `subject, subjectId, reviewId and result (${allowed.join(' | ')}) are required` }, 400);
+			if (!parsed.success || !allowed.includes(parsed.data.result)) {
+				return c.json({ success: false, error: 'Invalid image review result' }, 400);
 			}
+			const body = parsed.data;
 			const result = await applyImageResult(c.env as never, body);
 			if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 			return c.json({ success: true, result: { applied: true } });
@@ -72,20 +93,22 @@ export function createReviewInternalRouter() {
 	});
 
 	app.post('/audio-track/:videoId/:trackId/outcome', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewOutcomeRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || !isObject(body.routing) || !['approve', 'hold'].includes(String(body.routing.route))) {
-			return c.json({ success: false, error: 'reviewId and routing.route (approve | hold) are required' }, 400);
+		const parsed = Outcome.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('videoId')).success || !isAudioTrackId(c.req.param('trackId'))) {
+			return c.json({ success: false, error: 'Invalid review outcome or routing' }, 400);
 		}
+		const body = parsed.data;
 		const result = await applyAudioTrackOutcome(c.env as never, c.req.param('videoId'), c.req.param('trackId'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });
 	});
 
 	app.post('/audio-track/:videoId/:trackId/decision', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewDecisionRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || typeof body.reviewerId !== 'string' || !['approve', 'reject', 'undo'].includes(String(body.decision))) {
-			return c.json({ success: false, error: 'reviewId, reviewerId and decision (approve | reject | undo) are required' }, 400);
+		const parsed = Decision.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('videoId')).success || !isAudioTrackId(c.req.param('trackId'))) {
+			return c.json({ success: false, error: 'Invalid review decision' }, 400);
 		}
+		const body = parsed.data;
 		const result = await applyAudioTrackDecision(c.env as never, c.req.param('videoId'), c.req.param('trackId'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });
@@ -100,9 +123,14 @@ export function createReviewInternalRouter() {
 	});
 
 	app.post('/livestream/:id/media', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as LiveVodReviewMediaRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || (body.manifestKey !== undefined && typeof body.manifestKey !== 'string') || (body.error !== undefined && typeof body.error !== 'string')) {
-			return c.json({ success: false, error: 'reviewId is required; manifestKey and error are strings' }, 400);
+		const parsed = LiveMedia.safeParse(await c.req.json().catch(() => null));
+		const id = c.req.param('id');
+		if (!parsed.success || !RecordId.safeParse(id).success) return c.json({ success: false, error: 'Invalid review media report' }, 400);
+		const body = parsed.data;
+		// Failed extraction can report a partial key. Only a successful report supplies a key to the consumer.
+		if (!body.error && body.manifestKey !== undefined &&
+			(!ObjectKey.safeParse(body.manifestKey).success || !body.manifestKey.startsWith('review/' + id + '/') || !body.manifestKey.endsWith('/manifest.json'))) {
+			return c.json({ success: false, error: 'Invalid review manifest key' }, 400);
 		}
 		const result = await applyLiveReviewMedia(c.env as unknown as LiveReviewEnv, c.req.param('id'), body);
 		if (!result.queued) return c.json({ success: false, error: result.why ?? 'not queued' }, result.why === 'error' || result.why === 'moderation queue not bound' ? 503 : 409);
@@ -110,41 +138,44 @@ export function createReviewInternalRouter() {
 	});
 
 	app.post('/livestream/:id/outcome', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewOutcomeRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || !isObject(body.routing) || !['approve', 'hold'].includes(String(body.routing.route))) {
-			return c.json({ success: false, error: 'reviewId and routing.route (approve | hold) are required' }, 400);
+		const parsed = Outcome.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('id')).success) {
+			return c.json({ success: false, error: 'Invalid review outcome or routing' }, 400);
 		}
+		const body = parsed.data;
 		const result = await applyLiveReviewOutcome(c.env as unknown as LiveReviewEnv, c.req.param('id'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });
 	});
 
 	app.post('/livestream/:id/decision', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewDecisionRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || typeof body.reviewerId !== 'string' || !['approve', 'reject', 'undo'].includes(String(body.decision))) {
-			return c.json({ success: false, error: 'reviewId, reviewerId and decision (approve | reject | undo) are required' }, 400);
+		const parsed = Decision.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('id')).success) {
+			return c.json({ success: false, error: 'Invalid review decision' }, 400);
 		}
+		const body = parsed.data;
 		const result = await applyLiveReviewDecision(c.env as unknown as LiveReviewEnv, c.req.param('id'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });
 	});
 
 	app.post('/:videoId/outcome', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewOutcomeRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || !isObject(body.routing) || !['approve', 'hold'].includes(String(body.routing.route))) {
-			return c.json({ success: false, error: 'reviewId and routing.route (approve | hold) are required' }, 400);
+		const parsed = Outcome.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('videoId')).success) {
+			return c.json({ success: false, error: 'Invalid review outcome or routing' }, 400);
 		}
+		const body = parsed.data;
 		const result = await applyReviewOutcome(c.env, c.req.param('videoId'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });
 	});
 
 	app.post('/:videoId/decision', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as ReviewDecisionRequest | null;
-		if (!isObject(body) || typeof body.reviewId !== 'string' || typeof body.reviewerId !== 'string' || !['approve', 'reject', 'undo'].includes(String(body.decision))) {
-			return c.json({ success: false, error: 'reviewId, reviewerId and decision (approve | reject | undo) are required' }, 400);
+		const parsed = Decision.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success || !RecordId.safeParse(c.req.param('videoId')).success) {
+			return c.json({ success: false, error: 'Invalid review decision' }, 400);
 		}
-		if (body.note !== undefined && (typeof body.note !== 'string' || body.note.length > 1000)) return c.json({ success: false, error: 'note must be at most 1,000 characters' }, 400);
+		const body = parsed.data;
 		const result = await applyReviewDecision(c.env, c.req.param('videoId'), body);
 		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
 		return c.json({ success: true, result: { review: result.review } });

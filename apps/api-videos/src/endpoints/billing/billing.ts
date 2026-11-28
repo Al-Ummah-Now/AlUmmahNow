@@ -12,7 +12,8 @@
  *   POST /webhooks/billing/fake/checkout/:id/pay "Pay (test)"
  */
 import type { Context } from 'hono';
-import { BILLING_ERRORS, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { BILLING_ERRORS, BILLING_PERIODS, PAYMENT_PROVIDER_IDS, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { tokenEmail } from '../../lib/account-email';
 import { logger } from '../../lib/logger';
 import { BillingError } from '../../lib/billing/config';
@@ -67,13 +68,18 @@ export async function checkoutContact(c: Context, userId: string): Promise<{ ema
 	return { email, name };
 }
 
+const Checkout = z.object({
+	tierId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/), period: z.enum(BILLING_PERIODS),
+	currency: z.string().regex(/^[A-Za-z]{3}$/), provider: z.enum(PAYMENT_PROVIDER_IDS), returnPath: z.string().max(300).optional(),
+});
+
 export async function handleCheckout(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
-	const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-	if (!body || typeof body !== 'object') return c.json({ success: false, code: BILLING_ERRORS.invalid, error: 'A JSON body is required' }, 400);
+	const parsed = Checkout.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ success: false, code: BILLING_ERRORS.invalid, error: 'Invalid checkout fields' }, 400);
 	try {
-		const result = await startCheckout(env(c), { userId, ...(await checkoutContact(c, userId)) }, body);
+		const result = await startCheckout(env(c), { userId, ...(await checkoutContact(c, userId)) }, parsed.data);
 		return c.json({ success: true, result }, 201);
 	} catch (error) {
 		return failure(c, error, 'Checkout');

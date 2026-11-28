@@ -21,16 +21,20 @@ import { matchesSearch, searchWords, SEARCH_WINDOW } from "../../lib/watch-histo
 const ListWatchHistoryQuery = z.object({
   limit: z.coerce
     .number()
+    .int()
     .min(1)
     .max(100)
     .default(20)
     .describe("Number of entries to return (default: 20, max: 100)"),
   cursor: z
     .string()
+    .max(12)
+    .regex(/^[0-9]+$/)
     .optional()
     .describe("Cursor for pagination"),
-  completed: z.coerce
-    .boolean()
+  completed: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
     .optional()
     .describe("Filter by completion status"),
   q: z
@@ -113,12 +117,8 @@ export class ListWatchHistory extends AuthenticatedRoute {
 
     const userId = this.getUserId(c);
 
-    // Parse and validate query parameters
-    const query = c.req.query();
-    const limit = parseInt(query.limit || "20", 10);
-    const cursor = query.cursor;
-    const completed = query.completed !== undefined ? query.completed === "true" : undefined;
-    const sort = (query.sort || "newest") as "newest" | "oldest" | "alphabetical";
+    const { query } = request;
+    const { limit, cursor, completed, sort } = query;
 
     try {
       // Entries are stored with key pattern userId:videoId (prefix listing)

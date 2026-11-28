@@ -32,8 +32,11 @@
  *                                          (lib/media/video-override.ts) → { override, media };
  *                                          400 { problem } when it would leave the video unplayable
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { IntegerQuery, ObjectKey } from '../../validation/legacy-request';
 import { Hono } from 'hono';
-import { isMediaRev, isMediaVideoId, settingsProblems, type DeliverySettings, type ErrorReporterEnv, type ExecutionContextLike, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
+import { isMediaRev, isMediaVideoId, settingsProblems, PREBUILT_REJECTIONS, R2_RUNG_STATES, SOURCE_COLOUR_KINDS, sanitizeSourceFacts, sanitizeStartup, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
@@ -110,18 +113,57 @@ export async function readMediaLive(env: Env, now: number = Date.now()): Promise
 	};
 }
 
-function isEvent(body: unknown): body is TranscodeJobEvent {
-	const b = body as Partial<TranscodeJobEvent> | null;
-	return !!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && ['started', 'progress', 'ready', 'failed'].includes(b.type as string);
-}
-
-function isMp4Event(body: unknown): body is Mp4JobEvent {
-	const b = body as Partial<Mp4JobEvent> | null;
-	return (
-		!!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && typeof b.rev === 'string' && isMediaRev(b.rev) &&
-		(b.access === 'pub' || b.access === 'priv') && (b.type === 'ready' || b.type === 'failed')
-	);
-}
+const VideoId = z.string().refine((id) => isMediaVideoId(id) && !isInternalVideoKey(id));
+const JobId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
+const FileName = z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/);
+const RungName = z.string().regex(/^[0-9]{2,4}p$/);
+const Count = z.number().int().nonnegative();
+const Amount = z.number().nonnegative();
+const Fraction = z.number().min(0).max(1);
+const Label = z.string().max(80);
+const At = z.iso.datetime({ offset: true });
+const Size = { width: Count, height: Count };
+const Mp4 = z.object({ ...Size, file: FileName.refine((file) => file.endsWith('.mp4')), rung: RungName, bytes: Count });
+const Result = z.object({
+	rungs: z.array(z.object({ ...Size, name: RungName, maxrate: Count, bandwidth: Count.optional(), bytes: Count.optional(), segments: Count.optional() })).min(1).max(8),
+	objects: Count, bytes: Count, durationSeconds: Amount,
+	source: z.object({
+		...Size, durationSeconds: Amount, bytes: Count, codec: Label.optional(), hasAudio: z.boolean(), file: FileName.optional(),
+		colour: z.object({ kind: z.enum(SOURCE_COLOUR_KINDS), transfer: Label.optional(), primaries: Label.optional(), matrix: Label.optional() }).optional(),
+	}),
+	timings: z.object({ downloadMs: Amount, transcodeMs: Amount, uploadMs: Amount, totalMs: Amount }),
+	thumbnail: FileName, preview: FileName.optional(), mp4: Mp4.optional(),
+	review: z.object({ manifestKey: ObjectKey.optional(), failed: z.boolean().optional() }).optional(),
+	prebuilt: z.object({ used: z.boolean(), reason: z.enum(PREBUILT_REJECTIONS).optional(), rung: RungName.optional() }).optional(),
+});
+const Failure = z.object({
+	stage: z.enum(['start', 'fetch_source', 'probe', 'encode', 'stills', 'upload', 'container']),
+	stageDetail: Label.optional(), error: z.string().max(1000), attempt: Count, elapsedMs: Amount, at: At,
+	source: z.object({ file: FileName.optional(), bytes: Count.optional() }).optional(),
+	exitCode: z.number().int().optional(), stopReason: z.string().max(200).optional(), instanceId: Label.optional(),
+	stderrTail: z.array(z.string().max(1000)).max(20).optional(),
+});
+const Event = z.object({
+	videoId: VideoId, jobId: RecordId, at: At, attempt: Count,
+	type: z.enum(['started', 'progress', 'ready', 'failed']), progress: Fraction.optional(),
+	rungs: z.array(z.object({ name: RungName, state: z.enum(R2_RUNG_STATES), progress: Fraction.optional() })).max(8).optional(),
+	containerSeconds: Amount.optional(), instanceType: Label.optional(), result: Result.optional(),
+	error: z.string().max(1000).optional(), final: z.boolean().optional(), failure: Failure.optional(),
+	sourceFacts: z.unknown().transform((value) => sanitizeSourceFacts(value) ?? undefined).optional(),
+	startup: z.unknown().transform((value) => sanitizeStartup(value) ?? undefined).optional(),
+}).refine((event) => event.type !== 'ready' || !!event.result);
+const Mp4Event = z.object({
+	videoId: VideoId, jobId: RecordId, rev: z.string().refine(isMediaRev), access: z.enum(['pub', 'priv']),
+	type: z.enum(['ready', 'failed']), at: At, mp4: Mp4.optional(),
+	error: z.string().max(1000).optional(), containerSeconds: Amount.optional(),
+}).refine((event) => event.type !== 'ready' || !!event.mp4);
+const Actor = z.object({ actorId: RecordId });
+const IdInput = z.object({ videoId: VideoId });
+const Retry = z.object({ ids: z.array(VideoId).min(1).max(MAX_IDS) });
+const LegacyDelivery = Actor.extend({
+	mode: z.enum(['bunny', 'r2', 'split']).optional(), r2Percent: z.number().min(0).max(100).optional(),
+	assign: z.enum(['video', 'view']).optional(), transcode: z.boolean().optional(),
+});
 
 export function createMediaInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
@@ -142,24 +184,26 @@ export function createMediaInternalRouter() {
 	});
 
 	app.post('/events', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		if (!isEvent(body)) return c.json({ success: false, error: 'bad event' }, 400);
+		const parsed = Event.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'bad event' }, 400);
+		const body = parsed.data;
 		const result = await applyJobEvent(c.env as never, c.executionCtx as never, body);
 		// A stale or duplicate event is not an error for the sender (it stops resending)
 		return c.json({ success: true, result });
 	});
 
 	app.post('/mp4', async (c) => {
-		const body = await c.req.json().catch(() => null);
-		if (!isMp4Event(body)) return c.json({ success: false, error: 'bad event' }, 400);
+		const parsed = Mp4Event.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'bad event' }, 400);
+		const body = parsed.data;
 		// Stale or duplicate: not an error for the sender
 		return c.json({ success: true, result: await applyMp4Event(c.env, body) });
 	});
 
 	app.post('/retry', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { ids?: unknown } | null;
-		const ids = Array.isArray(body?.ids) ? body!.ids.filter((x): x is string => typeof x === 'string' && isMediaVideoId(x)).slice(0, MAX_IDS) : [];
-		if (!ids.length) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
+		const parsed = Retry.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid video ids' }, 400);
+		const { ids } = parsed.data;
 		const results = [];
 		for (const id of ids) {
 			const r = await enqueueTranscode(c.env, id, 'retry', { force: true });
@@ -170,19 +214,25 @@ export function createMediaInternalRouter() {
 		return c.json({ success: true, result: { results } });
 	});
 
-	app.get('/hdr-check', async (c) => c.json({ success: true, result: { run: await readHdrCheck(c.env, { live: c.req.query('live') === '1' }) } }));
+	app.get('/hdr-check', async (c) => {
+		const parsed = z.object({ live: z.enum(['0', '1']).optional() }).safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		return c.json({ success: true, result: { run: await readHdrCheck(c.env, { live: parsed.data.live === '1' }) } });
+	});
 
 	app.post('/hdr-check', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { actorId?: unknown } | null;
-		if (typeof body?.actorId !== 'string' || !body.actorId) return apiError(c, 400, 'bad_request', { error: 'actorId is required' });
-		return c.json({ success: true, result: await startHdrCheck(c.env, body.actorId) });
+		const parsed = Actor.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request', { error: 'actorId is required' });
+		return c.json({ success: true, result: await startHdrCheck(c.env, parsed.data.actorId) });
 	});
 
 	app.get('/jobs', async (c) => {
+		const parsed = z.object({ status: z.enum(['queued', 'transcoding', 'ready', 'failed', 'cancelled']).optional(), limit: IntegerQuery.optional() }).safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
 		const db = c.env.SEARCH_DB;
 		if (!db) return c.json({ success: true, result: { items: [] } });
-		const status = c.req.query('status');
-		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '50', 10) || 50, 1), 200);
+		const { status } = parsed.data;
+		const limit = Math.min(Math.max(parsed.data.limit || 50, 1), 200);
 		const stmt = status
 			? db.prepare('SELECT * FROM media_jobs WHERE status = ? ORDER BY updated_at DESC LIMIT ?').bind(status, limit)
 			: db.prepare('SELECT * FROM media_jobs ORDER BY updated_at DESC LIMIT ?').bind(limit);
@@ -191,8 +241,9 @@ export function createMediaInternalRouter() {
 	});
 
 	app.get('/troubleshoot', async (c) => {
-		const focus = c.req.query('video');
-		return c.json({ success: true, result: await readTroubleshootJobs(c.env as TroubleshootEnv, Date.now(), focus && isMediaVideoId(focus) ? focus : undefined) });
+		const parsed = z.object({ video: VideoId.optional() }).safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		return c.json({ success: true, result: await readTroubleshootJobs(c.env as TroubleshootEnv, Date.now(), parsed.data.video) });
 	});
 
 	// Why videos failed, for every admin page that shows them (lib/media/failures.ts)
@@ -207,25 +258,26 @@ export function createMediaInternalRouter() {
 		createJob(env as unknown as JobEnv, { kind: action === 'cancel' ? 'media.transcode-cancel' : 'media.transcode-retry', targetKind: 'video', targetId: videoId, actorId });
 
 	app.post('/troubleshoot/actions', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { action?: unknown; videoId?: unknown; actorId?: unknown } | null;
-		if (body?.action !== 'retry-now' && body?.action !== 'cancel') return c.json({ success: false, error: 'action must be retry-now or cancel' }, 400);
-		if (typeof body.videoId !== 'string' || !isMediaVideoId(body.videoId)) return c.json({ success: false, error: 'bad video id' }, 400);
-		if (typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		const parsed = Actor.extend({ videoId: VideoId, action: z.enum(['retry-now', 'cancel']) }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const body = parsed.data;
 		const job = await queueAction(c.env, body.action, body.videoId, body.actorId);
 		return c.json({ success: true, result: { job } }, 202);
 	});
 
 	app.post('/troubleshoot/retry-now', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { videoId?: unknown } | null;
-		if (typeof body?.videoId !== 'string' || !isMediaVideoId(body.videoId)) return c.json({ success: false, error: 'bad video id' }, 400);
+		const parsed = IdInput.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'bad video id' }, 400);
+		const body = parsed.data;
 		const job = await queueAction(c.env, 'retry-now', body.videoId, 'errors-retry');
 		if (job.status === 'failed') return c.json({ success: false, error: job.lastError ?? 'could not queue' }, 503);
 		return c.json({ success: true, result: { job } });
 	});
 
 	app.post('/troubleshoot/jobs/retry', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { jobId?: unknown } | null;
-		if (typeof body?.jobId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(body.jobId)) return c.json({ success: false, error: 'bad job id' }, 400);
+		const parsed = z.object({ jobId: JobId }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'bad job id' }, 400);
+		const body = parsed.data;
 		const existing = await getJob(c.env as unknown as JobEnv, body.jobId);
 		if (!existing || !existing.kind.startsWith('media.transcode-')) return c.json({ success: false, error: 'job not found' }, 404);
 		const job = await retryJob(c.env as unknown as JobEnv, body.jobId);
@@ -233,17 +285,21 @@ export function createMediaInternalRouter() {
 	});
 
 	app.get('/qoe-live', async (c) => {
-		const minutes = parseInt(c.req.query('minutes') || '60', 10) || 60;
+		const parsed = z.object({ minutes: IntegerQuery.optional() }).safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const minutes = parsed.data.minutes || 60;
 		const live = await readQoeLive(c.env as never, minutes);
 		if (!live) return c.json({ success: false, error: 'Live playback quality is unavailable' }, 503);
 		return c.json({ success: true, result: live });
 	});
 
 	app.get('/summary', async (c) => {
+		const parsed = z.object({ days: IntegerQuery.optional(), only: z.literal('live').optional() }).safeParse(c.req.query());
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
 		const db = c.env.SEARCH_DB;
-		const days = Math.min(Math.max(parseInt(c.req.query('days') || '30', 10) || 30, 1), 120);
+		const days = Math.min(Math.max(parsed.data.days || 30, 1), 120);
 		const since = new Date(Date.now() - days * 86400_000).toISOString();
-		if (c.req.query('only') === 'live') return c.json({ success: true, result: { live: await readMediaLive(c.env) } });
+		if (parsed.data.only === 'live') return c.json({ success: true, result: { live: await readMediaLive(c.env) } });
 		if (!db) return c.json({ success: true, result: { days, jobs: null, qoe: [], costs: [], live: await readMediaLive(c.env) } });
 		const [jobs, qoe, costs, live] = await Promise.all([
 			db
@@ -286,8 +342,11 @@ export function createMediaInternalRouter() {
 	// Concurrent R2 transcodes range (admin-api: everyone with an admin role reads, admins change it, audited)
 	app.get('/transcode-limit', async (c) => c.json({ success: true, result: await readTranscodeLimitView(c.env, true) }));
 	app.put('/transcode-limit', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { min?: unknown; max?: unknown; actorId?: unknown } | null;
-		const actorId = typeof body?.actorId === 'string' ? body.actorId : 'unknown';
+		const parsed = z.object({ min: z.unknown(), max: z.unknown(), actorId: RecordId.default('unknown') })
+			.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const body = parsed.data;
+		const actorId = body.actorId;
 		try {
 			return c.json({ success: true, result: await saveTranscodeLimit(c.env, { min: body?.min, max: body?.max }, actorId) });
 		} catch (error) {
@@ -299,9 +358,9 @@ export function createMediaInternalRouter() {
 	app.get('/settings', async (c) => c.json({ success: true, result: await readDeliverySettings(c.env, true) }));
 
 	app.put('/settings', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as (Partial<DeliverySettings> & { actorId?: string }) | null;
-		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
-		const { actorId, ...input } = body;
+		const parsed = LegacyDelivery.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const { actorId, ...input } = parsed.data;
 		try {
 			return c.json({ success: true, result: await writeDeliverySettings(c.env, input, actorId) });
 		} catch (error) {
@@ -316,9 +375,9 @@ export function createMediaInternalRouter() {
 	});
 
 	app.put('/providers', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { settings?: unknown; actorId?: string } | null;
-		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
-		if (!body.settings || typeof body.settings !== 'object') return c.json({ success: false, error: 'settings is required' }, 400);
+		const parsed = Actor.extend({ settings: z.record(z.string(), z.unknown()) }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const body = parsed.data;
 		try {
 			const settings = await saveMediaSettings(c.env, body.settings, body.actorId);
 			return c.json({ success: true, result: { settings, health: await readHealth(c.env), problems: [] } });
@@ -331,9 +390,9 @@ export function createMediaInternalRouter() {
 	app.put('/videos/:id/override', async (c) => {
 		const id = c.req.param('id');
 		if (!isMediaVideoId(id)) return c.json({ success: false, error: 'bad id' }, 400);
-		const body = (await c.req.json().catch(() => null)) as { override?: unknown; actorId?: string } | null;
-		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
-		if (body.override !== null && (typeof body.override !== 'object' || Array.isArray(body.override))) return c.json({ success: false, error: 'override must be an object or null' }, 400);
+		const parsed = Actor.extend({ override: z.record(z.string(), z.unknown()).nullable() }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return apiError(c, 400, 'bad_request');
+		const body = parsed.data;
 		const result = await setVideoOverride(c.env, id, body.override, body.actorId);
 		if ('problem' in result) {
 			if (result.problem === 'not_found' || result.problem === 'deleted') return c.json({ success: false, error: 'video not found', problem: result.problem }, 404);

@@ -8,17 +8,20 @@
  *     starts a new queued add. 404 when there is no such add.
  */
 
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { Hono } from 'hono';
 import { retryPlaylistAdd, type PlaylistAddEnv } from '../../lib/playlistUploadAdds';
+
+const Retry = z.object({ videoId: RecordId, playlistId: RecordId });
 
 export function createPlaylistAddsInternalRouter() {
 	const app = new Hono<{ Bindings: PlaylistAddEnv }>();
 
 	app.post('/retry', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { videoId?: unknown; playlistId?: unknown } | null;
-		const videoId = typeof body?.videoId === 'string' ? body.videoId : '';
-		const playlistId = typeof body?.playlistId === 'string' ? body.playlistId : '';
-		if (!videoId || !playlistId) return c.json({ success: false, error: 'videoId and playlistId are required' }, 400);
+		const parsed = Retry.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'videoId and playlistId are required' }, 400);
+		const { videoId, playlistId } = parsed.data;
 		let ctx: { waitUntil(promise: Promise<unknown>): void } | undefined;
 		try {
 			ctx = c.executionCtx;

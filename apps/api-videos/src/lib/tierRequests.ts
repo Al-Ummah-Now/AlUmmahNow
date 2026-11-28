@@ -124,7 +124,7 @@ export async function latestRequest(db: D1Database, userId: string): Promise<Tie
  */
 export async function listMyRequests(db: D1Database, userId: string, opts: { cursor?: string | null; limit?: number } = {}): Promise<TierRequestHistoryPage> {
 	const limit = Math.min(Math.max(Math.trunc(opts.limit ?? TIER_REQUEST_HISTORY_PAGE), 1), 50);
-	const after = decodeCursor(opts.cursor ?? undefined);
+	const after = decodeTierRequestCursor(opts.cursor ?? undefined);
 	const rows =
 		(
 			await db
@@ -283,11 +283,13 @@ export interface TierRequestsEnv {
 
 const CURSOR_SEP = '|';
 const encodeCursor = (row: { created_at: string; id: string }) => btoa(`${row.created_at}${CURSOR_SEP}${row.id}`);
-function decodeCursor(cursor: string | undefined): { createdAt: string; id: string } | null {
-	if (!cursor) return null;
+export function decodeTierRequestCursor(cursor: string | undefined): { createdAt: string; id: string } | null {
+	if (!cursor || cursor.length > 128) return null;
 	try {
-		const [createdAt, id] = atob(cursor).split(CURSOR_SEP);
-		return createdAt && id ? { createdAt, id } : null;
+		const [createdAt, id, suffix] = atob(cursor).split(CURSOR_SEP);
+		const date = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
+		const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+		return suffix === undefined && date.test(createdAt) && uuid.test(id) ? { createdAt, id } : null;
 	} catch {
 		return null;
 	}
@@ -334,7 +336,7 @@ export async function listTierRequests(
 	const db = env.SEARCH_DB;
 	const filter = query.filter ?? 'pending';
 	const size = Math.min(Math.max(Math.floor(query.pageSize ?? 25), 1), 100);
-	const after = decodeCursor(query.cursor);
+	const after = decodeTierRequestCursor(query.cursor);
 	const oldestFirst = filter === 'pending';
 	const where: string[] = [];
 	const binds: unknown[] = [];

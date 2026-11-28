@@ -8,17 +8,19 @@
  *        Starts a pass per bucket (default: all five), one page per PROCESSING_CHECK_QUEUE message.
  *        A dry run reads every object and counts the rows it would write; it writes only its own state.
  */
+import { z } from 'zod';
+import { optionalJson } from '../../validation/legacy-request';
 import { Hono } from 'hono';
 import { logger } from '../../lib/logger';
 import {
 	FOOTPRINT_BUCKETS,
 	footprintsComplete,
-	isFootprintBucket,
 	readFootprintPass,
 	startFootprintPass,
-	type FootprintBucket,
 	type FootprintEnv,
 } from '../../lib/privacy/footprints';
+
+const Backfill = z.object({ dryRun: z.boolean().optional(), buckets: z.array(z.enum(FOOTPRINT_BUCKETS)).max(50).optional() });
 
 export function createFootprintsInternalRouter() {
 	const app = new Hono<{ Bindings: FootprintEnv }>();
@@ -38,14 +40,13 @@ export function createFootprintsInternalRouter() {
 	});
 
 	app.post('/backfill', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as { dryRun?: unknown; buckets?: unknown };
-		const dryRun = body.dryRun !== false;
-		const requested = Array.isArray(body.buckets) ? body.buckets : [...FOOTPRINT_BUCKETS];
-		const unknown = requested.filter((b) => typeof b !== 'string' || !isFootprintBucket(b));
-		if (unknown.length) return c.json({ success: false, error: `Unknown bucket(s): ${unknown.join(', ')}`, buckets: FOOTPRINT_BUCKETS }, 400);
+		const parsed = Backfill.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return c.json({ success: false, error: 'Invalid backfill options', buckets: FOOTPRINT_BUCKETS }, 400);
+		const dryRun = parsed.data.dryRun !== false;
+		const requested = parsed.data.buckets ?? FOOTPRINT_BUCKETS;
 		try {
 			const started: Record<string, unknown> = {};
-			for (const bucket of new Set(requested as FootprintBucket[])) started[bucket] = await startFootprintPass(c.env, bucket, { dryRun });
+			for (const bucket of new Set(requested)) started[bucket] = await startFootprintPass(c.env, bucket, { dryRun });
 			return c.json({ success: true, result: started }, 202);
 		} catch (error) {
 			logger.error('[PrivacyFootprints] Could not start the backfill', { error: error instanceof Error ? error.message : String(error) });

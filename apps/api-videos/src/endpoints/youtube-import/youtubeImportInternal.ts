@@ -11,11 +11,16 @@
  *                                            404 when the import is gone or over
  */
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { logger } from '../../lib/logger';
 import { forgetFeatureSettings } from '../../lib/features';
 import { retryYtJob, type YtJobsEnv } from '../../lib/youtube-import/jobs';
 import { YtHttpError } from '../../lib/youtube-import/service';
 import { saveYtClientSecret, saveYtSettings, ytSettingsView, YtSettingsError } from '../../lib/youtube-import/settings';
+
+const Actor = z.string().regex(/^[A-Za-z0-9_@.+-]{1,128}$/).default('admin');
+const SettingsBody = z.object({ actorId: Actor, enabled: z.boolean().optional(), clientId: z.string().max(512).optional() });
+const SecretBody = z.object({ actorId: Actor, value: z.string().min(16).max(256) });
 
 type Ctx = { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -40,19 +45,18 @@ export function createYoutubeImportInternalRouter() {
 	app.get('/settings', async (c) => c.json({ success: true, result: await ytSettingsView(c.env) }));
 
 	app.put('/settings', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { enabled?: unknown; clientId?: unknown; actorId?: unknown } | null;
-		if (!body || typeof body !== 'object') return c.json({ success: false, code: 'invalid_settings', error: 'A JSON body is required' }, 400);
-		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
-		const { previous } = await saveYtSettings(c.env, { enabled: body.enabled, clientId: body.clientId }, actorId);
+		const parsed = SettingsBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, code: 'invalid_settings', error: 'Invalid settings' }, 400);
+		const { actorId, ...patch } = parsed.data;
+		const { previous } = await saveYtSettings(c.env, patch, actorId);
 		forgetFeatureSettings();
 		return c.json({ success: true, result: await ytSettingsView(c.env), previous });
 	});
 
 	app.put('/client-secret', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { value?: unknown; actorId?: unknown } | null;
-		if (!body || typeof body !== 'object') return c.json({ success: false, code: 'invalid_secret', error: 'A JSON body is required' }, 400);
-		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
-		const { hadAdminSecret } = await saveYtClientSecret(c.env, body.value, actorId);
+		const parsed = SecretBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, code: 'invalid_secret', error: 'Invalid client secret' }, 400);
+		const { hadAdminSecret } = await saveYtClientSecret(c.env, parsed.data.value, parsed.data.actorId);
 		forgetFeatureSettings();
 		return c.json({ success: true, result: await ytSettingsView(c.env), hadAdminSecret });
 	});

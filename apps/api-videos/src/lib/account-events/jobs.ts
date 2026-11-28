@@ -175,9 +175,10 @@ async function giveUp(env: AccountEventsEnv, ctx: ExecutionContextLike | undefin
 
 /** The admin's Retry of an event that gave up. False when there is nothing to retry. */
 export async function retryAccountEvent(env: AccountEventsEnv, jti: unknown, ctx: ExecutionContextLike | undefined): Promise<boolean> {
-	if (typeof jti !== 'string' || !(await reopen(dbOf(env), jti))) return false;
-	await enqueue(env, jti);
-	resolveNeedsAction(env as unknown as ErrorReporterEnv, ctx, accountEventKey(jti));
+	const parsed = AccountEventBody.shape.jti.safeParse(jti);
+	if (!parsed.success || !(await reopen(dbOf(env), parsed.data))) return false;
+	await enqueue(env, parsed.data);
+	resolveNeedsAction(env as unknown as ErrorReporterEnv, ctx, accountEventKey(parsed.data));
 	return true;
 }
 

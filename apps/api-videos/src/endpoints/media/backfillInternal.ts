@@ -19,6 +19,9 @@
  *   POST /internal/media/backfill/libraries/:id/removals/cancel
  *   POST /internal/media/backfill/removals/retry { videoId }  (also the Errors page's Retry)
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
+import { IntegerQuery } from '../../validation/legacy-request';
 import { Hono, type Context } from 'hono';
 import { parseBackfillScope, parseBackfillSettings, type BackfillItemState, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { MediaSettingsError } from '../../lib/media/settings';
@@ -43,7 +46,9 @@ const ctxOf = (c: C): ExecutionContextLike | undefined => {
 		return undefined;
 	}
 };
-const actor = (body: Record<string, unknown>) => (typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin');
+const Actor = z.object({ actorId: RecordId.default('admin') });
+const Id = z.string().regex(SAFE);
+const Query = z.object({ cursor: Id.optional(), limit: IntegerQuery.optional() });
 
 export function createBackfillInternalRouter() {
 	const app = new Hono<E>();
@@ -57,14 +62,19 @@ export function createBackfillInternalRouter() {
 
 	app.get('/overview', async (c) => c.json({ success: true, result: { overview: await backfillOverview(c.env) } }));
 
-	app.get('/runs', async (c) => c.json({ success: true, result: { runs: await listRuns(c.env.SEARCH_DB!, Number(c.req.query('limit')) || 20) } }));
+	app.get('/runs', async (c) => {
+		const parsed = Query.safeParse(c.req.query());
+		if (!parsed.success) return bad(c, 'invalid query');
+		return c.json({ success: true, result: { runs: await listRuns(c.env.SEARCH_DB!, parsed.data.limit || 20) } });
+	});
 
 	app.post('/runs', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-		const scope = parseBackfillScope(body.scope);
+		const parsed = Actor.extend({ scope: z.unknown() }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return bad(c, 'bad run options');
+		const scope = parseBackfillScope(parsed.data.scope);
 		if ('error' in scope) return bad(c, scope.error);
 		if (!scope.ok) return bad(c, 'bad scope');
-		return c.json({ success: true, result: { run: await createRun(c.env, scope.scope, actor(body)) } }, 201);
+		return c.json({ success: true, result: { run: await createRun(c.env, scope.scope, parsed.data.actorId) } }, 201);
 	});
 
 	app.get('/runs/:id', async (c) => {
@@ -76,21 +86,21 @@ export function createBackfillInternalRouter() {
 
 	app.get('/runs/:id/items', async (c) => {
 		const id = c.req.param('id');
-		const state = c.req.query('state') as BackfillItemState | undefined;
 		if (!SAFE.test(id)) return bad(c, 'bad run id');
-		if (state && !STATES.includes(state)) return bad(c, `state must be one of ${STATES.join(', ')}`);
-		const cursor = c.req.query('cursor');
-		if (cursor && !SAFE.test(cursor)) return bad(c, 'bad cursor');
-		return c.json({ success: true, result: await listItems(c.env.SEARCH_DB!, id, { state, cursor, limit: Number(c.req.query('limit')) || 50 }) });
+		const parsed = Query.extend({ state: z.enum(STATES).optional() }).safeParse(c.req.query());
+		if (!parsed.success) return bad(c, 'invalid item filters');
+		const { cursor, state, limit = 50 } = parsed.data;
+		return c.json({ success: true, result: await listItems(c.env.SEARCH_DB!, id, { state, cursor, limit }) });
 	});
 
 	app.put('/runs/:id/settings', async (c) => {
 		const id = c.req.param('id');
+		const input = z.object({ settings: z.record(z.string(), z.unknown()) }).safeParse(await c.req.json().catch(() => null));
+		if (!input.success) return bad(c, 'bad settings');
 		const row = SAFE.test(id) ? await getRunRow(c.env.SEARCH_DB!, id) : null;
 		if (!row) return c.json({ success: false, code: 'not_found', error: 'No such run' }, 404);
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 		const current = runView(row, await countsOf(c.env.SEARCH_DB!, id), await spentOf(c.env.SEARCH_DB!, id)).settings;
-		const parsed = parseBackfillSettings(body.settings, current);
+		const parsed = parseBackfillSettings(input.data.settings, current);
 		if ('error' in parsed) return bad(c, parsed.error);
 		if (!parsed.ok) return bad(c, 'bad settings');
 		return c.json({ success: true, result: { run: await changeSettings(c.env, id, parsed.settings) } });
@@ -110,28 +120,31 @@ export function createBackfillInternalRouter() {
 	});
 
 	app.post('/items/retry', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-		if (typeof body.runId !== 'string' || !SAFE.test(body.runId) || typeof body.videoId !== 'string' || !SAFE.test(body.videoId)) return bad(c, 'runId and videoId are required');
+		const parsed = z.object({ runId: Id, videoId: Id }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return bad(c, 'runId and videoId are required');
+		const body = parsed.data;
 		const out = await retryItem(c.env, ctxOf(c), body.runId, body.videoId);
 		if (!out.retried && out.why === 'no such run') return c.json({ success: false, code: 'not_found', error: out.why }, 404);
 		return c.json({ success: true, result: out });
 	});
 
 	app.post('/flip', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-		const undo = body.undo === true;
+		const shared = Actor.extend({ undo: z.boolean().default(false) });
+		const parsed = z.discriminatedUnion('target', [
+			shared.extend({ target: z.literal('videos'), videoIds: z.array(Id).min(1).max(MAX_FLIP_VIDEOS) }),
+			shared.extend({ target: z.literal('channel'), channelId: Id }),
+			shared.extend({ target: z.literal('global') }),
+		]).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return bad(c, 'Invalid flip options');
+		const body = parsed.data;
 		if (body.target === 'videos') {
-			const ids = Array.isArray(body.videoIds) ? [...new Set(body.videoIds.filter((v): v is string => typeof v === 'string' && SAFE.test(v)))] : [];
-			if (!ids.length || ids.length > MAX_FLIP_VIDEOS) return bad(c, `videoIds must list 1-${MAX_FLIP_VIDEOS} video ids`);
-			return c.json({ success: true, result: await flipVideos(c.env, ids, actor(body), undo) });
+			return c.json({ success: true, result: await flipVideos(c.env, [...new Set(body.videoIds)], body.actorId, body.undo) });
 		}
 		if (body.target === 'channel') {
-			if (typeof body.channelId !== 'string' || !SAFE.test(body.channelId)) return bad(c, 'channelId is required');
-			const settings = await flipChannel(c.env, body.channelId, actor(body), undo);
+			const settings = await flipChannel(c.env, body.channelId, body.actorId, body.undo);
 			return c.json({ success: true, result: { settings, verification: await channelVerification(c.env, body.channelId) } });
 		}
-		if (body.target === 'global') return c.json({ success: true, result: { settings: await flipGlobal(c.env, actor(body), undo) } });
-		return bad(c, 'target must be videos, channel or global');
+		return c.json({ success: true, result: { settings: await flipGlobal(c.env, body.actorId, body.undo) } });
 	});
 
 	app.get('/channels/:id/verification', async (c) => {
@@ -145,18 +158,18 @@ export function createBackfillInternalRouter() {
 	app.get('/libraries/:id/removals', async (c) => {
 		const id = Number(c.req.param('id'));
 		if (!Number.isInteger(id)) return bad(c, 'bad library id');
-		const cursor = c.req.query('cursor');
-		if (cursor && !SAFE.test(cursor)) return bad(c, 'bad cursor');
-		const status = c.req.query('status');
-		if (status && !['scheduled', 'removing', 'removed', 'cancelled', 'failed'].includes(status)) return bad(c, 'bad status');
-		return c.json({ success: true, result: await listRemovals(c.env, id, { status, cursor, limit: Number(c.req.query('limit')) || 50 }) });
+		const parsed = Query.extend({ status: z.enum(['scheduled', 'removing', 'removed', 'cancelled', 'failed']).optional() }).safeParse(c.req.query());
+		if (!parsed.success) return bad(c, 'invalid removal filters');
+		const { status, cursor, limit = 50 } = parsed.data;
+		return c.json({ success: true, result: await listRemovals(c.env, id, { status, cursor, limit }) });
 	});
 
 	app.post('/libraries/:id/removals', async (c) => {
 		const id = Number(c.req.param('id'));
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 		if (!Number.isInteger(id)) return bad(c, 'bad library id');
-		return c.json({ success: true, result: await scheduleRemovals(c.env, id, Number(body.graceDays), actor(body)) });
+		const parsed = Actor.extend({ graceDays: z.number().int().or(IntegerQuery) }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return bad(c, 'bad grace period', 'bad_grace');
+		return c.json({ success: true, result: await scheduleRemovals(c.env, id, parsed.data.graceDays, parsed.data.actorId) });
 	});
 
 	app.post('/libraries/:id/removals/cancel', async (c) => {
@@ -166,9 +179,9 @@ export function createBackfillInternalRouter() {
 	});
 
 	app.post('/removals/retry', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-		if (typeof body.videoId !== 'string' || !SAFE.test(body.videoId)) return bad(c, 'videoId is required');
-		return c.json({ success: true, result: await retryRemoval(c.env, ctxOf(c), body.videoId) });
+		const parsed = z.object({ videoId: Id }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return bad(c, 'videoId is required');
+		return c.json({ success: true, result: await retryRemoval(c.env, ctxOf(c), parsed.data.videoId) });
 	});
 
 	return app;

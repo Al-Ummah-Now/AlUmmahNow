@@ -11,8 +11,10 @@
  *                                                 the processor's viewer-side title translation (§5.9); 409 when the
  *                                                 video changed meanwhile, 404 when it is gone or no longer public
  */
+import { z } from 'zod';
+import { RecordId, SubtitleLanguage } from '../../validation/identifiers';
 import { Hono } from 'hono';
-import { CAPTION_JOB_ERRORS, type CaptionAudioReport, type CaptionJobError, type CaptionJobStatus, type VideoObject } from '@al-ummah/shared-types';
+import { CAPTION_JOB_ERRORS, captionWorkPrefix, type VideoObject } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { CaptionJobHttpError, finishJob, onAudioReport, onProgress, readJob, retryJob, type CaptionJobsEnv } from '../../lib/captions/jobs';
 import { logger } from '../../lib/logger';
@@ -30,6 +32,25 @@ const ctxOf = (c: { executionCtx: Ctx }): Ctx => {
 	}
 };
 
+const Retry = z.object({ jobId: RecordId });
+const Metadata = z.object({
+	videoId: RecordId, lang: SubtitleLanguage, sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+	title: z.string().min(1).max(4000), description: z.string().max(20_000).nullish(),
+	provider: z.string().min(1).max(128).optional(), model: z.string().min(1).max(256).optional(),
+});
+const Audio = z.discriminatedUnion('ok', [
+	z.object({ ok: z.literal(true), manifestKey: z.string().max(512) }),
+	z.object({ ok: z.literal(false), error: z.string().max(300).default('failed'), retryable: z.boolean().default(false) }),
+]);
+const Progress = z.object({
+	status: z.enum(['waiting_budget', 'transcribing', 'translating', 'postprocessing']),
+	done: z.number().int().nonnegative().optional(), total: z.number().int().nonnegative().optional(),
+});
+const Finish = z.discriminatedUnion('outcome', [
+	z.object({ outcome: z.literal('ready'), minutesUsed: z.number().int().nonnegative() }),
+	z.object({ outcome: z.literal('failed'), error: z.enum(CAPTION_JOB_ERRORS).default('failed') }),
+]);
+
 export function createCaptionJobsInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
 
@@ -42,9 +63,9 @@ export function createCaptionJobsInternalRouter() {
 	const video = (env: Env, videoId: string) => new R2Repository<VideoObject>(env.videos).getObject(videoId);
 
 	app.post('/jobs/retry', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { jobId?: unknown } | null;
-		const jobId = typeof body?.jobId === 'string' ? body.jobId : '';
-		if (!jobId) return c.json({ success: false, error: 'jobId is required' }, 400);
+		const parsed = Retry.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'jobId is required' }, 400);
+		const { jobId } = parsed.data;
 		const job = await readJob(c.env, jobId);
 		if (!job) return c.json({ success: false, error: 'No such caption job' }, 404);
 		try {
@@ -58,8 +79,9 @@ export function createCaptionJobsInternalRouter() {
 	});
 
 	app.post('/metadata-translations', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as Partial<{ videoId: string; lang: string; sourceHash: string; title: string; description: string | null; provider: string; model: string }> | null;
-		if (!body || typeof body.videoId !== 'string' || typeof body.lang !== 'string' || typeof body.sourceHash !== 'string' || typeof body.title !== 'string') return c.json({ success: false, error: 'invalid' }, 400);
+		const parsed = Metadata.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ success: false, error: 'invalid' }, 400);
+		const body = parsed.data;
 		const stored = await video(c.env, body.videoId);
 		if (!stored || !isVideoPubliclyVisible(stored as never)) return c.json({ success: false, error: 'video_gone' }, 404);
 		try {
@@ -67,9 +89,9 @@ export function createCaptionJobsInternalRouter() {
 				lang: body.lang,
 				sourceHash: body.sourceHash,
 				title: body.title,
-				description: typeof body.description === 'string' ? body.description : null,
-				provider: String(body.provider ?? 'unknown'),
-				model: String(body.model ?? 'unknown'),
+				description: body.description ?? null,
+				provider: body.provider ?? 'unknown',
+				model: body.model ?? 'unknown',
 			});
 		} catch (error) {
 			if (error instanceof TranslateHttpError) return c.json({ success: false, error: error.code }, error.status as 400);
@@ -79,12 +101,14 @@ export function createCaptionJobsInternalRouter() {
 	});
 
 	app.post('/jobs/:jobId/audio', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as Partial<{ ok: boolean; manifestKey: string; error: string; retryable: boolean }> | null;
-		if (!body || typeof body.ok !== 'boolean') return c.json({ success: false, error: 'invalid_report' }, 400);
-		const report: CaptionAudioReport = body.ok
-			? { ok: true, manifestKey: String(body.manifestKey ?? '') }
-			: { ok: false, error: String(body.error ?? 'failed').slice(0, 300), retryable: body.retryable === true };
-		const job = await readJob(c.env, c.req.param('jobId'));
+		const parsed = Audio.safeParse(await c.req.json().catch(() => null));
+		const jobId = c.req.param('jobId');
+		if (!parsed.success || !RecordId.safeParse(jobId).success ||
+			('manifestKey' in parsed.data && parsed.data.manifestKey !== captionWorkPrefix(jobId) + 'manifest.json')) {
+			return c.json({ success: false, error: 'invalid_report' }, 400);
+		}
+		const report = parsed.data;
+		const job = await readJob(c.env, jobId);
 		if (!job) return c.json({ success: false, error: 'job_not_found' }, 404);
 		const title = (await video(c.env, job.videoId))?.title;
 		const done = await onAudioReport(c.env, job.id, report, title, ctxOf(c as never));
@@ -92,26 +116,20 @@ export function createCaptionJobsInternalRouter() {
 	});
 
 	app.post('/jobs/:jobId/progress', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { status?: unknown; done?: unknown; total?: unknown } | null;
-		const num = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined);
-		const active = await onProgress(c.env, c.req.param('jobId'), { status: String(body?.status ?? '') as CaptionJobStatus, done: num(body?.done), total: num(body?.total) });
+		const parsed = Progress.safeParse(await c.req.json().catch(() => null));
+		const jobId = c.req.param('jobId');
+		if (!parsed.success || !RecordId.safeParse(jobId).success) return c.json({ success: false, error: 'invalid_status' }, 400);
+		const active = await onProgress(c.env, jobId, parsed.data);
 		if (!active) return c.json({ success: false, error: 'job_not_active' }, 409);
 		return c.json({ success: true });
 	});
 
 	app.post('/jobs/:jobId/finish', async (c) => {
-		const body = (await c.req.json().catch(() => null)) as { outcome?: unknown; minutesUsed?: unknown; error?: unknown } | null;
-		const ctx = ctxOf(c as never);
-		if (body?.outcome === 'ready' && typeof body.minutesUsed === 'number' && Number.isInteger(body.minutesUsed) && body.minutesUsed >= 0) {
-			const job = await finishJob(c.env, c.req.param('jobId'), { outcome: 'ready', minutesUsed: body.minutesUsed }, ctx);
-			return c.json({ success: true, result: { status: job.status } });
-		}
-		if (body?.outcome === 'failed') {
-			const error = (CAPTION_JOB_ERRORS as readonly string[]).includes(String(body.error)) ? (body.error as CaptionJobError) : 'failed';
-			const job = await finishJob(c.env, c.req.param('jobId'), { outcome: 'failed', error }, ctx);
-			return c.json({ success: true, result: { status: job.status } });
-		}
-		return c.json({ success: false, error: 'invalid_outcome' }, 400);
+		const parsed = Finish.safeParse(await c.req.json().catch(() => null));
+		const jobId = c.req.param('jobId');
+		if (!parsed.success || !RecordId.safeParse(jobId).success) return c.json({ success: false, error: 'invalid_outcome' }, 400);
+		const job = await finishJob(c.env, jobId, parsed.data, ctxOf(c as never));
+		return c.json({ success: true, result: { status: job.status } });
 	});
 
 	return app;
