@@ -58,6 +58,16 @@ test('a theme with a body font puts it on the header controls and the menu text,
   }
 });
 
+test('the account lines under the name (e-mail, acting as) keep the header sans, not the theme font', () => {
+  // they sit inside .aun-menu-item, which takes the theme font (Nahas serif), so they name their own
+  const lines = '.aun-menu-who-sub,\n.aun-acct-email,\n.aun-acct-current {\n  font-family: var(--aun-header-font,';
+  const linesAr = '.aun-menu-who-sub:lang(ar),\n.aun-acct-email:lang(ar),\n.aun-acct-current:lang(ar) {\n  font-family: var(--aun-header-font-ar,';
+  assert.ok(css.includes(lines), 'e-mail lines name the header sans stack');
+  assert.ok(css.includes(linesAr), 'Arabic account lines name the header Arabic stack');
+  // and no theme rule reaches them
+  assert.doesNotMatch(block, /aun-menu-who-sub|aun-acct-email|aun-acct-current/);
+});
+
 test('every font a theme puts on the controls is shipped, from this package only', () => {
   const faces = [...fontsCss.matchAll(/font-family:'([^']+)';font-weight:(\d+);[^}]*src:url\('\/aun-nav\/fonts\/([^']+)'\)/g)];
   const families = new Set(faces.map((f) => f[1]));
