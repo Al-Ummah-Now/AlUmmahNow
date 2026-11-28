@@ -63894,6 +63894,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64010,6 +64013,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64188,6 +64194,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64198,6 +64207,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 35,
+              "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
               "description": "ISO 639-1 language code (e.g., en, ar, ur)"
             },
             "required": true,
@@ -64301,6 +64312,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64311,6 +64325,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 35,
+              "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
               "description": "ISO 639-1 language code (e.g., en, ar, ur)"
             },
             "required": true,
@@ -64456,6 +64472,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64466,6 +64485,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 35,
+              "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
               "description": "ISO 639-1 language code of the track to make default"
             },
             "required": true,
@@ -64622,6 +64643,9 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
               "description": "Video ID"
             },
             "required": true,
@@ -64632,6 +64656,8 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 35,
+              "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
               "description": "ISO 639-1 language code (e.g., en, ar, ur)"
             },
             "required": true,

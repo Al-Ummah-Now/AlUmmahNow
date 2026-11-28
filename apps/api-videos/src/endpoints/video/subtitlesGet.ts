@@ -2,7 +2,8 @@
  * Get specific subtitle track
  */
 
-import { Str, Enumeration } from '../../lib/chanfana-params';
+import { RecordId, SubtitleLanguage } from '../../validation/identifiers';
+import { Enumeration } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { captionMarkerRanges, featureGate } from '@al-ummah/shared-types';
 import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';
@@ -21,8 +22,8 @@ export class SubtitlesGet extends OptionalAuthRoute {
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({
-        videoId: Str({ description: 'Video ID' }),
-        language: Str({ description: 'ISO 639-1 language code (e.g., en, ar, ur)' }),
+        videoId: RecordId.describe('Video ID'),
+        language: SubtitleLanguage.describe('ISO 639-1 language code (e.g., en, ar, ur)'),
       }),
       query: z.object({
         format: Enumeration({
@@ -159,7 +160,7 @@ export class SubtitlesGet extends OptionalAuthRoute {
       return c.json(
         {
           success: false,
-          error: error.message || 'Failed to get subtitle',
+          error: 'Failed to get subtitle',
         },
         500
       );

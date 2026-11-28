@@ -2,6 +2,7 @@
  * Network adapters (spec §10.4): one per network, the same shape, so planning, retries, the cap and errors are
  * written once. Adapters only talk to the network; storage stays in store.ts.
  */
+import { checkUrl } from '../../link-preview';
 import type { SocialLanguage, SocialNetwork } from '@al-ummah/shared-types';
 
 /** Why a network call failed, so the queue knows whether to retry. */
@@ -122,8 +123,15 @@ export async function failure(network: string, res: Response, what: string): Pro
 
 /** A fetch that turns network-level failures (DNS, reset) into retryable errors. */
 export async function call(f: typeof fetch, input: string, init: RequestInit, network: string, what: string): Promise<Response> {
+	let url: URL;
 	try {
-		return await f(input, init);
+		url = checkUrl(input);
+		if (url.protocol !== 'https:' || url.port) throw new Error('Expected HTTPS');
+	} catch {
+		throw new NetworkError(`${network} ${what}: Invalid destination`, 'fatal');
+	}
+	try {
+		return await f(url.href, { ...init, redirect: 'error' });
 	} catch (error) {
 		throw new NetworkError(`${network} ${what}: ${error instanceof Error ? error.message : String(error)}`, 'retry');
 	}
@@ -143,10 +151,10 @@ export async function download(f: typeof fetch, url: string, maxBytes: number, n
 /** Size of hosted media without downloading it (HEAD, then a 1-byte range). */
 export async function mediaSize(f: typeof fetch, url: string): Promise<number | null> {
 	try {
-		const head = await f(url, { method: 'HEAD' });
+		const head = await call(f, url, { method: 'HEAD' }, 'Social', 'media size');
 		const n = Number(head.headers.get('content-length'));
 		if (head.ok && Number.isFinite(n) && n > 0) return n;
-		const range = await f(url, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+		const range = await call(f, url, { method: 'GET', headers: { Range: 'bytes=0-0' } }, 'Social', 'media size');
 		const total = /\/(\d+)$/.exec(range.headers.get('content-range') ?? '')?.[1];
 		await range.body?.cancel();
 		return total ? Number(total) : null;

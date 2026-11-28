@@ -60,6 +60,7 @@ export class BunnyStreamClient {
 
         const response = await fetch(url.toString(), {
             method,
+            redirect: 'error',
             headers: {
                 'AccessKey': this.accessKey,
                 'Content-Type': 'application/json',
@@ -76,17 +77,17 @@ export class BunnyStreamClient {
 
     // Get a collection
     async getCollection(libraryId: number, collectionId: string, includeThumbnails: boolean = false): Promise<CollectionModel> {
-        return this.request<CollectionModel>('GET', `/library/${libraryId}/collections/${collectionId}`, undefined, { includeThumbnails });
+        return this.request<CollectionModel>('GET', `/library/${libraryId}/collections/${encodeURIComponent(collectionId)}`, undefined, { includeThumbnails });
     }
 
     // Update a collection
     async updateCollection(libraryId: number, collectionId: string, data: { name?: string }): Promise<CollectionModel> {
-        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections/${collectionId}`, { ...data, name: this.prefixed(data.name) });
+        return this.request<CollectionModel>('POST', `/library/${libraryId}/collections/${encodeURIComponent(collectionId)}`, { ...data, name: this.prefixed(data.name) });
     }
 
     // Delete a collection
     async deleteCollection(libraryId: number, collectionId: string): Promise<void> {
-        return this.request<void>('DELETE', `/library/${libraryId}/collections/${collectionId}`);
+        return this.request<void>('DELETE', `/library/${libraryId}/collections/${encodeURIComponent(collectionId)}`);
     }
 
     // List collections
@@ -104,22 +105,22 @@ export class BunnyStreamClient {
 
     // Get a video
     async getVideo(libraryId: number, videoId: string): Promise<VideoModel> {
-        return this.request<VideoModel>('GET', `/library/${libraryId}/videos/${videoId}`);
+        return this.request<VideoModel>('GET', `/library/${libraryId}/videos/${encodeURIComponent(videoId)}`);
     }
 
     // Update a video
     async updateVideo(libraryId: number, videoId: string, data: { title?: string; collectionId?: string }): Promise<VideoModel> {
-        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}`, { ...data, title: this.prefixed(data.title) });
+        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${encodeURIComponent(videoId)}`, { ...data, title: this.prefixed(data.title) });
     }
 
     /** Encode the video again from its original upload (admin "reprocess"). */
     async reencodeVideo(libraryId: number, videoId: string): Promise<VideoModel> {
-        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}/reencode`);
+        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${encodeURIComponent(videoId)}/reencode`);
     }
 
     // Delete a video
     async deleteVideo(libraryId: number, videoId: string): Promise<void> {
-        return this.request<void>('DELETE', `/library/${libraryId}/videos/${videoId}`);
+        return this.request<void>('DELETE', `/library/${libraryId}/videos/${encodeURIComponent(videoId)}`);
     }
 
     // List videos
@@ -144,7 +145,7 @@ export class BunnyStreamClient {
         if (dateTo) params.dateTo = dateTo;
         if (hourly) params.hourly = 'true';
         
-        return this.request<any>('GET', `/library/${libraryId}/videos/${videoId}/statistics`, undefined, params);
+        return this.request<any>('GET', `/library/${libraryId}/videos/${encodeURIComponent(videoId)}/statistics`, undefined, params);
     }
 
     // Get library statistics
@@ -177,13 +178,14 @@ export class BunnyStreamClient {
 
     // Upload a video
     async uploadVideo(libraryId: number, videoId: string, file: Blob, enabledResolutions?: string): Promise<VideoModel> {
-        const url = new URL(`/library/${libraryId}/videos/${videoId}`, this.baseURL);
+        const url = new URL(`/library/${libraryId}/videos/${encodeURIComponent(videoId)}`, this.baseURL);
         if (enabledResolutions) {
             url.searchParams.append('enabledResolutions', enabledResolutions);
         }
 
         const response = await fetch(url.toString(), {
             method: 'PUT',
+            redirect: 'error',
             headers: {
                 'AccessKey': this.accessKey,
                 'Content-Type': 'application/octet-stream',

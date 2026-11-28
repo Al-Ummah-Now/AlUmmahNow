@@ -93,6 +93,20 @@ function bunnyStub() {
 	return s;
 }
 
+it('refuses Bunny upload locations outside the upload service', async (t) => {
+	const h = harness();
+	let redirect: RequestRedirect | undefined;
+	t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+		redirect = init?.redirect;
+		return new Response(null, { status: 201, headers: { Location: 'https://example.org/tusupload/fixture' } });
+	});
+	const response = await h.post();
+	assert.equal(response.status, 503);
+	assert.equal(redirect, 'error');
+	assert.equal(response.headers.get('Location'), null);
+	assert.equal([...h.kv.data.keys()].some((key) => key.startsWith('tus:upload:')), false);
+});
+
 function harness(user = 'alice', logRequests = false) {
 	const kv = flakyKv();
 	const videos = new MemoryBucket({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'uploading', fileSize: SIZE }) });

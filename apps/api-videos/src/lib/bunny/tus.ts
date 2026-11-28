@@ -9,6 +9,7 @@
  * @see https://tus.io/protocols/resumable-upload.html
  */
 
+import { z } from 'zod';
 import { logger } from '../logger';
 import { bunnyApi, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from './libraries';
 
@@ -227,28 +228,36 @@ export interface TusProxySession {
   uploadRound?: number;
 }
 
-/**
- * Parse TUS `Upload-Metadata` (`key base64,key base64`). Keys must be unique
- * (TUS 1.0.0): a repeated key returns null, so the tier gate
- * (middleware/upload-limits.ts) and the proxy can never read different
- * values from one header. Values that are not valid base64 are skipped.
- */
+const MetadataHeader = z.string().max(4096);
+const MetadataEntry = z.tuple([z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), z.base64().optional()]);
+
+/** Parse the TUS header once, so the tier gate and upload proxy agree on every entry. */
 export function parseTusMetadata(header: string | null | undefined): Record<string, string> | null {
-  const metadata: Record<string, string> = {};
-  const seen = new Set<string>();
-  for (const pair of (header ?? '').split(',')) {
-    const [key, base64Value] = pair.trim().split(' ');
-    if (!key) continue;
-    if (seen.has(key)) return null;
-    seen.add(key);
-    if (!base64Value) continue;
-    try {
-      metadata[key] = atob(base64Value);
-    } catch {
-      // not base64: ignored, as before
-    }
-  }
-  return metadata;
+	const parsed = MetadataHeader.safeParse(header ?? '');
+	if (!parsed.success) return null;
+	const entries = new Map<string, string>();
+	if (parsed.data) {
+		for (const pair of parsed.data.split(',')) {
+			const parts = pair.trim().split(' ');
+			const entry = MetadataEntry.safeParse([parts[0], parts[1]]);
+			if (!entry.success || parts.length > 2 || entries.has(entry.data[0])) return null;
+			const [key, encoded] = entry.data;
+			entries.set(key, encoded ? atob(encoded) : '');
+		}
+	}
+	return Object.fromEntries(entries);
+}
+
+/** Only file presentation fields go to Bunny. IDs come from the signed upload headers. */
+export function bunnyUploadMetadata(metadata: Record<string, string>): string {
+	const filename = metadata.filename;
+	const filetype = metadata.filetype;
+	return [
+		filename && filename.length <= 1024 && ![...filename].some((char) => char.charCodeAt(0) < 32)
+			? 'filename ' + btoa(filename) : '',
+		filetype && /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}\/[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(filetype)
+			? 'filetype ' + btoa(filetype) : '',
+	].filter(Boolean).join(',');
 }
 
 /** KV key the TUS proxy uses to resolve a session ID. */

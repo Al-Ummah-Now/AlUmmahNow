@@ -8,6 +8,7 @@
  * - payout to a payee whose country is 'ZZ' fails with `account_closed` (then returns money);
  * - a payout of exactly 4040 minor units answers `unknown` once (timeout), then `paid`.
  */
+import { z } from 'zod';
 import { addMoney, basisPoints, type Money, type PayeeStatus, type SanctionsStatus, type TaxForm } from '@al-ummah/shared-types';
 import { hmacSha256Hex, timingSafeEqualHex, withinTolerance } from '../billing/provider';
 import { type PayeeState, type PayoutRail, type PayoutState, type RailContext, RailError, type RailEvent } from './rail';
@@ -67,6 +68,18 @@ export async function signTestRailDelivery(body: string, now: Date): Promise<Hea
 	const t = Math.floor(now.getTime() / 1000);
 	return new Headers({ 'Content-Type': 'application/json', [TEST_RAIL_SIGNATURE_HEADER]: `t=${t},v1=${await hmacSha256Hex(TEST_RAIL_SECRET, `${t}.${body}`)}` });
 }
+
+const ref = z.string().min(1).max(200).regex(/^[A-Za-z0-9_.-]+$/);
+const occurredAt = z.iso.datetime();
+const Delivery = z.object({
+	id: ref,
+	createdAt: occurredAt.optional(),
+	events: z.array(z.discriminatedUnion('type', [
+		z.object({ type: z.literal('payee.updated'), occurredAt, railPayeeRef: ref, payeeId: ref.nullish().transform((value) => value ?? null) }),
+		z.object({ type: z.literal('payout.updated'), occurredAt, payoutId: ref, railPayoutRef: ref, status: z.enum(['sent', 'paid', 'failed', 'returned', 'unknown']), failureCode: z.string().max(100).nullable() }),
+		z.object({ type: z.literal('ignored'), occurredAt }),
+	])).max(100),
+});
 
 export const testRail: PayoutRail = {
 	id: 'test',
@@ -138,17 +151,20 @@ export const testRail: PayoutRail = {
 		const t = Number(parts.t);
 		if (!parts.v1 || !withinTolerance(t, ctx.now())) return null;
 		if (!timingSafeEqualHex(await hmacSha256Hex(TEST_RAIL_SECRET, `${t}.${rawBody}`), parts.v1)) return null;
-		let body: { id?: unknown; createdAt?: unknown; events?: unknown };
+		let raw: unknown;
 		try {
-			body = JSON.parse(rawBody);
+			raw = JSON.parse(rawBody);
 		} catch {
 			return null;
 		}
-		if (typeof body.id !== 'string' || !Array.isArray(body.events)) return null;
-		return { eventId: body.id, type: 'test.events', occurredAt: typeof body.createdAt === 'string' ? body.createdAt : ctx.now().toISOString(), payload: body };
+		const result = Delivery.safeParse(raw);
+		if (!result.success) return null;
+		const body = result.data;
+		return { eventId: body.id, type: 'test.events', occurredAt: body.createdAt ?? ctx.now().toISOString(), payload: body };
 	},
 
 	async normalize(_ctx, delivery) {
-		return ((delivery.payload as { events: RailEvent[] }).events ?? []).filter((e) => e && typeof (e as { type?: unknown }).type === 'string');
+		const result = Delivery.safeParse(delivery.payload);
+		return result.success ? result.data.events as RailEvent[] : [];
 	},
 };

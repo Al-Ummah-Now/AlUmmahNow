@@ -8,32 +8,36 @@
  * secret and sends them through the same receive → queue → job → entitlement
  * path as a real provider, so E2E covers the whole flow without charges.
  */
+import { z } from 'zod';
 import type { BillingPeriod } from '@al-ummah/shared-types';
 import { addPeriod, hmacSha256Hex, isoOrNull, type NormalizedEvent, type PaymentProviderAdapter, ProviderError, timingSafeEqualHex, withinTolerance } from './provider';
 
 /** The fake provider's webhook (and API) secret: a fixed test value, it guards nothing real. */
 export const FAKE_SECRET = 'fake-provider-test-secret';
 
-export interface FakeEventBody {
-	id: string;
-	type: 'subscription.updated' | 'payment.succeeded' | 'payment.refunded';
-	createdAt: string;
-	data: {
-		subscriptionRef?: string;
-		status?: 'active' | 'past_due' | 'canceled' | 'ended';
-		priceRef?: string;
-		customerRef?: string;
-		period?: BillingPeriod;
-		amount?: number;
-		currency?: string;
-		currentPeriodEnd?: string;
-		cancelAtPeriodEnd?: boolean;
-		paymentRef?: string;
-		refundedAmount?: number;
-		userId?: string;
-		checkoutId?: string;
-	};
-}
+const FakeRef = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/);
+const FakeEvent = z.object({
+	id: FakeRef,
+	type: z.enum(['subscription.updated', 'payment.succeeded', 'payment.refunded']),
+	createdAt: z.iso.datetime(),
+	data: z.object({
+		subscriptionRef: FakeRef.optional(),
+		status: z.enum(['active', 'past_due', 'canceled', 'ended']).optional(),
+		priceRef: FakeRef.optional(),
+		customerRef: FakeRef.optional(),
+		period: z.enum(['month', 'year']).optional(),
+		amount: z.number().int().nonnegative().optional(),
+		currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+		currentPeriodEnd: z.iso.datetime().optional(),
+		cancelAtPeriodEnd: z.boolean().optional(),
+		paymentRef: FakeRef.optional(),
+		refundedAmount: z.number().int().nonnegative().optional(),
+		userId: FakeRef.optional(),
+		checkoutId: FakeRef.optional(),
+	}),
+});
+
+export type FakeEventBody = z.infer<typeof FakeEvent>;
 
 export async function signFake(body: string, now = new Date()): Promise<Headers> {
 	const t = Math.floor(now.getTime() / 1000);
@@ -69,13 +73,15 @@ export const fakeAdapter: PaymentProviderAdapter = {
 		const t = Number(parts.t);
 		if (!parts.v1 || !withinTolerance(t, now)) return null;
 		if (!timingSafeEqualHex(await hmacSha256Hex(secret, `${t}.${rawBody}`), parts.v1)) return null;
-		let body: FakeEventBody;
+		let raw: unknown;
 		try {
-			body = JSON.parse(rawBody);
+			raw = JSON.parse(rawBody);
 		} catch {
 			return null;
 		}
-		if (!body?.id || !body.type) return null;
+		const parsed = FakeEvent.safeParse(raw);
+		if (!parsed.success) return null;
+		const body = parsed.data;
 		return { eventId: body.id, type: body.type, occurredAt: isoOrNull(body.createdAt) ?? now.toISOString(), payload: body };
 	},
 

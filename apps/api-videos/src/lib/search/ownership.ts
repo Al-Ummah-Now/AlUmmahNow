@@ -300,10 +300,10 @@ export async function keysetPage(db: SearchDb, q: KeysetPageQuery): Promise<Keys
     // Array sort is stable: arm order, and index order within an arm
     rowsAll = (results ?? []).map((r, n) => ({ r, n })).sort((a, b) => Number(a.r.arm) - Number(b.r.arm) || a.n - b.n).map(x => x.r).slice(0, q.limit + 1);
   } else {
-    const offset = q.offset ? ` OFFSET ${Math.max(0, Math.floor(q.offset))}` : '';
+    const offset = q.offset ? Math.max(0, Math.floor(q.offset)) : 0;
     const { results } = await db.prepare(
-      `SELECT ${select} FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT ?${offset}`,
-    ).bind(...params, q.limit + 1).all<Record<string, number | string>>();
+      `SELECT ${select} FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT ?${offset ? ' OFFSET ?' : ''}`,
+    ).bind(...params, q.limit + 1, ...(offset ? [offset] : [])).all<Record<string, number | string>>();
     rowsAll = results ?? [];
   }
   const rows = rowsAll.slice(0, q.limit);
