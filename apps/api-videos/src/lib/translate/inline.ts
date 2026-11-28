@@ -10,6 +10,7 @@
  */
 import {
 	INLINE_TRANSLATE_LIMITS,
+	TRANSLATION_PROVIDERS,
 	MessageType,
 	guessTitleLanguage,
 	type InlineTranslateField,
@@ -179,7 +180,8 @@ const TranslateAnswer = z.object({
 		quran: z.array(z.object({ range: z.string().max(40), label: z.string().max(80) })).max(500).optional(),
 		refused: z.literal('quran').optional(),
 	})).max(INLINE_TRANSLATE_LIMITS.texts),
-	provider: z.enum(['workers-ai', 'deepl']),
+	// The processor also returns the local fixture provider and a no-model result for Quran-only text.
+	provider: z.enum([...TRANSLATION_PROVIDERS, 'fixture', 'none']),
 	model: z.string().min(1).max(256),
 	usd: z.number().nonnegative(),
 });
