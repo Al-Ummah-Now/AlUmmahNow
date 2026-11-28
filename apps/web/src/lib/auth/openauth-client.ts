@@ -1,6 +1,6 @@
 import { createClient } from "@al-ummah-now/openauth/client"
 import { audienceMode, withAudienceCheck } from "@al-ummah/shared-types"
-import { logger } from "@/lib/logger-server"
+import { logger } from "../logger-server"
 
 type OpenAuthClient = ReturnType<typeof createClient>
 

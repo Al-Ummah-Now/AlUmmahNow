@@ -18,6 +18,17 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "../web/e2e/test-utils/run-users.ts", "../web/e2e/test-utils/placement.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../web/e2e/test-utils/run-users.ts",
+    "../web/e2e/test-utils/placement.ts",
+    "../admin-api/src/lib/openauth-client.ts",
+    "../api-videos/src/lib/openauth-client.ts",
+    "../web/src/lib/auth/openauth-client.ts",
+    "../web/src/lib/logger-server.ts"
+  ],
   "exclude": ["node_modules"]
 }
