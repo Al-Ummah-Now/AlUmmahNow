@@ -399,6 +399,27 @@ export function liveVodTarget(base: string, rel: string): string | null {
 	return `${base}${rel}`;
 }
 
+export async function fetchLiveVod(request: Request, base: string): Promise<Response> {
+	if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('method', { status: 405 });
+	const url = new URL(request.url);
+	const target = liveVodTarget(base, url.pathname.slice(1) + url.search);
+	if (!target) return new Response('outside the recording', { status: 403 });
+	const headers = new Headers();
+	const range = request.headers.get('range');
+	if (range) headers.set('range', range);
+	const upstream = await fetch(target, { method: request.method, headers, redirect: 'manual' });
+	if (upstream.status >= 300 && upstream.status < 400) {
+		await upstream.body?.cancel();
+		return new Response('recording redirect refused', { status: 502 });
+	}
+	const responseHeaders = new Headers({ 'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream' });
+	for (const name of ['content-length', 'content-range']) {
+		const value = upstream.headers.get(name);
+		if (value !== null) responseHeaders.set(name, value);
+	}
+	return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+}
+
 /** Same queue policy as a remux-only job: busy waits, a passing failure retries, then give up. */
 export const liveReviewQueueAction = (result: { outcome: 'ready' | 'busy' | 'failed'; fatal?: boolean }, attempts: number) => mp4QueueAction(result, attempts);
 

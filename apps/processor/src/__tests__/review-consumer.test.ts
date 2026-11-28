@@ -314,7 +314,7 @@ describe('review image fetch', () => {
   it('fetches a recognised delivery origin without following redirects', async () => {
     const fetcher = jest.fn(async () => new Response(null, { status: 302, headers: { Location: 'https://other.example.test/image.jpg' } }));
     await expect(fetchReviewImage(fetcher, 'https://images.alummahnow.net/image.jpg')).resolves.toBeNull();
-    expect(fetcher).toHaveBeenCalledWith('https://images.alummahnow.net/image.jpg', expect.objectContaining({ redirect: 'error' }));
+    expect(fetcher).toHaveBeenCalledWith('https://images.alummahnow.net/image.jpg', expect.objectContaining({ redirect: 'manual' }));
   });
 
   it('refuses an unrecognised origin before sending a request', async () => {

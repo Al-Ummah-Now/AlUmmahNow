@@ -9,7 +9,7 @@ import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, sanitizeSourceFacts, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult, type TranscodeSourceFacts } from '@al-ummah/shared-types';
 import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { startupTimes, cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { startupTimes, cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, fetchLiveVod, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -142,15 +142,7 @@ export class Transcoder extends Container<Env> {
 		 * under that recording's directory (live review jobs; the container has no internet)
 		 */
 		async vod(req: Request, _env: Env, ctx: OutboundHandlerContext<{ base: string }>): Promise<Response> {
-			if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('method', { status: 405 });
-			const url = new URL(req.url);
-			const target = liveVodTarget(ctx.params.base, url.pathname.slice(1) + url.search);
-			if (!target) return new Response('outside the recording', { status: 403 });
-			const headers = new Headers();
-			const range = req.headers.get('range');
-			if (range) headers.set('range', range);
-			const res = await fetch(target, { method: req.method, headers, redirect: 'error' });
-			return new Response(res.body, { status: res.status, headers: { 'content-type': res.headers.get('content-type') ?? 'application/octet-stream', ...(res.headers.get('content-length') ? { 'content-length': res.headers.get('content-length')! } : {}), ...(res.headers.get('content-range') ? { 'content-range': res.headers.get('content-range')! } : {}) } });
+			return fetchLiveVod(req, ctx.params.base);
 		},
 		/** GET http://audioin.internal/src (Range) → an uploaded audio track's file, its chunks concatenated (audio-track jobs) */
 		async audioin(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string; trackId: string; uploadId: string; bytes: number }>): Promise<Response> {

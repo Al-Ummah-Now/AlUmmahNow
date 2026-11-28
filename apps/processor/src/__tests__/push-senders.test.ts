@@ -299,6 +299,15 @@ describe('WNS', () => {
     }
   });
 
+  it('treats a redirect from a WNS channel as a failed send', async () => {
+    server.responders.set('db5p.notify.windows.com', () => ({ status: 307, headers: { location: '/other-channel' } }));
+    const fetcher = jest.fn(server.fetch);
+    const wns = new WnsPushProvider(env, new Counting(), fetcher);
+    expect(await wns.sendAlert(target({ provider: 'wns', token: channel }), alert)).toMatchObject({ ok: false, invalidToken: false });
+    expect(fetcher).toHaveBeenLastCalledWith(channel, expect.objectContaining({ redirect: 'manual' }));
+    expect(server.on('db5p.notify.windows.com')).toHaveLength(1);
+  });
+
   it('review toasts sit under the localised "Admin · Review queue" header (#1307)', async () => {
     const { reviewAlertText } = await import('@al-ummah/shared-types');
     const en = reviewToastXml({ ...alert, ...reviewAlertText('nsfw', 9, 'en') });

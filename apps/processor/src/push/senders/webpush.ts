@@ -238,7 +238,7 @@ export class WebPushProvider implements PushProvider {
     const jwt = await this.vapidJwt(keys, new URL(sub.endpoint).origin);
     const res = await this.fetchImpl(sub.endpoint, {
       method: 'POST',
-      redirect: 'error',
+      redirect: 'manual',
       headers: {
         authorization: `vapid t=${jwt}, k=${keys.publicKey}`,
         'content-encoding': 'aes128gcm',

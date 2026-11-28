@@ -100,7 +100,7 @@ export class WnsPushProvider implements PushProvider {
     } catch (error) {
       return { ok: false, invalidToken: false, error: error instanceof Error ? error.message : String(error) };
     }
-    const res = await this.fetchImpl(endpoint.href, { method: 'POST', redirect: 'error', headers: { authorization: `Bearer ${token}`, ...headers }, body });
+    const res = await this.fetchImpl(endpoint.href, { method: 'POST', redirect: 'manual', headers: { authorization: `Bearer ${token}`, ...headers }, body });
     if (res.ok) return { ok: true };
     if (res.status === 401) tokenCache.delete(creds.sid);
     // 404: the channel URI is not valid; 410: the channel expired. Either way the device must re-register
