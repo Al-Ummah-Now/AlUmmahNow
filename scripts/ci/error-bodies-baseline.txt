@@ -213,7 +213,7 @@ apps/api-videos/src/endpoints/video/videoSearch.ts 3
 apps/api-videos/src/endpoints/video/videoThumbnailUpload.ts 9
 apps/api-videos/src/endpoints/video/videoTrash.ts 3
 apps/api-videos/src/endpoints/video/videoUpdate.ts 5
-apps/api-videos/src/endpoints/video/videoUpload.ts 7
+apps/api-videos/src/endpoints/video/videoUpload.ts 6
 apps/api-videos/src/endpoints/video/videoUploadStatus.ts 3
 apps/api-videos/src/endpoints/video/videoView.ts 3
 apps/api-videos/src/endpoints/video/videoWatchTime.ts 2
