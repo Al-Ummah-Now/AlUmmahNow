@@ -55,8 +55,10 @@ const SVG_ELEMENTS = new Set([
 
 /** Why an SVG is unsafe to serve from the site, or undefined. */
 export function svgProblem(text: string): string | undefined {
-  const svg = text.trim().replace(/^<\?xml\s+version=["']1\.0["'](?:\s+encoding=["']UTF-8["'])?\s*\?>/i, '')
-    .replace(/<!--[^]*?-->/g, '').trim();
+  if (text.includes('<!--')) return 'contains an SVG comment';
+  const trimmed = text.trim();
+  const declaration = /^<\?xml\s+version=["']1\.0["'](?:\s+encoding=["']UTF-8["'])?\s*\?>/i.exec(trimmed);
+  const svg = trimmed.slice(declaration?.[0].length ?? 0).trimStart();
   if (!/^<svg[\s/>]/.test(svg)) return 'is not an SVG';
   if (/<[!?]|<script|<foreignObject|\son[a-z]+\s*=|&/i.test(svg)) return 'contains a script or entity';
   if (/(?:href|src)\s*=\s*["'](?!#)/i.test(svg)) return 'contains an external reference';

@@ -339,3 +339,15 @@ test('theme upload limits are enforced with and without Content-Length', async (
   headers.set('content-length', String(MAX_ZIP_BYTES + 1));
   assert.equal(await readThemeUpload({ headers, body: null }), null);
 });
+
+test('theme SVG refuses comments, including nested comment markup', () => {
+  assert.ok(svgProblem('<svg><!-- note --><path /></svg>'));
+  assert.ok(svgProblem('<svg><!<!--- --><path /></svg>'));
+});
+
+test('theme SVG rejects 50,000 comment openers promptly', () => {
+  const text = '<svg>' + '<!--'.repeat(50_000) + '</svg>';
+  const start = performance.now();
+  assert.ok(svgProblem(text));
+  assert.ok(performance.now() - start < 1_000, 'comment validation should finish within one second');
+});
