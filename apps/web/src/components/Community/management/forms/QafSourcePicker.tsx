@@ -45,13 +45,14 @@ function useQafError() {
   };
 }
 
-export function QafSourcePicker({ channelId, postLocale, editor, value, onChange, maxLength }: {
+export function QafSourcePicker({ channelId, postLocale, editor, value, onChange, maxLength, onSelectPassage }: {
   channelId: string;
   postLocale: 'ar' | 'en';
   editor: RefObject<HTMLTextAreaElement | null>;
   value: string;
   onChange: (value: string) => void;
   maxLength: number;
+  onSelectPassage?: (passage: QafPassage) => void;
 }) {
   const { t, dir } = useLanguage();
   const copy = t.community.sources;
@@ -81,6 +82,11 @@ export function QafSourcePicker({ channelId, postLocale, editor, value, onChange
         <DialogTitle className="pe-10">{copy.find}</DialogTitle>
         <DialogDescription>{copy.hint}</DialogDescription>
         <SourceSearch key={postLocale} channelId={channelId} postLocale={postLocale} topic={topic} onInsert={(passage) => {
+          if (onSelectPassage) {
+            onSelectPassage(passage);
+            setOpen(false);
+            return true;
+          }
           const quote = writeQafQuote(passage.text, citation(passage, postLocale), passage.url);
           const candidate = value.trimEnd() ? `${value.trimEnd()}\n\n${quote}` : quote;
           if (candidate.length > maxLength) return false;

@@ -49,7 +49,7 @@ test('Quran cards keep synced text byte-exact, cite the verse and expire with th
   const result = await readQuranCard(bucket, source, 'ar', now);
   assert.ok(result);
   assert.deepEqual(Buffer.from(result.copy.text), Buffer.from(text));
-  assert.equal(result.copy.citation, 'سورة البقرة · الآية ١');
+  assert.equal(result.copy.citation, 'سورة البقرة، الآية ١');
   assert.match(result.copy.credit ?? '', /quran\.foundation/u);
   assert.equal(await readQuranCard(bucket, source, 'ar', now + QURAN_MAX_STALE_MS + 1), null);
   clearQuranCopyCache();

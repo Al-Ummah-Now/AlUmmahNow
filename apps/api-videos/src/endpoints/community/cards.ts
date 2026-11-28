@@ -10,7 +10,7 @@ import { authorizeCard, CARD_JOB, cardImageKey, cardRequest, enqueueCard, flagCa
 const channel = z.object({ channelId: z.string().min(1).max(128).regex(/^[\w-]+$/u) });
 const response = { description: 'Card publish job', content: { 'application/json': { schema: z.any() } } };
 
-function cardsConfigured(env: AppContext['env']) {
+export function cardsConfigured(env: AppContext['env']) {
   return !!(env.CARD_PUBLIC_ORIGIN && env.CARD_RENDER_ACCOUNT && env.CARD_RENDER_TOKEN && env.MEDIA_PRIVATE && env.ADMIN_JOBS_QUEUE);
 }
 
@@ -70,7 +70,7 @@ export class PublishCard extends AuthenticatedRoute {
     }
     const job = await enqueueCard(c.env, params.channelId, auth.userId, { ...body, roles, origin });
     if (job.status === 'failed') flagCardPublishFailed(c.env, job, job.lastError ?? 'Card could not be queued');
-    return c.json({ id: job.id, postId: body.id, status: job.status }, 202);
+    return c.json({ id: job.id, postId: job.params.id, status: job.status }, 202);
   }
 }
 
@@ -111,7 +111,10 @@ export class CardImage extends PublicRoute {
     }
     const current = post.designedCard.quran && await readQuranCurrent(bucket);
     if (post.designedCard.quran && !current) return c.notFound();
-    const image = await bucket.get(cardImageKey(channelId, cardId, current?.version));
+    const rawPage = c.req.query('page');
+    if (rawPage !== undefined && !/^(?:[1-9]|[1-3][0-9]|40)$/u.test(rawPage)) return c.notFound();
+    const page = rawPage === undefined ? undefined : Number(rawPage) - 1;
+    const image = await bucket.get(cardImageKey(channelId, cardId, current?.version, page));
     if (!image) {
       if (current) await queueQuranCardRefresh(c.env, post, current.version);
       c.header('Cache-Control', 'private, no-store');

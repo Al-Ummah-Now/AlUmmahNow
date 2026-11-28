@@ -54,7 +54,7 @@ export async function writeCommunityPost(
 	c: WaitUntilContext & { env: WritePostEnv },
 	post: CommunityPost,
 	actor: { userId: string; channelId?: string },
-	options: { announce?: boolean } = {},
+	options: { skipSocial?: boolean } = {},
 ): Promise<CommunityPost> {
 	const env = c.env;
 	const channelId = post.channelId;
@@ -77,12 +77,13 @@ export async function writeCommunityPost(
 		await queueImageScan(env as never, gate, { subject: 'post', subjectId: `${channelId}/${post.id}`, reviewId, ownerId: post.userId, channelId, images: imageUrls.slice(0, 10), text: communityPostScanText(post) });
 	}
 	// Notifications and social (if published; a post held for review is announced when it clears)
-	if (options.announce !== false && post.status === PostStatus.PUBLISHED && !gate?.holds) {
+	if (post.status === PostStatus.PUBLISHED && !gate?.holds) {
 		await new Queue(env.queue as never).send(MessageType.CommunityPostCreated, {
 			postId: post.id,
 			channelId,
 			actor,
 			timestamp: post.createdAt,
+			...(options.skipSocial ? { skipSocial: true } : {}),
 		});
 	}
 	scanInBackground(c as never, { surface: 'community_post', event: 'create', subjectId: post.id, authorId: actor.userId, channelId, text: communityPostScanText(post) });

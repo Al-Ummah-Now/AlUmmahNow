@@ -18,6 +18,7 @@ interface PostTypeSelectorProps {
   selected: PostType | null;
   onSelect: (type: PostType) => void;
   locale: string;
+  allowCards?: boolean;
 }
 
 interface PostTypeCard {
@@ -81,7 +82,7 @@ const POST_TYPES: PostTypeCard[] = [
     type: PostType.CARDS,
     icon: GalleryHorizontal,
     label: { en: 'Cards', ar: 'بطاقات' },
-    description: { en: 'Share up to 40 image cards', ar: 'شارك حتى ٤٠ بطاقة مصوّرة' }
+    description: { en: 'Design a card from a verse, quote or message', ar: 'صمّم بطاقة من آية أو اقتباس أو رسالة' }
   },
   {
     type: PostType.LINK,
@@ -91,7 +92,7 @@ const POST_TYPES: PostTypeCard[] = [
   }
 ];
 
-export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelectorProps) {
+export function PostTypeSelector({ selected, onSelect, locale, allowCards = true }: PostTypeSelectorProps) {
   const isRTL = locale === 'ar';
 
   return (
@@ -106,7 +107,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
       gap-3                /* Mobile: compact gaps */
       md:gap-4             /* Desktop: larger gaps */
     ">
-      {POST_TYPES.map((postType) => {
+      {POST_TYPES.filter(({ type }) => allowCards || type !== PostType.CARDS).map((postType) => {
         const Icon = postType.icon;
         const isSelected = selected === postType.type;
         const label = isRTL ? postType.label.ar : postType.label.en;

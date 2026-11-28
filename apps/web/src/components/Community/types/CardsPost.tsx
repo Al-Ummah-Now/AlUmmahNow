@@ -1,5 +1,6 @@
 'use client';
 
+import TextPost from './TextPost';
 import { useRef, useState } from 'react';
 import { CommunityPost, fillTemplate } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -15,7 +16,7 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
   const strip = useRef<HTMLOListElement>(null);
   const [current, setCurrent] = useState(0);
   const slides = post.slides ?? [];
-  if (slides.length === 0) return null;
+  if (slides.length === 0 && !post.designedCard) return null;
   const lang = post.locale ?? undefined;
 
   const go = (i: number) => {
@@ -38,7 +39,7 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
           {slides.map((s, i) => {
             const safeImg = safeImageUrl(s.image.url);
             return (
-              <li key={s.id} className="relative shrink-0 w-full snap-start aspect-[4/5] bg-[var(--fanous-color-surface-raised)]" aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length }, pageLang)}>
+              <li key={s.id} className="relative shrink-0 w-full snap-start bg-[var(--fanous-color-surface-raised)]" style={{ aspectRatio: post.designedCard && s.image.width && s.image.height ? s.image.width / s.image.height : 4 / 5 }} aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length }, pageLang)}>
                 {safeImg ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={safeImg} alt={s.image.alt ?? ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" className="absolute inset-0 w-full h-full object-cover" />
@@ -67,6 +68,11 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
           </div>
         ) : null}
       </div>
+      {post.designedCard?.quran && <>
+        <p dir="auto" className="whitespace-pre-wrap break-words">{post.content}</p>
+        <a href="https://quran.foundation/" className="underline">{post.locale === 'ar' ? 'مؤسسة القرآن' : 'Quran Foundation'}</a>
+      </>}
+      {post.designedCard && !post.designedCard.quran && <TextPost post={post} />}
     </section>
   );
 }

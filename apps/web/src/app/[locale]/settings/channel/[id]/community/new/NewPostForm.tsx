@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
@@ -22,7 +22,7 @@ import { QuizPostForm, QuizFormData } from '@/components/Community/management/fo
 import { VideoPostForm } from '@/components/Community/management/forms/VideoPostForm';
 import { GifPostForm, GifData } from '@/components/Community/management/forms/GifPostForm';
 import { ArticlePostForm, ArticleFormData, emptyArticle } from '@/components/Community/management/forms/ArticlePostForm';
-import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community/management/forms/CardsPostForm';
+import { DesignedCardForm, cardAction } from '@/components/Community/management/forms/DesignedCardForm';
 import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
 import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
 import { tooLargeMessage } from '@/lib/community/upload-limits';
@@ -74,7 +74,14 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
   // PostV2 (post-schema.ts): every post has a language; articles, cards and links have their own fields
   const [postLocale, setPostLocale] = useState<'en' | 'ar'>(locale === 'ar' ? 'ar' : 'en');
   const [article, setArticle] = useState<ArticleFormData>(emptyArticle);
-  const [cards, setCards] = useState<CardsFormData>(emptyCards);
+  const [cardChannel, setCardChannel] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    cardAction<{ enabled: boolean }>(id, '', undefined, controller.signal)
+      .then(({ enabled }) => { if (!controller.signal.aborted) setCardChannel(enabled ? id : null); })
+      .catch(() => { if (!controller.signal.aborted) setCardChannel(null); });
+    return () => controller.abort();
+  }, [id]);
   const [link, setLink] = useState<LinkFormData>(emptyLink);
 
   const validatePost = (): string | null => {
@@ -119,12 +126,6 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
       case PostType.ARTICLE:
         if (!article.title.trim()) return t.community.errorTitle;
         if (!article.body.trim()) return t.community.errorBody;
-        break;
-
-      case PostType.CARDS:
-        if (!cards.title.trim()) return t.community.errorTitle;
-        if (!cards.cards.some((c) => c.image)) return t.community.errorCards;
-        if (cards.cards.some((c) => c.image && !c.image.alt?.trim())) return t.community.errorAlt;
         break;
 
       case PostType.LINK:
@@ -187,13 +188,6 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             body: article.body,
             cover: article.cover
           };
-          break;
-
-        case PostType.CARDS:
-          baseData.title = cards.title.trim();
-          baseData.slides = cards.cards
-            .filter((c) => c.image)
-            .map((c) => ({ id: c.id, image: c.image, heading: c.heading.trim() || null, body: c.body.trim() || null, position: c.position }));
           break;
 
         case PostType.LINK:
@@ -306,7 +300,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           </div>
 
           {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish is offered */}
-          <div className="flex gap-2">
+          {selectedType !== PostType.CARDS && <div className="flex gap-2">
             <Button
               onClick={handlePublish}
               disabled={loading || !selectedType}
@@ -314,7 +308,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
               {loading && <Loader2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0 animate-spin" />}
               {isRTL ? 'نشر' : 'Publish'}
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -331,7 +325,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           lg:grid-cols-3
           gap-6 md:gap-8
         ">
-          <div className="lg:col-span-2 space-y-6">
+          <div className={selectedType === PostType.CARDS ? "lg:col-span-3 space-y-6" : "lg:col-span-2 space-y-6"}>
             <Card className="p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold mb-4">
                 {isRTL ? 'اختر نوع المنشور' : 'Select Post Type'}
@@ -339,6 +333,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
               <PostTypeSelector
                 selected={selectedType}
                 onSelect={setSelectedType}
+                allowCards={cardChannel === id}
                 locale={locale}
               />
             </Card>
@@ -412,7 +407,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 )}
 
                 {selectedType === PostType.CARDS && (
-                  <CardsPostForm channelId={id} data={cards} onChange={setCards} postLocale={postLocale} />
+                  <>
+                    <label className="mb-4 flex w-fit items-center gap-2 text-sm">
+                      {t.community.postLanguage}
+                      <select className="rounded-md border bg-background p-2" value={postLocale} onChange={(event) => setPostLocale(event.target.value === 'ar' ? 'ar' : 'en')}>
+                        <option value="en">English</option><option value="ar">العربية</option>
+                      </select>
+                    </label>
+                    <DesignedCardForm channelId={id} locale={postLocale} onPublished={() => router.push(`/${locale}/settings/channel/${id}/community`)} />
+                  </>
                 )}
 
                 {selectedType === PostType.LINK && (
@@ -426,7 +429,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             )}
           </div>
 
-          <div className="space-y-6">
+          {selectedType !== PostType.CARDS && <div className="space-y-6">
             <Card className="p-4 md:p-6">
               <h3 className="text-base md:text-lg font-semibold mb-4">
                 {isRTL ? 'الإعدادات' : 'Settings'}
@@ -488,7 +491,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 </div>
               </div>
             </Card>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

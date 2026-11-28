@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CardCopy } from './source';
+import { cardTypeSize } from './paginate';
 
 const palettes = {
   fawanees: [
@@ -78,25 +79,24 @@ main { --accent:${accent}; --panel:${panel}; position:relative; width:100%; heig
   display:grid; grid-template-rows:minmax(0,1fr) auto; gap:30px;
   background:radial-gradient(ellipse at 50% 28%, var(--panel), transparent 72%); }
 blockquote, footer { z-index:1; margin:0; min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
-blockquote { align-self:stretch; display:grid; align-content:center; font-size:76px; line-height:1.42; }
+blockquote { align-self:stretch; display:grid; align-content:center; font-size:${cardTypeSize[design.format]}px; line-height:1.42; }
+blockquote:has(> bdi:dir(rtl)) { line-height:1.86; }
 bdi:dir(rtl) { font-family:Amiri,SourceSerif,serif; }
 footer { font-size:29px; line-height:1.38; }
+footer .page { float:inline-end; margin-inline-start:12px; color:var(--accent); }
 footer small { display:block; font-size:.82em; margin-top:7px; }
 ${styles[design.template]}
 </style>
-<main><blockquote><bdi dir="auto">${escape(copy.text)}</bdi></blockquote><footer><bdi dir="auto">${escape(copy.citation)}</bdi>${copy.credit ? `<small><bdi dir="auto">${escape(copy.credit)}</bdi></small>` : ''}</footer></main>
+<main><blockquote><bdi dir="auto">${escape(copy.text)}</bdi></blockquote><footer>${copy.pageLabel ? `<bdi class="page" dir="ltr">${escape(copy.pageLabel)}</bdi>` : ''}<bdi dir="auto">${escape(copy.citation)}</bdi>${copy.credit ? `<small><bdi dir="auto">${escape(copy.credit)}</bdi></small>` : ''}</footer></main>
 <script>
 (async () => {
   await Promise.all([document.fonts.load('32px Amiri', 'ع'), document.fonts.load('32px SourceSerif', 'A')]);
   await document.fonts.ready;
   const body = document.querySelector('blockquote');
   const footer = document.querySelector('footer');
-  for (let size = 76; size >= 22; size -= 2) {
-    body.style.fontSize = size + 'px';
-    if (body.scrollHeight <= body.clientHeight && footer.getBoundingClientRect().bottom <= ${height} - 50) {
-      document.documentElement.dataset.cardReady = 'true';
-      return;
-    }
+  if (body.scrollHeight <= body.clientHeight && footer.getBoundingClientRect().bottom <= ${height} - 50) {
+    document.documentElement.dataset.cardReady = 'true';
+    return;
   }
   document.documentElement.dataset.cardReady = 'overflow';
 })().catch(() => { document.documentElement.dataset.cardReady = 'font-error'; });

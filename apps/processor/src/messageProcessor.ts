@@ -932,9 +932,10 @@ export class MessageProcessor {
   private async processCommunityPostMessage(message: AlUmmahMessage, env?: QueueEnvironment): Promise<void> {
     this.logger.debug(`Processing community post message: ${MessageType[message.type]}`, message.payload);
 
-    const { postId, channelId, actor } = message.payload as {
+    const { postId, channelId, actor, skipSocial } = message.payload as {
       postId: string;
       channelId: string;
+      skipSocial?: boolean;
       actor?: { userId: string; channelId?: string };
     };
 
@@ -947,7 +948,7 @@ export class MessageProcessor {
       case MessageType.CommunityPostCreated:
         this.logger.debug(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
         // A new post (or a scheduled one reaching its time) is announced to social; api-videos checks it is public
-        if (env) await this.announceToSocial(env, { channelId, event: 'post', entityId: postId });
+        if (env && !skipSocial) await this.announceToSocial(env, { channelId, event: 'post', entityId: postId });
         break;
       case MessageType.CommunityPostUpdated:
         this.logger.debug(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });
