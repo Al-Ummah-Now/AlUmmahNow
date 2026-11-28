@@ -7,6 +7,7 @@ import type { SocialDeliveryView } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { linkFixes, reasonKey, socialClient } from '@/lib/studio/social-client';
+import { safeHttpUrl } from '@/lib/security/safe-input';
 import { NetworkMark, Notice, Pill, Section } from './shared';
 import { RelativeDate } from '@/components/RelativeDate';
 
@@ -56,27 +57,31 @@ export function SocialDeliveries({ channelId, locale, deliveries, onDeliveries }
                   </div>
                   <span className="shrink-0"><Pill tone={TONE[item.status]}>{d.status[item.status]}</Pill></span>
                 </div>
-                {(item.remoteUrl && item.status === 'sent') || item.status === 'failed' ? (
-                  <div className="flex flex-wrap gap-2 ps-11 sm:ps-0">
-                    {item.remoteUrl && item.status === 'sent' ? (
-                      <a href={item.remoteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm underline-offset-4 hover:underline sm:min-h-9">
-                        {d.open}
-                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                      </a>
-                    ) : null}
-                    {item.status === 'failed' ? (
-                      linkFixes(item.error) && item.format === 'video' ? (
-                        <Button type="button" size="sm" variant="secondary" className="min-h-11 sm:min-h-9" disabled={busy === item.id} onClick={() => void retry(item, true)} data-testid="social-delivery-retry-link">
-                          {d.retryAsLink}
-                        </Button>
-                      ) : (
-                        <Button type="button" size="sm" variant="secondary" className="min-h-11 sm:min-h-9" disabled={busy === item.id} onClick={() => void retry(item, false)} data-testid="social-delivery-retry">
-                          {d.retry}
-                        </Button>
-                      )
-                    ) : null}
-                  </div>
-                ) : null}
+                {(() => {
+                  const safeRemoteUrl = item.status === 'sent' ? safeHttpUrl(item.remoteUrl) : null;
+                  if (!safeRemoteUrl && item.status !== 'failed') return null;
+                  return (
+                    <div className="flex flex-wrap gap-2 ps-11 sm:ps-0">
+                      {safeRemoteUrl ? (
+                        <a href={safeRemoteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm underline-offset-4 hover:underline sm:min-h-9">
+                          {d.open}
+                          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        </a>
+                      ) : null}
+                      {item.status === 'failed' ? (
+                        linkFixes(item.error) && item.format === 'video' ? (
+                          <Button type="button" size="sm" variant="secondary" className="min-h-11 sm:min-h-9" disabled={busy === item.id} onClick={() => void retry(item, true)} data-testid="social-delivery-retry-link">
+                            {d.retryAsLink}
+                          </Button>
+                        ) : (
+                          <Button type="button" size="sm" variant="secondary" className="min-h-11 sm:min-h-9" disabled={busy === item.id} onClick={() => void retry(item, false)} data-testid="social-delivery-retry">
+                            {d.retry}
+                          </Button>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })()}
               </li>
             );
           })}

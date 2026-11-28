@@ -5,6 +5,7 @@ import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 import { RETURN_COOKIE, SILENT_COOKIE, parsePrompt, safeReturnPath } from '@/lib/auth/silent-sign-in';
 import { PKCE_COOKIE, STATE_COOKIE, newStateNonce, pkceCookieValue, stateCookieOptions, withState } from '@/lib/auth/oauth-state';
+import { isLocalHostHeader } from '@/lib/security/safe-input';
 
 /**
  * GET /api/auth/login?prompt=none|login&return=/en/watch/...&locale=en
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   const returnPath = safeReturnPath(url.searchParams.get('return'));
 
   const host = req.headers.get('host') ?? url.host;
-  const protocol = host.includes('localhost') ? 'http' : 'https';
+  const protocol = isLocalHostHeader(host) ? 'http' : 'https';
   const { url: authorizeUrl, challenge } = await getOpenAuthClient().authorize(`${protocol}://${host}/api/callback`, 'code', { pkce: true });
   // Bind the callback to this browser (login CSRF)
   const nonce = newStateNonce();

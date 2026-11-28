@@ -2,6 +2,7 @@
 
 import { CommunityPost } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { safeHttpUrl, safeImageUrl } from '@/lib/security/safe-input';
 
 const hostOf = (url: string) => {
   try {
@@ -15,23 +16,25 @@ const hostOf = (url: string) => {
 export default function LinkPost({ post }: { post: CommunityPost }) {
   const { t } = useLanguage();
   const l = post.link;
-  if (!l || !/^https?:\/\//i.test(l.url)) return null;
+  const safeHref = l ? safeHttpUrl(l.url) : null;
+  if (!l || !safeHref) return null;
+  const safeImg = l.image ? safeImageUrl(l.image.url) : null;
   return (
     <div className="space-y-3" data-testid="community-link">
       {post.content ? <p className="text-[var(--fanous-color-text-primary)] whitespace-pre-wrap break-words" dir="auto">{post.content}</p> : null}
       <a
-        href={l.url}
+        href={safeHref}
         target="_blank"
         rel="noopener noreferrer nofollow ugc"
         className="flex gap-3 border border-[var(--fanous-color-divider)] rounded-lg overflow-hidden hover:border-[var(--fanous-color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-focus-ring)]"
       >
-        {l.image ? (
+        {safeImg ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={l.image.url} alt="" loading="lazy" decoding="async" className="w-28 h-28 object-cover shrink-0 bg-[var(--fanous-color-surface-raised)]" />
+          <img src={safeImg} alt="" loading="lazy" decoding="async" className="w-28 h-28 object-cover shrink-0 bg-[var(--fanous-color-surface-raised)]" />
         ) : null}
         <span className="p-3 space-y-1 min-w-0 text-start">
-          <span className="block text-xs text-[var(--fanous-color-text-muted)]" dir="auto" data-testid="community-link-site">{l.siteName || hostOf(l.url)}</span>
-          <span className="block font-semibold text-[var(--fanous-color-text-primary)] break-words [text-wrap:balance]" dir="auto">{l.title || l.url}</span>
+          <span className="block text-xs text-[var(--fanous-color-text-muted)]" dir="auto" data-testid="community-link-site">{l.siteName || hostOf(safeHref)}</span>
+          <span className="block font-semibold text-[var(--fanous-color-text-primary)] break-words [text-wrap:balance]" dir="auto">{l.title || safeHref}</span>
           {l.description ? <span className="block text-sm text-[var(--fanous-color-text-secondary)] line-clamp-2 break-words [text-wrap:balance]" dir="auto">{l.description}</span> : null}
           <span className="sr-only">({t.community.opensOutside})</span>
         </span>

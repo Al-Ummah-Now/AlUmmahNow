@@ -4,6 +4,7 @@
 
 import type { EmbedLang } from './params';
 import { formatClock, type FormatLocale } from '@al-ummah/shared-types';
+import { safeHttpUrl } from '@/lib/security/safe-input';
 
 export type EmbedKind = 'video' | 'playlist';
 
@@ -78,22 +79,25 @@ export function escapeHtmlAttr(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
 export function iframeSnippet(src: string, size: EmbedSize, title: string): string {
+  const safeSrc = safeHttpUrl(src) ?? 'about:blank';
   return (
-    `<iframe src="${escapeHtmlAttr(src)}" width="${size.width}" height="${size.height}" ` +
+    `<iframe src="${escapeHtmlAttr(safeSrc)}" width="${size.width}" height="${size.height}" ` +
     `title="${escapeHtmlAttr(title)}" frameborder="0" loading="lazy" allow="${IFRAME_ALLOW}" allowfullscreen ` +
     `referrerpolicy="strict-origin-when-cross-origin"></iframe>`
   );
 }
 
 export function responsiveSnippet(src: string, title: string): string {
+  const safeSrc = safeHttpUrl(src) ?? 'about:blank';
   return (
     `<div style="position:relative;width:100%;aspect-ratio:16/9">` +
-    `<iframe src="${escapeHtmlAttr(src)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" ` +
+    `<iframe src="${escapeHtmlAttr(safeSrc)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" ` +
     `title="${escapeHtmlAttr(title)}" loading="lazy" allow="${IFRAME_ALLOW}" allowfullscreen ` +
     `referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
   );

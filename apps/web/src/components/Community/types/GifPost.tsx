@@ -1,6 +1,7 @@
 'use client';
 
 import { CommunityPost } from '@al-ummah/shared-types';
+import { safeImageUrl } from '@/lib/security/safe-input';
 import Image from 'next/image';
 
 interface GifPostProps {
@@ -10,7 +11,8 @@ interface GifPostProps {
 }
 
 export default function GifPost({ post }: GifPostProps) {
-  if (!post.gif) return null;
+  const safeGifUrl = post.gif ? safeImageUrl(post.gif.url) : null;
+  if (!post.gif || !safeGifUrl) return null;
 
   return (
     <div className="space-y-3">
@@ -25,7 +27,7 @@ export default function GifPost({ post }: GifPostProps) {
       <div className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
         <div className="relative w-full" style={{ paddingBottom: `${(post.gif.height / post.gif.width) * 100}%` }}>
           <Image
-            src={post.gif.url}
+            src={safeGifUrl}
             alt="Animated GIF"
             fill
             className="object-contain"

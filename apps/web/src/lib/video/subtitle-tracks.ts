@@ -7,6 +7,7 @@
 
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import type { ApiSubtitleTrack } from '@/lib/api/subtitle-utils';
+import { safeHttpUrl, safeSameOriginPath } from '@/lib/security/safe-input';
 
 export interface PlayerTextTrack {
   src: string;
@@ -42,15 +43,26 @@ export function toPlayerTextTracks(
 
   return tracks
     .filter((track) => track && track.language && (track.status === undefined || track.status === 'ready'))
-    .map((track) => {
-      const src = track.url
-        ? (/^https?:\/\//i.test(track.url) ? track.url : `${apiBase}${track.url.startsWith('/') ? '' : '/'}${track.url}`)
-        : `${apiBase}/api/videos/${encodeURIComponent(options.videoId)}/subtitles/${encodeURIComponent(track.language)}`;
+    .flatMap((track) => {
+      let src: string | null;
+      if (track.url) {
+        const external = safeHttpUrl(track.url);
+        if (external) {
+          src = external;
+        } else {
+          const normalized = track.url.startsWith('/') ? track.url : `/${track.url}`;
+          const safeRel = safeSameOriginPath(normalized);
+          src = safeRel && !/^[a-z][a-z0-9+.-]*:/i.test(track.url.trim()) ? `${apiBase}${safeRel}` : null;
+        }
+      } else {
+        src = `${apiBase}/api/videos/${encodeURIComponent(options.videoId)}/subtitles/${encodeURIComponent(track.language)}`;
+      }
+      if (!src) return [];
 
       const isDefault = !!track.isDefault && !defaultAssigned;
       if (isDefault) defaultAssigned = true;
 
-      return {
+      return [{
         src,
         srclang: track.language,
         label: track.machineTranslation && options.machineLabel
@@ -58,7 +70,7 @@ export function toPlayerTextTracks(
           : getSubtitleLabel(track.language, options.uiLocale, track.label),
         kind: track.kind === 'captions' ? 'captions' : 'subtitles',
         default: isDefault,
-      } satisfies PlayerTextTrack;
+      } satisfies PlayerTextTrack];
     });
 }
 
@@ -68,6 +80,8 @@ export function toPlayerTextTracks(
  * file (QF 2026-11-22). Null for a track served from anywhere else.
  */
 export function captionDownloadHref(src: string): string | null {
-  const m = /^(.*\/api\/(?:v1\/)?videos\/[^/?#]+\/subtitles\/[^/?#]+)(?:[?#].*)?$/.exec(src);
+  const safe = safeHttpUrl(src) ?? safeSameOriginPath(src);
+  if (!safe) return null;
+  const m = /^(.*\/api\/(?:v1\/)?videos\/[^/?#]+\/subtitles\/[^/?#]+)(?:[?#].*)?$/.exec(safe);
   return m ? `${m[1]}/download` : null;
 }

@@ -58,9 +58,12 @@ function renderNotification(data) {
 
 // Server action URLs are locale-less ("/video/123"): same rule as localizeActionUrl
 function openUrl(url, lang) {
-  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) return '/' + lang + '/notifications';
+  const safeLang = lang === 'ar' ? 'ar' : 'en';
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || url.includes('\\') || /[\u0000-\u001F\u007F]/.test(url)) {
+    return '/' + safeLang + '/notifications';
+  }
   if (/^\/(en|ar)(\/|$|\?)/.test(url)) return url;
-  return '/' + lang + url;
+  return '/' + safeLang + url;
 }
 
 function parse(event) {
@@ -112,7 +115,14 @@ self.addEventListener('push', (event) => event.waitUntil(show(parse(event))));
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  const raw = (event.notification.data && event.notification.data.url) || '/';
+  let parsed;
+  try {
+    parsed = new URL(typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') ? raw : '/', self.location.origin);
+  } catch (e) {
+    parsed = new URL('/', self.location.origin);
+  }
+  const target = parsed.origin === self.location.origin ? parsed.href : new URL('/', self.location.origin).href;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

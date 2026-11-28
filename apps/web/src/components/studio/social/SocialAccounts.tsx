@@ -25,6 +25,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { socialClient, type ConnectResult } from '@/lib/studio/social-client';
 import type { SocialOverview } from '@/lib/studio/social';
+import { safeHttpUrl } from '@/lib/security/safe-input';
 import { CopyButton, NetworkMark, Notice, Pill, Section, fill } from './shared';
 
 interface Props {
@@ -75,8 +76,11 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
     setBusy(null);
     if (!r.ok) return setMessage({ tone: 'error', text: errorText(r.code) });
     const result: ConnectResult = r.data;
-    if (result.kind === 'redirect') window.location.assign(result.authorizeUrl);
-    else setPending({ network: 'telegram', code: result.code, bot: `@${result.botUsername}` });
+    if (result.kind === 'redirect') {
+      const target = safeHttpUrl(result.authorizeUrl);
+      if (target) window.location.assign(target);
+      else setMessage({ tone: 'error', text: s.errors.generic });
+    } else setPending({ network: 'telegram', code: result.code, bot: `@${result.botUsername}` });
   }
 
   function onConnect(network: SocialNetwork) {
@@ -218,14 +222,17 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
                 {/* Name and handle line up at the start of the card in either language; bdi keeps each one's own direction */}
                 <h3 id={`acc-${account.id}`} className="break-words text-start font-medium"><bdi>{account.displayName || account.handle}</bdi></h3>
                 <p className="truncate text-start text-sm text-[var(--fanous-color-text-secondary)]">
-                  {account.profileUrl ? (
-                    <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+                  {(() => {
+                    const safeProfileUrl = safeHttpUrl(account.profileUrl);
+                    return safeProfileUrl ? (
+                      <a href={safeProfileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+                        <bdi dir="ltr">{account.handle}</bdi>
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                      </a>
+                    ) : (
                       <bdi dir="ltr">{account.handle}</bdi>
-                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                    </a>
-                  ) : (
-                    <bdi dir="ltr">{account.handle}</bdi>
-                  )}
+                    );
+                  })()}
                 </p>
               </div>
               <Pill tone={statusTone(account.status)} testId="social-account-status">{a.status[account.status]}</Pill>

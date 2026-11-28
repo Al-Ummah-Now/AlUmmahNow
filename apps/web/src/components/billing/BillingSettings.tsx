@@ -26,6 +26,7 @@ import { formatAbsoluteDate } from '@/lib/format/videoMeta';
 import { formatBillingAmount } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
+import { safeNavigationUrl } from '@/lib/security/safe-input';
 
 import { MetaSep } from '@/components/ui/MetaSep';
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; billing: MyBilling };
@@ -104,8 +105,9 @@ export function BillingSettings() {
     setPortalBusy(true);
     setFailure(null);
     const res = await openBillingPortal();
-    if (res.ok && res.result?.url) {
-      window.location.assign(res.result.url);
+    const portalUrl = res.ok ? safeNavigationUrl(res.result?.url, { allowRelative: true }) : null;
+    if (portalUrl) {
+      window.location.assign(portalUrl);
       return;
     }
     logger.warn('[billing] Portal not opened', { status: res.status, code: res.code });

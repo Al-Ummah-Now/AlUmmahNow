@@ -28,6 +28,7 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { deleteSitePage, previewSiteSettings, restoreSitePage, saveSitePage, uploadSiteImage } from '@/lib/studio/site-client';
+import { safeHttpUrl, safeImageUrl } from '@/lib/security/safe-input';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Props {
@@ -116,9 +117,10 @@ export function SitePageEditor({ locale, channelId, siteLocales, initial }: Prop
     setBusy('preview');
     const r = await previewSiteSettings(channelId, {});
     setBusy(null);
-    if (!r.ok) return setStatus({ tone: 'error', text: p.errors.generic });
-    const u = new URL(r.data.url);
-    u.pathname = `/${tab}/${page.slug}/`;
+    const safeBase = r.ok ? safeHttpUrl(r.data.url) : null;
+    if (!safeBase) return setStatus({ tone: 'error', text: p.errors.generic });
+    const u = new URL(safeBase);
+    u.pathname = `/${tab}/${encodeURIComponent(page.slug)}/`;
     setPreviewUrl(u.toString());
   };
 
@@ -167,10 +169,13 @@ export function SitePageEditor({ locale, channelId, siteLocales, initial }: Prop
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
-              {b.url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={b.url} alt="" className="h-16 w-24 rounded object-cover" />
-              )}
+              {(() => {
+                const safeImg = safeImageUrl(b.url);
+                return safeImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={safeImg} alt="" className="h-16 w-24 rounded object-cover" />
+                ) : null;
+              })()}
               <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 text-sm">
                 {busy === `img:${i}` ? t.studio.site.uploading : t.studio.site.upload}
                 <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" aria-label={p.imageUrl} onChange={(e) => uploadImage(i, e.target.files?.[0])} />

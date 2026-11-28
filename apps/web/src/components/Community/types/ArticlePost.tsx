@@ -2,6 +2,7 @@
 
 import { CommunityPost } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { safeHttpUrl, safeImageUrl } from '@/lib/security/safe-input';
 import PostMarkdown from './PostMarkdown';
 
 interface ArticlePostProps {
@@ -19,8 +20,8 @@ export default function ArticlePost({ post }: ArticlePostProps) {
   const { t, locale } = useLanguage();
   const a = post.article;
   if (!a) return null;
-  const cover = a.cover?.url ?? a.coverUrl;
-  const wwwUrl = post.www?.url ?? a.url;
+  const cover = safeImageUrl(a.cover?.url ?? a.coverUrl);
+  const wwwUrl = safeHttpUrl(post.www?.url ?? a.url);
 
   if (typeof a.body === 'string') {
     return (

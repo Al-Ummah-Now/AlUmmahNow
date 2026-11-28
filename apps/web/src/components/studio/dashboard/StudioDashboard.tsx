@@ -17,6 +17,7 @@ import { can, type StudioRole } from '@/lib/studio/permissions';
 import { legacyHref } from '@/lib/studio/nav';
 import { studioVideoTitle } from '@/lib/studio/videos';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
+import { safeSameOriginPath } from '@/lib/security/safe-input';
 import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 
 /** A summary card's counts: compact and cut ("5.4K"), the number kept on one line with its noun */
@@ -193,12 +194,24 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                   {/* Each line keeps its own text direction (plaintext) but all of them align to the page's start */}
                   <p className="line-clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
-                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
-                    {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
-                    {text.held.on.split('{title}')[0]}
-                    <bdi>{comment.targetTitleLocalized?.[locale]?.trim() || comment.targetTitle}</bdi>
-                    {text.held.on.split('{title}')[1]}
-                  </Link>
+                  {(() => {
+                    const targetPath = safeSameOriginPath(comment.targetUrlPath);
+                    const label = (
+                      <>
+                        {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
+                        {text.held.on.split('{title}')[0]}
+                        <bdi>{comment.targetTitleLocalized?.[locale]?.trim() || comment.targetTitle}</bdi>
+                        {text.held.on.split('{title}')[1]}
+                      </>
+                    );
+                    return targetPath ? (
+                      <Link href={`/${locale}${targetPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
+                        {label}
+                      </Link>
+                    ) : (
+                      <span className="block truncate text-xs text-muted-foreground">{label}</span>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

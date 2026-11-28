@@ -142,7 +142,8 @@ async function requestLocale(): Promise<string> {
 async function requestOrigin(): Promise<string | undefined> {
   try {
     const h = await headers();
-    const host = h.get('x-forwarded-host') || h.get('host');
+    // Use Host only: X-Forwarded-Host is client-controllable on Workers
+    const host = h.get('host');
     if (!host) return undefined;
     // the same origin rule as every page's canonical (originFromHost)
     return originFromHost(host);
