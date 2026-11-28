@@ -256,8 +256,8 @@ jobs:
 
       - name: API unit tests
         run: pnpm --filter @al-ummah/api-videos test:unit
-        # The suite passes in ~180 s and grows with every feature; 3 min killed green runs (main 2026-11-23)
-        timeout-minutes: 6
+        # The suite grows with every feature: ~180 s on 2026-11-23, ~355 s on 2026-11-28, when 6 min killed green runs
+        timeout-minutes: 12
 
       - name: Validate API deployment
         run: |
