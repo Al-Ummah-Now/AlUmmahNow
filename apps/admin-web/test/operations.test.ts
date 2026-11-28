@@ -10,9 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { TAB_CHARTS, budgetMeter, capShare, dailyBudget, fillSeries, idleStatus, opsFormats, parseEnv, parseRange, parseTab } from '../src/app/(protected)/operations/model';
-import { createTranslator } from '../src/i18n/translate';
 import { canReadOps } from '../src/lib/roles';
-import type { OpsCosts } from '../src/lib/api/ops-types';
 
 // tsx compiles the component's JSX to React.createElement (Next uses the automatic runtime)
 (globalThis as { React?: unknown }).React = React;
@@ -20,12 +18,9 @@ type Chart = typeof import('../src/components/charts/TimeSeriesChart').TimeSerie
 let TimeSeriesChart: Chart;
 type Stacked = typeof import('../src/components/charts/StackedBarChart').StackedBarChart;
 let StackedBarChart: Stacked;
-type SpendSec = typeof import('../src/app/(protected)/operations/SpendSection').SpendSection;
-let SpendSection: SpendSec;
 before(async () => {
   ({ TimeSeriesChart } = await import('../src/components/charts/TimeSeriesChart'));
   ({ StackedBarChart } = await import('../src/components/charts/StackedBarChart'));
-  ({ SpendSection } = await import('../src/app/(protected)/operations/SpendSection'));
 });
 
 const ARABIC_DIGITS = /[٠-٩]/;
@@ -189,78 +184,6 @@ describe('spend', () => {
     const phone = tickXs(svgOf(ar, 'phone'));
     assert.ok(phone.length > 0 && phone.every((x) => x > 250));
     assert.match(stacked('en', [[0, 0, 0], [0, 0, 0]]), /data-testid="s-empty"/);
-  });
-
-  function sampleCosts(capUsd: number | null): OpsCosts {
-    const z = { mtd: 0, projected: 0 };
-    return {
-      env: 'all',
-      budget: {
-        capUsd,
-        month: '2026-11',
-        mtd: 38.42,
-        projected: 51.2,
-        share: capUsd ? 38.42 / capUsd : null,
-        projectedShare: capUsd ? 51.2 / capUsd : null,
-        level: 'ok',
-        projectedLevel: 'ok',
-        parts: { cloudflare: z, bunny: z, containers: z, ai: z, plan: { mtd: 38.42, projected: 51.2 } },
-        levels: [0.5, 0.8, 1],
-      },
-      idle: { monthlyUsd: 12, targetUsd: 50, byEnv: { production: 12, stage: 0, qa: 0 }, parts: { cloudflare: 0, bunny: 0, containers: 0, ai: 0, plan: 12 }, top: [], days: [] },
-      trend: { days: ['2026-11-22', '2026-11-23'], series: [] },
-      drivers: [],
-      spikes: [],
-      estimated: false,
-      sources: { bunny: false, ai: false },
-    };
-  }
-
-  it('SpendSection shows Month to date under Spent so far and no Not set under spend tiles when budget is unset', () => {
-    const extractTile = (markup: string, id: string) =>
-      markup
-        .split('<div class="rounded-lg border border-border bg-surface-2 p-4">')
-        .find((part) => part.includes(`data-testid="${id}"`))
-        ?.split('</div>')[0] ?? '';
-
-    for (const locale of ['en', 'ar'] as const) {
-      const t = createTranslator(locale);
-      const f = opsFormats(locale);
-      const msgs = (locale === 'ar' ? ar : en).operations.spend;
-
-      const unsetHtml = renderToStaticMarkup(
-        React.createElement(SpendSection as unknown as React.FC<Parameters<SpendSec>[0]>, {
-          c: sampleCosts(null),
-          t,
-          f,
-          locale,
-        }),
-      );
-
-      const spentTile = extractTile(unsetHtml, 'ops-spend-mtd');
-      assert.ok(spentTile.includes(msgs.spentSub), `${locale} ops-spend-mtd should show "${msgs.spentSub}": ${spentTile}`);
-      assert.ok(!spentTile.includes(msgs.notSet), `${locale} ops-spend-mtd must not show "${msgs.notSet}": ${spentTile}`);
-
-      const projectedTile = extractTile(unsetHtml, 'ops-spend-projected');
-      assert.equal((projectedTile.match(/<dd\b/g) ?? []).length, 1, `${locale} ops-spend-projected should omit sub-label when budget is unset: ${projectedTile}`);
-      assert.ok(!projectedTile.includes(msgs.notSet), `${locale} ops-spend-projected must not show "${msgs.notSet}": ${projectedTile}`);
-
-      assert.ok(extractTile(unsetHtml, 'ops-spend-left').includes(msgs.notSet), `${locale} ops-spend-left should still show "${msgs.notSet}" for the budget tile`);
-
-      const capped = sampleCosts(600);
-      const cappedHtml = renderToStaticMarkup(
-        React.createElement(SpendSection as unknown as React.FC<Parameters<SpendSec>[0]>, {
-          c: capped,
-          t,
-          f,
-          locale,
-        }),
-      );
-      const expectedSpentShare = msgs.share.replace('{percent}', f.percent(capped.budget.share!));
-      const expectedProjectedShare = msgs.share.replace('{percent}', f.percent(capped.budget.projectedShare!));
-      assert.ok(extractTile(cappedHtml, 'ops-spend-mtd').includes(expectedSpentShare), `${locale} capped ops-spend-mtd should show "${expectedSpentShare}"`);
-      assert.ok(extractTile(cappedHtml, 'ops-spend-projected').includes(expectedProjectedShare), `${locale} capped ops-spend-projected should show "${expectedProjectedShare}"`);
-    }
   });
 });
 

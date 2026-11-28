@@ -181,11 +181,13 @@ export function BudgetNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
   );
 }
 
-const KEY_ICON = (
-  <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 shrink-0 text-warning-fg" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 8a4 4 0 1 1-3.5 6L4 21H3v-3l7-7A4 4 0 0 1 15 8zM16 7h.01" />
-  </svg>
-);
+function KeyIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 shrink-0 text-warning-fg" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 8a4 4 0 1 1-3.5 6L4 21H3v-3l7-7A4 4 0 0 1 15 8zM16 7h.01" />
+    </svg>
+  );
+}
 
 /**
  * Cloudflare refuses the collector's token (no Account Analytics Read): the Cloudflare figures
@@ -197,7 +199,7 @@ function RefusedNotice({ d, t, check }: { d: CostsDashboard; t: Translator; chec
   return (
     <section className="cost-banner p-5" role="alert" aria-labelledby="costs-token-title" data-testid="costs-token-banner" data-kind="refused" data-via={via}>
       <h2 id="costs-token-title" className="flex items-start gap-2 text-lg font-semibold text-fg">
-        {KEY_ICON}
+        <KeyIcon />
         <span>{t('costs.token.refusedTitle')}</span>
       </h2>
       <p className="mt-1 max-w-3xl text-sm text-fg" data-testid="costs-token-permission">
