@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isLiveReviewJobMessage } from '@al-ummah/shared-types';
 import { reviewVariant } from '../container/review.mjs';
-import { liveReviewPrefix, liveReviewQueueAction, liveVodSource, liveVodTarget } from '../src/jobs';
+import { fetchLiveVod, liveReviewPrefix, liveReviewQueueAction, liveVodSource, liveVodTarget } from '../src/jobs';
 
 const SID = '11111111-2222-4333-8444-555555555555';
 const BUNNY = 'https://vz-cb79844a-c5d.b-cdn.net/bcdn_token=abc_-&expires=1763000000&token_path=%2Faaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee%2F/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/playlist.m3u8';
@@ -49,6 +49,28 @@ describe('the recording the container may read', () => {
 		const base = 'https://live.qa.alummahnow.net/hls/session/';
 		assert.equal(liveVodTarget(base, '720/./segment.m4s'), null);
 		assert.equal(liveVodTarget(base, '720/segment.m4s?quality=720&v=a%2Fb'), base + '720/segment.m4s?quality=720&v=a%2Fb');
+	});
+
+	it('forwards the recording range and refuses upstream redirects', async (t) => {
+		const base = 'https://live.qa.alummahnow.net/hls/session/';
+		const request = new Request('http://vod.internal/720/segment.m4s', { headers: { Range: 'bytes=0-9' } });
+		const partial = new Response('0123456789', { status: 206, headers: { 'Content-Range': 'bytes 0-9/16' } });
+		const redirected = Response.redirect('https://other.example.test/segment.m4s', 302);
+		const fetcher = t.mock.method(globalThis, 'fetch', async () => partial);
+		fetcher.mock.mockImplementationOnce(async () => redirected, 1);
+		const result = await fetchLiveVod(request, base);
+		assert.equal(result.status, 206);
+		assert.equal(result.headers.get('Content-Range'), 'bytes 0-9/16');
+		assert.equal(await result.text(), '0123456789');
+		const refusal = await fetchLiveVod(request, base);
+		assert.equal(refusal.status, 502);
+		assert.equal(refusal.headers.get('Location'), null);
+		assert.equal(fetcher.mock.callCount(), 2);
+		for (const { arguments: [url, init] } of fetcher.mock.calls) {
+			assert.equal(url, `${base}720/segment.m4s`);
+			assert.equal(init?.redirect, 'manual');
+			assert.equal(new Headers(init?.headers).get('Range'), 'bytes=0-9');
+		}
 	});
 
 	it('review media go under review/<streamId>/<rev>/', () => {

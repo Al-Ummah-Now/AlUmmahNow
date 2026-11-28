@@ -261,6 +261,16 @@ describe('WebPushProvider', () => {
     }
   });
 
+  it('treats a push service redirect as a failed send', async () => {
+    const b = browser();
+    const fetcher = jest.fn(async () =>
+      Response.redirect('https://push.example.test/other-subscription', 307));
+    const provider = new WebPushProvider(env, new LogOnlyPushProvider(), fetcher);
+    expect(await provider.send(target(b.token), message)).toMatchObject({ ok: false, invalidToken: false });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(b.endpoint, expect.objectContaining({ redirect: 'manual' }));
+  });
+
   it('a stored token that is not a subscription is pruned without a request', async () => {
     const { sent, fetchImpl } = recorder();
     expect(await new WebPushProvider(env, new LogOnlyPushProvider(), fetchImpl).send(target('{"endpoint":"x"}'), message)).toMatchObject({ ok: false, invalidToken: true });

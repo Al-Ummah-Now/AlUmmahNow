@@ -68,7 +68,7 @@ export async function fetchReviewImage(fetchImpl: typeof fetch, raw: string): Pr
     return null;
   }
   if (url.protocol !== 'https:' || url.username || url.password || url.port || (!REVIEW_IMAGE_HOSTS.has(url.hostname) && !isBunnyMediaHost(url.hostname))) return null;
-  const res = await fetchImpl(url.href, { headers: { Accept: 'image/*' }, redirect: 'error' });
+  const res = await fetchImpl(url.href, { headers: { Accept: 'image/*' }, redirect: 'manual' });
   if (!res.ok) return null;
   const contentType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0] ?? 'image/jpeg';
   if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return null;

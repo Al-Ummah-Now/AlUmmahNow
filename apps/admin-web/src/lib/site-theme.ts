@@ -38,7 +38,7 @@ export function acceptPackageCss(css: string, id: string): string | null {
 
 async function packageCss(url: string, id: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS), next: { revalidate: PACKAGE_TTL_SECONDS } });
+    const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS), next: { revalidate: PACKAGE_TTL_SECONDS } });
     if (!response.ok) return null;
     return acceptPackageCss(await response.text(), id);
   } catch (error) {
@@ -71,7 +71,7 @@ export async function getSiteTheme(): Promise<ActiveSiteTheme> {
   try {
     const response = await fetch(`${adminApi}/public/site-theme`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      redirect: 'error',
+      redirect: 'manual',
       next: { revalidate: TTL_SECONDS },
     });
     if (!response.ok) return unanswered();

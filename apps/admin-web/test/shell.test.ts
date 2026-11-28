@@ -203,8 +203,8 @@ describe('site theme package CSS', () => {
     try {
       assert.deepEqual(await getSiteTheme(), { id: 'custom-1', css });
       assert.deepEqual(fetches, [
-        { url: api + '/public/site-theme', redirect: 'error' },
-        { url: api + '/public/themes/custom-1/1.2.3/theme.css', redirect: 'error' },
+        { url: api + '/public/site-theme', redirect: 'manual' },
+        { url: api + '/public/themes/custom-1/1.2.3/theme.css', redirect: 'manual' },
       ]);
     } finally {
       globalThis.fetch = originalFetch;
