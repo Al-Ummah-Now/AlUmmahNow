@@ -107,6 +107,8 @@ describe('test collector', () => {
 		assert.equal(await testCollector.verifyWebhook(c, body.replace('tevt_1', 'tevt_2'), headers), null);
 		const stale = await signTestDelivery(body, new Date(NOW.getTime() - 10 * 60_000));
 		assert.equal(await testCollector.verifyWebhook(c, body, stale), null);
+		const invalid = JSON.stringify({ id: 'tevt_1', events: [{ type: 'payment.succeeded', paymentRef: 17 }] });
+		assert.equal(await testCollector.verifyWebhook(c, invalid, await signTestDelivery(invalid, NOW)), null);
 	});
 
 	it('refuses to run without its state store (production never has one)', async () => {
@@ -183,6 +185,8 @@ describe('test rail', () => {
 		const d = await testRail.verifyWebhook(c, body, await signTestRailDelivery(body, NOW));
 		assert.equal((await testRail.normalize(c, d!))[0].type, 'payout.updated');
 		assert.equal(await testRail.verifyWebhook(c, body, new Headers()), null);
+		const invalid = body.replace('"paid"', '"new-status"');
+		assert.equal(await testRail.verifyWebhook(c, invalid, await signTestRailDelivery(invalid, NOW)), null);
 	});
 });
 

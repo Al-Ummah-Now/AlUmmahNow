@@ -124,9 +124,9 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 			.prepare(
 				`SELECT * FROM (${CREATORS_SQL}) ${whereSql}
 				 ORDER BY (${needsTierSql}) DESC, hits7d DESC, (tier_id IS NOT NULL) DESC, videos DESC, channels DESC, lower(COALESCE(display_name, user_name, user_id)), user_id
-				 LIMIT ${pageSize} OFFSET ${offset}`,
+				 LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`,
 			)
-			.bind(...binds)
+			.bind(...binds, pageSize, offset)
 			.all<Row>(),
 		// Distinct users over a week of limit hits (~212k rows on QA under suite load): reused for a minute too
 		Promise.all([

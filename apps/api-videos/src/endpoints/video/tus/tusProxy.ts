@@ -20,7 +20,7 @@ import { can, requestIdOf } from '@al-ummah/shared-types';
 import { roleOnRecord } from '../../../lib/channelAccess';
 import { markExpectedRetry } from '../../../middleware/logging';
 import { getAuthContext } from '../../../middleware/auth';
-import { bunnyTusRequestHeaders, getTusSessionKey, parseTusMetadata, tusUploadIndexKey, type TusProxySession } from '../../../lib/bunny/tus';
+import { bunnyUploadMetadata, bunnyTusRequestHeaders, getTusSessionKey, parseTusMetadata, tusUploadIndexKey, type TusProxySession } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
 import { uploadsToBunny } from '../../../lib/media/ingest';
@@ -38,6 +38,15 @@ const TUS_VERSION = '1.0.0';
 const TUS_MAX_SIZE = 5368709120;
 const TUS_EXTENSIONS = ['creation', 'creation-with-upload', 'termination', 'concatenation'];
 const BUNNY_TUS_ENDPOINT = 'https://video.bunnycdn.com/tusupload';
+
+function bunnyUploadLocation(location: string | null): string | undefined {
+  if (!location) return undefined;
+  const url = URL.parse(location, BUNNY_TUS_ENDPOINT);
+  if (url?.origin === new URL(BUNNY_TUS_ENDPOINT).origin && !url.username && !url.password &&
+      url.pathname.startsWith('/tusupload/') && !url.hash) return url.href;
+  return undefined;
+}
+
 
 /**
  * How long a proxy upload session lives. It is written once (POST) and only
@@ -468,8 +477,7 @@ export class TusProxy {
 
       // Parse metadata (base64 encoded key-value pairs)
       const metadata = this.parseUploadMetadata(uploadMetadata || '');
-      // A repeated key could mean different things to the tier gate and here
-      if (!metadata) return c.json({ error: 'Upload-Metadata keys must be unique' }, 400);
+      if (!metadata) return c.json({ error: 'Invalid Upload-Metadata' }, 400);
       const tusSessionId = metadata.tusSessionId;
 
       if (!tusSessionId || !/^[A-Za-z0-9-]{1,64}$/.test(tusSessionId)) {
@@ -532,7 +540,7 @@ export class TusProxy {
         const requestHeaders: Record<string, string> = {
           ...(await this.createBunnyHeaders(videoId)),
           'Tus-Resumable': TUS_VERSION,
-          'Upload-Metadata': uploadMetadata || '',
+          'Upload-Metadata': bunnyUploadMetadata(metadata),
         };
 
         // Only include Upload-Length OR Upload-Defer-Length, never both
@@ -544,7 +552,8 @@ export class TusProxy {
 
         let bunnyResponse: Response;
         try {
-          bunnyResponse = await fetch(storedSession.tusEndpoint || BUNNY_TUS_ENDPOINT, {
+          bunnyResponse = await fetch(BUNNY_TUS_ENDPOINT, {
+            redirect: 'error',
             method: 'POST',
             headers: requestHeaders,
           });
@@ -571,17 +580,12 @@ export class TusProxy {
           return c.json({ error: 'Upload creation failed', details: errorBody }, bunnyResponse.status);
         }
 
-        // Get the Location header from Bunny's response
-        const bunnyLocation = bunnyResponse.headers.get('Location');
-        if (!bunnyLocation) {
-          logger.error('[TUS Proxy] No Location header in Bunny response', { videoId });
+        const location = bunnyUploadLocation(bunnyResponse.headers.get('Location'));
+        if (!location) {
+          logger.error('[TUS Proxy] Invalid Location header from Bunny', { videoId });
           return this.retryLater('Upload service gave no upload URL, retry');
         }
-
-        // Convert relative URL to absolute URL if needed
-        bunnyUploadUrl = bunnyLocation.startsWith('/')
-          ? `https://video.bunnycdn.com${bunnyLocation}`
-          : bunnyLocation;
+        bunnyUploadUrl = location;
       }
 
       const fileSize = parseInt(uploadLength || '0', 10);
@@ -635,12 +639,14 @@ export class TusProxy {
       cacheSession(uploadKey, session);
 
       // Return proxy location: session id + video id (see buildTusUploadId)
-      const proxyLocation = `${c.req.url.replace(/\/+$/, '')}/${buildTusUploadId(uploadKey, videoId)}`;
+      const proxyLocation = new URL(c.req.url);
+      proxyLocation.pathname = `${proxyLocation.pathname.replace(/\/+$/, '')}/${buildTusUploadId(uploadKey, videoId)}`;
+      proxyLocation.search = '';
 
       return new Response(null, {
         status: 201,
         headers: {
-          'Location': proxyLocation,
+          'Location': proxyLocation.href,
           'Tus-Resumable': TUS_VERSION,
           'Access-Control-Expose-Headers': 'Location, Tus-Resumable',
         },
@@ -673,7 +679,8 @@ export class TusProxy {
       if (live.kind === 'gone') return new Response(null, { status: 404, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
       if (live.kind === 'closed') return new Response(null, { status: 410, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
       if (session.target === 'r2') return await this.headR2(session, uploadId);
-      if (!session.bunnyUploadUrl) {
+      const upstream = bunnyUploadLocation(session.bunnyUploadUrl ?? null);
+      if (!upstream) {
         return new Response(null, { status: 404, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
       }
 
@@ -681,7 +688,8 @@ export class TusProxy {
       let bunnyResponse: Response;
       try {
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
-        bunnyResponse = await fetch(session.bunnyUploadUrl, {
+        bunnyResponse = await fetch(upstream, {
+          redirect: 'error',
           method: 'HEAD',
           headers: {
             ...bunnyHeaders,
@@ -770,7 +778,8 @@ export class TusProxy {
 
       if (session.target === 'r2') return await this.patchR2(c, session, uploadId, live.record);
 
-      if (!session.bunnyUploadUrl) {
+      const upstream = bunnyUploadLocation(session.bunnyUploadUrl ?? null);
+      if (!upstream) {
         logger.error('[TUS Proxy] No bunnyUploadUrl in session', { uploadId });
         return c.json({ error: 'Upload not found' }, 404);
       }
@@ -797,7 +806,8 @@ export class TusProxy {
       try {
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
         // Forward PATCH to Bunny.net with streaming
-        bunnyResponse = await fetch(session.bunnyUploadUrl, {
+        bunnyResponse = await fetch(upstream, {
+          redirect: 'error',
           method: 'PATCH',
           headers: {
             ...bunnyHeaders,
@@ -897,8 +907,11 @@ export class TusProxy {
         await deleteR2Upload(this.env, session.videoId, parseTusUploadId(uploadId)?.sessionId ?? uploadId);
       } else {
         // Forward DELETE to Bunny.net
+        const upstream = bunnyUploadLocation(session.bunnyUploadUrl ?? null);
+        if (!upstream) return new Response(null, { status: 404 });
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
-        await fetch(session.bunnyUploadUrl!, {
+        await fetch(upstream, {
+          redirect: 'error',
           method: 'DELETE',
           headers: {
             ...bunnyHeaders,

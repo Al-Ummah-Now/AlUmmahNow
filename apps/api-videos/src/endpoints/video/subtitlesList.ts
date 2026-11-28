@@ -2,6 +2,7 @@
  * List all subtitle tracks for a video
  */
 
+import { RecordId } from '../../validation/identifiers';
 import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { SubtitleMetadata } from '@al-ummah/shared-types';
@@ -19,7 +20,7 @@ export class SubtitlesList extends OptionalAuthRoute {
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({
-        videoId: Str({ description: 'Video ID' }),
+        videoId: RecordId.describe('Video ID'),
       }),
     },
     responses: {

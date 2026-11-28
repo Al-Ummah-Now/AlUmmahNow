@@ -7,7 +7,8 @@
  *
  * Its fee is a fixed schedule (`TEST_COLLECTOR_FEE`) so breakdowns in tests are predictable.
  */
-import { addMoney, basisPoints, type CollectorFeeSchedule, type Money, subMoney, sumMoney, zeroMoney } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { addMoney, basisPoints, isSupportCurrency, type CollectorFeeSchedule, type Money, subMoney, sumMoney, zeroMoney } from '@al-ummah/shared-types';
 import { hmacSha256Hex, timingSafeEqualHex, withinTolerance } from '../billing/provider';
 import { type CollectorContext, CollectorError, type CollectorEvent, type SupportCollector, type VerifiedDelivery } from './collector';
 import { sha256Hex, type TestStateStore } from './test-state';
@@ -69,6 +70,25 @@ export async function testPay(ctx: CollectorContext, input: { checkoutId: string
 	return { eventId: `tevt_${h}`, events };
 }
 
+const ref = z.string().min(1).max(200).regex(/^[A-Za-z0-9_.-]+$/);
+const occurredAt = z.iso.datetime();
+const MoneyBody = z.object({ amount: z.number().int(), currency: z.custom<Money['currency']>(isSupportCurrency) });
+const Delivery = z.object({
+	id: ref,
+	createdAt: occurredAt.optional(),
+	events: z.array(z.discriminatedUnion('type', [
+		z.object({ type: z.literal('checkout.completed'), occurredAt, checkoutId: ref, paymentRef: ref, pledgeRef: ref.nullable() }),
+		z.object({ type: z.literal('payment.succeeded'), occurredAt, paymentRef: ref, pledgeRef: ref.nullable(), checkoutId: ref.nullable(), gross: MoneyBody, fee: MoneyBody, tax: MoneyBody, supporterCountry: z.string().regex(/^[A-Z]{2}$/).nullable() }),
+		z.object({ type: z.literal('payment.failed'), occurredAt, paymentRef: ref.nullable(), pledgeRef: ref.nullable(), checkoutId: ref.nullable(), reason: z.string().max(500) }),
+		z.object({ type: z.literal('payment.refunded'), occurredAt, paymentRef: ref, refundRef: ref, amount: MoneyBody }),
+		z.object({ type: z.literal('dispute.opened'), occurredAt, paymentRef: ref, disputeRef: ref, amount: MoneyBody, fee: MoneyBody, evidenceDueAt: occurredAt.nullable() }),
+		z.object({ type: z.literal('dispute.closed'), occurredAt, paymentRef: ref, disputeRef: ref, outcome: z.enum(['won', 'lost']) }),
+		z.object({ type: z.literal('pledge.updated'), occurredAt, pledgeRef: ref, status: z.enum(['active', 'past_due', 'canceled', 'ended']), currentPeriodEnd: occurredAt.nullable() }),
+		z.object({ type: z.literal('settlement.paid'), occurredAt, settlementRef: ref, net: MoneyBody }),
+		z.object({ type: z.literal('ignored'), occurredAt }),
+	])).max(100),
+});
+
 export const testCollector: SupportCollector = {
 	id: 'test',
 
@@ -116,19 +136,21 @@ export const testCollector: SupportCollector = {
 		const t = Number(parts.t);
 		if (!parts.v1 || !withinTolerance(t, ctx.now())) return null;
 		if (!timingSafeEqualHex(await hmacSha256Hex(TEST_COLLECTOR_SECRET, `${t}.${rawBody}`), parts.v1)) return null;
-		let body: { id?: unknown; createdAt?: unknown; events?: unknown };
+		let raw: unknown;
 		try {
-			body = JSON.parse(rawBody);
+			raw = JSON.parse(rawBody);
 		} catch {
 			return null;
 		}
-		if (typeof body.id !== 'string' || !Array.isArray(body.events)) return null;
-		return { eventId: body.id, type: 'test.events', occurredAt: typeof body.createdAt === 'string' ? body.createdAt : ctx.now().toISOString(), payload: body } satisfies VerifiedDelivery;
+		const result = Delivery.safeParse(raw);
+		if (!result.success) return null;
+		const body = result.data;
+		return { eventId: body.id, type: 'test.events', occurredAt: body.createdAt ?? ctx.now().toISOString(), payload: body } satisfies VerifiedDelivery;
 	},
 
 	async normalize(_ctx, delivery) {
-		const events = (delivery.payload as { events: CollectorEvent[] }).events;
-		return events.filter((e) => e && typeof e === 'object' && typeof (e as { type?: unknown }).type === 'string');
+		const result = Delivery.safeParse(delivery.payload);
+		return result.success ? result.data.events as CollectorEvent[] : [];
 	},
 
 	async listSettlements(ctx, sinceIso) {

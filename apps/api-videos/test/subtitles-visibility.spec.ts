@@ -135,3 +135,18 @@ describe('caption reads follow the video GET', () => {
 		for (const path of paths('ghost')) assert.equal((await app('owner').request(path, {}, e as never)).status, 404, path);
 	});
 });
+
+it('validates caption key components before looking up subtitles', async () => {
+	const e = env();
+	const paths = [
+		'/api/videos/pub/subtitles/english',
+		'/api/videos/pub/subtitles/english/download',
+		'/api/videos/' + 'v'.repeat(129) + '/subtitles/en',
+	];
+	for (const path of paths) {
+		const res = await app().request(path, {}, e as never);
+		assert.equal(res.status, 400, path);
+		const body = await res.json() as { errors?: { code: number }[] };
+		assert.equal(body.errors?.[0].code, 7001);
+	}
+});

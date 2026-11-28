@@ -1,3 +1,4 @@
+import { RecordId } from '../validation/identifiers';
 import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
@@ -262,6 +263,8 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     if (!auth) {
       return apiError(c, 401, 'authentication_required', { error: 'Authentication required' });
     }
+
+    if (!RecordId.safeParse(channelId).success) return apiError(c, 400, 'invalid_request');
 
     // Likes and dislikes belong to the member: one without a channel reacts
     // as themselves, with their own user id as channelId (#292). Every other

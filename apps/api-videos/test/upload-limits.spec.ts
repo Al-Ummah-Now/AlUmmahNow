@@ -190,7 +190,7 @@ async function harness(opts: Options = {}) {
   const startUpload = (user: string, uploadId: string, fileSize = 2048 * MB) =>
     uploaders.set(`vid-${uploadId}`, user) && tusKv.put(
       `tus:upload:${uploadId}`,
-      JSON.stringify({ uploadId, userId: user, videoId: `vid-${uploadId}`, fileSize, uploadOffset: 0, bunnyUploadUrl: `https://bunny.test/tus/${uploadId}` }),
+      JSON.stringify({ uploadId, userId: user, videoId: `vid-${uploadId}`, fileSize, uploadOffset: 0, bunnyUploadUrl: `https://video.bunnycdn.com/tusupload/${uploadId}` }),
     );
   const tusCreate = (user: string, headers: Record<string, string> = {}) =>
     request(user, '/api/videos/tus', { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '10', ...headers } });
@@ -205,7 +205,7 @@ async function harness(opts: Options = {}) {
     );
   /** What initiate leaves in TUS_SESSIONS: the uploader and the channel the upload is for */
   const issueSession = (sessionId: string, userId: string, channelId: string, extra: Record<string, unknown> = {}) =>
-    tusKv.put(`tus:session:${sessionId}`, JSON.stringify({ videoId: `vid-${sessionId}`, userId, channelId, tusEndpoint: 'https://bunny.test/tus', tusHeaders: {}, ...extra }));
+    tusKv.put(`tus:session:${sessionId}`, JSON.stringify({ videoId: `vid-${sessionId}`, userId, channelId, tusEndpoint: 'https://video.bunnycdn.com/tusupload', tusHeaders: {}, ...extra }));
   const continueHour = (user: string) =>
     Number(
       (db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = ? AND operation = 'video_upload_continue' AND period = 'hour'").get(user) as
@@ -222,7 +222,7 @@ describe('creator tiers: who may upload', () => {
     Date.now = () => clock;
     bunnyPatches = 0;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).startsWith('https://bunny.test/') && init?.method === 'PATCH') {
+      if (String(url).startsWith('https://video.bunnycdn.com/tusupload/') && init?.method === 'PATCH') {
         bunnyPatches++;
         const offset = Number((init.headers as Record<string, string>)['Upload-Offset'] ?? 0) + 5 * MB;
         return new Response(null, { status: 204, headers: { 'Upload-Offset': String(offset) } });

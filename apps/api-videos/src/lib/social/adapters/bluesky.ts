@@ -5,6 +5,7 @@
  * PAR + PKCE, and every token is DPoP-bound: each session has its own P-256 key, stored encrypted with the tokens.
  * App passwords are never accepted (full account access, no scope).
  */
+import { checkUrl } from '../../link-preview';
 import { base64url, pkceChallenge, randomToken } from '../crypto';
 import { call, download, failure, NetworkError, type Adapter, type AdapterContext, type PostResult, type TokenSet } from './types';
 
@@ -114,8 +115,8 @@ export function normalizeHandle(input: string): string | null {
 }
 
 const httpsOrigin = (raw: string): string => {
-	const u = new URL(raw);
-	if (u.protocol !== 'https:') throw new NetworkError('Bluesky: the account server is not on https', 'fatal');
+	const u = checkUrl(raw);
+	if (u.protocol !== 'https:' || u.port) throw new NetworkError('Bluesky: the account server is not on https', 'fatal');
 	return u.origin;
 };
 
@@ -138,7 +139,13 @@ export async function resolveBluesky(f: typeof fetch, handle: string): Promise<B
 		`${httpsOrigin(as)}/.well-known/oauth-authorization-server`,
 		'authorization server',
 	);
-	if (httpsOrigin(meta.issuer) !== httpsOrigin(as)) throw new NetworkError('Bluesky: authorization server issuer mismatch', 'fatal');
+	const issuerOrigin = httpsOrigin(as);
+	if (httpsOrigin(meta.issuer) !== issuerOrigin) throw new NetworkError('Bluesky: authorization server issuer mismatch', 'fatal');
+	for (const endpoint of [meta.authorization_endpoint, meta.pushed_authorization_request_endpoint, meta.token_endpoint, meta.revocation_endpoint]) {
+		if (endpoint !== undefined && httpsOrigin(endpoint) !== issuerOrigin) {
+			throw new NetworkError('Bluesky: endpoint is outside the authorization server origin', 'fatal');
+		}
+	}
 	return {
 		did,
 		handle,

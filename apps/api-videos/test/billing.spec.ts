@@ -136,6 +136,23 @@ describe('webhook signatures', () => {
 		assert.equal(await paygoodAdapter.verifyWebhook(raw, headers(good), 'another_secret', at), null);
 	});
 
+	it('refuses a correctly signed PayGood payload with no event object', async () => {
+		const raw = 'null';
+		const id = 'fixture-event';
+		const ts = String(Math.floor(T0.getTime() / 1000));
+		const secret = 'fixture-key';
+		const signature = createHmac('sha256', secret).update([id, ts, raw].join('.')).digest('hex');
+		const headers = new Headers({ 'Merchant-Webhook-Id': id, 'Merchant-Webhook-Timestamp': ts, 'Merchant-Webhook-Signature': 'v1=' + signature });
+		assert.equal(await paygoodAdapter.verifyWebhook(raw, headers, secret, T0), null);
+	});
+
+	it('rejects a correctly signed test event whose ID or data has the wrong type', async () => {
+		for (const event of [{ id: 123, data: {} }, { id: 'fixture', data: ['wrong'] }]) {
+			const body = JSON.stringify({ ...event, type: 'subscription.updated', createdAt: T0.toISOString() });
+			assert.equal(await fakeAdapter.verifyWebhook(body, await signFake(body, T0), FAKE_SECRET, T0), null);
+		}
+	});
+
 	it('test provider: signFake verifies with the fixed secret only', async () => {
 		const body = JSON.stringify(subEvent('fake_evt_1', { subscriptionRef: 's1' }, T0.toISOString()));
 		assert.ok(await fakeAdapter.verifyWebhook(body, await signFake(body, T0), FAKE_SECRET, T0));

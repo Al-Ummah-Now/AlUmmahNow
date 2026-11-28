@@ -2,6 +2,7 @@
  * Upload subtitle track for a video
  */
 
+import { RecordId } from '../../validation/identifiers';
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str, Bool } from '../../lib/chanfana-params';
@@ -26,7 +27,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({
-          videoId: Str({ description: 'Video ID' }),
+          videoId: RecordId.describe('Video ID'),
         }),
         body: {
           content: {

@@ -2,6 +2,7 @@
  * Delete subtitle track
  */
 
+import { RecordId, SubtitleLanguage } from '../../validation/identifiers';
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from '../../lib/chanfana-params';
@@ -25,8 +26,8 @@ export class SubtitlesDelete extends AuthenticatedRoute {
           channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
         }),
         params: z.object({
-          videoId: Str({ description: 'Video ID' }),
-          language: Str({ description: 'ISO 639-1 language code (e.g., en, ar, ur)' }),
+          videoId: RecordId.describe('Video ID'),
+          language: SubtitleLanguage.describe('ISO 639-1 language code (e.g., en, ar, ur)'),
         }),
       },
       responses: {

@@ -102,6 +102,31 @@ export async function handleLiveEdge(request: Request, env: LiveEnv, ctx: Execut
 // Ingest
 // ---------------------------------------------------------------------------
 
+/** The Worker serves playlists verbatim, so each referenced file must belong to the session. */
+export function isLocalLivePlaylist(playlist: string, kind: 'master' | 'media'): boolean {
+	const lines = playlist.trimEnd().split(/\r?\n/);
+	if (lines[0] !== '#EXTM3U') return false;
+	const accepts = (uri: string) => {
+		if (kind === 'media') return INIT.test(uri) || SEGMENT.test(uri);
+		const [rendition, file, ...extra] = uri.split('/');
+		return !extra.length && RENDITION.test(rendition) && file === 'index.m3u8';
+	};
+	for (const raw of lines.slice(1)) {
+		const line = raw.trim();
+		if (!line) continue;
+		if (!line.startsWith('#')) {
+			if (!accepts(line)) return false;
+			continue;
+		}
+		if (!line.startsWith('#EXT')) continue;
+		for (const uri of line.matchAll(/[:,][ \t]*(?:[A-Z-]+-)?URI[ \t]*=[ \t]*("[^"]*"|[^,]*)/gi)) {
+			const value = uri[1];
+			if (!value.startsWith('"') || !value.endsWith('"') || !accepts(value.slice(1, -1))) return false;
+		}
+	}
+	return true;
+}
+
 async function ingest(request: Request, env: LiveEnv, ctx: ExecutionContext, parts: string[], hooks: EdgeHooks): Promise<Response> {
 	const db = env.SEARCH_DB!;
 	const now = Date.now();
@@ -132,7 +157,12 @@ async function ingest(request: Request, env: LiveEnv, ctx: ExecutionContext, par
 	const body = await request.arrayBuffer();
 	const limit = kind === 'segment' || kind === 'init' ? MAX_SEGMENT : MAX_PLAYLIST;
 	if (body.byteLength > limit) return text(413, 'Too large');
-	const isPlaylist = kind === 'master' || kind === 'media';
+	let playlist: string | null = null;
+	if (kind === 'master' || kind === 'media') {
+		playlist = new TextDecoder().decode(body);
+		if (!isLocalLivePlaylist(playlist, kind)) return text(400, 'Unexpected playlist reference');
+	}
+	const isPlaylist = playlist !== null;
 	await env.LIVE_MEDIA!.put(`live/${sessionId}/${path}`, body, {
 		httpMetadata: {
 			contentType: isPlaylist ? 'application/vnd.apple.mpegurl' : 'video/mp4',
@@ -164,7 +194,7 @@ async function ingest(request: Request, env: LiveEnv, ctx: ExecutionContext, par
 	}
 	if (kind === 'media') {
 		try {
-			await indexMediaPlaylist(env, ctx, session, rendition, new TextDecoder().decode(body), now, hooks);
+			await indexMediaPlaylist(env, ctx, session, rendition, playlist!, now, hooks);
 		} catch (error) {
 			logger.error('[LiveEdge] Playlist indexing failed', { sessionId, rendition, error: error instanceof Error ? error.message : String(error) });
 		}

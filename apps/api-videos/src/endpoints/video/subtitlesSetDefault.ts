@@ -4,6 +4,7 @@
  * PUT /api/videos/:videoId/subtitles/:language/default
  */
 
+import { RecordId, SubtitleLanguage } from '../../validation/identifiers';
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from '../../lib/chanfana-params';
@@ -29,8 +30,8 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
           channelId: z.string().optional().nullable(),
         }),
         params: z.object({
-          videoId: Str({ description: 'Video ID' }),
-          language: Str({ description: 'ISO 639-1 language code of the track to make default' }),
+          videoId: RecordId.describe('Video ID'),
+          language: SubtitleLanguage.describe('ISO 639-1 language code of the track to make default'),
         }),
       },
       responses: {

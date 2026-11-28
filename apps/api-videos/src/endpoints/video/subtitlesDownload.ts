@@ -11,9 +11,10 @@
  * only admins and the video's team with video.edit (owner, channel owner/admin/editor) get the file,
  * for Studio; anyone else gets 404 feature_off, before the track is looked up.
  */
+import { RecordId, SubtitleLanguage } from '../../validation/identifiers';
 import { z } from 'zod';
 import { captionMarkerRanges, featureGate } from '@al-ummah/shared-types';
-import { Enumeration, Str } from '../../lib/chanfana-params';
+import { Enumeration } from '../../lib/chanfana-params';
 import { fillServedTrack } from '../../lib/captions/drafts';
 import { subtitleDownload, type SubtitleDownloadFormat } from '../../lib/captions/download';
 import { editionFor } from '../../lib/quran/translations';
@@ -36,8 +37,8 @@ export class SubtitlesDownload extends OptionalAuthRoute {
 			'One video, one language, as an attachment (WebVTT or SubRip). Quran verse text is filled at download time from the Quran Foundation copy, unaltered, with the attribution and edition inside the file. Never cached or stored.',
 		request: {
 			params: z.object({
-				videoId: Str({ description: 'Video ID' }),
-				language: Str({ description: 'ISO 639-1 language code (e.g., en, ar, ur)' }),
+				videoId: RecordId.describe('Video ID'),
+				language: SubtitleLanguage.describe('ISO 639-1 language code (e.g., en, ar, ur)'),
 			}),
 			query: z.object({
 				format: Enumeration({ description: 'File format', values: ['vtt', 'srt'], default: 'vtt' }),

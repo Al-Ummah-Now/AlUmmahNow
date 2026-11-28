@@ -18,6 +18,7 @@
  *   paid period ends (service.ts sets accessUntil).
  * - No customer portal: users manage the subscription on the videos site.
  */
+import { z } from 'zod';
 import type { BillingPeriod } from '@al-ummah/shared-types';
 import {
 	addPeriod,
@@ -92,6 +93,22 @@ export function splitName(name: string | null, email: string): { firstName: stri
 	return { firstName: one.slice(0, 100), lastName: one.slice(0, 100) };
 }
 
+const ProviderRef = z.string().max(200).regex(/^[A-Za-z0-9_.-]+$/);
+const PaygoodEvent = z.object({
+	id: ProviderRef.optional(),
+	type: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.-]+$/),
+	createdAt: z.string().max(64).optional(),
+	data: z.object({
+		occurredAt: z.string().max(64).optional(),
+		subscriptionId: ProviderRef.nullish(),
+		customerId: ProviderRef.nullish(),
+		paymentId: ProviderRef.nullish(),
+		amount: z.number().nullish(),
+		refundedAmount: z.number().nullish(),
+		currency: z.string().length(3).nullish(),
+	}).nullish(),
+});
+
 export const paygoodAdapter: PaymentProviderAdapter = {
 	id: 'paygood',
 
@@ -99,7 +116,7 @@ export const paygoodAdapter: PaymentProviderAdapter = {
 		const id = headers.get('Merchant-Webhook-Id') ?? '';
 		const ts = headers.get('Merchant-Webhook-Timestamp') ?? '';
 		const sigHeader = headers.get('Merchant-Webhook-Signature') ?? '';
-		if (!id || !ts || !withinTolerance(Number(ts), now)) return null;
+		if (!ProviderRef.safeParse(id).success || !/^\d{1,15}$/.test(ts) || !withinTolerance(Number(ts), now)) return null;
 		const provided = sigHeader
 			.split(' ')
 			.filter((v) => v.startsWith('v1='))
@@ -107,17 +124,18 @@ export const paygoodAdapter: PaymentProviderAdapter = {
 		if (!provided.length) return null;
 		const expected = await hmacSha256Hex(secret, `${id}.${ts}.${rawBody}`);
 		if (!provided.some((p) => timingSafeEqualHex(expected, p))) return null;
-		let body: { id?: unknown; type?: unknown; createdAt?: unknown; data?: unknown };
+		let raw: unknown;
 		try {
-			body = JSON.parse(rawBody);
+			raw = JSON.parse(rawBody);
 		} catch {
 			return null;
 		}
-		const type = str(body.type);
-		if (!type) return null;
+		const parsed = PaygoodEvent.safeParse(raw);
+		if (!parsed.success) return null;
+		const body = parsed.data;
 		// The delivery id; a manual redelivery gets a new id but carries the same event,
 		// so applying events must be idempotent too (store.ts keys payments and subscriptions by ref)
-		return { eventId: str(body.id) ?? id, type, occurredAt: isoOrNull((body.data as { occurredAt?: unknown })?.occurredAt) ?? isoOrNull(body.createdAt) ?? now.toISOString(), payload: body };
+		return { eventId: body.id ?? id, type: body.type, occurredAt: isoOrNull(body.data?.occurredAt) ?? isoOrNull(body.createdAt) ?? now.toISOString(), payload: body };
 	},
 
 	async normalize(webhook: ParsedWebhook, ctx): Promise<NormalizedEvent[]> {

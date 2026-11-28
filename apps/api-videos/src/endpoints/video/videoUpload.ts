@@ -18,6 +18,15 @@ import { requireSecret } from "../../lib/env-helpers";
 import { validateVideoMagicBytes, readFileHeader } from "../../lib/security/magic-bytes";
 import { logger } from '../../lib/logger';
 
+const DirectUploadForm = z.object({
+	file: z.custom<File>((value) => value instanceof File),
+	title: z.string().trim().min(1).max(1000),
+	description: z.string().max(5000).nullish(),
+	tags: z.string().max(2000).nullish(),
+	isPublic: z.enum(['true', 'false']).nullish(),
+	isLive: z.enum(['true', 'false']).nullish(),
+});
+
 export class VideoUpload extends AuthenticatedRoute {
     schema = {
         tags: ["Videos"],
@@ -101,27 +110,18 @@ export class VideoUpload extends AuthenticatedRoute {
 
         try {
             // Parse multipart form data
-            const formData = await c.req.formData();
-            const file = formData.get('file') as File;
-            const title = formData.get('title') as string;
-            const description = formData.get('description') as string || '';
-            const isPublic = formData.get('isPublic') === 'true';
-            const isLive = formData.get('isLive') === 'true';
-            const tags = formData.get('tags') as string || '';
-
-            if (!file) {
-                return c.json({
-                    success: false,
-                    error: "No file provided"
-                }, 400);
-            }
-
-            if (!title) {
-                return c.json({
-                    success: false,
-                    error: "Title is required"
-                }, 400);
-            }
+            const formData = await c.req.formData().catch(() => null);
+            const fields = Object.keys(DirectUploadForm.shape);
+            const input = formData && fields.every((field) => formData.getAll(field).length <= 1)
+                ? Object.fromEntries(fields.map((field) => [field, formData.get(field)]))
+                : null;
+            const parsed = DirectUploadForm.safeParse(input);
+            if (!parsed.success) return c.json({ success: false, code: 'invalid_request', error: 'Invalid upload form' }, 400);
+            const { file, title } = parsed.data;
+            const description = parsed.data.description ?? '';
+            const tags = parsed.data.tags ?? '';
+            const isPublic = parsed.data.isPublic === 'true';
+            const isLive = parsed.data.isLive === 'true';
 
             // SECURITY: Validate file type using magic bytes (file signatures)
             // This prevents attackers from uploading malicious files by spoofing Content-Type headers

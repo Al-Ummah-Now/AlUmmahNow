@@ -130,9 +130,9 @@ export async function listMyRequests(db: D1Database, userId: string, opts: { cur
 			await db
 				.prepare(
 					`SELECT * FROM tier_requests WHERE user_id = ?1 ${after ? 'AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))' : ''}
-					 ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}`,
+					 ORDER BY created_at DESC, id DESC LIMIT ${after ? '?4' : '?2'}`,
 				)
-				.bind(...(after ? [userId, after.createdAt, after.id] : [userId]))
+				.bind(...(after ? [userId, after.createdAt, after.id] : [userId]), limit + 1)
 				.all<RequestRow>()
 		).results ?? [];
 	const page = rows.slice(0, limit);

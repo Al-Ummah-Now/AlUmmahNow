@@ -115,6 +115,16 @@ describe('every Bunny create gets the right collection', () => {
 		assert.deepEqual(creates.map((c) => c.collectionId), ['col-ch1']);
 	});
 
+	it('rejects non-file and non-text direct upload fields before calling Bunny', async () => {
+		const h = harness(CHANNEL);
+		const form = new FormData();
+		form.set('file', 'not a file');
+		form.set('title', new File([MP4], 'a.mp4', { type: 'video/mp4' }));
+		const res = await h.app.request('/api/videos/upload', { method: 'POST', headers: { channelId: 'ch1' }, body: form }, h.env);
+		assert.equal(res.status, 400);
+		assert.deepEqual(creates, []);
+	});
+
 	it('POST /api/videos uses the channel collection, never a collection named after the channel id', async () => {
 		const h = harness(CHANNEL);
 		const res = await h.post('/api/videos', { title: 'Created' }, 'ch1');

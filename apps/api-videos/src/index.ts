@@ -146,6 +146,7 @@ import { errorEnvelope } from './middleware/error-envelope';
 import { applyFeatureGates } from './middleware/require-feature';
 import { apiError } from './lib/api-error';
 import { refuseInternalVideoKeys } from './middleware/internal-video-keys';
+import { validateRequestPath } from './middleware/request-path';
 
 // ==========================================
 // APP SETUP
@@ -248,6 +249,7 @@ app.options('/api/*', (c) => {
 // Use optionalAuthMiddleware for GET endpoints (allow both authenticated and public access)
 // Use authMiddleware for CUD operations (require authentication)
 app.use('/api/*', refuseInternalVideoKeys);
+app.use('*', validateRequestPath);
 app.use('/api/*', optionalAuthMiddleware);
 // Feature switches (FEAT-2): mapped routes answer 404 feature_off while their switch is off
 applyFeatureGates(app, 'api-videos');

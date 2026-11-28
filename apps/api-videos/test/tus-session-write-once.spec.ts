@@ -45,7 +45,7 @@ function harness() {
 	const kv = rateLimitedKv();
 	const videos = new MemoryBucket({ vid: videoFixture({ id: 'vid', userId: 'alice', uploadStatus: 'uploading' }) });
 	const queue = new MemoryQueue();
-	kv.data.set('tus:session:s1', JSON.stringify({ videoId: 'vid', userId: 'alice', channelId: 'ch', tusEndpoint: 'https://bunny.test/tusupload', tusHeaders: {}, expiresAt: '2099-01-01T00:00:00.000Z' }));
+	kv.data.set('tus:session:s1', JSON.stringify({ videoId: 'vid', userId: 'alice', channelId: 'ch', tusEndpoint: 'https://video.bunnycdn.com/tusupload', tusHeaders: {}, expiresAt: '2099-01-01T00:00:00.000Z' }));
 	const app = new Hono();
 	app.use('*', async (c, next) => {
 		c.set('userId' as never, 'alice' as never);
@@ -65,7 +65,7 @@ describe('TUS sessions written once (AV-24)', () => {
 		clearTusSessionCache();
 		globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
 			const u = String(url);
-			if (u === 'https://bunny.test/tusupload' && init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/tusupload/b1' } });
+			if (u === 'https://video.bunnycdn.com/tusupload' && init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/tusupload/b1' } });
 			if (u.endsWith('/tusupload/b1') && init?.method === 'PATCH') {
 				bunnyOffset = Number((init.headers as Record<string, string>)['Upload-Offset']) + CHUNK;
 				return new Response(null, { status: 204, headers: { 'Upload-Offset': String(bunnyOffset) } });
@@ -92,8 +92,6 @@ describe('TUS sessions written once (AV-24)', () => {
 		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`, `tus:user:alice:upload:${uploadKey}`]);
 		const stored = JSON.parse(h.kv.data.get(`tus:upload:${uploadKey}`)!);
 		assert.equal(stored.bunnyUploadUrl, 'https://video.bunnycdn.com/tusupload/b1', 'POST stores the whole session, upload URL included');
-		globalThis.fetch = ((orig) => (async (url: string | URL | Request, init?: RequestInit) =>
-			orig(String(url).replace('https://video.bunnycdn.com', 'https://bunny.test'), init)) as typeof fetch)(globalThis.fetch);
 
 		for (let offset = 0; offset < SIZE; offset += CHUNK) {
 			const res = await h.request(`/api/videos/tus/${uploadId}`, {
@@ -121,7 +119,6 @@ describe('TUS sessions written once (AV-24)', () => {
 		const head = async (id: string) => (await h.request(`/api/videos/tus/${id}`, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' } })).status;
 		const patch = async (id: string) =>
 			(await h.request(`/api/videos/tus/${id}`, { method: 'PATCH', body: new Uint8Array(CHUNK), headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': '0', 'Tus-Resumable': '1.0.0' } })).status;
-		globalThis.fetch = ((orig) => (async (url: string | URL | Request, init?: RequestInit) => orig(String(url).replace('https://video.bunnycdn.com', 'https://bunny.test'), init)) as typeof fetch)(globalThis.fetch);
 		assert.equal(await head(old), 200);
 		// Every byte arrived, and the transcode refused them
 		const flagged = { ...h.videos.read('vid'), uploadStatus: 'failed', tusUpload: undefined, processingIssue: { kind: 'needs_reupload', at: 'x', code: 'source_changed' } };

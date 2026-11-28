@@ -259,9 +259,9 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 	const { results } = await db
 		.prepare(
 			`SELECT c.*, (SELECT COALESCE(SUM(v.views), 0) FROM ${OWNERSHIP_TABLE} v WHERE v.kind = 'video' AND v.channel_id = c.id AND v.is_deleted = 0) AS total_views
-			 FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql} ORDER BY ${CHANNEL_SORT[query.sort ?? 'newest'] ?? CHANNEL_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`,
+			 FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql} ORDER BY ${CHANNEL_SORT[query.sort ?? 'newest'] ?? CHANNEL_SORT.newest} LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`,
 		)
-		.bind(...binds)
+		.bind(...binds, pageSize, offset)
 		.all<Row>();
 	const rows = results ?? [];
 	return { items: await hydrateChannels(env, rows), total, page, pageSize, indexComplete };
@@ -377,9 +377,9 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 			`SELECT v.*, ch.admin_title AS channel_name, ow.admin_title AS owner_name, ow.email AS owner_email FROM ${source}
 			 LEFT JOIN ${OWNERSHIP_TABLE} ch ON ch.kind = 'channel' AND ch.id = v.channel_id
 			 LEFT JOIN ${OWNERSHIP_TABLE} ow ON ow.kind = 'profile' AND ow.id = v.owner_id
-			 WHERE ${whereSql} ORDER BY ${VIDEO_SORT[query.sort ?? 'newest'] ?? VIDEO_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`,
+			 WHERE ${whereSql} ORDER BY ${VIDEO_SORT[query.sort ?? 'newest'] ?? VIDEO_SORT.newest} LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`,
 		)
-		.bind(...binds)
+		.bind(...binds, pageSize, offset)
 		.all<Row>();
 	return { items: await hydrateVideos(env, results ?? []), total: totalOf(total), page, pageSize, indexComplete };
 }
@@ -469,8 +469,9 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 				 FROM ${OWNERSHIP_TABLE} p
 				 WHERE p.kind = 'profile' AND p.is_deleted = 0
 				   AND NOT EXISTS (SELECT 1 FROM admin_deletions d WHERE d.kind = 'user' AND d.target_id = p.id AND d.purged_at IS NULL)
-				 ORDER BY p.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`,
+				 ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
 			)
+			.bind(pageSize, offset)
 			.all<Row>();
 		const rows = results ?? [];
 		const profiles = await readMany(env.profiles, rows.map((r) => r.id));
@@ -501,8 +502,8 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 	const total = query.noTotal ? -1 : await cachedCount(db, `users:${query.banned ?? ''}:${query.tier ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
 		db.prepare(`SELECT COUNT(*) AS n FROM (${base}) u ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
 	const { results } = await db
-		.prepare(`SELECT * FROM (${base}) u ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`)
-		.bind(...binds)
+		.prepare(`SELECT * FROM (${base}) u ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`)
+		.bind(...binds, pageSize, offset)
 		.all<Row>();
 	const rows = results ?? [];
 	const profiles = await readMany(env.profiles, rows.filter((r) => !r.profile_deleted).map((r) => r.id));
@@ -587,9 +588,9 @@ export async function listComments(env: AdminEnv, query: AdminCommentQuery, wait
 		.prepare(
 			`SELECT c.*, v.admin_title AS video_title FROM admin_comments c
 			 LEFT JOIN ${OWNERSHIP_TABLE} v ON v.kind = 'video' AND v.id = c.video_id
-			 WHERE ${whereSql} ORDER BY c.created_at DESC, c.comment_id LIMIT ${pageSize} OFFSET ${offset}`,
+			 WHERE ${whereSql} ORDER BY c.created_at DESC, c.comment_id LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`,
 		)
-		.bind(...binds)
+		.bind(...binds, pageSize, offset)
 		.all<Row>();
 	return {
 		items: (results ?? []).map((r) => ({
