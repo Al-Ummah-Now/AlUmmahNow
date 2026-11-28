@@ -32,10 +32,19 @@ const NONE: ConsentChoices = { analytics: false, experiments: false, performance
 const card = 'pb-glass rounded-[20px] p-6';
 const heading = 'flex items-center gap-2 text-lg font-semibold text-[var(--fanous-color-text-primary)]';
 const body = 'mt-1 text-sm text-[var(--fanous-color-text-secondary)]';
+// Disabled buttons stay readable (owner 2026-11-20: disabled but unreadable isn't acceptable): the
+// theme's disabled pair (button.*.disabledBg/disabledText, checked at 4.5:1 by check:tokens) with a
+// plain border and the not-allowed cursor, never opacity, which faded "Delete my data" to 2.98:1
+const disabledLook = 'disabled:cursor-not-allowed disabled:border disabled:border-[var(--fanous-c-divider-line)] disabled:shadow-none';
 const primaryButton =
-  'inline-flex items-center gap-2 rounded-md bg-[var(--fanous-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--fanous-color-on-primary)] hover:bg-[var(--fanous-color-primary-hover)] disabled:opacity-50';
+  `inline-flex items-center gap-2 rounded-md bg-[var(--fanous-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--fanous-color-on-primary)] hover:bg-[var(--fanous-color-primary-hover)] disabled:bg-[var(--fanous-c-button-primary-disabled-bg)] disabled:text-[var(--fanous-c-button-primary-disabled-text)] disabled:hover:bg-[var(--fanous-c-button-primary-disabled-bg)] ${disabledLook}`;
 const secondaryButton =
-  'inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700';
+  `inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700 disabled:bg-[var(--fanous-c-button-secondary-disabled-bg)] disabled:text-[var(--fanous-c-button-secondary-disabled-text)] disabled:hover:bg-[var(--fanous-c-button-secondary-disabled-bg)] ${disabledLook}`;
+// Destructive: the theme's destructive pair (not bg-red-*, which the bridge restyles with !important)
+const destructiveButton =
+  `inline-flex items-center gap-2 rounded-md border border-[var(--fanous-c-button-destructive-border)] bg-[var(--fanous-c-button-destructive-bg)] px-4 py-2 text-sm font-semibold text-[var(--fanous-c-button-destructive-text)] hover:bg-[var(--fanous-c-button-destructive-hover)] disabled:bg-[var(--fanous-c-button-destructive-disabled-bg)] disabled:text-[var(--fanous-c-button-destructive-disabled-text)] disabled:hover:bg-[var(--fanous-c-button-destructive-disabled-bg)] ${disabledLook}`;
+/** The page's button styles (exported for the disabled-contrast test) */
+export const privacyButtonClasses = { primary: primaryButton, secondary: secondaryButton, destructive: destructiveButton };
 
 function StatusLine({ status }: { status: Status }) {
   if (status.kind === 'done') return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-400">{status.message}</p>;
@@ -181,7 +190,8 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
                   type="button"
                   onClick={eraseData}
                   disabled={confirmText.trim() !== confirmWord || deleteStatus.kind === 'busy'}
-                  className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  className={destructiveButton}
+                  data-testid="privacy-delete-button"
                 >
                   {deleteStatus.kind === 'busy' ? p.deleting : p.deleteButton}
                 </button>
