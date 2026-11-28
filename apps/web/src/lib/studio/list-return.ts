@@ -1,5 +1,7 @@
 'use client';
 
+import { safeSameOriginPath } from '@/lib/security/safe-input';
+
 /**
  * Back from the editor to the exact list it was opened from (same status,
  * filters, sort and scroll): the list records its URL when a row is opened,
@@ -29,8 +31,9 @@ export function listReturn(channelId: string, pathname: string): ListReturn | nu
   try {
     const raw = sessionStorage.getItem(KEY);
     const entry = raw ? (JSON.parse(raw) as { channelId?: string; url?: string; target?: string }) : null;
-    if (entry?.channelId !== channelId || typeof entry.url !== 'string' || !entry.url.startsWith('/')) return null;
-    return { url: entry.url, cameFromList: entry.target === pathname };
+    const safeUrl = entry?.channelId === channelId ? safeSameOriginPath(entry.url) : null;
+    if (!safeUrl) return null;
+    return { url: safeUrl, cameFromList: entry?.target === pathname };
   } catch {
     return null;
   }

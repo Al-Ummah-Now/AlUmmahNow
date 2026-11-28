@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { CommunityPost, formatPercent } from '@al-ummah/shared-types';
+import { safeImageUrl } from '@/lib/security/safe-input';
 import { cn } from '@/lib/utils';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
@@ -111,26 +112,29 @@ export default function QuizPost({ post, isRTL = false }: QuizPostProps) {
                 </div>
 
                 {/* Option Text/Image */}
-                {option.image ? (
-                  <div className="flex-1 min-w-0">
-                    <div className="relative w-full h-24">
-                      <Image
-                        src={option.image.url}
-                        alt={option.text}
-                        fill
-                        className="object-cover rounded"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
+                {(() => {
+                  const safeImg = option.image ? safeImageUrl(option.image.url) : null;
+                  return safeImg ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="relative w-full h-24">
+                        <Image
+                          src={safeImg}
+                          alt={option.text}
+                          fill
+                          className="object-cover rounded"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                      </div>
+                      <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        {option.text}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                  ) : (
+                    <span className="flex-1 text-gray-900 dark:text-gray-100">
                       {option.text}
-                    </p>
-                  </div>
-                ) : (
-                  <span className="flex-1 text-gray-900 dark:text-gray-100">
-                    {option.text}
-                  </span>
-                )}
+                    </span>
+                  );
+                })()}
               </div>
             </button>
           );

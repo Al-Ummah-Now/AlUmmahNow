@@ -20,6 +20,9 @@ import { shouldRedirectToProfileCreation } from '../profile-helpers';
 import { logger } from '@/lib/logger-server';
 import { singleSignOutToHome } from '../auth/single-sign-out';
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from '../auth/oauth-state';
+import { isLocaleSupported } from '@/lib/i18n/utils';
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
+import { isLocalHostHeader } from '@/lib/security/safe-input';
 
 /**
  * Get OpenAuth client
@@ -32,12 +35,13 @@ async function getAuthClient() {
  * Add a new user account (login with additional account)
  */
 export async function addUserAccount(locale: string = 'en'): Promise<void> {
+  const safeLocale = isLocaleSupported(locale) ? locale : DEFAULT_LOCALE;
   const headers = await getHeaders();
   const host = headers.get("host");
-  const protocol = host?.includes("localhost") ? "http" : "https";
+  const protocol = isLocalHostHeader(host) ? "http" : "https";
 
   const cookieStore = await getCookies();
-  cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
+  cookieStore.set("auth_locale", safeLocale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
 
   const client = await getAuthClient();
   const { url, challenge } = await client.authorize(
@@ -57,7 +61,7 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   const addUrl = new URL(withState(url, nonce));
   addUrl.searchParams.set("prompt", "login");
 
-  redirect(withAuthorizeLocale(addUrl.toString(), locale));
+  redirect(withAuthorizeLocale(addUrl.toString(), safeLocale));
 }
 
 /**
@@ -67,7 +71,7 @@ export async function completeAddAccount(code: string): Promise<void> {
   try {
     const headers = await getHeaders();
     const host = headers.get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
+    const protocol = isLocalHostHeader(host) ? "http" : "https";
 
     const client = await getAuthClient();
     const exchanged = await client.exchange(

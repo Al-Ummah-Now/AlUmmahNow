@@ -7,6 +7,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getChannelAbout, type ChannelAbout } from '@/lib/api/channel-profile';
 import { formatHandle } from '@/lib/channel-url';
 import { logger } from '@/lib/logger-client';
+import { safeHttpUrl, safeMailtoHref } from '@/lib/security/safe-input';
 
 interface AboutTabContentProps {
   channelId: string;
@@ -85,20 +86,24 @@ export function AboutTabContent({ channelId }: AboutTabContentProps) {
                   <p className="text-sm text-gray-600 dark:text-gray-400">{t.channel.noLinks}</p>
                 ) : (
                   <ul className="space-y-2" data-testid="about-links">
-                    {about.links.map((link, index) => (
-                      <li key={`${link.url}-${index}`} className="flex items-center gap-2">
-                        <Link2 className="w-4 h-4 text-gray-500 flex-shrink-0" aria-hidden="true" />
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel={EXTERNAL_LINK_REL}
-                          className="text-blue-600 dark:text-blue-400 hover:underline break-all"
-                        >
-                          {link.title}
-                        </a>
-                        <span className="text-xs text-gray-500" dir="ltr">{linkHost(link.url)}</span>
-                      </li>
-                    ))}
+                    {about.links.map((link, index) => {
+                      const safeUrl = safeHttpUrl(link.url);
+                      if (!safeUrl) return null;
+                      return (
+                        <li key={`${safeUrl}-${index}`} className="flex items-center gap-2">
+                          <Link2 className="w-4 h-4 text-gray-500 flex-shrink-0" aria-hidden="true" />
+                          <a
+                            href={safeUrl}
+                            target="_blank"
+                            rel={EXTERNAL_LINK_REL}
+                            className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                          >
+                            {link.title}
+                          </a>
+                          <span className="text-xs text-gray-500" dir="ltr">{linkHost(safeUrl)}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </section>
@@ -108,15 +113,22 @@ export function AboutTabContent({ channelId }: AboutTabContentProps) {
                   <h3 id="about-contact" className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                     {t.channel.aboutDetails}
                   </h3>
-                  {about.contactEmail && (
-                    <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <Mail className="w-4 h-4 text-gray-500" aria-hidden="true" />
-                      <span className="sr-only">{t.channel.contactEmail}: </span>
-                      <a href={`mailto:${about.contactEmail}`} className="text-blue-600 dark:text-blue-400 hover:underline" dir="ltr" data-testid="about-contact">
-                        {about.contactEmail}
-                      </a>
-                    </p>
-                  )}
+                  {about.contactEmail && (() => {
+                    const mailto = safeMailtoHref(about.contactEmail);
+                    return (
+                      <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <Mail className="w-4 h-4 text-gray-500" aria-hidden="true" />
+                        <span className="sr-only">{t.channel.contactEmail}: </span>
+                        {mailto ? (
+                          <a href={mailto} className="text-blue-600 dark:text-blue-400 hover:underline" dir="ltr" data-testid="about-contact">
+                            {about.contactEmail}
+                          </a>
+                        ) : (
+                          <span dir="ltr" data-testid="about-contact">{about.contactEmail}</span>
+                        )}
+                      </p>
+                    );
+                  })()}
                   {about.location && (
                     <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300" data-testid="about-location">
                       <MapPin className="w-4 h-4 text-gray-500" aria-hidden="true" />

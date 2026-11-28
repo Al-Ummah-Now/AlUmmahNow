@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { CommunityPost, fillTemplate } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { safeImageUrl } from '@/lib/security/safe-input';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const fill = (s: string, vars: Record<string, string | number>, lang = 'en') => fillTemplate(lang, s, vars, '');
@@ -34,20 +35,25 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
       {post.title ? <h3 className="text-base font-semibold text-[var(--fanous-color-text-primary)] break-words">{post.title}</h3> : null}
       <div className="relative">
         <ol ref={strip} onScroll={onScroll} className="flex overflow-x-auto snap-x snap-mandatory rounded-lg" style={{ scrollbarWidth: 'none' }}>
-          {slides.map((s, i) => (
-            <li key={s.id} className="relative shrink-0 w-full snap-start aspect-[4/5] bg-[var(--fanous-color-surface-raised)]" aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length }, pageLang)}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.image.url} alt={s.image.alt ?? ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" className="absolute inset-0 w-full h-full object-cover" />
-              {s.heading || s.body ? (
-                <div className={`absolute inset-0 flex flex-col ${POSITION[s.position] ?? POSITION.bottom} p-4`}>
-                  <div className="rounded-md p-3 bg-[var(--fanous-c-player-control-bg)] text-[var(--fanous-c-player-control)] space-y-1">
-                    {s.heading ? <p className="font-semibold text-base">{s.heading}</p> : null}
-                    {s.body ? <p dir="auto" className="text-sm whitespace-pre-wrap">{s.body}</p> : null}
+          {slides.map((s, i) => {
+            const safeImg = safeImageUrl(s.image.url);
+            return (
+              <li key={s.id} className="relative shrink-0 w-full snap-start aspect-[4/5] bg-[var(--fanous-color-surface-raised)]" aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length }, pageLang)}>
+                {safeImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={safeImg} alt={s.image.alt ?? ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                ) : null}
+                {s.heading || s.body ? (
+                  <div className={`absolute inset-0 flex flex-col ${POSITION[s.position] ?? POSITION.bottom} p-4`}>
+                    <div className="rounded-md p-3 bg-[var(--fanous-c-player-control-bg)] text-[var(--fanous-c-player-control)] space-y-1">
+                      {s.heading ? <p className="font-semibold text-base">{s.heading}</p> : null}
+                      {s.body ? <p dir="auto" className="text-sm whitespace-pre-wrap">{s.body}</p> : null}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </li>
-          ))}
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
         {slides.length > 1 ? (
           <div className="flex items-center justify-between gap-2 pt-2">

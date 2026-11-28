@@ -26,6 +26,7 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useLanguage } from '@/hooks/useLanguage';
 import { previewSiteSettings, saveSiteSettings, uploadSiteImage } from '@/lib/studio/site-client';
 import type { StudioSite } from '@/lib/studio/site';
+import { safeHostname, safeHttpUrl, safeImageUrl } from '@/lib/security/safe-input';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Props {
@@ -113,7 +114,8 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
     setBusy('preview');
     const r = await previewSiteSettings(channelId, draft);
     setBusy(null);
-    if (r.ok) setPreviewUrl(r.data.url);
+    const safeUrl = r.ok ? safeHttpUrl(r.data.url) : null;
+    if (safeUrl) setPreviewUrl(safeUrl);
     else setStatus({ tone: 'error', text: s.error });
   };
 
@@ -138,12 +140,15 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
           <span dir="ltr" className="font-mono" data-testid="studio-site-host">{saved.primaryHost}</span>
           {metaSeparator(locale, '·')}
           <span data-testid="studio-site-status">{statusText}</span>
-          {site.status === 'live' && (
-            <>
-              {metaSeparator(locale, '·')}
-              <a className="underline" href={`https://${saved.primaryHost}/${lang(locale)}/`} target="_blank" rel="noopener noreferrer">{s.open}</a>
-            </>
-          )}
+          {site.status === 'live' && (() => {
+            const host = safeHostname(saved.primaryHost);
+            return host ? (
+              <>
+                {metaSeparator(locale, '·')}
+                <a className="underline" href={`https://${host}/${lang(locale)}/`} target="_blank" rel="noopener noreferrer">{s.open}</a>
+              </>
+            ) : null;
+          })()}
         </p>
       </header>
 
@@ -202,11 +207,14 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
                 <p className="text-sm font-medium" id={`site-${kind}-label`}>{kind === 'logo' ? s.logo : s.favicon}</p>
                 <p className="text-muted-foreground text-xs">{kind === 'logo' ? s.logoHint : s.faviconHint}</p>
               </div>
-              {url && (
-                // Owner art is shown as is: no crop, overlay or badge (owner rule)
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={url} alt="" width={48} height={48} className="h-12 w-12 rounded object-contain" data-testid={`studio-site-${kind}-img`} />
-              )}
+              {(() => {
+                const safeImg = safeImageUrl(url);
+                return safeImg ? (
+                  // Owner art is shown as is: no crop, overlay or badge (owner rule)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={safeImg} alt="" width={48} height={48} className="h-12 w-12 rounded object-contain" data-testid={`studio-site-${kind}-img`} />
+                ) : null;
+              })()}
               <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 text-sm">
                 {busy === kind ? s.uploading : s.upload}
                 <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-labelledby={`site-${kind}-label`} onChange={(e) => upload(kind, e.target.files?.[0])} data-testid={`studio-site-${kind}-file`} />

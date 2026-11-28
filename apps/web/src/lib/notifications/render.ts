@@ -79,9 +79,10 @@ export function relativeTime(iso: string, t: AppTranslations, locale: string, no
 
 /** Server action URLs are locale-less ("/video/123"); prefix the viewer's locale. */
 export function localizeActionUrl(url: string | null | undefined, lang: string): string | null {
-  if (!url || !url.startsWith('/') || url.startsWith('//')) return null;
+  if (!url || !url.startsWith('/') || url.startsWith('//') || url.includes('\\') || /[\u0000-\u001F\u007F]/.test(url)) return null;
+  const safeLang = lang === 'ar' ? 'ar' : 'en';
   if (/^\/(en|ar)(\/|$|\?)/.test(url)) return url;
-  return `/${lang}${url}`;
+  return `/${safeLang}${url}`;
 }
 
 /** Same-tab signal so the header badge follows changes made on the notifications page. */

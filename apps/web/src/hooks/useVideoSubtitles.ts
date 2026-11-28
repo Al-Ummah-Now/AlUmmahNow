@@ -52,10 +52,24 @@ export function useVideoSubtitles(videoId: string | undefined, uiLocale: string,
           setTracks(playerTracks);
           return;
         }
-        // Owner-only video: fetch each track with the token; a track that fails is left out
+        // Owner-only video: fetch each track with the token (only on the API's own origin so a
+        // third-party track URL can never receive the viewer's bearer token)
+        let apiOrigin: string | null = null;
+        try {
+          apiOrigin = new URL(apiUrl).origin;
+        } catch {
+          apiOrigin = null;
+        }
         const loaded = await Promise.all(
           playerTracks.map(async (track) => {
-            const res = await fetch(track.src, { signal: controller.signal, headers: auth, cache: 'no-store' });
+            let trackOrigin: string | null = null;
+            try {
+              trackOrigin = new URL(track.src, apiUrl).origin;
+            } catch {
+              return null;
+            }
+            const sendAuth = apiOrigin !== null && trackOrigin === apiOrigin;
+            const res = await fetch(track.src, { signal: controller.signal, ...(sendAuth ? { headers: auth } : {}), cache: 'no-store' });
             if (!res.ok) return null;
             const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/vtt' }));
             blobUrls.push(url);

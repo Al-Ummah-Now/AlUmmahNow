@@ -7,6 +7,7 @@
  */
 
 import { sanitizeEventPayload, sanitizeText } from './InputSanitizer';
+import { sanitizeLogText } from './safe-input';
 
 export const MAX_REPORT_BYTES = 16 * 1024;
 export const MAX_REPORTED_EVENTS = 20;
@@ -33,10 +34,10 @@ export function normalizeSecurityEvents(payload: unknown): NormalizedSecurityEve
     .map(event => ({
       type: String(event.type),
       severity: SEVERITIES.has(String(event.severity)) ? String(event.severity) : 'medium',
-      reason: sanitizeText(String(event.reason ?? ''), 200),
+      reason: sanitizeLogText(sanitizeText(String(event.reason ?? ''), 200), 200),
       context: typeof event.context === 'object' && event.context !== null ? (event.context as Record<string, unknown>) : {},
-      path: typeof event.path === 'string' ? event.path.split(/[?#]/)[0] : undefined,
-      timestamp: typeof event.timestamp === 'string' ? event.timestamp : undefined,
+      path: typeof event.path === 'string' ? sanitizeLogText(event.path.split(/[?#]/)[0], 300) : undefined,
+      timestamp: typeof event.timestamp === 'string' ? sanitizeLogText(event.timestamp, 64) : undefined,
     }));
 }
 
@@ -56,7 +57,7 @@ export function normalizeCspReports(payload: unknown): Record<string, string | n
       const pick = (...keys: string[]): string => {
         for (const key of keys) {
           const value = report[key];
-          if (typeof value === 'string') return sanitizeText(value.split(/[?#]/)[0], 300);
+          if (typeof value === 'string') return sanitizeLogText(sanitizeText(value.split(/[?#]/)[0], 300), 300);
         }
         return '';
       };

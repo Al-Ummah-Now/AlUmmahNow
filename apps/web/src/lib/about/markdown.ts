@@ -28,15 +28,25 @@ export interface LinkContext {
   locale: 'en' | 'ar';
 }
 
+import { safeHttpUrl, safeMailtoHref, safeSameOriginPath } from '@/lib/security/safe-input';
+
 /** A link target, or null when it is not safe to link. */
 export function resolveHref(raw: string, ctx: LinkContext): { href: string; external: boolean } | null {
   const href = raw.trim();
-  if (/^(https?:\/\/|mailto:)/i.test(href)) return { href, external: true };
-  if (href.startsWith('/') && !href.startsWith('//')) {
-    const path = /^\/(en|ar)(\/|$)/.test(href) ? href : `/${ctx.locale}${href}`;
-    return ctx.wwwUrl ? { href: `${ctx.wwwUrl}${path}`, external: true } : { href: path, external: false };
+  if (!href || /[\u0000-\u001F\u007F]/.test(href)) return null;
+  const http = safeHttpUrl(href);
+  if (http) return { href: http, external: true };
+  if (/^mailto:/i.test(href)) {
+    const mailto = safeMailtoHref(href.slice(7));
+    return mailto ? { href: mailto, external: true } : null;
   }
-  if (href.startsWith('#')) return { href, external: false };
+  const rel = safeSameOriginPath(href);
+  if (rel) {
+    const path = /^\/(en|ar)(\/|$)/.test(rel) ? rel : `/${ctx.locale}${rel}`;
+    const wwwBase = ctx.wwwUrl ? safeHttpUrl(ctx.wwwUrl) : null;
+    return wwwBase ? { href: `${wwwBase.replace(/\/+$/, '')}${path}`, external: true } : { href: path, external: false };
+  }
+  if (href.startsWith('#') && /^#[A-Za-z0-9._:-]+$/.test(href)) return { href, external: false };
   return null;
 }
 

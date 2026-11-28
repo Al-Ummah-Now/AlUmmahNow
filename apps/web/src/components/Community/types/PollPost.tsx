@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger-client';
 import { useState } from 'react';
 import Image from 'next/image';
 import { CommunityPost, PollOption, formatDate, formatPercent, fillTemplate } from '@al-ummah/shared-types';
+import { safeImageUrl } from '@/lib/security/safe-input';
 import { cn } from '@/lib/utils';
 import { voteOnPoll } from '@/lib/api/community-posts';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -171,28 +172,31 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
                 </div>
 
                 {/* Option Text/Image */}
-                {option.image ? (
-                  <div className="flex-1 min-w-0">
-                    <div className="relative w-full h-32">
-                      <Image
-                        src={option.image.url}
-                        alt={optionLabel}
-                        fill
-                        className="object-cover rounded"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
+                {(() => {
+                  const safeImg = option.image ? safeImageUrl(option.image.url) : null;
+                  return safeImg ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="relative w-full h-32">
+                        <Image
+                          src={safeImg}
+                          alt={optionLabel}
+                          fill
+                          className="object-cover rounded"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                      </div>
+                      {option.image?.caption && (
+                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                          {option.image.caption}
+                        </p>
+                      )}
                     </div>
-                    {option.image.caption && (
-                      <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                        {option.image.caption}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <span className="flex-1 text-gray-900 dark:text-gray-100">
-                    {option.text}
-                  </span>
-                )}
+                  ) : (
+                    <span className="flex-1 text-gray-900 dark:text-gray-100">
+                      {option.text}
+                    </span>
+                  );
+                })()}
 
                 {/* Percentage */}
                 {showResults && (

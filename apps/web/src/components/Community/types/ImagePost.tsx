@@ -2,6 +2,7 @@
 
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { CommunityPost } from '@al-ummah/shared-types';
+import { safeImageUrl } from '@/lib/security/safe-input';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { useState } from 'react';
@@ -15,9 +16,16 @@ interface ImagePostProps {
 export default function ImagePost({ post }: ImagePostProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
 
-  if (!post.images || post.images.length === 0) return null;
+  const safeImages = (post.images ?? [])
+    .map((img) => {
+      const url = safeImageUrl(img.url);
+      return url ? { ...img, url } : null;
+    })
+    .filter((img): img is NonNullable<typeof img> => img !== null);
 
-  const imageCount = post.images.length;
+  if (safeImages.length === 0) return null;
+
+  const imageCount = safeImages.length;
 
   const getGridClass = () => {
     if (imageCount === 1) return 'grid-cols-1';
@@ -42,7 +50,7 @@ export default function ImagePost({ post }: ImagePostProps) {
         getGridClass(),
         imageCount > 4 && 'max-h-[600px] overflow-hidden'
       )}>
-        {post.images.slice(0, 10).map((image, index) => (
+        {safeImages.slice(0, 10).map((image, index) => (
           <div
             key={index}
             className={cn(
@@ -89,8 +97,8 @@ export default function ImagePost({ post }: ImagePostProps) {
           </button>
           <div className="relative max-w-7xl max-h-[90vh] w-full h-full">
             <Image
-              src={post.images[selectedImage].url}
-              alt={post.images[selectedImage].caption || `Image ${selectedImage + 1}`}
+              src={safeImages[selectedImage].url}
+              alt={safeImages[selectedImage].caption || `Image ${selectedImage + 1}`}
               fill
               className="object-contain"
               onClick={(e) => e.stopPropagation()}

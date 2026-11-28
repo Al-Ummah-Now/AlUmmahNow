@@ -66,11 +66,12 @@ export function robotsTxt(production: boolean, origin?: string): string {
  * /<locale>/video/<id>, other query kept; null when the URL is not that form
  */
 export function legacyWatchRedirect(pathname: string, search: URLSearchParams, fallbackLocale: string): string | null {
-  const match = /^(?:\/([a-z]{2}))?\/video\/?$/.exec(pathname);
+  const match = /^(?:\/(en|ar))?\/video\/?$/.exec(pathname);
   const vid = search.get('vid');
-  if (!match || !vid) return null;
+  if (!match || !vid || vid === '.' || vid === '..' || vid.length > 256 || /[\u0000-\u001F\u007F]/.test(vid)) return null;
+  const locale = match[1] || (fallbackLocale === 'ar' ? 'ar' : 'en');
   const rest = new URLSearchParams(search);
   rest.delete('vid');
   const query = rest.toString();
-  return `/${match[1] || fallbackLocale}/video/${encodeURIComponent(vid)}${query ? `?${query}` : ''}`;
+  return `/${locale}/video/${encodeURIComponent(vid)}${query ? `?${query}` : ''}`;
 }

@@ -17,6 +17,7 @@ import {
   type ShelfKind,
 } from '@al-ummah/shared-types';
 import { resolveHref } from './markdown';
+import { safeHttpUrl } from '@/lib/security/safe-input';
 
 export interface AboutBlocksContext {
   /** The page's language. */
@@ -66,7 +67,10 @@ export function renderAboutBlocks(blocks: ServedBlock[], ctx: AboutBlocksContext
         heroIsPageHeading: hero,
         hasCover: false,
         href: (u) => resolveHref(u, link)?.href ?? null,
-        image: (ref, o) => (/^https:\/\//i.test(ref.url) ? defaultImage(ref, o) : ''),
+        image: (ref, o) => {
+          const safeUrl = safeHttpUrl(ref.url, { allowHttp: false });
+          return safeUrl ? defaultImage({ ...ref, url: safeUrl }, o) : '';
+        },
         watchHref: (kind, id) => (id ? `/${ctx.locale}/${WATCH[kind]}/${encodeURIComponent(id)}` : null),
         postHref: (p) => (ctx.wwwUrl && p.slug ? `${ctx.wwwUrl}/${ctx.locale}/articles/${encodeURIComponent(p.slug)}/` : null),
       })

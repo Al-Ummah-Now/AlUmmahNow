@@ -1,4 +1,6 @@
 "use client";
+import { safeHttpUrl, safeImageUrl, safeSameOriginPath } from '@/lib/security/safe-input';
+
 export function assertIsNode(e: EventTarget | null): asserts e is Node {
   if (!e || !("nodeType" in e)) {
     throw new Error(`Node expected`);
@@ -36,21 +38,30 @@ export class Observable<T> {
 }
 
 export function resolveUrl(url: string, baseUrl?: string): string {
-  // Handle data URIs (base64 encoded images)
-  if (url.startsWith("data:")) {
-    return url; // Data URIs should be returned as-is
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  // Allow safe raster data URIs only (never data:text/html or data:image/svg+xml)
+  if (/^data:/i.test(trimmed)) {
+    return safeImageUrl(trimmed, { allowRelative: false, allowHttp: false, allowDataImage: true }) ?? "";
   }
 
   // Use the provided baseUrl or fallback to window.location.origin in the browser
-  const resolvedBaseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
+  const resolvedBaseUrl = (baseUrl || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/+$/, "");
 
-  if (url.startsWith("http")) {
-    return url; // Fully qualified URL
-  } else if (url.startsWith("/")) {
-    return `${resolvedBaseUrl}${url}`; // Relative URL
-  } else {
-    return `https://${url}`; // Domain or subdomain
+  const external = safeHttpUrl(trimmed);
+  if (external) {
+    return external; // Fully qualified http(s) URL
   }
+  if (trimmed.startsWith("/")) {
+    const safePath = safeSameOriginPath(trimmed);
+    return safePath ? `${resolvedBaseUrl}${safePath}` : "";
+  }
+  // Reject non-http(s) schemes such as javascript:, vbscript:, file:
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return "";
+  }
+  return safeHttpUrl(`https://${trimmed}`) ?? "";
 }
 
 export function removeUnwantedChars(str: string): string {

@@ -18,6 +18,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { channelPath } from '@/lib/channel-url';
 import { reportError } from '@/lib/errors/reporter';
 import { logger } from '@/lib/logger-client';
+import { safeHttpUrl } from '@/lib/security/safe-input';
 import { shareLink } from '@/lib/share/short-link';
 import { uploadErrorMessage } from '@/lib/upload/report-upload-error';
 import {
@@ -340,7 +341,9 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     setConnectError('');
     try {
       const url = await startOAuth(channelId, captions && !!view?.captionsAvailable, lang);
-      window.location.assign(url);
+      const safeUrl = safeHttpUrl(url);
+      if (!safeUrl) throw new Error('Invalid OAuth redirect URL');
+      window.location.assign(safeUrl);
     } catch (error) {
       if (isFeatureOff(error)) return;
       const code = errorCodeOf(error);

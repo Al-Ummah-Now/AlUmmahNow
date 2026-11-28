@@ -13,7 +13,8 @@ import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/struc
 async function requestOrigin(): Promise<string | null> {
   try {
     const h = await headers();
-    const host = h.get('x-forwarded-host') || h.get('host');
+    // Use Host only: X-Forwarded-Host is client-controllable on Workers
+    const host = h.get('host');
     if (!host) return null;
     // the same origin rule as the watch, playlist and home pages (originFromHost)
     return originFromHost(host);

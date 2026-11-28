@@ -22,6 +22,9 @@ import {
 } from "@/lib/errors/server-report"
 import { isWebTokenRevoked } from "./auth/token-revocation"
 import { revokeTokensOnSignOut } from "./auth/revoke-on-sign-out"
+import { isLocaleSupported } from "@/lib/i18n/utils"
+import { DEFAULT_LOCALE } from "@/lib/i18n/locales"
+import { isLocalHostHeader } from "@/lib/security/safe-input"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -120,14 +123,15 @@ export async function authenticated(): Promise<AuthSubject | false> {
 }
 
 export async function login(locale: string = 'en', returnTo?: unknown) {
+  const safeLocale = isLocaleSupported(locale) ? locale : DEFAULT_LOCALE;
   // Back to the page the sign-in started from (the action posts to that page),
   // or the locale's home when there is none
   const requestHeaders = await getHeaders()
   const host = requestHeaders.get("host")
-  const protocol = host?.includes("localhost") ? "http" : "https"
+  const protocol = isLocalHostHeader(host) ? "http" : "https"
   // A Studio page, the locale's home or /upgrade, when the button names it (lib/auth/sign-in-return.ts); others use the referer
-  const returnPath = safeSignInReturn(returnTo, locale) ?? (host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null)
-  const home = returnPath ?? `/${locale}`
+  const returnPath = safeSignInReturn(returnTo, safeLocale) ?? (host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null)
+  const home = returnPath ?? `/${safeLocale}`
 
   // Check if already logged in via SessionManager
   try {
@@ -174,7 +178,7 @@ export async function login(locale: string = 'en', returnTo?: unknown) {
   // /authorize and /token, so the locale travels in a short-lived cookie
   // instead of the callback query string.
   const cookieStore = await getCookies()
-  cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
+  cookieStore.set("auth_locale", safeLocale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
   // An interactive sign-in: not silent, back to the page it started from
   cookieStore.delete("auth_silent")
   if (returnPath) cookieStore.set(RETURN_COOKIE, returnPath, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
@@ -188,10 +192,11 @@ export async function login(locale: string = 'en', returnTo?: unknown) {
   const nonce = newStateNonce()
   cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"))
   if (challenge?.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"))
-  redirect(withAuthorizeLocale(withState(url, nonce), locale))
+  redirect(withAuthorizeLocale(withState(url, nonce), safeLocale))
 }
 
 export async function logout(locale: string = 'en') {
+  const safeLocale = isLocaleSupported(locale) ? locale : DEFAULT_LOCALE;
   // Clear SessionManager if available
   try {
     const { SessionManager } = await import('./auth/session-manager');
@@ -214,6 +219,6 @@ export async function logout(locale: string = 'en') {
   // signs out of profile and admin), then come back here
   const headers = await getHeaders()
   const host = headers.get("host")
-  const protocol = host?.includes("localhost") ? "http" : "https"
-  redirect(startSingleSignOut(process.env.Issuer!, `${protocol}://${host}/${locale}`))
+  const protocol = isLocalHostHeader(host) ? "http" : "https"
+  redirect(startSingleSignOut(process.env.Issuer!, `${protocol}://${host}/${safeLocale}`))
 }

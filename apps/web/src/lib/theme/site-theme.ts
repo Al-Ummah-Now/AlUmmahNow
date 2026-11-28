@@ -94,7 +94,10 @@ async function edge(): Promise<{ cache: EdgeCache; after: AfterResponse } | null
 const keptKey = (adminApi: string) => `https://site-theme.cache.invalid/v1?of=${encodeURIComponent(adminApi)}`;
 
 /** A theme that may be rendered: one of ours, or a package whose CSS stays in its <style> and its scope. */
-const safePackageCss = (id: string, css: string) => css.length <= MAX_CSS_BYTES && !/<\/?style|<script/i.test(css) && css.includes(`html[data-theme='${id}']`);
+const safePackageCss = (id: string, css: string) =>
+  css.length <= MAX_CSS_BYTES &&
+  !/<\/?style|<script|<!--|-->|@import\b|expression\s*\(|javascript\s*:/i.test(css) &&
+  css.includes(`html[data-theme='${id}']`);
 const validTheme = (theme: Partial<ActiveSiteTheme> | null | undefined): theme is ActiveSiteTheme =>
   theme?.css === null ? isBuiltInSiteTheme(theme.id) : typeof theme?.css === 'string' && typeof theme.id === 'string' && PACKAGE_ID.test(theme.id) && safePackageCss(theme.id, theme.css);
 

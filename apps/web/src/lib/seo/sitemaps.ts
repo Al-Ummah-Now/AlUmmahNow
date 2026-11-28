@@ -47,7 +47,9 @@ const xml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 // Characters XML 1.0 forbids (control characters) are dropped from text nodes
 const clean = (text: string) => xml(text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, ''));
-const day = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso : null);
+// Strict anchored ISO-8601 date/timestamp (prevents XML tag injection via unanchored prefix matches)
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2}))?$/;
+const day = (iso: string | null | undefined) => (iso && ISO_DATE_RE.test(iso) ? iso : null);
 
 const URLSET_OPEN = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">';
 
@@ -110,7 +112,10 @@ export function videosSitemapXml(origin: string, videos: SitemapVideo[]): string
           contentLoc(v.contentUrl),
           `<video:player_loc>${xml(`${origin}/embed/v/${encodeURIComponent(v.id)}`)}</video:player_loc>`,
           duration ? `<video:duration>${duration}</video:duration>` : '',
-          day(v.publishedAt) ? `<video:publication_date>${v.publishedAt}</video:publication_date>` : '',
+          (() => {
+            const pubDate = day(v.publishedAt);
+            return pubDate ? `<video:publication_date>${xml(pubDate)}</video:publication_date>` : '';
+          })(),
           '<video:family_friendly>yes</video:family_friendly>',
           v.isLive ? '<video:live>yes</video:live>' : '',
           '</video:video>',
