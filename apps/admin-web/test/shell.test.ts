@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { activeItem, badgeText, breadcrumbs, groupedItems, NAV_ITEMS, visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import { fold, matchPages, move, paletteKinds, paletteOptions, START_PAGES } from '../src/components/shell/palette-model';
 import { isDark, MODE_SCRIPT } from '../src/lib/color-mode';
-import { acceptPackageCss } from '../src/lib/site-theme';
+import { acceptPackageCss, getSiteTheme, resetSiteThemeCache } from '../src/lib/site-theme';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
@@ -181,6 +181,41 @@ describe('colour mode', () => {
 });
 
 describe('site theme package CSS', () => {
+  it('loads published CSS from the configured admin API origin', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalApi = process.env.ADMIN_API_URL;
+    const originalPinned = process.env.NEXT_PUBLIC_ACTIVE_THEME;
+    const api = 'https://admin-api.example.test';
+    const css = "html[data-theme='custom-1']{--x:1}";
+    const fetches: Array<{ url: string; redirect?: RequestRedirect }> = [];
+    process.env.ADMIN_API_URL = api;
+    delete process.env.NEXT_PUBLIC_ACTIVE_THEME;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      fetches.push({ url, redirect: init?.redirect });
+      if (url.endsWith('/site-theme')) return Response.json({
+        theme: 'custom-1',
+        package: { id: 'custom-1', version: '1.2.3', css: 'https://assets.example.test/theme.css' },
+      });
+      return new Response(css);
+    };
+    resetSiteThemeCache();
+    try {
+      assert.deepEqual(await getSiteTheme(), { id: 'custom-1', css });
+      assert.deepEqual(fetches, [
+        { url: api + '/public/site-theme', redirect: 'error' },
+        { url: api + '/public/themes/custom-1/1.2.3/theme.css', redirect: 'error' },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalApi === undefined) delete process.env.ADMIN_API_URL;
+      else process.env.ADMIN_API_URL = originalApi;
+      if (originalPinned === undefined) delete process.env.NEXT_PUBLIC_ACTIVE_THEME;
+      else process.env.NEXT_PUBLIC_ACTIVE_THEME = originalPinned;
+      resetSiteThemeCache();
+    }
+  });
+
   it('accepts CSS scoped to its own theme only', () => {
     assert.equal(acceptPackageCss("html[data-theme='custom-1']{--x:1}", 'custom-1'), "html[data-theme='custom-1']{--x:1}");
     assert.equal(acceptPackageCss("html[data-theme='other']{--x:1}", 'custom-1'), null);

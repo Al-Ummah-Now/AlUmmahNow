@@ -353,6 +353,7 @@ export function validateWebhookUrl(raw: unknown, environment?: string): { url: s
     return { error: 'url must be an https URL' };
   }
   if (u.protocol !== 'https:') return { error: 'url must use https' };
+  if (u.port) return { error: 'url must use the default https port' };
   if (u.username || u.password) return { error: 'url must not contain a user name or password' };
   // A fully qualified name may end in dots (`localhost.`); strip them so the suffix rules see the real name
   const host = u.hostname.toLowerCase().replace(/\.+$/, '');
@@ -453,7 +454,10 @@ async function deliver(env: StatusNotifyEnv, msg: QueueMessageLike<Extract<Statu
     const email = renderIncidentEmail({ to: sub.address, locale: sub.locale, token: sub.token, base, incident, update, environment: env.ENVIRONMENT });
     result = await sendContactEmail(env, email, { idempotencyKey: `status-${notificationId}-${subscriberId}`, fetchImpl });
   } else {
-    result = await postWebhook(sub.address, sub.secret ?? '', webhookPayload(n, incident, update, base, env.ENVIRONMENT, now), fetchImpl);
+    const destination = validateWebhookUrl(sub.address, env.ENVIRONMENT);
+    result = 'error' in destination
+      ? { status: 'failed', error: destination.error }
+      : await postWebhook(destination.url, sub.secret ?? '', webhookPayload(n, incident, update, base, env.ENVIRONMENT, now), fetchImpl);
   }
   if (result.status !== 'failed') {
     // sent, or sunk (an E2E address outside production); skipped/queued never come back from a send

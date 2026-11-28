@@ -38,7 +38,7 @@ export function acceptPackageCss(css: string, id: string): string | null {
 
 async function packageCss(url: string, id: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS), next: { revalidate: PACKAGE_TTL_SECONDS } });
+    const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS), next: { revalidate: PACKAGE_TTL_SECONDS } });
     if (!response.ok) return null;
     return acceptPackageCss(await response.text(), id);
   } catch (error) {
@@ -71,14 +71,17 @@ export async function getSiteTheme(): Promise<ActiveSiteTheme> {
   try {
     const response = await fetch(`${adminApi}/public/site-theme`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      redirect: 'error',
       next: { revalidate: TTL_SECONDS },
     });
     if (!response.ok) return unanswered();
     const answer = (await response.json()) as Partial<PublicSiteTheme> | null;
     if (isBuiltInSiteTheme(answer?.theme)) return good({ id: answer.theme, css: null });
     const pkg = answer?.package;
-    if (!pkg || pkg.id !== answer?.theme || !/^[a-z][a-z0-9-]{1,39}$/.test(pkg.id) || !/^https?:\/\//.test(pkg.css)) return unanswered();
-    const css = await packageCss(pkg.css, pkg.id);
+    if (!pkg || pkg.id !== answer?.theme || !/^[a-z][a-z0-9-]{1,39}$/.test(pkg.id)
+      || typeof pkg.version !== 'string' || !/^\d{1,10}\.\d{1,10}\.\d{1,10}$/.test(pkg.version)) return unanswered();
+    const url = new URL('/public/themes/' + pkg.id + '/' + pkg.version + '/theme.css', adminApi);
+    const css = await packageCss(url.href, pkg.id);
     return css ? good({ id: pkg.id, css }) : unanswered();
   } catch (error) {
     logger.debug('[site-theme] Site theme unavailable, using the last one or the default', { error: error instanceof Error ? error.message : String(error) });
