@@ -19,6 +19,8 @@ type Locale = 'ar' | 'en';
 
 export type CardCopy = {
   text: string;
+  ayat?: readonly string[];
+  pageLabel?: string;
   citation: string;
   credit?: string;
   sourceUrl?: string;
@@ -49,7 +51,8 @@ export async function readQuranCard(
     version: result.current.version,
     copy: {
       text: verse.text,
-      citation: locale === 'ar' ? `سورة ${name} · الآية ${number}` : `${name} · Verse ${number}`,
+      ayat: [verse.text],
+      citation: locale === 'ar' ? `سورة ${name}، الآية ${number}` : `${name}, Verse ${number}`,
       credit: QURAN_ATTRIBUTION[locale],
       sourceUrl: QURAN_FOUNDATION_URL,
     },

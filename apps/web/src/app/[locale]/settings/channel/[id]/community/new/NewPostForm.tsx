@@ -325,7 +325,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           lg:grid-cols-3
           gap-6 md:gap-8
         ">
-          <div className="lg:col-span-2 space-y-6">
+          <div className={selectedType === PostType.CARDS ? "lg:col-span-3 space-y-6" : "lg:col-span-2 space-y-6"}>
             <Card className="p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold mb-4">
                 {isRTL ? 'اختر نوع المنشور' : 'Select Post Type'}
@@ -407,7 +407,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 )}
 
                 {selectedType === PostType.CARDS && (
-                  <DesignedCardForm channelId={id} locale={postLocale} onPublished={() => router.push(`/${locale}/settings/channel/${id}/community`)} />
+                  <>
+                    <label className="mb-4 flex w-fit items-center gap-2 text-sm">
+                      {t.community.postLanguage}
+                      <select className="rounded-md border bg-background p-2" value={postLocale} onChange={(event) => setPostLocale(event.target.value === 'ar' ? 'ar' : 'en')}>
+                        <option value="en">English</option><option value="ar">العربية</option>
+                      </select>
+                    </label>
+                    <DesignedCardForm channelId={id} locale={postLocale} onPublished={() => router.push(`/${locale}/settings/channel/${id}/community`)} />
+                  </>
                 )}
 
                 {selectedType === PostType.LINK && (
@@ -421,7 +429,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             )}
           </div>
 
-          <div className="space-y-6">
+          {selectedType !== PostType.CARDS && <div className="space-y-6">
             <Card className="p-4 md:p-6">
               <h3 className="text-base md:text-lg font-semibold mb-4">
                 {isRTL ? 'الإعدادات' : 'Settings'}
@@ -483,7 +491,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 </div>
               </div>
             </Card>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

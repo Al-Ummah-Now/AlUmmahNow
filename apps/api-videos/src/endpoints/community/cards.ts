@@ -111,7 +111,10 @@ export class CardImage extends PublicRoute {
     }
     const current = post.designedCard.quran && await readQuranCurrent(bucket);
     if (post.designedCard.quran && !current) return c.notFound();
-    const image = await bucket.get(cardImageKey(channelId, cardId, current?.version));
+    const rawPage = c.req.query('page');
+    if (rawPage !== undefined && !/^(?:[1-9]|[1-3][0-9]|40)$/u.test(rawPage)) return c.notFound();
+    const page = rawPage === undefined ? undefined : Number(rawPage) - 1;
+    const image = await bucket.get(cardImageKey(channelId, cardId, current?.version, page));
     if (!image) {
       if (current) await queueQuranCardRefresh(c.env, post, current.version);
       c.header('Cache-Control', 'private, no-store');

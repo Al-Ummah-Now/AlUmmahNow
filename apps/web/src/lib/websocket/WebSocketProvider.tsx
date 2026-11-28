@@ -80,7 +80,8 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     void (async () => {
       if (cancelled) return;
       manager.connect(user?.id).catch((error) => {
-        logger.error("Failed to connect to WebSocket:", error);
+        // Initial transport failures are retried and logged by WebSocketManager.
+        logger.warn("Initial realtime connection failed:", error);
       });
     })();
 

@@ -7,7 +7,7 @@ import { QafSourcePicker } from './QafSourcePicker';
 
 type Locale = 'en' | 'ar';
 type SourceKind = 'message' | 'quran' | 'qaf';
-type Preview = { html: string; width: number; height: number };
+type Preview = { pages: string[]; width: number; height: number };
 
 export async function cardAction<T>(channelId: string, path = '', body?: object, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/studio/cards/${encodeURIComponent(channelId)}${path}`, {
@@ -24,7 +24,7 @@ export async function cardAction<T>(channelId: string, path = '', body?: object,
 const field = 'block w-full rounded-md border bg-background p-2';
 const label = 'block space-y-1 text-sm font-medium';
 
-function CardPreview({ preview, title }: { preview: Preview; title: string }) {
+function CardPreview({ preview, title }: { preview: { html: string; width: number; height: number }; title: string }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = host.current;
@@ -53,17 +53,9 @@ function CardPreview({ preview, title }: { preview: Preview; title: string }) {
       canvas.style.transform = `scale(${entry.contentRect.width / preview.width})`;
     });
     resize.observe(element);
-    const text = canvas.querySelector('blockquote');
-    void Promise.all([document.fonts.load('32px Amiri', 'ع'), document.fonts.load('32px SourceSerif', 'A')]).then(() => {
-      if (!text) return;
-      for (let size = 76; size >= 22; size -= 2) {
-        text.style.fontSize = `${size}px`;
-        if (text.scrollHeight <= text.clientHeight) break;
-      }
-    }).catch(() => {});
     return () => resize.disconnect();
-  }, [preview]);
-  return <div ref={host} aria-label={title} className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg" style={{ aspectRatio: preview.width / preview.height }} />;
+  }, [preview.html, preview.width, preview.height]);
+  return <div ref={host} aria-label={title} className="relative mx-auto w-full overflow-hidden rounded-lg" style={{ aspectRatio: preview.width / preview.height }} />;
 
 }
 
@@ -123,7 +115,8 @@ export function DesignedCardForm({ channelId, locale, onPublished }: { channelId
     }
   }
 
-  return <div className="space-y-4" lang={locale} dir={ar ? 'rtl' : 'ltr'}>
+  return <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" lang={locale} dir={ar ? 'rtl' : 'ltr'}>
+    <div className="space-y-4">
     <fieldset disabled={busy} className="space-y-4">
       <label className={label}>{pick('Source', 'المصدر')}
         <select className={field} value={kind} onChange={(event) => setKind(event.target.value as SourceKind)}>
@@ -170,12 +163,24 @@ export function DesignedCardForm({ channelId, locale, onPublished }: { channelId
         </label>
       </div>
     </fieldset>
-    {currentPreview && <CardPreview preview={currentPreview.image} title={pick('Card preview', 'معاينة البطاقة')} />}
     {status === 'failure' && <p role="alert" className="text-sm text-destructive">{pick('Could not finish the card. Check the source and try again.', 'تعذّر إكمال البطاقة. تحقّق من المصدر وحاول مجددًا.')}</p>}
     {busy && <p role="status" className="text-sm">{status === 'publishing' ? pick('Publishing card…', 'جارٍ نشر البطاقة…') : pick('Preparing preview…', 'جارٍ إعداد المعاينة…')}</p>}
     <div className="flex flex-wrap gap-2">
       <Button type="button" variant="outline" disabled={!valid || busy} onClick={() => void submit(false)}>{pick('Preview', 'معاينة')}</Button>
       <Button type="button" disabled={!currentPreview || busy} onClick={() => void submit(true)}>{pick('Publish card', 'نشر البطاقة')}</Button>
     </div>
+    </div>
+    {currentPreview && (
+      <section className="min-w-0 rounded-xl border bg-card p-3 sm:p-4" aria-label={pick('Card preview', 'معاينة البطاقة')}>
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3">
+          {currentPreview.image.pages.map((html, index, all) => (
+            <div key={index} className={`shrink-0 snap-start ${all.length > 1 ? 'w-[88%]' : 'w-full'}`}>
+              <CardPreview preview={{ html, width: currentPreview.image.width, height: currentPreview.image.height }}
+                title={localizeDigits(locale, `${index + 1}/${all.length}`)} />
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
   </div>;
 }

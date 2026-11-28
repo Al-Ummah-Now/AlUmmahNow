@@ -11,6 +11,7 @@ import Queue, { MessageType } from '../queue';
 import { addToChannelIndex, writeCommunityPost, type WritePostEnv } from '../community/writePost';
 import { rememberPostLocation } from '../community-posts';
 import { sanitizePostContent } from '../post-content';
+import { cardPages } from './paginate';
 import { captureCard } from './capture';
 import { cardDesignSchema, cardDimensions, cardDocument } from './design';
 import { canCreateCard, cardSourceSchema, readQafCard, readQuranCard, type CardCopy } from './source';
@@ -59,14 +60,31 @@ async function loadCardFonts(bucket: R2Bucket) {
   return { amiri, sourceSerif };
 }
 
-async function renderToBucket(env: AppBindings, bucket: R2Bucket, key: string, copy: CardCopy, design: z.infer<typeof cardDesignSchema>, locale: 'en' | 'ar') {
-  if (await bucket.head(key)) return;
-  const image = await captureCard(env, cardDocument(copy, design, locale, await loadCardFonts(bucket)), design.format);
-  await bucket.put(key, image, { httpMetadata: { contentType: 'image/png' }, onlyIf: { etagDoesNotMatch: '*' } });
+export function cardImageKey(channelId: string, id: string, version?: string, page?: number) {
+  const file = page === undefined ? id : `${id}-p${page + 1}`;
+  return version ? `cards/quran/${version}/${channelId}/${file}.png` : `cards/posts/${channelId}/${file}.png`;
 }
 
-export function cardImageKey(channelId: string, id: string, version?: string) {
-  return version ? `cards/quran/${version}/${channelId}/${id}.png` : `cards/posts/${channelId}/${id}.png`;
+async function renderPages(env: AppBindings, bucket: R2Bucket, channelId: string, id: string, pages: CardCopy[], design: z.infer<typeof cardDesignSchema>, locale: 'en' | 'ar', version?: string) {
+  const fonts = await loadCardFonts(bucket);
+  for (const [page, copy] of pages.entries()) {
+    const key = cardImageKey(channelId, id, version, page);
+    if (await bucket.head(key)) continue;
+    const image = await captureCard(env, cardDocument(copy, design, locale, fonts), design.format);
+    await bucket.put(key, image, { httpMetadata: { contentType: 'image/png' }, onlyIf: { etagDoesNotMatch: '*' } });
+  }
+}
+
+function cardSlides(channelId: string, id: string, origin: string, pages: CardCopy[], design: z.infer<typeof cardDesignSchema>, includeText: boolean): NonNullable<CommunityPost['slides']> {
+  return pages.map((copy, page) => ({
+    id: `${id}-${page + 1}`,
+    image: {
+      ...cardDimensions(design.format),
+      url: new URL(`/api/community/channels/${channelId}/cards/${id}/image?page=${page + 1}`, origin).href,
+      alt: includeText ? cardPostCopy(copy) : null,
+    },
+    heading: null, body: null, position: 'bottom',
+  }));
 }
 
 export function cardPostCopy(copy: CardCopy) {
@@ -99,7 +117,10 @@ export async function previewCard(env: AppBindings, channel: Channel, actorId: s
   if (!bucket) throw new Error('Card media storage is unavailable');
   const { copy } = await resolveCardCopy(env, channel, actorId, params);
   const fonts = await loadCardFonts(bucket);
-  return { html: cardDocument(copy, params.design, params.locale, fonts), ...cardDimensions(params.design.format) };
+  return {
+    pages: cardPages(copy, params.design, params.locale).map((page) => cardDocument(page, params.design, params.locale, fonts)),
+    ...cardDimensions(params.design.format),
+  };
 }
 
 export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<ExecutionContext, 'waitUntil'>): Promise<JobOutcome> {
@@ -117,7 +138,7 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
     const result = await readQuranCard(bucket, params.source, params.locale);
     if (!result) throw new Error('Synced verse is unavailable');
     if (result.version === params.refreshVersion) {
-      await renderToBucket(env, bucket, cardImageKey(channelId, params.id, result.version), result.copy, params.design, params.locale);
+      await renderPages(env, bucket, channelId, params.id, cardPages(result.copy, params.design, params.locale), params.design, params.locale, result.version);
     }
     return { done: true, result: { postId: params.id } };
   }
@@ -135,13 +156,9 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
 
   const { source, locale, design } = params;
   const { copy, quran } = await resolveCardCopy(env, channel, job.actorId, params);
-  const imageKey = cardImageKey(channelId, params.id, quran?.version);
-  await renderToBucket(env, bucket, imageKey, copy, design, locale);
-  const image = {
-    ...cardDimensions(design.format),
-    url: new URL(`/api/community/channels/${channelId}/cards/${params.id}/image`, params.origin).href,
-    alt: quran ? null : cardPostCopy(copy),
-  };
+  const pages = cardPages(copy, design, locale);
+  await renderPages(env, bucket, channelId, params.id, pages, design, locale, quran?.version);
+  const slides = cardSlides(channelId, params.id, params.origin, pages, design, !quran);
   const post: CommunityPost = {
     id: params.id, channelId, userId: channel.userId,
     ...(job.actorId !== channel.userId ? { authorId: job.actorId } : {}),
@@ -149,7 +166,7 @@ export async function runCardPublish(env: AppBindings, job: AdminJob, ctx: Pick<
     content: quran ? undefined : source.kind === 'qaf' && copy.sourceUrl
       ? writeQafQuote(copy.text, copy.citation, copy.sourceUrl)
       : sanitizePostContent(cardPostCopy(copy).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')),
-    slides: [{ id: params.id, image, heading: null, body: null, position: 'bottom' }],
+    slides,
     designedCard: quran && source.kind === 'quran' ? { quran: { surah: source.surah, ayah: source.ayah }, design } : {},
     likes: 0, comments: 0, shares: 0, views: 0,
     createdAt: job.createdAt, pinned: false, status: PostStatus.PUBLISHED,
@@ -167,12 +184,16 @@ export async function hydrateDesignedCard(env: AppBindings, post: CommunityPost)
   const result = await readQuranCard(env.MEDIA_PRIVATE, { kind: 'quran', ...verse }, post.locale === 'ar' ? 'ar' : 'en');
   if (!result) return { ...post, slides: [] };
   const copy = result.copy;
-  const image = await env.MEDIA_PRIVATE?.head(cardImageKey(post.channelId, post.id, result.version));
+  const design = cardDesignSchema.safeParse(post.designedCard?.design);
+  const origin = env.CARD_PUBLIC_ORIGIN ?? post.slides?.[0]?.image.url;
+  if (!design.success || !origin) return { ...post, content: cardPostCopy(copy), slides: [] };
+  const pages = cardPages(copy, design.data, post.locale === 'ar' ? 'ar' : 'en');
+  const image = await env.MEDIA_PRIVATE?.head(cardImageKey(post.channelId, post.id, result.version, pages.length - 1));
   if (!image) await queueQuranCardRefresh(env, post, result.version);
   return {
     ...post,
     content: cardPostCopy(copy),
-    slides: image ? post.slides?.map((slide) => ({ ...slide, image: { ...slide.image, alt: cardPostCopy(copy) } })) : [],
+    slides: image ? cardSlides(post.channelId, post.id, origin, pages, design.data, true) : [],
   };
 }
 
