@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QAF_LIMITS, QAF_PASSAGE_URL } from '@al-ummah/shared-types';
+import { QAF_LIMITS, QAF_PASSAGE_URL, QAF_TURATH_URL } from '@al-ummah/shared-types';
 
 export const qafLocale = z.enum(['en', 'ar']).default('en');
 const ids = <T extends z.ZodType>(id: T) => z.array(id).min(1).max(20);
@@ -44,7 +44,7 @@ export const qafPassage = z.object({
   id: z.uuid(),
   title: z.string(),
   url: z.string().regex(QAF_PASSAGE_URL),
-  turathUrl: z.string().regex(/^https:\/\/app\.turath\.io\/[\w/?%&=.,#-]+$/),
+  turathUrl: z.string().regex(QAF_TURATH_URL),
   text: z.string(),
   pages: z.array(z.object({ vol: z.string().nullable(), page: z.int().nullable() })),
   book: z.object({ id: z.uuid(), title: z.string(), titleArabic: z.string() }),

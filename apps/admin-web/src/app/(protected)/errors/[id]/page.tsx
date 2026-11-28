@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import { videoFailuresById } from '@/lib/api/failures';
 import { causedByFile, failureIds } from '@/lib/video-failure';
 import { FailureWhy } from '@/components/content/failure';
-import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName, platformName } from '../ui';
+import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, localizedQafError, languageName, platformName } from '../ui';
 import { countryName, sourceLabel } from '../origin';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
 import { ErrorGroupActions } from './ErrorGroupActions';
@@ -76,7 +76,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         {back}
         <div className="flex flex-wrap items-start gap-3">
           <h1 className="text-2xl font-bold text-fg break-words min-w-0 flex-1 [text-wrap:balance]" dir="auto" style={{ textAlign: start }} data-testid="error-group-message">
-            {errorTitle(group)}
+            {localizedQafError(t, errorTitle(group))}
           </h1>
           <ErrorStatusChip status={group.status} label={translateDynamic(t, 'errorStatus', group.status)} testId="error-status" />
           {!!group.test && <TestChip label={t('errorsPage.test')} />}
@@ -136,7 +136,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                 <li key={item.id} className="py-4 first:pt-0 last:pb-0" data-testid="error-item" data-item-id={item.id} data-status={item.status}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-fg" dir="auto" style={failure ? { textAlign: start } : undefined}>{failure?.title ?? item.title}</p>
+                      <p className="font-medium text-fg" dir="auto" style={failure ? { textAlign: start } : undefined}>{failure?.title ?? localizedQafError(t, item.title)}</p>
                       {failure ? (
                         <>
                           <FailureWhy failure={failure} t={t} className="mt-1" />
@@ -144,7 +144,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                           {item.detail && <p className="mt-1 text-xs text-fg-muted break-words" style={{ textAlign: start }}><bdi dir="ltr">{item.detail}</bdi></p>}
                         </>
                       ) : (
-                        item.detail && <p className="text-sm text-fg-muted mt-1 break-words" dir="auto">{item.detail}</p>
+                        item.detail && <p className="text-sm text-fg-muted mt-1 break-words" dir="auto">{localizedQafError(t, item.detail)}</p>
                       )}
                     </div>
                     <ErrorStatusChip status={item.status} label={translateDynamic(t, 'itemStatus', item.status)} testId="error-item-status" />

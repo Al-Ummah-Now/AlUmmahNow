@@ -2,8 +2,18 @@
  * Presentational pieces of the Errors pages (server and client safe).
  */
 
-import { compactNumber, localizeDigits, niceScale, numberFormat } from '@al-ummah/shared-types';
+import { QAF_ERROR_MESSAGES, compactNumber, localizeDigits, niceScale, numberFormat } from '@al-ummah/shared-types';
 import { translateDynamic, type Translator } from '@/i18n/translate';
+
+/** Localize Qaf's fixed reports while preserving the stored diagnostics. */
+export function localizedQafError(t: Translator, text: string): string {
+  switch (text) {
+    case QAF_ERROR_MESSAGES.title: return t('qafSettings.actionTitle');
+    case QAF_ERROR_MESSAGES.week: return t('qafSettings.blockedWeek');
+    case QAF_ERROR_MESSAGES.invalid_keys: return t('qafSettings.blockedKey');
+    default: return text;
+  }
+}
 
 /** The error's message as its title; the type ("UploadError") is shown apart, as a technical detail (errorType). */
 export function errorTitle(g: { name: string | null; message: string }): string {

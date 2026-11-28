@@ -1620,6 +1620,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     excerpt: 'Summary (optional)',
     articleBody: 'Article',
     sources: {
+      readInTurath: 'Read in Turath',
       find: 'Find a source',
       hint: 'Search classical Islamic books with Qaf and cite the passage you insert.',
       topic: 'Topic or phrase',

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type FormEvent, type RefObject } from 'react';
 import { BookOpen, Search } from 'lucide-react';
-import { QAF_PASSAGE_URL, localizeDigits, parseLocaleNumber, writeQafQuote, type QafCandidate, type QafContext, type QafPassage } from '@al-ummah/shared-types';
+import { QAF_PASSAGE_URL, QAF_TURATH_URL, localizeDigits, parseLocaleNumber, writeQafQuote, type QafCandidate, type QafContext, type QafPassage } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -273,8 +273,13 @@ function SourceResult({ passage, channelId, onInsert }: { passage: QafPassage; c
     {expanded && context?.footnotes && <div className="text-sm"><p className="font-medium">{copy.footnotes}</p><p lang="ar" dir="rtl" className={prose}>{context.footnotes}</p></div>}
     {expanded && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <div className="flex flex-wrap gap-2">
-      <Button type="button" size="sm" variant="outline" onClick={toggleContext} aria-expanded={expanded} disabled={pending}>{pending ? copy.searching : expanded ? copy.closeContext : copy.context}</Button>
       <Button type="button" size="sm" disabled={!safeCitation} onClick={onInsert}>{copy.insert}</Button>
+      {QAF_TURATH_URL.test(passage.turathUrl) && (
+        <Button asChild size="sm" variant="outline">
+          <a href={passage.turathUrl} target="_blank" rel="noopener noreferrer nofollow">{copy.readInTurath}</a>
+        </Button>
+      )}
+      <Button type="button" size="sm" variant="outline" onClick={toggleContext} aria-expanded={expanded} disabled={pending}>{pending ? copy.searching : expanded ? copy.closeContext : copy.context}</Button>
     </div>
   </div>;
 }

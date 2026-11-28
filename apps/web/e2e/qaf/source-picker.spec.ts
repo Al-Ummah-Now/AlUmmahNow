@@ -4,7 +4,9 @@ import { join } from 'node:path';
 
 const id = 'd9335f69-e54b-59ae-a78c-50db734b8d50';
 const url = `https://qaf.ai/passages/${id}`;
+const turathUrl = 'https://app.turath.io/book/21660?print_page=4%2C233';
 const passage = {
+  turathUrl,
   id, url, text: 'الصَّبْرُ عِنْدَ الصَّدْمَةِ الأُولَى، وَبِالصَّبْرِ يُفْتَحُ كُلُّ بَابٍ مُغْلَقٍ.',
   book: { title: 'Fayd al-Qadir', titleArabic: 'فيض القدير' },
   author: { name: 'Abd al-Rauf al-Munawi', nameArabic: 'عبد الرؤوف المناوي' },
@@ -59,6 +61,12 @@ for (const locale of ['en', 'ar'] as const) {
     await panel.getByRole('button', { name: labels.search, exact: true }).click();
     await panel.getByRole('button', { name: labels.context }).click();
     await expect(panel.getByText(context.text)).toBeVisible();
+    await expect(panel.getByRole('link', { name: ar ? 'القراءة في تراث' : 'Read in Turath' })).toHaveAttribute('href', turathUrl);
+    await expect(panel.getByRole('button', { name: labels.insert })).toHaveClass(/\bbg-primary\b/);
+    if (ar) {
+      await expect(panel.getByText(/عبر قاف/)).toBeVisible();
+      await expect(panel.getByText(/\bQaf\b/)).toHaveCount(0);
+    }
     await panel.getByText(ar ? 'عوامل التصفية' : 'Filters', { exact: true }).click();
     await shot(panel, `composer-panel-${locale}`);
     await panel.getByRole('button', { name: labels.insert }).click();
@@ -99,7 +107,7 @@ test('renders adversarial Qaf results as plain text and prevents unsafe citation
   const text = '<script>alert(1)</script>\n<img src=x onerror=alert(2)> **literal**';
   await page.route('**/api/studio/sources/qaf-test-channel/search', (route) => route.fulfill({ json: {
     results: [
-      { ...passage, id: 'unsafe', url: 'javascript:alert(3)', text },
+      { ...passage, id: 'unsafe', url: 'javascript:alert(3)', turathUrl: 'data:text/html,x', text },
       { ...passage, text, book: { ...passage.book, title: '<img src=x onerror=alert(4)>' } },
     ],
   } }));
@@ -109,7 +117,7 @@ test('renders adversarial Qaf results as plain text and prevents unsafe citation
   await panel.getByLabel('Topic or phrase').fill('patience');
   await panel.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Insert quotation' }).first()).toBeDisabled();
-  await expect(panel.locator('img, script, a[href^="javascript:"]')).toHaveCount(0);
+  await expect(panel.locator('img, script, a[href^="javascript:"], a[href^="data:"]')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Insert quotation' }).last().click();
   await page.getByTestId('qaf-harness-publish').click();
   const figure = page.getByTestId('qaf-quotation');

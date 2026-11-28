@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  can, channelRoleOf, reportNeedsAction, resolveNeedsAction, tierAllowsChannels, tierAllowsUploads,
+  QAF_ERROR_MESSAGES, can, channelRoleOf, reportNeedsAction, resolveNeedsAction, tierAllowsChannels, tierAllowsUploads,
   type Channel, type ErrorReporterEnv,
 } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
@@ -47,11 +47,9 @@ abstract class QafRoute extends AuthenticatedRoute {
       const result = await queryQaf(c.env, auth.userId, request, {
         report: (code, id) => {
           reportNeedsAction('api-videos', env, c.executionCtx, {
-            key: qafActionKey(code), source: 'ops', title: 'Qaf source search needs attention',
+            key: qafActionKey(code), source: 'ops', title: QAF_ERROR_MESSAGES.title,
             itemType: 'integration', itemId: 'qaf', itemUrl: '/platform-settings',
-            message: code === 'week'
-              ? 'Qaf refused search because the shared account reached its weekly allowance (week).'
-              : 'Qaf refused the API key (invalid_keys). Check or replace the key in Platform settings.',
+            message: QAF_ERROR_MESSAGES[code],
             extra: { reason: code },
             requestId: id && /^[a-zA-Z0-9-]{1,64}$/.test(id) ? id : undefined,
           });
