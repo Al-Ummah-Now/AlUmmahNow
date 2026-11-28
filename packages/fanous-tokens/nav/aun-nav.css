@@ -615,6 +615,18 @@ html[data-theme='fawanees'],html:not([data-theme]){--aun-header-band:linear-grad
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The account lines under a name (e-mail, "acting as") sit inside .aun-menu-item, which takes the
+   theme font; they stay on the header's sans stack, like the section labels */
+.aun-menu-who-sub,
+.aun-acct-email,
+.aun-acct-current {
+  font-family: var(--aun-header-font, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+}
+.aun-menu-who-sub:lang(ar),
+.aun-acct-email:lang(ar),
+.aun-acct-current:lang(ar) {
+  font-family: var(--aun-header-font-ar, 'Noto Naskh Arabic', 'Geeza Pro', system-ui, 'Segoe UI', Tahoma, sans-serif);
+}
 
 /* section header: names the group under it (never upper-cased or letter-spaced: Arabic) */
 .aun-menu-label {
