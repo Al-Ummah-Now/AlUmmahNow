@@ -273,3 +273,10 @@ it('validates legacy site writes before applying settings or page changes', asyn
 		assert.equal(response.status, 400, method + ' ' + path);
 	}
 });
+
+it('refuses a malformed editor user ID before reading the channel', async () => {
+	const bindings = new Proxy({}, { get: () => assert.fail('invalid user ID reached storage') });
+	const response = await sitesInternalRouter.request('/' + CH + '/editor?userId=usr%3A%3Aother', {}, bindings as never);
+	assert.equal(response.status, 200);
+	assert.deepEqual(await response.json(), { canEdit: false });
+});
