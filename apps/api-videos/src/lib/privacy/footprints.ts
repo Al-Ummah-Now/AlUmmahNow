@@ -20,6 +20,8 @@
  * time) and no footprint write failed since (`privacy:footprints:invalid:<bucket>`
  * updated after that start). Otherwise the erase scans the bucket as before.
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import type { SearchDb, SearchStatement } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
@@ -408,9 +410,13 @@ export interface FootprintEnv {
 	reports?: unknown;
 }
 
+const FootprintBackfillBody = z.object({
+	kind: z.literal(FOOTPRINT_BACKFILL_KIND),
+	runId: RecordId, page: z.number().int().nonnegative(), bucket: z.enum(FOOTPRINT_BUCKETS), dryRun: z.boolean(),
+});
+
 export function isFootprintBackfillMessage(body: unknown): body is FootprintBackfillMessage {
-	const b = body as Partial<FootprintBackfillMessage> | null;
-	return !!b && b.kind === FOOTPRINT_BACKFILL_KIND && typeof b.bucket === 'string' && isFootprintBucket(b.bucket) && typeof b.runId === 'string' && typeof b.page === 'number' && typeof b.dryRun === 'boolean';
+	return FootprintBackfillBody.safeParse(body).success;
 }
 
 export async function readFootprintPass(db: SearchDb, bucket: FootprintBucket, dryRun = false): Promise<FootprintPassState | null> {

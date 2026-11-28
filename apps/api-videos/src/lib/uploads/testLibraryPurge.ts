@@ -42,6 +42,8 @@
  * "production".
  */
 
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { readRecordByBunnyGuid } from '../media/refs';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -121,8 +123,13 @@ export interface PurgeMessage {
 
 export type PurgeEnv = ReaperEnv & { BUNNY_TEST_LIBRARY?: string; ENVIRONMENT?: string };
 
+const PurgeBody = z.object({
+	kind: z.literal(PURGE_KIND),
+	runId: RecordId, page: z.number().int().positive(),
+});
+
 export function isPurgeMessage(body: unknown): body is PurgeMessage {
-	return !!body && typeof body === 'object' && (body as { kind?: unknown }).kind === PURGE_KIND;
+	return PurgeBody.safeParse(body).success;
 }
 
 /** Only a QA / stage worker that declares its library a test library. */
@@ -505,8 +512,8 @@ export function purgeRetryDelaySeconds(attempts: number): number {
 export async function handlePurgeBatch(batch: { messages: readonly QueueMessageLike<unknown>[] }, env: PurgeEnv): Promise<void> {
 	for (const msg of batch.messages) {
 		const body = msg.body as PurgeMessage;
-		if (!isPurgeMessage(body) || typeof body.runId !== 'string' || !Number.isInteger(body.page) || body.page < 1) {
-			logger.error('[TestLibraryPurge] Malformed message dropped', { body });
+		if (!isPurgeMessage(body)) {
+			logger.error('[TestLibraryPurge] Malformed message dropped');
 			msg.ack();
 			continue;
 		}

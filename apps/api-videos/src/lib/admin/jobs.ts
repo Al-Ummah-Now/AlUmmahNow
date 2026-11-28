@@ -15,6 +15,8 @@
  * (admin_job_log, the newest ADMIN_JOB_LOG_LIMIT lines) come from search/0071 (TA-8: the Jobs page shows
  * attempts n/max, the next retry and what happened). Log writes never fail or stall the job.
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, ADMIN_JOB_UNCANCELLABLE_KINDS, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, isSuperAdminOnlyJob, MessageType, publishAdminLiveFor, SUPER_ADMIN_ONLY_JOB_KINDS, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -355,6 +357,14 @@ export interface JobMessage {
 	retry(options?: { delaySeconds?: number }): void;
 }
 
+const AdminJobBody = z.object({
+	payload: z.object({
+		jobId: RecordId,
+		runId: RecordId.optional(),
+		ifUnmovedSince: z.iso.datetime().optional(),
+	}),
+});
+
 /**
  * Consumer for the admin-jobs queue. Each message carries a job id; the job
  * row says what to do. A handler error retries the message with backoff; the
@@ -368,13 +378,14 @@ export async function handleAdminJobBatch(
 	onFailed?: (job: AdminJob, error: string) => Promise<void>,
 ): Promise<void> {
 	for (const msg of batch.messages) {
-		const payload = (msg.body as { payload?: { jobId?: unknown; runId?: unknown; ifUnmovedSince?: unknown } } | null)?.payload;
-		const jobId = payload?.jobId;
-		if (typeof jobId !== 'string') {
-			logger.error('[AdminJobs] Message without a job id', { body: msg.body });
+		const parsed = AdminJobBody.safeParse(msg.body);
+		if (!parsed.success) {
+			logger.error('[AdminJobs] Invalid job message dropped');
 			msg.ack();
 			continue;
 		}
+		const { payload } = parsed.data;
+		const { jobId } = payload;
 		let job: AdminJob | null;
 		let runId: string | null = null;
 		try {

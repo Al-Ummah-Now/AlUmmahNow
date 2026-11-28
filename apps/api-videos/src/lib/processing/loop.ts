@@ -17,6 +17,8 @@
  * a record that is already in the target state is not written again.
  */
 
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { videoProviderRecords } from '../media/providers';
 import { bunnyCopyRefused, usableBunnyRef } from '../media/source-changed';
 import type { VideoMediaProviders } from '@al-ummah/shared-types';
@@ -41,14 +43,16 @@ import {
 
 export const PROCESSING_CHECK_KIND = 'processing-check';
 
-export interface ProcessingCheckMessage {
-	kind: typeof PROCESSING_CHECK_KIND;
-	videoId: string;
-	loopId: string;
-	attempt: number;
-	startedAt: string;
-	reason?: string;
-}
+const ProcessingCheckBody = z.object({
+	kind: z.literal(PROCESSING_CHECK_KIND),
+	videoId: RecordId,
+	loopId: RecordId,
+	attempt: z.number().int().nonnegative(),
+	startedAt: z.iso.datetime(),
+	reason: z.string().max(256).optional(),
+});
+
+export type ProcessingCheckMessage = z.infer<typeof ProcessingCheckBody>;
 
 interface SecretBinding {
 	text?(): Promise<string>;
@@ -490,12 +494,13 @@ export async function handleProcessingCheckBatch(
 	env: ProcessingEnv,
 ): Promise<void> {
 	for (const msg of batch.messages) {
-		const body = msg.body as ProcessingCheckMessage;
-		if (!body || body.kind !== PROCESSING_CHECK_KIND || !body.videoId || !body.loopId) {
-			logger.error('[ProcessingLoop] Malformed message dropped', { body });
+		const parsed = ProcessingCheckBody.safeParse(msg.body);
+		if (!parsed.success) {
+			logger.error('[ProcessingLoop] Malformed message dropped');
 			msg.ack();
 			continue;
 		}
+		const body = parsed.data;
 		try {
 			const decision = await runProcessingCheck(env, body);
 			if (decision.kind === 'again') {

@@ -34,6 +34,8 @@
  * Bunny no longer has, owners without a profile.
  * State: global_settings `ops/bunny-collections/runs/<runId>.json` (+ latest.json).
  */
+import { z } from 'zod';
+import { RecordId } from '../../validation/identifiers';
 import { bunnyRef } from '../media/providers';
 import { videoIdForRef } from '../media/refs';
 import { logger } from '../logger';
@@ -183,9 +185,15 @@ export interface CollectionBackfillEnv extends BunnyLibrariesEnv {
 	BUNNY_NAME_PREFIX?: string;
 }
 
+const CollectionBackfillBody = z.object({
+	kind: z.literal(COLLECTION_BACKFILL_KIND),
+	runId: RecordId.max(64), page: z.number().int().nonnegative(), cursor: z.string().max(4096).nullable(), dryRun: z.boolean(),
+	phase: z.enum(['videos', 'unreferenced', 'collections']).optional(), limit: z.number().int().positive().optional(),
+	libraryId: z.number().int().positive().optional(), bunnyPage: z.number().int().positive().optional(),
+}).strict();
+
 export function isCollectionBackfillMessage(body: unknown): body is CollectionBackfillMessage {
-	const b = body as Partial<CollectionBackfillMessage> | null;
-	return !!b && b.kind === COLLECTION_BACKFILL_KIND && typeof b.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(b.runId) && typeof b.page === 'number' && typeof b.dryRun === 'boolean';
+	return CollectionBackfillBody.safeParse(body).success;
 }
 
 function emptyCounts(): CollectionBackfillCounts {
@@ -585,7 +593,7 @@ const RECORD_ERRORS_ON_ATTEMPT = 3;
 export async function handleCollectionBackfillMessage(env: CollectionBackfillEnv, msg: QueueMessageLike, now = new Date()): Promise<void> {
 	const body = msg.body;
 	if (!isCollectionBackfillMessage(body)) {
-		logger.error('[CollectionBackfill] Malformed message dropped', { body });
+		logger.error('[CollectionBackfill] Malformed message dropped');
 		msg.ack();
 		return;
 	}

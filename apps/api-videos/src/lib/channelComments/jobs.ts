@@ -15,6 +15,7 @@
  * that calls POST /internal/channel-comments/retry (registered in admin-api
  * lib/errors-actions.ts). When a flagged job later finishes, the item resolves.
  */
+import { z } from 'zod';
 import { reportNeedsAction, resolveNeedsAction, STUDIO_REMOVED_RETENTION_DAYS, type ErrorReporterEnv, type ExecutionContextLike, type PostComment, type SearchDb } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -71,10 +72,14 @@ export interface ChannelCommentsJobEnv extends ErrorReporterEnv {
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 
+const ChannelCommentsBody = z.discriminatedUnion('job', [
+	z.object({ kind: z.literal(CHANNEL_COMMENTS_KIND), job: z.literal('rebuild'), channelId: z.string().regex(ID),
+		phase: z.enum(['videos', 'posts']), after: z.string().max(4096).optional(), flagged: z.boolean().optional() }),
+	z.object({ kind: z.literal(CHANNEL_COMMENTS_KIND), job: z.literal('purge'), flagged: z.boolean().optional() }),
+]);
+
 export function isChannelCommentsMessage(body: unknown): body is ChannelCommentsMessage {
-	const b = body as { kind?: unknown; job?: unknown; channelId?: unknown } | null;
-	if (!b || typeof b !== 'object' || b.kind !== CHANNEL_COMMENTS_KIND) return false;
-	return b.job === 'purge' || (b.job === 'rebuild' && typeof b.channelId === 'string' && ID.test(b.channelId));
+	return ChannelCommentsBody.safeParse(body).success;
 }
 
 export function rebuildNeedsActionKey(channelId: string): string {
@@ -294,7 +299,7 @@ export async function handleChannelCommentsBatch(batch: { messages: readonly Que
 	for (const msg of batch.messages) {
 		const body = msg.body;
 		if (!isChannelCommentsMessage(body)) {
-			logger.error('[ChannelComments] Malformed message dropped', { body });
+			logger.error('[ChannelComments] Malformed message dropped');
 			msg.ack();
 			continue;
 		}
