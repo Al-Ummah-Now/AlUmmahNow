@@ -245,3 +245,31 @@ describe('internal routes (admin-api)', () => {
 		assert.equal((await call('GET', '/ch_missing')).status, 404);
 	});
 });
+
+it('validates legacy site writes before applying settings or page changes', async () => {
+	const e = env();
+	await grantSite(e, CH, { slug: 'mustafa-elbadry', tier: 'white-label-domain', actor: 'a' });
+	const app = new Hono();
+	app.use('*', async (c, next) => { c.set('userId' as never, OWNER as never); await next(); });
+	app.route('/internal/sites', sitesInternalRouter as never);
+	app.route('/api/sites', sitesRouter as never);
+	const internal = '/internal/sites/' + CH;
+	const studio = '/api/sites/channel/' + CH;
+	const cases = [
+		['GET', '/internal/sites/slug/mustafa-elbadry?channelId=invalid%3A%3Aid', undefined],
+		['POST', internal, { slug: ['mustafa-elbadry'], tier: 'white-label' }],
+		['PATCH', internal, { slug: ['mustafa-elbadry'] }],
+		['POST', internal + '/domains', { host: 'a'.repeat(254) }],
+		['PATCH', internal + '/domains/mustafa.example', { checkedAt: {} }],
+		['PUT', internal + '/primary', { host: 'a'.repeat(254) }],
+		['PUT', studio, { navigation: [{ id: 'about', kind: 'other' }] }],
+		['POST', studio + '/preview', { themeRef: 'unknown@9.9.9' }],
+		['POST', studio + '/pages', { blocks: { en: [null] } }],
+		['PUT', studio + '/pages/pg_0123456789abcdef', { title: [] }],
+		['POST', studio + '/pages/pg_0123456789abcdef/restore', { index: '0' }],
+	] as const;
+	for (const [method, path, body] of cases) {
+		const response = await app.request(path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }, e);
+		assert.equal(response.status, 400, method + ' ' + path);
+	}
+});

@@ -37,11 +37,14 @@
  *   GET /api/sites/by-host/:host/home[?preview=]         → { page | null }
  */
 import { Hono, type Context } from 'hono';
-import { SITE_THEME_CHOICES, can, primarySiteHost, type SiteSettingsUpdate } from '@al-ummah/shared-types';
+import { z } from 'zod';
+import { SITE_LOCALES, SITE_STATUSES, SITE_THEME_CHOICES, SITE_TIERS, can, primarySiteHost, validateSiteSettingsUpdate } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { rethrowBusy } from '../lib/r2Repo';
 import { roleOnChannel } from '../lib/channelAccess';
 import { CHANNEL_ID, SiteError, readSettings, siteEnvironment, writePreview, type SitesEnv } from '../lib/sites/store';
+import { optionalJson } from '../validation/legacy-request';
+import { DomainBody, DomainUpdateBody, SitePageBody, SiteSettingsBody } from '../validation/site-requests';
 import { publicSiteLink } from '../lib/sites/canonical';
 import { removeDomain, reserveDomain, setPrimaryHost, updateDomain } from '../lib/sites/domains';
 import { createPage, deletePage, listPages, publicPage, publicPageById, readPage, restorePageRevision, updatePage } from '../lib/sites/pages';
@@ -56,7 +59,21 @@ function fail(c: Context<Env>, error: unknown) {
 	return c.json({ error: 'internal_error' }, 500);
 }
 
-const actorOf = (c: Context<Env>) => c.req.header('X-Admin-Actor')?.slice(0, 128) || 'admin';
+const Actor = z.string().regex(/^[A-Za-z0-9_@.+-]{1,128}$/);
+const actorOf = (c: Context<Env>) => Actor.safeParse(c.req.header('X-Admin-Actor')).data ?? 'admin';
+const GrantBody = z.object({
+	slug: z.string().max(80),
+	tier: z.enum(SITE_TIERS),
+	limits: z.unknown().optional(),
+	themeRef: z.string().max(120).optional(),
+	locales: z.array(z.enum(SITE_LOCALES)).min(1).max(2).optional(),
+});
+const AdminBody = z.object({
+	slug: GrantBody.shape.slug.optional(),
+	tier: GrantBody.shape.tier.optional(),
+	limits: GrantBody.shape.limits,
+	status: z.enum(SITE_STATUSES).optional(),
+});
 
 // ---------------------------------------------------------------------------------------------
 // Internal
@@ -66,6 +83,7 @@ export const sitesInternalRouter = new Hono<Env>();
 sitesInternalRouter.get('/slug/:slug', async (c) => {
 	try {
 		const channelId = c.req.query('channelId') || undefined;
+		if (channelId && !CHANNEL_ID.test(channelId)) return c.json({ error: 'bad_request' }, 400);
 		return c.json(await slugAvailability(c.env, c.req.param('slug').toLowerCase(), channelId));
 	} catch (error) {
 		return fail(c, error);
@@ -84,16 +102,10 @@ sitesInternalRouter.get('/:channelId', async (c) => {
 
 sitesInternalRouter.post('/:channelId', async (c) => {
 	try {
-		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		const site = await grantSite(c.env, c.req.param('channelId'), {
-			slug: String(body.slug ?? '').toLowerCase(),
-			tier: body.tier as never,
-			limits: body.limits as never,
-			themeRef: typeof body.themeRef === 'string' ? body.themeRef : undefined,
-			locales: Array.isArray(body.locales) ? (body.locales as never) : undefined,
-			actor: actorOf(c),
-		});
+		const parsed = GrantBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		const { limits, ...body } = parsed.data;
+		const site = await grantSite(c.env, c.req.param('channelId'), { ...body, slug: body.slug.toLowerCase(), limits: limits as never, actor: actorOf(c) });
 		logger.info('[Sites] granted', { channelId: site.channelId, slug: site.slug, tier: site.tier });
 		return c.json({ site }, 201);
 	} catch (error) {
@@ -103,15 +115,10 @@ sitesInternalRouter.post('/:channelId', async (c) => {
 
 sitesInternalRouter.patch('/:channelId', async (c) => {
 	try {
-		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		const { before, after } = await adminUpdateSite(c.env, c.req.param('channelId'), {
-			status: body.status as never,
-			tier: body.tier as never,
-			limits: body.limits as never,
-			slug: typeof body.slug === 'string' ? body.slug.toLowerCase() : undefined,
-			actor: actorOf(c),
-		});
+		const parsed = AdminBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		const { limits, ...body } = parsed.data;
+		const { before, after } = await adminUpdateSite(c.env, c.req.param('channelId'), { ...body, slug: body.slug?.toLowerCase(), limits: limits as never, actor: actorOf(c) });
 		return c.json({ before, site: after });
 	} catch (error) {
 		return fail(c, error);
@@ -130,7 +137,7 @@ sitesInternalRouter.get('/:channelId/editor', async (c) => {
 	try {
 		const channelId = c.req.param('channelId');
 		const userId = c.req.query('userId') ?? '';
-		if (!CHANNEL_ID.test(channelId) || !userId) return c.json({ canEdit: false });
+		if (!CHANNEL_ID.test(channelId) || !CHANNEL_ID.test(userId)) return c.json({ canEdit: false });
 		return c.json({ canEdit: can(await roleOnChannel(c.env as never, channelId, userId), 'channel.edit') });
 	} catch (error) {
 		return fail(c, error);
@@ -139,9 +146,9 @@ sitesInternalRouter.get('/:channelId/editor', async (c) => {
 
 sitesInternalRouter.post('/:channelId/domains', async (c) => {
 	try {
-		const body = (await c.req.json().catch(() => null)) as { host?: unknown } | null;
-		if (!body || typeof body.host !== 'string') return c.json({ error: 'bad_request' }, 400);
-		return c.json(await reserveDomain(c.env, c.req.param('channelId'), body.host, actorOf(c)), 201);
+		const parsed = DomainBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await reserveDomain(c.env, c.req.param('channelId'), parsed.data.host, actorOf(c)), 201);
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -149,9 +156,9 @@ sitesInternalRouter.post('/:channelId/domains', async (c) => {
 
 sitesInternalRouter.patch('/:channelId/domains/:host', async (c) => {
 	try {
-		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		return c.json(await updateDomain(c.env, c.req.param('channelId'), c.req.param('host'), body as never, actorOf(c)));
+		const parsed = DomainUpdateBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await updateDomain(c.env, c.req.param('channelId'), c.req.param('host'), parsed.data, actorOf(c)));
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -167,9 +174,9 @@ sitesInternalRouter.delete('/:channelId/domains/:host', async (c) => {
 
 sitesInternalRouter.put('/:channelId/primary', async (c) => {
 	try {
-		const body = (await c.req.json().catch(() => null)) as { host?: unknown } | null;
-		if (!body || typeof body.host !== 'string') return c.json({ error: 'bad_request' }, 400);
-		return c.json({ site: await setPrimaryHost(c.env, c.req.param('channelId'), body.host, actorOf(c)) });
+		const parsed = DomainBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json({ site: await setPrimaryHost(c.env, c.req.param('channelId'), parsed.data.host, actorOf(c)) });
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -293,10 +300,9 @@ sitesRouter.put('/channel/:channelId', async (c) => {
 	const denied = await requireSiteEditor(c, channelId);
 	if (denied) return denied;
 	try {
-		const body = (await c.req.json().catch(() => null)) as SiteSettingsUpdate | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		const ifMatch = c.req.header('If-Match')?.replace(/^W\//, '').replace(/"/g, '') || null;
-		const result = await updateSiteSettings(c.env, channelId, body, c.get('userId') as string, ifMatch);
+		const parsed = SiteSettingsBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		const result = await updateSiteSettings(c.env, channelId, parsed.data, c.get('userId') as string, ifMatchOf(c));
 		return c.json({ site: result.settings, etag: result.etag });
 	} catch (error) {
 		return fail(c, error);
@@ -310,7 +316,11 @@ sitesRouter.post('/channel/:channelId/preview', async (c) => {
 	try {
 		const current = await readSettings(c.env, channelId);
 		if (!current || current.settings.status === 'revoked') return c.json({ error: 'site_not_found' }, 404);
-		const body = pickUpdate((await c.req.json().catch(() => null)) as SiteSettingsUpdate | null);
+		const parsed = SiteSettingsBody.safeParse(await optionalJson(c.req));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		const body = pickUpdate(parsed.data);
+		const problem = validateSiteSettingsUpdate(body, current.settings.limits);
+		if (problem) return c.json({ error: problem }, 400);
 		const { token, expiresAt } = await writePreview(c.env, channelId, body);
 		const host = primarySiteHost(current.settings, siteEnvironment(c.env)).host;
 		const scheme = siteEnvironment(c.env) === 'local' ? 'http' : 'https';
@@ -330,7 +340,13 @@ async function requirePageWriter(c: Context<Env>, channelId: string): Promise<Re
 	return null;
 }
 
-const ifMatchOf = (c: Context<Env>) => c.req.header('If-Match')?.replace(/^W\//, '').replace(/"/g, '') || null;
+function ifMatchOf(c: Context<Env>): string | null {
+	const header = c.req.header('If-Match');
+	if (!header) return null;
+	const etag = /^(?:W\/)?"([!-~]+)"$/.exec(header)?.[1] ?? header;
+	if (!/^[A-Za-z0-9._-]{1,128}$/.test(etag)) throw new SiteError(400, 'bad_request');
+	return etag;
+}
 
 sitesRouter.get('/channel/:channelId/pages', async (c) => {
 	const channelId = c.req.param('channelId');
@@ -351,9 +367,9 @@ sitesRouter.post('/channel/:channelId/pages', async (c) => {
 	const denied = await requirePageWriter(c, channelId);
 	if (denied) return denied;
 	try {
-		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		return c.json(await createPage(c.env, channelId, body as never, c.get('userId') as string), 201);
+		const parsed = SitePageBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await createPage(c.env, channelId, parsed.data, c.get('userId') as string), 201);
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -378,9 +394,9 @@ sitesRouter.put('/channel/:channelId/pages/:pageId', async (c) => {
 	const denied = await requirePageWriter(c, channelId);
 	if (denied) return denied;
 	try {
-		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-		if (!body) return c.json({ error: 'bad_request' }, 400);
-		return c.json(await updatePage(c.env, channelId, c.req.param('pageId'), body as never, c.get('userId') as string, ifMatchOf(c)));
+		const parsed = SitePageBody.safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await updatePage(c.env, channelId, c.req.param('pageId'), parsed.data, c.get('userId') as string, ifMatchOf(c)));
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -391,10 +407,9 @@ sitesRouter.post('/channel/:channelId/pages/:pageId/restore', async (c) => {
 	const denied = await requirePageWriter(c, channelId);
 	if (denied) return denied;
 	try {
-		const body = (await c.req.json().catch(() => null)) as { index?: unknown } | null;
-		const index = Number(body?.index);
-		if (!Number.isInteger(index) || index < 0) return c.json({ error: 'bad_request' }, 400);
-		return c.json(await restorePageRevision(c.env, channelId, c.req.param('pageId'), index, c.get('userId') as string));
+		const parsed = z.object({ index: z.number().int().nonnegative() }).safeParse(await c.req.json().catch(() => null));
+		if (!parsed.success) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await restorePageRevision(c.env, channelId, c.req.param('pageId'), parsed.data.index, c.get('userId') as string));
 	} catch (error) {
 		return fail(c, error);
 	}
