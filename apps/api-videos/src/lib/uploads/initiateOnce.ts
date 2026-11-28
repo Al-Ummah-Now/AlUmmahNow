@@ -89,7 +89,7 @@ export interface InitiateOnceDeps {
 	/** Can the bound video take this upload again? Throws on a transient failure. */
 	check(videoId: string): Promise<ReuseVerdict>;
 	/** Create the Bunny video and its record; resolves to the video id. */
-	create(): Promise<string>;
+	create(reserveVideoId: (videoId: string) => Promise<void>): Promise<string>;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
 	waitMs?: number;
@@ -140,9 +140,18 @@ export async function initiateOnce(key: string, deps: InitiateOnceDeps): Promise
 	const createAndBind = async (claim: FingerprintClaim, etag: string): Promise<InitiateOnceResult> => {
 		let videoId: string;
 		try {
-			videoId = await deps.create();
+			videoId = await deps.create(async (id) => {
+				const reserved = { ...claim, videoId: id, leaseUntil: now() + CLAIM_LEASE_MS };
+				const written = await deps.store.put(objectKey, JSON.stringify(reserved), { onlyIf: { etagMatches: etag }, httpMetadata: JSON_META });
+				if (!written) throw new UploadClaimBusyError(key);
+				claim = reserved;
+				etag = written.etag;
+			});
 		} catch (error) {
-			// Release the claim so a retry can create; only if it is still ours.
+			// A write might have committed before its response failed. Keep the
+			// reserved id so the next caller can check the record after the lease.
+			if (claim.videoId) throw error;
+			// Release an unreserved claim so a retry can create.
 			try {
 				const current = await deps.store.get(objectKey);
 				if (current && current.etag === etag) await deps.store.delete(objectKey);
@@ -191,6 +200,12 @@ export async function initiateOnce(key: string, deps: InitiateOnceDeps): Promise
 
 		// creating
 		if (current.leaseUntil <= now()) {
+			if (current.videoId && (await deps.check(current.videoId)).kind === 'reuse') {
+				const bound: FingerprintClaim = { ...current, state: 'bound', leaseUntil: 0, updatedAt: new Date(now()).toISOString() };
+				const written = await deps.store.put(objectKey, JSON.stringify(bound), { onlyIf: { etagMatches: object.etag }, httpMetadata: JSON_META });
+				if (written) return { videoId: current.videoId, reused: true };
+				continue;
+			}
 			const claim = claimFor(crypto.randomUUID(), current);
 			const written = await deps.store.put(objectKey, JSON.stringify(claim), { onlyIf: { etagMatches: object.etag }, httpMetadata: JSON_META });
 			if (written) {

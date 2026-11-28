@@ -150,6 +150,27 @@ describe('initiateOnce (claim state machine)', () => {
 		assert.deepEqual(await initiateOnce('k', base(s)), { videoId: 'video-1', reused: false });
 	});
 
+	it('recovers a reserved video after its write commits and the response is lost', async () => {
+		const s = store();
+		let now = 0;
+		let created = 0;
+		const deps = {
+			...base(s),
+			now: () => now,
+			waitMs: 0,
+			create: async (reserve: (id: string) => Promise<void>) => {
+				await reserve('video-1');
+				created++;
+				throw new Error('video write response lost');
+			},
+		};
+		await assert.rejects(initiateOnce('k', deps), /video write response lost/);
+		await assert.rejects(initiateOnce('k', deps), UploadClaimBusyError);
+		now += CLAIM_LEASE_MS + 1;
+		assert.deepEqual(await initiateOnce('k', deps), { videoId: 'video-1', reused: true });
+		assert.equal(created, 1);
+	});
+
 	it('the key separates channels and uploaders', async () => {
 		const a = await fingerprintKey('c1', 'u1', FP);
 		assert.equal(a, await fingerprintKey('c1', 'u1', { ...FP }));
@@ -189,14 +210,25 @@ describe('POST /api/videos/upload/initiate with a fingerprint', () => {
 		assert.equal(h.env.videos.read(videoId).title, 'Lecture (renamed)', 'latest metadata applied');
 	});
 
-	it('an analytics queue failure does not release the claim after creating the video', async () => {
+	it('reuses the video when its initial record write committed but lost its response', async () => {
 		const h = harness();
-		h.env.queue.send = async () => { throw new Error('analytics queue unavailable'); };
+		const put = h.env.videos.put.bind(h.env.videos);
+		h.env.videos.put = async (...args) => {
+			const result = await put(...args);
+			throw new Error(`Lost the response for ${result?.key}`);
+		};
 		const first = await h.initiate({ fingerprint: FP });
-		assert.equal(first.status, 200, JSON.stringify(first.body));
+		assert.equal(first.status, 500);
+		h.env.videos.put = put;
+
+		const key = claimObjectKey(await fingerprintKey('ch1', 'alice', FP));
+		const claim = h.env.global_settings.read(key);
+		assert.ok(claim.videoId, 'the video ID was reserved before writing the record');
+		await h.env.global_settings.put(key, JSON.stringify({ ...claim, leaseUntil: 0 }));
+
 		const retry = await h.initiate({ fingerprint: FP });
-		assert.equal(retry.status, 200);
-		assert.equal(retry.body.result.videoId, first.body.result.videoId);
+		assert.equal(retry.status, 200, JSON.stringify(retry.body));
+		assert.equal(retry.body.result.videoId, claim.videoId);
 		assert.equal(retry.body.result.reused, true);
 		assert.equal(bunny.created.length, 1);
 	});
