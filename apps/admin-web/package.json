@@ -19,7 +19,7 @@
     "theme-kit": "node --experimental-strip-types --no-warnings ../../packages/theme-packages/scripts/admin-kit.ts"
   },
   "dependencies": {
-    "@al-ummah-now/openauth": "1.0.15",
+    "@al-ummah-now/openauth": "1.2.3",
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "@al-ummah/theme-packages": "workspace:*",

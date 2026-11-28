@@ -25,7 +25,7 @@
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
     "@bunny.net/storage-sdk": "0.3.0",
-    "@al-ummah-now/openauth": "1.0.15",
+    "@al-ummah-now/openauth": "1.2.3",
     "chanfana": "^3.7.0",
     "hono": "^4.13.19",
     "jose": "5.9.6",

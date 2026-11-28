@@ -1,15 +1,10 @@
-import { createClient } from "@al-ummah-now/openauth/client"
-import { withKeyRefetch } from "@al-ummah/shared-types"
+import { clearClientCache, createClient } from "@al-ummah-now/openauth/client"
 
 type OpenAuthClient = ReturnType<typeof createClient>
 
 /**
- * The OpenAuth client caches the issuer's discovery document and JWKS inside
- * the client object, so a client created per request fetched both from the
- * auth worker on every authenticated request (two auth-worker invocations
- * per API call). Keep one client per isolate instead, rebuilt every
- * CLIENT_TTL_MS, and at once when a live token fails to verify
- * (withKeyRefetch), so a rotated signing key is picked up (AlUmmahNowAuth#13).
+ * Reuse the client per isolate. OpenAuth caches discovery and JWKS by issuer
+ * and refreshes keys after a signature or key lookup failure, with a cooldown.
  */
 export const CLIENT_TTL_MS = 10 * 60 * 1000
 
@@ -24,7 +19,7 @@ export async function getClient(
   if (!cached || cached.key !== key || t - cached.createdAt >= CLIENT_TTL_MS || t < cached.createdAt) {
     cached = {
       key,
-      client: withKeyRefetch(() => createClient({ clientID: env.ClientId as string, issuer: env.Issuer })),
+      client: createClient({ clientID: env.ClientId as string, issuer: env.Issuer }),
       createdAt: t,
     }
   }
@@ -34,4 +29,5 @@ export async function getClient(
 /** Tests only. */
 export function __resetClientForTests(): void {
   cached = null
+  clearClientCache()
 }
