@@ -32,7 +32,8 @@ async function source(request: NextRequest, context: Params) {
       method: request.method,
       headers: { Authorization: `Bearer ${auth.accessToken}`, ...(get ? {} : { 'Content-Type': 'application/json' }) },
       body,
-      signal: AbortSignal.timeout(20000),
+      // Allow one Qaf minute-window backoff, plus the API's bounded fetch attempts.
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(75000)]),
     });
     const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' });
     const retryAfter = upstream.headers.get('retry-after');

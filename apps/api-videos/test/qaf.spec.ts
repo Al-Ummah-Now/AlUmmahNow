@@ -207,3 +207,25 @@ test('authenticated creator routes block callers without posting access and repo
   assert.match(reports, /qaf-sources:invalid_keys/);
   assert.doesNotMatch(reports, /qaf_sk_|private-draft-topic/);
 });
+
+test('honors the minute Retry-After once and leaves the weekly allowance charged once', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const { env } = fixture();
+  await saveQafSettings(env, { key: 'qaf_sk_test_secret' });
+  let attempts = 0;
+  const delays: number[] = [];
+  await queryQaf(env, 'creator', { kind: 'search', input: { query: 'الصبر' } }, {
+    fetch: async () => {
+      attempts++;
+      if (attempts === 1) return Response.json({ data: { reason: 'minute' } }, { status: 429, headers: { 'Retry-After': '32' } });
+      return Response.json({ results: [passage] });
+    },
+    sleep: async (seconds) => {
+      delays.push(seconds);
+      t.mock.timers.setTime(Date.now() + seconds * 1000);
+    },
+  });
+  assert.deepEqual(delays, [32]);
+  assert.equal(attempts, 2);
+  assert.equal((await readQafSettings(env)).weeklyRemaining, 999);
+});
