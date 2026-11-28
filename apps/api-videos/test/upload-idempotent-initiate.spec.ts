@@ -189,6 +189,18 @@ describe('POST /api/videos/upload/initiate with a fingerprint', () => {
 		assert.equal(h.env.videos.read(videoId).title, 'Lecture (renamed)', 'latest metadata applied');
 	});
 
+	it('an analytics queue failure does not release the claim after creating the video', async () => {
+		const h = harness();
+		h.env.queue.send = async () => { throw new Error('analytics queue unavailable'); };
+		const first = await h.initiate({ fingerprint: FP });
+		assert.equal(first.status, 200, JSON.stringify(first.body));
+		const retry = await h.initiate({ fingerprint: FP });
+		assert.equal(retry.status, 200);
+		assert.equal(retry.body.result.videoId, first.body.result.videoId);
+		assert.equal(retry.body.result.reused, true);
+		assert.equal(bunny.created.length, 1);
+	});
+
 	it('a finished video means a new one', async () => {
 		const h = harness();
 		const first = await h.initiate({ fingerprint: FP });

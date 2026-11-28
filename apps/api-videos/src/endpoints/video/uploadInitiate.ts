@@ -372,7 +372,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			// what the uploader kept; without a category and without a suggestion, request one
 			adoptOrRequestSuggestion(c, { videoId, userId, channelId, category: category ?? null, draftKey: categorySuggestionKey });
 
-			// Send analytics event for upload initiation
+			// An analytics outage must not release the file claim after its record was written.
 			const queue = new Queue(c.env.queue);
 			await queue.send(MessageType.VideoUploadStarted, {
 				videoId,
@@ -382,6 +382,8 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 				fileSize,
 				mimeType,
 				timestamp: now,
+			}).catch((error) => {
+				logger.warn('[UploadInitiate] Could not queue upload analytics', { videoId, error: String(error) });
 			});
 
 			// AI moderation of the metadata (queued, never fails the upload). Only a newly
