@@ -19,7 +19,7 @@ import { handleCreateTierRequest, handleUpgradeOverview } from '../src/endpoints
 import { handleCreatorAccess } from '../src/endpoints/creator/creatorAccess';
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../src/lib/upgradeMode';
 import { FAKE_SECRET, fakeAdapter, signFake, type FakeEventBody } from '../src/lib/billing/fake';
-import { paygoodAdapter, splitName } from '../src/lib/billing/paygood';
+import { paygoodAdapter, splitName, validatePaygoodCheckoutUrl } from '../src/lib/billing/paygood';
 import { ProviderError, providerJson } from '../src/lib/billing/provider';
 import {
 	billingPlans,
@@ -456,6 +456,64 @@ describe('validation', () => {
 	it('PayGood splits a display name for its customer record', () => {
 		assert.deepEqual(splitName('Amina Yusuf Ali', 'a@example.com'), { firstName: 'Amina Yusuf', lastName: 'Ali' });
 		assert.equal(splitName(null, 'amina@example.com').firstName, 'amina');
+	});
+
+	it('PayGood validates synced offering checkoutUrl and rejects invalid URLs permanently', async () => {
+		assert.equal(validatePaygoodCheckoutUrl('https://checkout.paygood.co/invoices/inv_123'), 'https://checkout.paygood.co/invoices/inv_123');
+		assert.equal(validatePaygoodCheckoutUrl('https://checkout-sandbox.paygood.co/offerings/off_1'), 'https://checkout-sandbox.paygood.co/offerings/off_1');
+		for (const bad of [
+			'',
+			null,
+			'http://checkout.paygood.co/offerings/off_1',
+			'javascript:alert(1)',
+			'data:text/html,<script>alert(1)</script>',
+			'https://user:pass@checkout.paygood.co/offerings/off_1',
+			'https://checkout.paygood.co:8443/offerings/off_1',
+			'https://localhost/offerings/off_1',
+			'https://127.0.0.1/offerings/off_1',
+			'https://169.254.169.254/latest/meta-data',
+			'https://[::1]/offerings/off_1',
+			'https://internal.local/offerings/off_1',
+			'https://checkout.paygood.co/off_1\r\nX-Inject: 1',
+			'https://checkout.paygood.co\\evil',
+		]) {
+			assert.equal(validatePaygoodCheckoutUrl(bad), null, `expected rejection for ${String(bad)}`);
+		}
+
+		const mockFetch = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.endsWith('/catalog/products')) return new Response(JSON.stringify({ productId: 'prod_1' }), { status: 200 });
+			if (url.endsWith('/catalog/prices')) return new Response(JSON.stringify({ priceId: 'price_1' }), { status: 200 });
+			return new Response(JSON.stringify({ offeringId: 'off_1', checkoutUrl: 'javascript:alert(1)' }), { status: 200 });
+		}) as typeof fetch;
+
+		const ctx = {
+			mode: 'test' as const,
+			secret: 'sk_test',
+			settings: { merchantId: 'merch_1' },
+			apiBase: 'https://videos.api.qa.example',
+			fetch: mockFetch,
+		};
+		const price = { id: 'p_1', tierId: 'creator', tierName: 'Creator', period: 'month' as const, currency: 'USD', amount: 500, active: true };
+		await assert.rejects(
+			paygoodAdapter.syncPrice(ctx, price, { providerRef: null, productRef: null, syncedAmount: null, checkoutUrl: null }),
+			(e: unknown) => e instanceof ProviderError && e.permanent && /invalid checkout URL/i.test(e.message),
+		);
+
+		await assert.rejects(
+			paygoodAdapter.createCheckout(ctx, {
+				checkoutId: 'bco_1',
+				userId: USER,
+				email: null,
+				name: null,
+				customerRef: null,
+				priceRef: 'off_1',
+				priceCheckoutUrl: 'http://checkout.paygood.co/offerings/off_1',
+				returnUrl: 'https://qa.example/en/upgrade',
+				cancelUrl: 'https://qa.example/en/upgrade',
+			}),
+			(e: unknown) => e instanceof ProviderError && e.permanent,
+		);
 	});
 
 	it('provider errors: 4xx is permanent (but 429 is not), 5xx and network errors retry', async () => {

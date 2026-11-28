@@ -37,6 +37,39 @@ import {
 
 export const paygoodBase = (mode: 'test' | 'live') => (mode === 'live' ? 'https://api.paygood.co' : 'https://api-sandbox.paygood.co');
 
+const CHECKOUT_URL_CONTROL_RE = /[\u0000-\u001F\u007F]/;
+const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const IPV4_LITERAL_RE = /^\d+\.\d+\.\d+\.\d+$/;
+
+/**
+ * Validate a hosted checkout URL returned by PayGood (`POST /subscriptions/offerings`).
+ *
+ * PayGood docs (https://docs.paygood.com) show `https://checkout.paygood.co/invoices/...`
+ * in the Invoices API example, but do not exhaustively document the sandbox hosted-checkout
+ * domain or confirm all subscription-offering checkout hosts. Rather than guessing a host
+ * allowlist that could break live/sandbox checkout, enforce HTTPS with no embedded
+ * credentials, no non-default port, no control characters/backslashes, and a public DNS host.
+ */
+export function validatePaygoodCheckoutUrl(value: unknown): string | null {
+	if (typeof value !== 'string') return null;
+	const trimmed = value.trim();
+	if (!trimmed || CHECKOUT_URL_CONTROL_RE.test(trimmed) || trimmed.includes('\\')) return null;
+	let parsed: URL;
+	try {
+		parsed = new URL(trimmed);
+	} catch {
+		return null;
+	}
+	if (parsed.protocol !== 'https:') return null;
+	if (parsed.username || parsed.password || parsed.port) return null;
+	const host = parsed.hostname.toLowerCase();
+	if (!host || host.startsWith('[') || IPV4_LITERAL_RE.test(host)) return null;
+	if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return null;
+	const labels = host.split('.');
+	if (labels.length < 2 || labels.some((label) => !DNS_LABEL_RE.test(label))) return null;
+	return trimmed;
+}
+
 interface PaygoodSubscription {
 	subscriptionId: string;
 	customerId?: string;
@@ -187,7 +220,8 @@ export const paygoodAdapter: PaymentProviderAdapter = {
 		const merchant = merchantId(ctx);
 		if (!['USD', 'CAD'].includes(price.currency)) throw new ProviderError(`PayGood charges USD and CAD only, not ${price.currency}`, null, true);
 		if (existing.providerRef && existing.syncedAmount === price.amount && existing.checkoutUrl) {
-			return { providerRef: existing.providerRef, productRef: existing.productRef, checkoutUrl: existing.checkoutUrl };
+			const existingUrl = validatePaygoodCheckoutUrl(existing.checkoutUrl);
+			if (existingUrl) return { providerRef: existing.providerRef, productRef: existing.productRef, checkoutUrl: existingUrl };
 		}
 		let productRef = existing.productRef;
 		if (!productRef) {
@@ -217,11 +251,14 @@ export const paygoodAdapter: PaymentProviderAdapter = {
 		);
 		const offeringId = offering.offeringId ?? offering.id;
 		if (!offeringId || !offering.checkoutUrl) throw new ProviderError('PayGood create offering: no offering id or checkout URL in the answer');
-		return { providerRef: offeringId, productRef, checkoutUrl: offering.checkoutUrl };
+		const checkoutUrl = validatePaygoodCheckoutUrl(offering.checkoutUrl);
+		if (!checkoutUrl) throw new ProviderError('PayGood create offering: invalid checkout URL returned by provider', null, true);
+		return { providerRef: offeringId, productRef, checkoutUrl };
 	},
 
 	async createCheckout(ctx, request) {
-		if (!request.priceCheckoutUrl) throw new ProviderError('PayGood: the price has no checkout link; sync prices again', null, true);
+		const checkoutUrl = validatePaygoodCheckoutUrl(request.priceCheckoutUrl);
+		if (!checkoutUrl) throw new ProviderError('PayGood: the price has no valid checkout link; sync prices again', null, true);
 		let customerRef = request.customerRef;
 		if (!customerRef && request.email) {
 			const { firstName, lastName } = splitName(request.name, request.email);
@@ -233,7 +270,7 @@ export const paygoodAdapter: PaymentProviderAdapter = {
 			);
 			customerRef = customer.customerId;
 		}
-		return { url: request.priceCheckoutUrl, providerRef: request.priceRef, customerRef };
+		return { url: checkoutUrl, providerRef: request.priceRef, customerRef };
 	},
 
 	async getSubscription(ctx, ref) {

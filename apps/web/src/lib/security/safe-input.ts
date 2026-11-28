@@ -114,23 +114,23 @@ export function safeNavigationUrl(
   return safeHttpUrl(trimmed, { allowHttp: options.allowHttp ?? false });
 }
 
-/** Configured payment provider checkout/portal root domains (https only). */
-const BILLING_PROVIDER_DOMAINS = ['paygood.co', 'paygood.com'] as const;
-
-function isAllowedBillingProviderHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return BILLING_PROVIDER_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
-}
-
 /**
- * Validate a checkout or billing-portal redirect URL returned by the billing API.
- * Allows ONLY:
+ * Validate a checkout or billing-portal redirect URL returned by our own
+ * authenticated billing API (`POST /api/me/billing/checkout` or
+ * `POST /api/me/billing/portal`, never user/URL input).
+ *
+ * PayGood docs (https://docs.paygood.com) show `https://checkout.paygood.co/invoices/...`
+ * for invoices, but do not publish an exhaustive domain list for sandbox or
+ * subscription-offering hosted checkouts. Server-side validation in
+ * `apps/api-videos/src/lib/billing/paygood.ts` (`validatePaygoodCheckoutUrl`)
+ * gates synced checkout URLs before they are stored; on the client we allow ONLY:
  * - safe same-origin relative paths (`/en/upgrade?...`)
- * - exact origin match against the configured billing API URL (`apiUrl`, e.g. the
- *   fake test provider at `/webhooks/billing/fake/checkout/...` on local/QA API origin)
- * - explicit configured payment provider hosts (`paygood.co`, `*.paygood.co`,
- *   `paygood.com`, `*.paygood.com`) over `https:` without credentials or custom ports.
- * Rejects all other origins and non-http(s) schemes (`javascript:`, `data:`, etc.).
+ * - exact origin match against the configured billing API URL (`apiUrl`),
+ *   allowing `http:` ONLY on `localhost`/`127.0.0.1` (for the local fake test provider)
+ * - `https:` URLs with no embedded credentials, no non-default port, no backslashes,
+ *   and no control characters.
+ * Rejects `javascript:`, `data:`, `vbscript:`, non-local `http:`, wrong local ports,
+ * credentials, protocol-relative `//`, `/\`, and control characters.
  */
 export function safeBillingRedirectUrl(value: unknown, apiUrl?: string | null): string | null {
   if (typeof value !== 'string') return null;
@@ -149,7 +149,8 @@ export function safeBillingRedirectUrl(value: unknown, apiUrl?: string | null): 
   const protocol = parsed.protocol.toLowerCase();
   if (protocol !== 'https:' && protocol !== 'http:') return null;
 
-  // 1. Billing API's own origin (test/fake provider checkout hosted on api-videos)
+  // 1. Billing API's own origin (test/fake provider checkout hosted on api-videos;
+  //    http: is permitted ONLY when apiUrl itself is localhost / 127.0.0.1)
   if (apiUrl) {
     try {
       const apiParsed = new URL(apiUrl);
@@ -163,8 +164,8 @@ export function safeBillingRedirectUrl(value: unknown, apiUrl?: string | null): 
     }
   }
 
-  // 2. Configured hosted payment provider domains (https only, default port)
-  if (protocol === 'https:' && !parsed.port && isAllowedBillingProviderHost(parsed.hostname)) {
+  // 2. Server-validated hosted provider checkout/portal URL (https only, default port)
+  if (protocol === 'https:' && !parsed.port) {
     return trimmed;
   }
 
