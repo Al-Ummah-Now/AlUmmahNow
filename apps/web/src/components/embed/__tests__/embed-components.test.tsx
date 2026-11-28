@@ -402,6 +402,19 @@ describe('EmbedPlayer', () => {
     expect(screen.getByTestId('embed-watch-link')).toHaveTextContent('شاهد على الأمة الآن');
   });
 
+  it('works standalone without a parent frame (iOS Open in browser) and never forces muted autoplay', () => {
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({})} />);
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(screen.getByTestId('embed-facade')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-player')).toBeNull();
+    expect(screen.getByTestId('embed-watch-link')).toHaveAttribute('href', '/en/video/v1');
+
+    fireEvent.click(screen.getByTestId('embed-facade'));
+    const player = screen.getByTestId('mock-player');
+    expect(player).toHaveAttribute('data-muted', 'false');
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
   it('posts ready to the embedding origin only', () => {
     embedInto('https://host.example/page?x=1');
     render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({})} />);

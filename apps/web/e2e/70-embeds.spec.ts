@@ -253,8 +253,23 @@ test.describe('oEmbed and social previews', () => {
     // when it is there; the large 1200x630 card is the share image. X still plays it via twitter:player.
     expect(html).not.toContain('property="og:video');
     expect(html).toContain(`<meta property="og:image" content="${origin}/og/v/${video.id}.jpg"`);
+    expect(html).toContain(`<meta name="twitter:image" content="${origin}/og/v/${video.id}.jpg"`);
     expect(html).toContain('<meta name="twitter:card" content="player"');
     expect(html).toContain(`<meta name="twitter:player" content="${origin}/embed/v/${video.id}"`);
+    expect(html).toMatch(/<meta name="twitter:player:width" content="\d+"/);
+    expect(html).toMatch(/<meta name="twitter:player:height" content="\d+"/);
+    // twitter:player:stream is the direct public R2 MP4 (never the HTML embed page), or omitted when none exists
+    const streamMatch = /<meta name="twitter:player:stream" content="([^"]*)"/.exec(html);
+    const contentTypeMatch = /<meta name="twitter:player:stream:content_type" content="([^"]*)"/.exec(html);
+    if (streamMatch) {
+      const streamUrl = new URL(streamMatch[1]);
+      expect(streamUrl.protocol).toBe('https:');
+      expect(streamUrl.pathname).toMatch(/^\/pub\/(?:[^/]+\/)+[^/]+\.mp4$/i);
+      expect(streamUrl.search).toBe('');
+      expect(contentTypeMatch?.[1]).toBe('video/mp4');
+    } else {
+      expect(contentTypeMatch).toBeNull();
+    }
   });
 });
 

@@ -21,8 +21,8 @@ import {
 import { buildEvent, embedderOrigin, parseCommand, resolvePartnerOrigin } from '../messaging';
 import { buildOEmbed, fitSize, parseContentUrl } from '../oembed';
 import { viewContextFromBatch } from '../view-context';
-import { buildWatchMetadata, declaredPlayerSize } from '../watch-metadata';
-import { firstPublished, posterFor, toEmbedVideo, videoAspect } from '../content';
+import { buildWatchMetadata, declaredPlayerSize, publicStreamUrl } from '../watch-metadata';
+import { firstPublished, isPublicMp4Url, posterFor, toEmbedVideo, videoAspect } from '../content';
 import { isEmbedPath, isOEmbedPath } from '../routes';
 import { embedStrings, fill } from '../strings';
 
@@ -322,13 +322,18 @@ describe('toEmbedVideo (visibility)', () => {
 });
 
 describe('buildWatchMetadata', () => {
+  const PUBLIC_MP4 = 'https://media.alummahnow.net/pub/v1/e29db4ad6918a943/video.mp4';
   const video = toEmbedVideo({
     id: 'v1', title: 'Title', titleLocalized: { en: 'Title', ar: 'العنوان' }, description: 'x'.repeat(300),
     playUrl: 'https://vz/t/v1/playlist.m3u8', isPublic: true,
   });
+  const videoWithMp4 = toEmbedVideo({
+    id: 'v1', title: 'Title', titleLocalized: { en: 'Title', ar: 'العنوان' }, description: 'x'.repeat(300),
+    playUrl: 'https://vz/t/v1/playlist.m3u8', isPublic: true, contentUrl: PUBLIC_MP4,
+  });
 
-  it('renders OG video, a Twitter player card, hreflang and the oEmbed link', () => {
-    const meta = buildWatchMetadata(video, 'ar', HOST);
+  it('emits twitter:player:stream (direct public MP4) and video/mp4 content_type when a public R2 MP4 exists', () => {
+    const meta = buildWatchMetadata(videoWithMp4, 'ar', HOST);
     expect(meta.title).toBe('العنوان');
     expect((meta.description as string).length).toBeLessThanOrEqual(160);
     expect(meta.alternates?.canonical).toBe(`${HOST}/ar/video/v1`);
@@ -339,7 +344,70 @@ describe('buildWatchMetadata', () => {
     expect(meta.openGraph).toMatchObject({ type: 'video.other', images: [{ url: `${HOST}/og/v/v1.jpg`, width: 1200, height: 630 }] });
     // no og:video: chat apps can't play our HTML player and show a small video-link preview when it is there (2026-11-15)
     expect(meta.openGraph).not.toHaveProperty('videos');
-    expect(meta.twitter).toMatchObject({ card: 'player', players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar`, width: 1280, height: 720 }] });
+    expect(meta.twitter).toMatchObject({
+      card: 'player',
+      images: [`${HOST}/og/v/v1.jpg`],
+      players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar`, streamUrl: PUBLIC_MP4, width: 1280, height: 720 }],
+    });
+    expect(meta.other).toEqual({ 'twitter:player:stream:content_type': 'video/mp4' });
+  });
+
+  it('omits stream tags and keeps the iframe player card when a video has no public MP4 (Bunny-only, unlisted)', () => {
+    const meta = buildWatchMetadata(video, 'ar', HOST);
+    expect(meta.twitter).toMatchObject({ card: 'player', images: [`${HOST}/og/v/v1.jpg`], players: [] });
+    expect(meta.other).toEqual({
+      'twitter:player': `${HOST}/embed/v/v1?lang=ar`,
+      'twitter:player:width': 1280,
+      'twitter:player:height': 720,
+    });
+    expect(meta.other).not.toHaveProperty('twitter:player:stream');
+    expect(meta.other).not.toHaveProperty('twitter:player:stream:content_type');
+
+    // Unlisted videos never emit twitter:player:stream even if a contentUrl is forced onto the object
+    const unlisted = toEmbedVideo({ id: 'u1', title: 'Unlisted', playUrl: 'https://vz/t/u1/playlist.m3u8', isPublic: false, isUnlisted: true, contentUrl: PUBLIC_MP4 });
+    const unlistedMeta = buildWatchMetadata({ ...unlisted!, contentUrl: PUBLIC_MP4 }, 'en', HOST);
+    expect(unlistedMeta.twitter).toMatchObject({ card: 'player', players: [] });
+    expect(unlistedMeta.other).toEqual({
+      'twitter:player': `${HOST}/embed/v/u1`,
+      'twitter:player:width': 1280,
+      'twitter:player:height': 720,
+    });
+  });
+
+  it('rejects signed, expiring, private, non-https and non-mp4 stream URLs', () => {
+    for (const bad of [
+      `${HOST}/embed/v/v1`,
+      'http://media.alummahnow.net/pub/v1/abc/video.mp4',
+      'https://media.alummahnow.net/priv/1794535200.abcdef/v1/abc/video.mp4',
+      'https://media.alummahnow.net/pub/v1/abc/video.mp4?token=T&expires=1794535200',
+      'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=P&expires=1794535200/v1/play_480p.mp4',
+      'https://media.alummahnow.net/pub/v1/abc/master.m3u8',
+      'https://media.alummahnow.net/pub/../priv/v1/abc/video.mp4',
+    ]) {
+      expect(isPublicMp4Url(bad)).toBe(false);
+      expect(publicStreamUrl({ contentUrl: bad })).toBeUndefined();
+      const meta = buildWatchMetadata({ ...video!, contentUrl: bad }, 'en', HOST);
+      expect(meta.twitter).toMatchObject({ card: 'player', players: [] });
+      expect(meta.other).not.toHaveProperty('twitter:player:stream');
+      expect(meta.other).not.toHaveProperty('twitter:player:stream:content_type');
+    }
+  });
+
+  it('keeps twitter:player absolute https on public hosts and preserves http on localhost', () => {
+    const upgraded = buildWatchMetadata(videoWithMp4, 'en', 'http://videos.alummahnow.net');
+    expect(upgraded.twitter).toMatchObject({
+      players: [{ playerUrl: 'https://videos.alummahnow.net/embed/v/v1', streamUrl: PUBLIC_MP4, width: 1280, height: 720 }],
+    });
+    const local = buildWatchMetadata(video, 'en', 'http://localhost:3001');
+    expect(local.other).toMatchObject({ 'twitter:player': 'http://localhost:3001/embed/v/v1' });
+  });
+
+  it('falls back to the 1200x630 site card image when a video has no poster', () => {
+    const noPoster = toEmbedVideo({ id: 'v2', title: 'Audio Talk', playUrl: 'https://media.alummahnow.net/pub/v2/rev/master.m3u8', isPublic: true });
+    expect(noPoster?.poster).toBeUndefined();
+    const meta = buildWatchMetadata(noPoster, 'en', HOST);
+    expect(meta.twitter?.images).toEqual([`${HOST}/brand/og-default.jpg`]);
+    expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: `${HOST}/brand/og-default.jpg`, width: 1200, height: 630 })]);
   });
 
   it('adds nothing for unavailable videos', () => {
@@ -348,35 +416,43 @@ describe('buildWatchMetadata', () => {
 
   it("a scholar site on its own domain holds the canonical; cards and oEmbed stay here (AUN-SCHOLAR-SITES §4.4)", () => {
     const onSite = { canonical: 'https://scholar.example/ar/watch/v1/', languages: { ar: 'https://scholar.example/ar/watch/v1/' } };
-    const meta = buildWatchMetadata(video, 'ar', HOST, onSite);
+    const meta = buildWatchMetadata(videoWithMp4, 'ar', HOST, onSite);
     expect(meta.alternates?.canonical).toBe('https://scholar.example/ar/watch/v1/');
     expect(meta.alternates?.languages).toEqual({ ar: 'https://scholar.example/ar/watch/v1/' });
     expect(meta.openGraph).toMatchObject({ url: 'https://scholar.example/ar/watch/v1/' });
-    expect(meta.twitter).toMatchObject({ players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar` }] });
+    expect(meta.twitter).toMatchObject({ players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar`, streamUrl: PUBLIC_MP4 }] });
     expect(meta.alternates?.types).toEqual({ 'application/json+oembed': [{ url: oembedEndpointUrl(HOST, `${HOST}/ar/video/v1`), title: 'العنوان' }] });
   });
 
-  it("declares the video's own ratio: a Short is 9:16, so X gives it a tall card (2026-11-12)", () => {
+  it("declares the video's own ratio as positive integers: a Short is 9:16, so X gives it a tall card (2026-11-12)", () => {
     const short = toEmbedVideo({ id: 's1', title: 'Short', playUrl: 'https://vz/t/s1/playlist.m3u8', isPublic: true, width: 720, height: 1280, isShort: true });
     const meta = buildWatchMetadata(short, 'en', HOST);
-    expect(meta.twitter).toMatchObject({ card: 'player', players: [{ playerUrl: expect.stringContaining('/embed/v/s1'), width: 405, height: 720 }] });
-    // a Short flag with no size is still 9:16; a square is square; unknown stays 1280x720
+    expect(meta.twitter).toMatchObject({ card: 'player', players: [] });
+    expect(meta.other).toEqual({ 'twitter:player': `${HOST}/embed/v/s1`, 'twitter:player:width': 405, 'twitter:player:height': 720 });
+    // a Short flag with no size is still 9:16; a square is square; unknown stays 1280x720; extreme ratios stay >= 1 integers
     expect(declaredPlayerSize({ isShort: true })).toEqual({ width: 405, height: 720 });
     expect(declaredPlayerSize({ width: 1080, height: 1080 })).toEqual({ width: 720, height: 720 });
     expect(declaredPlayerSize({ width: 427, height: 240 })).toEqual({ width: 1280, height: 719 });
+    expect(declaredPlayerSize({ width: 100000, height: 1 })).toEqual({ width: 1280, height: 1 });
+    expect(declaredPlayerSize({ width: 1, height: 100000 })).toEqual({ width: 1, height: 720 });
     expect(declaredPlayerSize({})).toEqual({ width: 1280, height: 720 });
+    for (const s of [declaredPlayerSize({ isShort: true }), declaredPlayerSize({ width: 427, height: 240 }), declaredPlayerSize({})]) {
+      expect(Number.isInteger(s.width) && s.width > 0).toBe(true);
+      expect(Number.isInteger(s.height) && s.height > 0).toBe(true);
+    }
   });
 
   it('declares the encoded size, not a fixed 9:16: production Short 720x1256 → 413x720, oEmbed 367x640 (2026-11-12 Twitterbot fetch)', () => {
-    const short = toEmbedVideo({ id: 's2', title: 'Short', playUrl: 'https://vz/t/s2/playlist.m3u8', isPublic: true, width: 720, height: 1256, isShort: true });
+    const short = toEmbedVideo({ id: 's2', title: 'Short', playUrl: 'https://vz/t/s2/playlist.m3u8', isPublic: true, width: 720, height: 1256, isShort: true, contentUrl: PUBLIC_MP4 });
     const meta = buildWatchMetadata(short, 'ar', HOST);
-    expect(meta.twitter).toMatchObject({ players: [{ width: 413, height: 720 }] });
+    expect(meta.twitter).toMatchObject({ players: [{ width: 413, height: 720, streamUrl: PUBLIC_MP4 }] });
+    expect(meta.other).toEqual({ 'twitter:player:stream:content_type': 'video/mp4' });
     // the player keeps the Short's ratio; the share image is the 1200x630 card (its frame centred) for the large preview
     expect(meta.openGraph).toMatchObject({ images: [{ url: `${HOST}/og/v/s2.jpg`, width: 1200, height: 630, type: 'image/jpeg' }] });
     expect(fitSize(null, null, 720 / 1256)).toEqual({ width: 367, height: 640 });
     // a landscape video keeps a 16:9 card
     const wide = toEmbedVideo({ id: 'w1', title: 'Wide', playUrl: 'https://vz/t/w1/playlist.m3u8', isPublic: true, width: 1920, height: 1080 });
-    expect(buildWatchMetadata(wide, 'en', HOST).twitter).toMatchObject({ players: [{ width: 1280, height: 720 }] });
+    expect(buildWatchMetadata(wide, 'en', HOST).other).toMatchObject({ 'twitter:player:width': 1280, 'twitter:player:height': 720 });
   });
 });
 

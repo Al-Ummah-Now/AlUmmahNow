@@ -38,6 +38,7 @@ export const IMAGE_HOST = 'images.alummahnow.net';
 
 const PLAYER_FIXTURES = join(ROOT, 'apps/web/e2e/player/fixtures');
 const THUMBNAIL = join(ROOT, 'apps/web/e2e/test-fixtures/e2e-thumbnail.jpg');
+const SAMPLE_MP4 = join(ROOT, 'apps/web/e2e/test-fixtures/e2e-sample.mp4');
 const ENCODE_MODE = process.env.FAKE_BUNNY_ENCODE === 'manual' ? 'manual' : 'auto';
 const ENCODE_MS = Number(process.env.FAKE_BUNNY_ENCODE_MS ?? 2000);
 
@@ -348,6 +349,7 @@ async function writeRenditions(videoId: string, access: string, rev: string): Pr
     for (const seg of segments) await put(`${r}/${seg}`, 'segment');
   }
   await put('thumb.jpg', 'jpeg');
+  await put('video.mp4', 'mp4');
 }
 
 export async function fakeTranscode(videoId: string, outcome: string): Promise<Response> {
@@ -386,6 +388,7 @@ export async function fakeTranscode(videoId: string, outcome: string): Promise<R
       source: { width: 1280, height: 720, durationSeconds: 90, bytes: 1, hasAudio: true },
       timings: { downloadMs: 1, transcodeMs: 1, uploadMs: 1, totalMs: 3 },
       thumbnail: 'thumb.jpg',
+      mp4: { file: 'video.mp4', rung: '360p', width: 640, height: 360, bytes: readFileSync(SAMPLE_MP4).length },
     },
   });
   await writeRenditions(videoId, r2.access, r2.rev);
@@ -393,7 +396,7 @@ export async function fakeTranscode(videoId: string, outcome: string): Promise<R
   return json({ videoId, outcome: 'ready', rev: r2.rev, access: r2.access });
 }
 
-function mediaHost(method: string, pathname: string): Response {
+function mediaHost(method: string, pathname: string, range?: string | null): Response {
   if (fakeMedia.down) return new Response('media host down (fake)', { status: 503, headers: CORS });
   const head = method === 'HEAD';
   if (pathname === '/pub/_health/probe.txt') return new Response(head ? null : 'ok', { status: 200, headers: CORS });
@@ -405,8 +408,16 @@ function mediaHost(method: string, pathname: string): Response {
   const rendition = fakeMedia.renditions.get(videoId ?? '');
   if ((scope !== 'pub' && scope !== 'priv') || !rendition || rendition.rev !== rev || rendition.access !== scope) return new Response(null, { status: 404, headers: CORS });
   const file = rest.join('/');
-  const send = (body: Buffer, type: string) => new Response(head ? null : body, { status: 200, headers: { 'content-type': type, 'access-control-allow-origin': '*', 'cache-control': 'no-store' } });
+  const send = (body: Buffer, type: string) =>
+    new Response(head ? null : body, {
+      status: 200,
+      headers: { 'content-type': type, 'content-length': String(body.length), 'accept-ranges': 'bytes', 'access-control-allow-origin': '*', 'cache-control': 'no-store' },
+    });
   if (file === 'thumb.jpg') return send(readFileSync(THUMBNAIL), 'image/jpeg');
+  if (file === 'video.mp4') {
+    const mp4 = readFileSync(SAMPLE_MP4);
+    return ranged(mp4, range, 'video/mp4', head) ?? send(mp4, 'video/mp4');
+  }
   const path = normalize(join(PLAYER_FIXTURES, 'bright', file));
   if (!path.startsWith(join(PLAYER_FIXTURES, 'bright')) || !existsSync(path)) return new Response(null, { status: 404, headers: CORS });
   return send(readFileSync(path), TYPES[extname(path)] ?? 'application/octet-stream');
@@ -472,7 +483,7 @@ export function registerFakes(): void {
   FAKES.set('api.resend.com', resend);
   FAKES.set('api.cloudflare.com', cloudflareApi);
   FAKES.set(FAKE_WEBHOOK_HOST, webhookReceiver);
-  FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));
+  FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname, request.headers.get('range')));
   // Move from YouTube: Google's consent, tokens, the YouTube Data API and thumbnails (fake-google.ts)
   FAKES.set('accounts.google.com', googleAccounts);
   FAKES.set('oauth2.googleapis.com', googleOAuth);

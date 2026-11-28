@@ -169,11 +169,18 @@ Watch pages advertise the endpoint for discovery:
 
 ### Social previews
 
-Watch pages (`/{locale}/video/{id}`) of public videos render Open Graph and Twitter tags server side: `og:type`
-`video.other`, `og:title`, `og:description`, `og:image` (thumbnail), `og:url`, `og:video` / `og:video:secure_url`
-(the embed URL, `text/html`, 1280×720), `twitter:card=player`, `twitter:player` (embed URL), `twitter:player:width`
-/ `height`, `hreflang` alternates for `en` / `ar`, and the oEmbed `<link>`. Private or missing videos get only the
-site defaults.
+Watch pages (`/{locale}/video/{id}` and `/{locale}/shorts/{id}`) of public and unlisted videos render Open Graph and
+Twitter Player Card tags server side: `og:type` `video.other`, `og:title`, `og:description`, `og:image` (the stable
+1200×630 card `/og/v/{id}.jpg`, or the site brand card when a video has no thumbnail), `og:url`, `twitter:card=player`,
+`twitter:image` (1200×630 fallback), `twitter:player` (absolute HTTPS embed URL), integer `twitter:player:width` /
+`height`, `hreflang` alternates for `en` / `ar`, and the oEmbed `<link>`. `og:video` is intentionally omitted so chat
+apps render the large preview card.
+
+When a public video has a ready progressive MP4 on the public media host (`/pub/{videoId}/{rev}/video.mp4`, D-SEO-11),
+the watch page also emits `twitter:player:stream` pointing at that unsigned MP4 URL and
+`twitter:player:stream:content_type=video/mp4` so X's mobile apps play the video inline natively. Videos without a
+public MP4 (not ready, Bunny-only, private, unlisted, or restricted) omit both stream tags and keep the iframe player
+card. Private or missing videos get only the site defaults.
 
 ## 4. Sharing links
 

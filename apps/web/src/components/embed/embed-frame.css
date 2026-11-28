@@ -27,10 +27,11 @@ main[data-testid="embed-player"] {
   container: embed-frame / inline-size;
 }
 
-/* the player box: the whole frame */
+/* the player box: the whole frame (100dvh keeps controls clear of mobile browser chrome standalone) */
 main[data-testid="embed-player"] > .embed-box {
   width: 100vw !important;
   height: 100vh !important;
+  height: 100dvh !important;
 }
 
 main[data-testid="embed-player"] .custom-video-player,
@@ -38,6 +39,7 @@ main[data-testid="embed-player"] .custom-video-player.aspect-video:not([data-por
 main[data-testid="embed-player"] .custom-video-player[data-portrait] {
   width: 100% !important;
   height: 100vh !important;
+  height: 100dvh !important;
   max-height: none !important;
   aspect-ratio: auto !important;
   margin: 0;
@@ -93,6 +95,14 @@ main[data-testid="embed-player"] .embed-watch-link[data-compact] .embed-watch-la
 }
 
 @container embed-frame (max-width: 479px) {
+  main[data-testid="embed-player"] .embed-title-bar:not([data-has-playlist]) {
+    padding-inline-end: 3rem;
+  }
+
+  main[data-testid="embed-player"] .embed-title-bar[data-has-playlist] {
+    padding-inline-end: 7rem;
+  }
+
   main[data-testid="embed-player"] .embed-watch-link {
     padding: 6px;
   }

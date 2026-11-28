@@ -228,9 +228,27 @@ test.describe.serial('SEO: what crawlers see', () => {
       // The long description is clipped at a word with an ellipsis, not cut mid-word
       expect(description.endsWith('…'), `watch (${locale}): clipped description "${description}"`).toBe(true);
       expect(metas(html, 'name', 'twitter:card')[0], `watch (${locale}): twitter:card`).toBe('player');
+      const webOrigin = new URL(target().web).origin;
+      const expectedPlayer = `${webOrigin}/embed/v/${video.id}${locale === 'ar' ? '?lang=ar' : ''}`;
+      expect(metas(html, 'name', 'twitter:player'), `watch (${locale}): twitter:player`).toEqual([expectedPlayer]);
+      expect(metas(html, 'name', 'twitter:player:width')[0], `watch (${locale}): integer twitter:player:width`).toMatch(/^[1-9]\d*$/);
+      expect(metas(html, 'name', 'twitter:player:height')[0], `watch (${locale}): integer twitter:player:height`).toMatch(/^[1-9]\d*$/);
+      expect(metas(html, 'name', 'twitter:image')[0], `watch (${locale}): twitter:image`).toBe(`${webOrigin}/og/v/${video.id}.jpg`);
 
       const videoNode = jsonLd(html).find((n) => n['@type'] === 'VideoObject');
       expect(videoNode, `watch (${locale}): VideoObject`).toBeTruthy();
+      const streams = metas(html, 'name', 'twitter:player:stream');
+      const streamTypes = metas(html, 'name', 'twitter:player:stream:content_type');
+      if (typeof videoNode?.contentUrl === 'string') {
+        expect(streams, `watch (${locale}): twitter:player:stream matches public MP4`).toEqual([videoNode.contentUrl]);
+        expect(new URL(streams[0]).protocol, `watch (${locale}): twitter:player:stream is https`).toBe('https:');
+        expect(new URL(streams[0]).pathname, `watch (${locale}): twitter:player:stream is public MP4`).toMatch(/^\/pub\/(?:[^/]+\/)+[^/]+\.mp4$/i);
+        expect(new URL(streams[0]).search, `watch (${locale}): twitter:player:stream has no signed query`).toBe('');
+        expect(streamTypes, `watch (${locale}): twitter:player:stream:content_type`).toEqual(['video/mp4']);
+      } else {
+        expect(streams, `watch (${locale}): twitter:player:stream omitted when no public MP4`).toEqual([]);
+        expect(streamTypes, `watch (${locale}): twitter:player:stream:content_type omitted when no public MP4`).toEqual([]);
+      }
       for (const field of ['name', 'description', 'thumbnailUrl', 'uploadDate', 'embedUrl']) {
         expect(videoNode?.[field], `watch (${locale}): VideoObject.${field}`).toBeTruthy();
       }

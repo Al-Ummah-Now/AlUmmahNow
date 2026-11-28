@@ -166,14 +166,25 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(video.isLive === true ? { isLive: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
     ...(sources.length ? { sources } : {}),
-    ...(video.isPublic !== false && isPublicMp4(video.contentUrl) ? { contentUrl: video.contentUrl } : {}),
+    ...(video.isPublic !== false && isPublicMp4Url(video.contentUrl) ? { contentUrl: video.contentUrl } : {}),
     ...(audioTracksOf(video.audioTracks).length ? { audioTracks: audioTracksOf(video.audioTracks) } : {}),
   };
 }
 
-/** An absolute https URL (the API's public R2 MP4); anything else is not given to search engines. */
-function isPublicMp4(url: unknown): url is string {
-  return typeof url === 'string' && /^https:\/\/[^\s"<>]+$/.test(url);
+/**
+ * An absolute, unsigned https URL to the public R2 progressive MP4 (`/pub/.../*.mp4`).
+ * Never accepts signed/expiring URLs (query strings, `/priv/`, Bunny tokens) or HTML pages,
+ * because crawlers cache VideoObject.contentUrl and twitter:player:stream.
+ */
+export function isPublicMp4Url(url: unknown): url is string {
+  if (typeof url !== 'string' || !url || /\s/.test(url)) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) return false;
+    return /^\/pub\/(?:[^/]+\/)+[^/]+\.mp4$/i.test(u.pathname);
+  } catch {
+    return false;
+  }
 }
 
 /**
