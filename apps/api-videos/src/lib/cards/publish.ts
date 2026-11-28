@@ -32,8 +32,14 @@ export async function authorizeCard(env: AppBindings, channelId: string, actorId
   return channel;
 }
 
-export function enqueueCard(env: AppBindings, channelId: string, actorId: string, params: z.infer<typeof cardJobParams>) {
-  return createJob(env, { kind: CARD_JOB, targetKind: 'channel', targetId: channelId, actorId, params });
+export async function enqueueCard(env: AppBindings, channelId: string, actorId: string, params: z.infer<typeof cardJobParams>) {
+  const identity = [channelId, actorId, params.id, params.refreshVersion ?? 'publish'].join(':');
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity)));
+  digest[6] = (digest[6] & 0x0f) | 0x80;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const id = [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+  return createJob(env, { id, kind: CARD_JOB, targetKind: 'channel', targetId: channelId, actorId, params: { ...params, id: params.refreshVersion ? params.id : id } });
 }
 
 async function fontBase64(bucket: R2Bucket, key: string): Promise<string> {
@@ -194,17 +200,9 @@ export async function queueQuranCardRefresh(env: AppBindings, post: CommunityPos
   const verse = post.designedCard?.quran;
   const design = cardDesignSchema.safeParse(post.designedCard?.design);
   if (!env.CARD_PUBLIC_ORIGIN || !env.MEDIA_PRIVATE || !env.ADMIN_JOBS_QUEUE || !env.SEARCH_DB || !verse || !design.success) return;
-  const bucket = env.MEDIA_PRIVATE;
-  const claim = `cards/quran/${version}/${post.channelId}/${post.id}.refresh`;
-  if (!(await bucket.put(claim, '', { onlyIf: { etagDoesNotMatch: '*' } }))) return;
-  try {
-    const job = await enqueueCard(env, post.channelId, post.authorId ?? post.userId, {
-      id: post.id, source: { kind: 'quran', ...verse }, design: design.data,
-      locale: post.locale === 'ar' ? 'ar' : 'en', roles: [], origin: env.CARD_PUBLIC_ORIGIN, refreshVersion: version,
-    });
-    if (job.status === 'failed') flagCardPublishFailed(env, job, job.lastError ?? 'Card refresh could not be queued');
-  } catch (error) {
-    await bucket.delete(claim);
-    throw error;
-  }
+  const job = await enqueueCard(env, post.channelId, post.authorId ?? post.userId, {
+    id: post.id, source: { kind: 'quran', ...verse }, design: design.data,
+    locale: post.locale === 'ar' ? 'ar' : 'en', origin: env.CARD_PUBLIC_ORIGIN, refreshVersion: version,
+  });
+  if (job.status === 'failed') flagCardPublishFailed(env, job, job.lastError ?? 'Card refresh could not be queued');
 }

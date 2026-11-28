@@ -246,10 +246,10 @@ async function enqueue(env: JobEnv, job: AdminJob, runId: string, delaySeconds?:
 	}
 }
 
-export async function createJob(env: JobEnv, input: { kind: AdminJobKind; targetKind: AdminJobTarget; targetId: string; params?: Record<string, unknown>; actorId: string; delaySeconds?: number }): Promise<AdminJob> {
+export async function createJob(env: JobEnv, input: { id?: string; kind: AdminJobKind; targetKind: AdminJobTarget; targetId: string; params?: Record<string, unknown>; actorId: string; delaySeconds?: number }): Promise<AdminJob> {
 	const at = now();
 	const job: AdminJob = {
-		id: crypto.randomUUID(),
+		id: input.id ?? crypto.randomUUID(),
 		kind: input.kind,
 		targetKind: input.targetKind,
 		targetId: input.targetId,
@@ -267,10 +267,17 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 	};
 	const store = db(env);
 	const runId = crypto.randomUUID();
-	await store
-		.prepare(`INSERT INTO admin_jobs (${INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	const inserted = await store
+		.prepare(`INSERT INTO admin_jobs (${INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
 		.bind(job.id, job.kind, job.targetKind, job.targetId, JSON.stringify(job.params), job.status, 0, null, null, job.actorId, at, at, null, runId)
 		.run();
+	if (!inserted.meta?.changes) {
+		const existing = await getJob(env, job.id);
+		if (!existing || existing.kind !== job.kind || existing.actorId !== job.actorId || existing.targetId !== job.targetId) {
+			throw new Error('Job ID belongs to another operation');
+		}
+		return existing;
+	}
 	// Who the job names, so an account erasure finds its jobs without a scan (#1253)
 	const links = jobUserIds(job).map((userId) => store.prepare('INSERT OR IGNORE INTO admin_job_users (user_id, job_id) VALUES (?, ?)').bind(userId, job.id));
 	if (links.length) await store.batch(links);

@@ -37,7 +37,7 @@ app.post('/:userId/:channelId/:action', async (c) => {
   }
   const job = await enqueueCard(c.env, channelId, userId, { ...input.data, origin });
   if (job.status === 'failed') flagCardPublishFailed(c.env, job, job.lastError ?? 'Card could not be queued');
-  return c.json({ id: job.id, postId: input.data.id, status: job.status }, 202);
+  return c.json({ id: job.id, postId: job.params.id, status: job.status }, 202);
 });
 
 app.get('/:userId/:channelId/jobs/:jobId', async (c) => {
