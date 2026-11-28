@@ -61,6 +61,7 @@ describe('"Your requests" history', () => {
 			seen.push(...page.items.map((r) => r.id));
 			cursor = page.next;
 			pages++;
+			assert.ok(pages <= 3, 'the cursor advances on every page');
 		} while (cursor);
 		assert.equal(pages, 3);
 		assert.equal(new Set(seen).size, 23);

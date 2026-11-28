@@ -18,7 +18,7 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { TIER_REQUEST_ERRORS, type TierRequestInput } from '@al-ummah/shared-types';
-import { createTierRequest, decodeTierRequestCursor, listMyRequests, ownRequest, receivedNotificationPayload, TierRequestError, upgradeOverview, withdrawTierRequest } from '../../lib/tierRequests';
+import { createTierRequest, decodeTierRequestCursor, listMyRequests, ownRequest, receivedNotificationPayload, TIER_REQUEST_ID, TierRequestError, upgradeOverview, withdrawTierRequest } from '../../lib/tierRequests';
 import { readTier } from '../../lib/creatorTiers';
 import { enqueueNotification, type NotificationsEnv } from '../../lib/notifications';
 import { logger } from '../../lib/logger';
@@ -30,7 +30,7 @@ import { soldTierIds, type ServiceEnv } from '../../lib/billing/service';
 import { IntegerQuery } from '../../validation/legacy-request';
 
 const HistoryQuery = z.object({ cursor: z.string().max(128).refine((value) => decodeTierRequestCursor(value) !== null).optional(), limit: IntegerQuery.optional() });
-const RequestId = z.uuid();
+const RequestId = z.string().regex(TIER_REQUEST_ID);
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;

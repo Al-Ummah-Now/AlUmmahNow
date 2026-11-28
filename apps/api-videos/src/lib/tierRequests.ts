@@ -282,14 +282,14 @@ export interface TierRequestsEnv {
 }
 
 const CURSOR_SEP = '|';
+export const TIER_REQUEST_ID = /^(?:tr_[A-Za-z0-9_-]{1,61}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const encodeCursor = (row: { created_at: string; id: string }) => btoa(`${row.created_at}${CURSOR_SEP}${row.id}`);
 export function decodeTierRequestCursor(cursor: string | undefined): { createdAt: string; id: string } | null {
 	if (!cursor || cursor.length > 128) return null;
 	try {
 		const [createdAt, id, suffix] = atob(cursor).split(CURSOR_SEP);
 		const date = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
-		const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-		return suffix === undefined && date.test(createdAt) && uuid.test(id) ? { createdAt, id } : null;
+		return suffix === undefined && date.test(createdAt) && TIER_REQUEST_ID.test(id) ? { createdAt, id } : null;
 	} catch {
 		return null;
 	}
