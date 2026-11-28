@@ -351,3 +351,24 @@ test('theme SVG rejects 50,000 comment openers promptly', () => {
   assert.ok(svgProblem(text));
   assert.ok(performance.now() - start < 1_000, 'comment validation should finish within one second');
 });
+
+test('theme SVG rejects oversized tag and attribute syntax within 50 ms', () => {
+  const longName = '-'.repeat(100_000);
+  const cases = [
+    ['tag name', '<svg><g' + longName + '/></svg>'],
+    ['attribute name', '<svg><g ' + longName + '="x"/></svg>'],
+    ['attribute count', '<svg><g' + ' -="x"'.repeat(10_000) + '/></svg>'],
+  ];
+  for (const [field, text] of cases) {
+    const start = performance.now();
+    const problem = svgProblem(text);
+    const duration = performance.now() - start;
+    assert.equal(problem, 'contains unsupported SVG markup', field);
+    assert.ok(duration < 50, field + ' took ' + duration.toFixed(1) + ' ms');
+  }
+});
+
+test('theme SVG accepts tags with up to 64 well-formed attributes', () => {
+  const attributes = Array.from({ length: 64 }, (_, i) => ' data-attribute-' + i + '="x"').join('');
+  assert.equal(svgProblem('<svg><g' + attributes + '/></svg>'), undefined);
+});
