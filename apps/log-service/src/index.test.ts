@@ -69,6 +69,34 @@ describe('Log Service E2E Tests', () => {
     });
   });
 
+  it('rejects unsupported log names and levels in both ingestion routes', async () => {
+    const log = { app: 'Audit Logs', level: 'info', message: 'Test' };
+    for (const entry of [log, { ...log, app: 'audit-logs', level: 'notice' }]) {
+      for (const [path, body] of [['/log', entry], ['/log/batch', { logs: [entry] }]] as const) {
+        const response = await fetch(BASE_URL + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        expect(response.status).toBe(400);
+      }
+    }
+  });
+
+  it('preserves a multiline message in one log record', async () => {
+    const app = 'log-record-test';
+    const response = await fetch(BASE_URL + '/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app, level: 'info', message: 'first line\nsecond line' }),
+    });
+    expect(response.status).toBe(200);
+    const read = await fetch(BASE_URL + '/logs/' + app + '?lines=1&tail=true');
+    const { lines } = await read.json();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/\[INFO\] first line\\nsecond line$/);
+  });
+
   describe('POST /log', () => {
     it('should accept and save a log message', async () => {
       const logEntry = {

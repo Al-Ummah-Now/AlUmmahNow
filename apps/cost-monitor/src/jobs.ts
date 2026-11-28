@@ -42,7 +42,13 @@ export function backoffSeconds(attempts: number): number {
 export function isCostJob(body: unknown): body is CostJob {
   if (!body || typeof body !== 'object') return false;
   const b = body as Partial<CostJob>;
-  return b.v === COST_JOB_VERSION && (COST_JOB_KINDS as readonly string[]).includes(String(b.job)) && typeof b.at === 'string' && (b.day === undefined || /^\d{4}-\d{2}-\d{2}$/.test(b.day));
+  if (b.v !== COST_JOB_VERSION || typeof b.job !== 'string' || !(COST_JOB_KINDS as readonly string[]).includes(b.job)
+    || typeof b.at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(b.at)
+    || !Number.isFinite(Date.parse(b.at))) return false;
+  if (b.day === undefined) return true;
+  if (typeof b.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.day)) return false;
+  const day = new Date(b.day);
+  return Number.isFinite(day.getTime()) && day.toISOString().startsWith(b.day + 'T');
 }
 
 /** Errors page key of a job (one item per job and day, so Retry re-runs exactly that one). */

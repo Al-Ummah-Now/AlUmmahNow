@@ -1,6 +1,7 @@
 import { OpenAPIRoute } from 'chanfana';
 import { Str, Num } from '../lib/chanfana-params';
 import { z } from 'zod';
+import { LOG_APP_NAME } from '../lib/log-record';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -82,7 +83,7 @@ export class GetLogs extends OpenAPIRoute {
       const isTail = tail === 'true';
 
       // Validate app name (prevent directory traversal)
-      if (appName.includes('..') || appName.includes('/')) {
+      if (!LOG_APP_NAME.test(appName)) {
         return c.json({
           error: 'Invalid app name',
         }, 400);

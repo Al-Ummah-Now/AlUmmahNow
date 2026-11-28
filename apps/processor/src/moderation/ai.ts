@@ -71,7 +71,8 @@ export async function translateToEnglish(ctx: AiContext, text: string): Promise<
     estimateTokens(TRANSLATE_SYSTEM_PROMPT) + estimateTokens(text),
     (r) => estimateTokens(String(chatContent(r) ?? ''))
   );
-  const translated = String(chatContent(result) ?? '').trim();
+  const output = chatContent(result);
+  const translated = typeof output === 'string' ? output.trim() : '';
   if (!translated) throw new Error('Translation returned no text');
   return translated;
 }
@@ -83,21 +84,26 @@ export interface GuardVerdict {
 
 /** Llama Guard answers either `{ safe, categories }` or text like "unsafe\nS1,S10". */
 export function parseGuardResponse(result: unknown): GuardVerdict {
-  const response = (result as { response?: unknown } | null)?.response ?? result;
-  const known = (c: string) => c in LLAMA_GUARD_CATEGORIES;
+  const response = chatContent(result);
+  const known = (code: string) => Object.hasOwn(LLAMA_GUARD_CATEGORIES, code);
   if (response && typeof response === 'object') {
     const r = response as { safe?: unknown; categories?: unknown };
-    if (typeof r.safe === 'boolean') {
-      const categories = Array.isArray(r.categories) ? r.categories.map((c) => String(c).trim().toUpperCase()).filter(known) : [];
-      return { safe: r.safe, categories: r.safe ? [] : categories };
+    if (r.safe === true) return { safe: true, categories: [] };
+    if (r.safe === false && Array.isArray(r.categories)) {
+      const categories = r.categories
+        .filter((code): code is string => typeof code === 'string')
+        .map((code) => code.trim().toUpperCase())
+        .filter(known);
+      if (categories.length) return { safe: false, categories: [...new Set(categories)] };
     }
   }
   if (typeof response === 'string') {
-    const text = response.trim().toLowerCase();
-    if (text.startsWith('safe')) return { safe: true, categories: [] };
-    if (text.startsWith('unsafe')) {
-      const categories = (response.toUpperCase().match(/S\d{1,2}/g) ?? []).filter(known);
-      return { safe: false, categories: [...new Set(categories)] };
+    const text = response.trim();
+    if (/^safe$/i.test(text)) return { safe: true, categories: [] };
+    const unsafe = /^unsafe\s*\r?\n\s*(S\d{1,2}(?:\s*,\s*S\d{1,2})*)$/i.exec(text);
+    if (unsafe) {
+      const categories = unsafe[1]!.toUpperCase().split(',').map((code) => code.trim()).filter(known);
+      if (categories.length) return { safe: false, categories: [...new Set(categories)] };
     }
   }
   throw new Error('Unrecognised Llama Guard response');

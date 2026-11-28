@@ -217,3 +217,17 @@ test('a send to a socket the client already closed is not logged as an error (pr
   }
   assert.equal(errors.length, 1, 'only the real failure is an error');
 });
+
+test('invalid client messages leave subscriptions unchanged', async () => {
+  const { durable } = makeDO();
+  const ws = await connect(durable, '');
+  for (const message of [
+    '{',
+    JSON.stringify({ type: 'subscribe', channel: 'video:' }),
+    JSON.stringify({ type: 'message', channel: 'video:v1' }),
+  ]) {
+    await durable.webSocketMessage(ws, message);
+    assert.equal(ws.last().code, 'INVALID_MESSAGE');
+  }
+  assert.equal(durable.subscriberCount('video:'), 0);
+});

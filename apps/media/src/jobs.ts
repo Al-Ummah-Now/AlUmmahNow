@@ -2,7 +2,7 @@
  * Transcode job state and decisions (pure; tested in test/jobs.test.ts). The
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
-import { reviewMediaPrefix, type ReviewExtractionOptions, type TranscodeStartup } from '@al-ummah/shared-types';
+import { isBunnyMediaHost, reviewMediaPrefix, type ReviewExtractionOptions, type TranscodeStartup } from '@al-ummah/shared-types';
 import { mediaPrefix, prebuiltStagingPrefix, sanitizeRungs, scrubOpsText, startFailureReason, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult, type TranscodeStartFailure, type TranscoderJobView } from '@al-ummah/shared-types';
 
 /** Plain words for a start failure (shared with the admin's troubleshooting panel, media-troubleshoot.ts). */
@@ -367,6 +367,10 @@ export function mp4QueueAction(
 // Live recording review (VR9): review frames and audio from a live stream's HLS VOD
 // ---------------------------------------------------------------------------
 
+const LIVE_VOD_HOSTS = new Set([
+	'live.alummahnow.net', 'live.qa.alummahnow.net', 'live.stage.alummahnow.net',
+]);
+
 /** The recording's directory (the `vod.internal` handler serves only under it) and its playlist file. */
 export function liveVodSource(vodUrl: string): { base: string; file: string } | null {
 	let url: URL;
@@ -375,9 +379,9 @@ export function liveVodSource(vodUrl: string): { base: string; file: string } | 
 	} catch {
 		return null;
 	}
-	if (url.protocol !== 'https:' || url.username || url.password) return null;
+	if (url.protocol !== 'https:' || url.username || url.password || url.port || (!LIVE_VOD_HOSTS.has(url.hostname) && !isBunnyMediaHost(url.hostname))) return null;
 	// Raw path (Bunny's token path keeps its %2F encoding): base = up to and including the last "/"
-	const raw = vodUrl.slice(url.origin.length).split('?')[0]!;
+	const raw = url.pathname;
 	const cut = raw.lastIndexOf('/');
 	const file = raw.slice(cut + 1);
 	if (!/^[A-Za-z0-9._-]+\.m3u8$/.test(file)) return null;
@@ -389,7 +393,9 @@ export function liveVodSource(vodUrl: string): { base: string; file: string } | 
  * directory (no `..`, no scheme, no host), so the container can read that recording and nothing else.
  */
 export function liveVodTarget(base: string, rel: string): string | null {
-	if (!rel || rel.startsWith('/') || rel.includes('..') || rel.includes('\\') || /^[a-z][a-z0-9+.-]*:/i.test(rel) || rel.includes('//')) return null;
+	const path = rel.split('?')[0]!;
+	if (rel.length > 2048 || rel.includes('#') || /\p{Cc}/u.test(rel)
+		|| path.split('/').some((segment) => !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(segment))) return null;
 	return `${base}${rel}`;
 }
 

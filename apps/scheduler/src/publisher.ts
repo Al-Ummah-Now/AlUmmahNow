@@ -27,6 +27,14 @@ export function buildScheduleKey(date: Date, videoId: string): string {
   return `${year}-${month}-${day}/${hour}/${videoId}.json`;
 }
 
+export function readScheduleMetadata(raw: unknown, key: string): ScheduledVideoMetadata | null {
+  const row = raw as Partial<ScheduledVideoMetadata> | null;
+  if (!row || typeof row.videoId !== 'string' || !/^[\w-]{1,64}$/.test(row.videoId)
+    || typeof row.scheduledPublishDate !== 'string' || row.scheduledPublishDate.length > 40
+    || !Number.isFinite(Date.parse(row.scheduledPublishDate))) return null;
+  return buildScheduleKey(new Date(row.scheduledPublishDate), row.videoId) === key ? row as ScheduledVideoMetadata : null;
+}
+
 const MAX_ATTEMPTS = 8;
 
 /**
@@ -187,8 +195,8 @@ export async function listDueSchedules(
         });
         operations++;
         if (body === null) continue;
-        const metadata: ScheduledVideoMetadata = JSON.parse(body);
-        if (new Date(metadata.scheduledPublishDate) < windowEnd) due.push(metadata);
+        const metadata = readScheduleMetadata(JSON.parse(body), object.key);
+        if (metadata && new Date(metadata.scheduledPublishDate) < windowEnd) due.push(metadata);
       } catch (error) {
         // One unreadable entry is skipped for this run, never the whole scan; the next run reads it again
         if (isTransientStorageError(error)) logger.warn(`Schedule entry ${object.key} unreadable for now; next run retries`, { error });

@@ -10,7 +10,7 @@ import { reviewVariant } from '../container/review.mjs';
 import { liveReviewPrefix, liveReviewQueueAction, liveVodSource, liveVodTarget } from '../src/jobs';
 
 const SID = '11111111-2222-4333-8444-555555555555';
-const BUNNY = 'https://vz-test.b-cdn.net/bcdn_token=abc_-&expires=1763000000&token_path=%2Faaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee%2F/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/playlist.m3u8';
+const BUNNY = 'https://vz-cb79844a-c5d.b-cdn.net/bcdn_token=abc_-&expires=1763000000&token_path=%2Faaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee%2F/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/playlist.m3u8';
 
 describe('the recording the container may read', () => {
 	it('self-hosted: the session directory and vod.m3u8', () => {
@@ -33,11 +33,22 @@ describe('the recording the container may read', () => {
 		for (const bad of ['http://x.example/a/vod.m3u8', 'https://u:p@x.example/a/vod.m3u8', 'https://x.example/a/video.mp4', 'not a url', 'https://x.example/a/v d.m3u8']) assert.equal(liveVodSource(bad), null, bad);
 	});
 
+	it('only accepts recordings on the platform delivery hosts', () => {
+		assert.equal(liveVodSource('https://other.example.test/recordings/vod.m3u8'), null);
+		assert.equal(liveVodSource('https://live.qa.alummahnow.net:8443/recordings/vod.m3u8'), null);
+	});
+
 	it('vod.internal serves only relative paths under the recording', () => {
 		const base = 'https://live.qa.alummahnow.net/hls/sess-1/';
 		assert.equal(liveVodTarget(base, '720/vod.m3u8'), `${base}720/vod.m3u8`);
 		assert.equal(liveVodTarget(base, '720/seg_00001.m4s?x=1'), `${base}720/seg_00001.m4s?x=1`);
 		for (const bad of ['', '../sess-2/vod.m3u8', '720/../../x', '/etc/passwd', 'https://evil.example/x', '//evil.example/x', 'a\\b', 'file:x']) assert.equal(liveVodTarget(base, bad), null, bad);
+	});
+
+	it('requires ordinary path segments and retains a separate query string', () => {
+		const base = 'https://live.qa.alummahnow.net/hls/session/';
+		assert.equal(liveVodTarget(base, '720/./segment.m4s'), null);
+		assert.equal(liveVodTarget(base, '720/segment.m4s?quality=720&v=a%2Fb'), base + '720/segment.m4s?quality=720&v=a%2Fb');
 	});
 
 	it('review media go under review/<streamId>/<rev>/', () => {

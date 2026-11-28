@@ -216,6 +216,35 @@ describe('theme builder API', () => {
     }
   });
 
+  it('rejects unsafe archive assets before creating a draft', async () => {
+    const { call, bucket } = setup();
+    const { theme } = fawanees();
+    theme.id = 'custom-test';
+    const assets = { 'assets/test.svg': new TextEncoder().encode('<svg><style>path {fill: red}</style></svg>') };
+    const res = await call('/api/themes/import', { method: 'POST', body: packageToZip({ theme, assets }) });
+    assert.equal(res.status, 422);
+    assert.equal(bucket.objects.size, 0);
+  });
+
+  it('rejects invalid archive metadata before making a new id', async () => {
+    const { call, bucket } = setup();
+    const { theme, assets } = fawanees();
+    Object.assign(theme.name, { en: 42 });
+    const res = await call('/api/themes/import?newId=1', { method: 'POST', body: packageToZip({ theme, assets }) });
+    assert.equal(res.status, 422);
+    assert.equal(bucket.objects.size, 0);
+  });
+
+  it('requires a known theme.json schema on archive import', async () => {
+    const { call, bucket } = setup();
+    const { theme, assets } = fawanees();
+    theme.id = 'custom-test';
+    Object.assign(theme, { legacyField: 'unknown' });
+    const res = await call('/api/themes/import', { method: 'POST', body: packageToZip({ theme, assets }) });
+    assert.equal(res.status, 422);
+    assert.equal(bucket.objects.size, 0);
+  });
+
   it('exports a version as a zip that imports back', async () => {
     const { call } = setup();
     await importCopy(call);

@@ -317,16 +317,21 @@
             }
 
             const logDiv = document.createElement('div');
-            logDiv.className = `log-entry ${entry.level.toLowerCase()}`;
+            const rawLevel = String(entry.level).toLowerCase();
+            const level = ['trace', 'debug', 'info', 'warn', 'error'].includes(rawLevel) ? rawLevel : 'unknown';
+            logDiv.className = 'log-entry ' + level;
 
-            const timestamp = new Date(entry.timestamp).toLocaleTimeString();
-
-            logDiv.innerHTML = `
-                <span class="log-timestamp">${timestamp}</span>
-                <span class="log-level ${entry.level.toUpperCase()}">${entry.level.toUpperCase()}</span>
-                <span class="log-app">[${entry.app}]</span>
-                <span class="log-message">${escapeHtml(entry.message)}</span>
-            `;
+            for (const [className, text] of [
+                ['log-timestamp', new Date(entry.timestamp).toLocaleTimeString()],
+                ['log-level ' + level.toUpperCase(), level.toUpperCase()],
+                ['log-app', '[' + entry.app + ']'],
+                ['log-message', entry.message],
+            ]) {
+                const span = document.createElement('span');
+                span.className = className;
+                span.textContent = text;
+                logDiv.appendChild(span);
+            }
 
             container.appendChild(logDiv);
             logCount++;
@@ -343,11 +348,7 @@
             logCount = 0;
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+
 
         // Auto-connect on page load
         window.addEventListener('load', () => {

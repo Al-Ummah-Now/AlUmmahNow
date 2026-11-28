@@ -68,3 +68,20 @@ export async function bodyText(res: Response): Promise<string> {
     return '';
   }
 }
+
+/** Validate stored subscription URLs again at the outbound boundary. */
+export function pushEndpoint(raw: string, provider: 'webpush' | 'wns'): URL | null {
+  if (raw.length > 2048) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.port || url.username || url.password) return null;
+  const host = url.hostname;
+  const matches = (domain: string) => host === domain || host.endsWith('.' + domain);
+  if (matches('notify.windows.com')) return url;
+  if (provider === 'webpush' && (host === 'fcm.googleapis.com' || matches('push.services.mozilla.com') || matches('push.apple.com'))) return url;
+  return null;
+}

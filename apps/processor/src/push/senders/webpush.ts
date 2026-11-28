@@ -18,7 +18,7 @@
  */
 import { logger } from '../../lib/logger';
 import type { AlertPush, PushMessage, PushProvider, PushResult, PushTarget } from '../provider';
-import { base64url, bodyText, nowSeconds, readSecret, retryableStatus, signJwt, type FetchLike, type SecretBinding } from './common';
+import { base64url, bodyText, nowSeconds, pushEndpoint, readSecret, retryableStatus, signJwt, type FetchLike, type SecretBinding } from './common';
 import { wnsTag } from './wns';
 
 export interface WebPushEnv {
@@ -74,12 +74,12 @@ export function parseSubscription(token: string): Subscription | null {
   try {
     const s = JSON.parse(token) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
     if (typeof s.endpoint !== 'string' || typeof s.keys?.p256dh !== 'string' || typeof s.keys?.auth !== 'string') return null;
-    const url = new URL(s.endpoint);
-    if (url.protocol !== 'https:') return null;
+    const url = pushEndpoint(s.endpoint, 'webpush');
+    if (!url) return null;
     const p256dh = fromBase64url(s.keys.p256dh);
     const auth = fromBase64url(s.keys.auth);
     if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) return null;
-    return { endpoint: s.endpoint, p256dh, auth };
+    return { endpoint: url.href, p256dh, auth };
   } catch {
     return null;
   }
@@ -238,6 +238,7 @@ export class WebPushProvider implements PushProvider {
     const jwt = await this.vapidJwt(keys, new URL(sub.endpoint).origin);
     const res = await this.fetchImpl(sub.endpoint, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         authorization: `vapid t=${jwt}, k=${keys.publicKey}`,
         'content-encoding': 'aes128gcm',

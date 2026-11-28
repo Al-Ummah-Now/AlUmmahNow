@@ -260,13 +260,21 @@ export class WebSocketDurableObject extends DurableObject {
         return;
       }
 
-      const data = typeof message === 'string' ? message : new TextDecoder().decode(message);
-      if (data.length > 100000) {
+      const size = typeof message === 'string' ? message.length : message.byteLength;
+      if (size > 100000) {
         this.sendMessage(ws, { type: 'error', error: 'Message too large', code: 'PAYLOAD_TOO_LARGE' });
         return;
       }
 
-      const validationResult = ClientMessageSchema.safeParse(JSON.parse(data));
+      let parsed: unknown;
+      try {
+        const data = typeof message === 'string' ? message : new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(message);
+        parsed = JSON.parse(data);
+      } catch {
+        this.sendMessage(ws, { type: 'error', error: 'Invalid message format', code: 'INVALID_MESSAGE' });
+        return;
+      }
+      const validationResult = ClientMessageSchema.safeParse(parsed);
       if (!validationResult.success) {
         this.sendMessage(ws, { type: 'error', error: 'Invalid message format', code: 'INVALID_MESSAGE' });
         return;

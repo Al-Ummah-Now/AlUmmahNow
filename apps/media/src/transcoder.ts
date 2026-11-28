@@ -149,7 +149,7 @@ export class Transcoder extends Container<Env> {
 			const headers = new Headers();
 			const range = req.headers.get('range');
 			if (range) headers.set('range', range);
-			const res = await fetch(target, { method: req.method, headers });
+			const res = await fetch(target, { method: req.method, headers, redirect: 'error' });
 			return new Response(res.body, { status: res.status, headers: { 'content-type': res.headers.get('content-type') ?? 'application/octet-stream', ...(res.headers.get('content-length') ? { 'content-length': res.headers.get('content-length')! } : {}), ...(res.headers.get('content-range') ? { 'content-range': res.headers.get('content-range')! } : {}) } });
 		},
 		/** GET http://audioin.internal/src (Range) → an uploaded audio track's file, its chunks concatenated (audio-track jobs) */

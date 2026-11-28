@@ -12,7 +12,7 @@
  * Secrets (Secrets Store): WNS_PACKAGE_SID, WNS_CLIENT_SECRET. Missing → log-only.
  */
 import type { AlertPush, PushMessage, PushProvider, PushResult, PushTarget } from '../provider';
-import { bodyText, readSecret, retryableStatus, type FetchLike, type SecretBinding } from './common';
+import { bodyText, pushEndpoint, readSecret, retryableStatus, type FetchLike, type SecretBinding } from './common';
 
 export interface WnsEnv {
   WNS_PACKAGE_SID?: SecretBinding;
@@ -92,13 +92,15 @@ export class WnsPushProvider implements PushProvider {
   private async post(target: PushTarget, headers: Record<string, string>, body: string): Promise<PushResult | 'not_configured'> {
     const creds = await this.credentials();
     if (!creds) return 'not_configured';
+    const endpoint = pushEndpoint(target.token, 'wns');
+    if (!endpoint) return { ok: false, invalidToken: true, error: 'stored WNS channel is not valid' };
     let token: string;
     try {
       token = await this.accessToken(creds);
     } catch (error) {
       return { ok: false, invalidToken: false, error: error instanceof Error ? error.message : String(error) };
     }
-    const res = await this.fetchImpl(target.token, { method: 'POST', headers: { authorization: `Bearer ${token}`, ...headers }, body });
+    const res = await this.fetchImpl(endpoint.href, { method: 'POST', redirect: 'error', headers: { authorization: `Bearer ${token}`, ...headers }, body });
     if (res.ok) return { ok: true };
     if (res.status === 401) tokenCache.delete(creds.sid);
     // 404: the channel URI is not valid; 410: the channel expired. Either way the device must re-register

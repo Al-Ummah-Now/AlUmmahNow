@@ -8,7 +8,7 @@ import type { AdminBindings } from '../base/types';
 import type { AuthContext } from '../middleware/auth';
 import { hasAdminRole } from '../lib/roles';
 import { logger } from '../lib/logger';
-import { ART_PATH, NEW_THEME_ID, ThemeError, ThemeStore } from '../lib/themePackages';
+import { ART_PATH, ASSET_PATH, NEW_THEME_ID, ThemeError, ThemeStore } from '../lib/themePackages';
 import { themeCssWithArt } from '../lib/theme-art';
 import { writeTrashAudit } from '../lib/trash-audit';
 
@@ -42,11 +42,33 @@ async function activeRef(c: Context<Env>) {
 }
 
 async function bodyBytes(c: Context<Env>): Promise<Uint8Array | Response> {
-  const length = Number(c.req.header('content-length') ?? 0);
-  if (length > MAX_UPLOAD) return c.json({ success: false, error: 'The upload is larger than 16 MB' }, 413);
-  const bytes = new Uint8Array(await c.req.arrayBuffer());
-  if (bytes.byteLength > MAX_UPLOAD) return c.json({ success: false, error: 'The upload is larger than 16 MB' }, 413);
-  return bytes;
+  const tooLarge = () => c.json({ success: false, error: 'The upload is larger than 16 MB' }, 413);
+  if (Number(c.req.header('content-length') ?? 0) > MAX_UPLOAD) return tooLarge();
+  const reader = c.req.raw.body?.getReader();
+  if (!reader) return new Uint8Array();
+  try {
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_UPLOAD) {
+        await reader.cancel();
+        return tooLarge();
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /** Built-in and custom themes, each marked active or not. */
@@ -126,11 +148,13 @@ app.get('/:id/draft/assets/*', async (c) => {
   try {
     const id = c.req.param('id');
     const path = c.req.path.slice(c.req.path.indexOf('/draft/') + '/draft/'.length);
+    const decoded = decodeURIComponent(path);
+    if (!ASSET_PATH.test(decoded)) return c.json({ success: false, error: 'Not found' }, 404);
     const s = store(c);
     // A soft-deleted theme's files stay in R2 until the cleanup purges them, but are not served
-    const obj = (await s.isLive(id)) ? await s.getObject(id, 'draft', decodeURIComponent(path)) : null;
+    const obj = (await s.isLive(id)) ? await s.getObject(id, 'draft', decoded) : null;
     if (!obj) return c.json({ success: false, error: 'Not found' }, 404);
-    return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType ?? 'application/octet-stream', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } });
+    return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType ?? 'application/octet-stream', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'" } });
   } catch (e) { return fail(c, e); }
 });
 
@@ -205,7 +229,7 @@ publicThemes.get('/:id/:version/*', async (c) => {
   const { id, version } = c.req.param();
   if (!/^[a-z][a-z0-9-]{1,39}$/.test(id) || !/^\d+\.\d+\.\d+$/.test(version)) return c.text('Not found', 404);
   const rest = decodeURIComponent(c.req.path.slice(`/public/themes/${id}/${version}/`.length));
-  if (!(rest === 'theme.css' || rest === 'theme.json' || ART_PATH.test(rest) || /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*$/.test(rest))) return c.text('Not found', 404);
+  if (!(rest === 'theme.css' || rest === 'theme.json' || ART_PATH.test(rest) || ASSET_PATH.test(rest))) return c.text('Not found', 404);
   const themes = new ThemeStore(c.env.REPORTS_DB, c.env.theme_packages);
   // A soft-deleted theme is never the site theme (refused on delete), so it stops being served
   if (!(await themes.isLive(id))) return c.text('Not found', 404, { 'Cache-Control': 'public, max-age=30' });
@@ -232,7 +256,7 @@ publicThemes.get('/:id/:version/*', async (c) => {
       'Cache-Control': IMMUTABLE,
       'Access-Control-Allow-Origin': '*',
       'X-Content-Type-Options': 'nosniff',
-      ...(rest.endsWith('.svg') ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}),
+      ...(rest.endsWith('.svg') ? { 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'" } : {}),
       ETag: obj.httpEtag,
     },
   });

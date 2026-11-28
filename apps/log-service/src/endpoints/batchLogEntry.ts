@@ -1,5 +1,5 @@
 import { OpenAPIRoute } from 'chanfana';
-import { Str } from '../lib/chanfana-params';
+import { formatLogLine, logEntry } from '../lib/log-record';
 import { z } from 'zod';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,14 +14,7 @@ export class BatchLogEntry extends OpenAPIRoute {
       body: {
         content: {
           'application/json': {
-            schema: z.object({
-              logs: z.array(z.object({
-                app: Str({ description: 'App name' }),
-                level: Str({ description: 'Log level' }),
-                message: Str({ description: 'Log message' }),
-                data: z.unknown().optional(),
-              })).min(1).describe('Array of log entries'),
-            }),
+            schema: z.object({ logs: z.array(logEntry).min(1).max(500) }),
           },
         },
       },
@@ -64,22 +57,15 @@ export class BatchLogEntry extends OpenAPIRoute {
   };
 
   async handle(c: any) {
+    const { body: { logs } } = await this.getValidatedData<typeof this.schema>();
     try {
-      const data = await this.getValidatedData<typeof this.schema>();
-      const { logs } = data.body;
 
       // Group logs by app for batch writing
       const logsByApp = new Map<string, string>();
 
       for (const log of logs) {
-        const { app: appName, level, message, data: logData } = log;
-
-        const timestamp = new Date().toISOString();
-        const dataStr = logData ? ` ${JSON.stringify(logData)}` : '';
-        const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}${dataStr}\n`;
-
-        const existing = logsByApp.get(appName) || '';
-        logsByApp.set(appName, existing + logLine);
+        const existing = logsByApp.get(log.app) || '';
+        logsByApp.set(log.app, existing + formatLogLine(log));
       }
 
       // Write all logs

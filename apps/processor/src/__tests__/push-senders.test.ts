@@ -262,6 +262,13 @@ describe('WNS', () => {
     server.responders.set('login.live.com', () => ({ status: 200, body: { access_token: 'EgAcAQMAAAAALYAAY', token_type: 'bearer', expires_in: 86400 } }));
   });
 
+  it('rejects unrecognised channel hosts before requesting a token', async () => {
+    const wns = new WnsPushProvider(env, new Counting(), server.fetch);
+    const result = await wns.sendAlert(target({ provider: 'wns', token: 'https://other.example.test/channel' }), alert);
+    expect(result).toMatchObject({ ok: false, invalidToken: true });
+    expect(server.seen).toHaveLength(0);
+  });
+
   it('client-credentials token, then a toast in the review group with a 16-character tag', async () => {
     const wns = new WnsPushProvider(env, new Counting(), server.fetch);
     const t = target({ provider: 'wns', platform: 'windows', token: channel });
