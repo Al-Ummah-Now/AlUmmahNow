@@ -331,6 +331,7 @@ export async function sweepStalledUploads(
           fresh.dateModified = now.toISOString();
           delete fresh.uploadWatch;
           expired = true;
+          return true;
         });
         if (expired && saved) {
           stats.expired++;
