@@ -2,7 +2,7 @@ name: Theme visibility
 
 # Every built-in site theme x light/dark x en/ar x desktop/phone: rendered text contrast (pixels, not
 # computed styles) and axe colour-contrast on the header popovers and other overlays. Runs against a
-# local `next dev` with a local session cookie and mocked API answers: no QA environment, no secrets.
+# local production build with a local session cookie and mocked API answers: no QA environment, no secrets.
 
 on:
   workflow_dispatch:
@@ -44,8 +44,6 @@ jobs:
     env:
       CI: true
       NEXT_TELEMETRY_DISABLED: 1
-      # Full stacks for dev-server render errors (#1457): Next hides frames inside next/ otherwise
-      __NEXT_SHOW_IGNORE_LISTED: true
 
     steps:
       - name: Checkout code

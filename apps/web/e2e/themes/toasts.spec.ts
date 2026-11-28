@@ -1,6 +1,6 @@
 import { test, expect, type WebSocketRoute } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES } from './harness';
+import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES, USER_ID } from './harness';
 
 /**
  * THEME-TOAST (#1169): a real-time notification toast, with its action button, is readable in every
@@ -12,21 +12,30 @@ for (const lang of LANGS) {
   for (const theme of THEMES) {
     for (const mode of MODES) {
       test(`toast ${theme} ${mode} ${lang}`, async ({ page, context, baseURL }, info) => {
-        const sockets: WebSocketRoute[] = [];
-        await page.routeWebSocket((u) => !/\/_next\//.test(u.pathname), (ws) => { sockets.push(ws); ws.onMessage(() => undefined); });
+        const channel = `user:${USER_ID}`;
+        let subscribedSocket: WebSocketRoute | undefined;
+        await page.route('**/api/realtime/token', (route) => route.fulfill({ json: { ticket: 'wst_theme_sweep' } }));
+        await page.routeWebSocket('**/ws', (ws) => {
+          ws.onMessage((message) => {
+            const frame = JSON.parse(String(message));
+            if (frame.type === 'authenticate') {
+              ws.send(JSON.stringify({ type: 'authenticated', data: { userId: USER_ID } }));
+            }
+            if (frame.type === 'subscribe' && frame.channel === channel) subscribedSocket = ws;
+          });
+          ws.onClose(() => {
+            if (subscribedSocket === ws) subscribedSocket = undefined;
+          });
+        });
         await signIn(context, baseURL!);
         await mockApi(page);
         await page.goto(`/${lang}`);
         await applyTheme(page, theme, mode);
-        await expect.poll(() => sockets.length, { timeout: 30_000 }).toBeGreaterThan(0);
-        const data = { type: 'notification', notificationId: `t${Date.now()}`, userId: 'x', notificationType: 'upload', notificationKey: 'uploadReady', params: { videoTitle: 'Toast contrast' }, actionUrl: '/video/v1', persisted: false };
+        await expect.poll(() => subscribedSocket, { timeout: 30_000, message: 'the notification channel was subscribed' }).toBeDefined();
+        const data = { type: 'notification', notificationId: 'theme-sweep-toast', userId: USER_ID, notificationType: 'upload', notificationKey: 'uploadReady', params: { videoTitle: 'Toast contrast' }, actionUrl: '/video/v1', persisted: false };
+        subscribedSocket!.send(JSON.stringify({ type: 'notification', channel, timestamp: Date.now(), data }));
         const toast = page.getByTestId('realtime-toast').first();
-        // The socket can open before the page subscribes to user:x, and a message sent before that is
-        // dropped: send again (same notificationId, so one toast) until it shows (#1196)
-        await expect(async () => {
-          sockets.forEach((ws) => ws.send(JSON.stringify({ type: 'notification', channel: 'user:x', timestamp: Date.now(), data })));
-          await expect(toast.getByTestId('realtime-toast-action')).toBeVisible({ timeout: 3_000 });
-        }).toPass({ timeout: 30_000 });
+        await expect(toast.getByTestId('realtime-toast-action')).toBeVisible();
         // Never see-through while it arrives: no opacity in its animation, fully opaque from the start
         const fade = await toast.evaluate((el) => {
           const name = getComputedStyle(el).animationName;
