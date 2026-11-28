@@ -106,8 +106,18 @@ describe('getSiteTheme', () => {
       `@\\69mport url('https://evil.example/x.css'); ${css}`,
       `${css} body{width:expression(alert(1))}`,
       `${css} body{background:url(javascript:alert(1))}`,
+      `${css} body{background:url("JaVaScRiPt:alert(1)")}`,
       `${css} body{background:url("java\\73cript:alert(1)")}`,
+      `${css} body{background:url("  \\09\\01 javascript:alert(1)")}`,
+      `${css} body{background:url("vbscript:msgbox(1)")}`,
+      `${css} body{background:url("VbScRiPt:msgbox(1)")}`,
+      `${css} body{background:url("data:text/html,hi")}`,
+      `${css} body{background:url("DaTa:image/png;base64,iVBORw0KGgo=")}`,
       `${css} body{background:url("data:image/svg+xml,<svg/>")}`,
+      `${css} body{background:url("\u0001https://cdn.example/a.png")}`,
+      `${css} body{content:"javascript:alert(1)"}`,
+      `${css} body{content:"  \t\u0001DaTa:text/html,x"}`,
+      `${css} body{content:"VbScRiPt:msgbox(1)"}`,
     ]) {
       resetSiteThemeCache();
       answers(pkg, unsafe);
@@ -118,7 +128,7 @@ describe('getSiteTheme', () => {
   });
 
   it('allows valid package CSS with child combinators and allowlisted url() assets', async () => {
-    const rich = `${css} html[data-theme='eid-lights'] .sib > h2{background:url('/api/theme-packages/eid-lights/1.0.0/assets/bg.webp')}`;
+    const rich = `${css} html[data-theme='eid-lights'] .sib > h2{background:url('/api/theme-packages/eid-lights/1.0.0/assets/bg.webp');mask-image:url("https://cdn.alummahnow.net/mask.webp")}`;
     answers(pkg, rich);
     await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css: rich });
   });

@@ -1,6 +1,6 @@
 import { DEFAULT_SITE_THEME, isBuiltInSiteTheme, resolveSiteTheme, type PublicSiteTheme } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger';
-import { safeHttpUrl, safeImageUrl, safeSameOriginPath } from '@/lib/security/safe-input';
+import { safeSameOriginPath } from '@/lib/security/safe-input';
 
 /** How long a change may take to reach visitors. */
 const TTL_SECONDS = 30;
@@ -171,18 +171,36 @@ function readCssString(css: string, start: number): { value: string; next: numbe
   return null;
 }
 
-/** Allowlist for `url(...)` targets inside package CSS: same-origin paths, https:, raster data:image, or #id. */
+const CSS_URL_BASE = 'https://theme-asset.invalid';
+const CONTROL_CHAR_RE = /[\u0000-\u001F\u007F]/;
+/** Matches a string carrying a URI scheme prefix (even after leading whitespace/control chars). */
+const HAS_URI_SCHEME_RE = /^[\s\u0000-\u0020]*[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Strict allowlist for URL targets inside package CSS:
+ * - same-origin relative paths (`/api/theme-packages/...`)
+ * - explicit `https:` URLs parsed via `new URL(value, base)`
+ * - local `#id` fragments
+ * Rejects `data:`, `javascript:`, `vbscript:`, `http:`, protocol-relative `//`,
+ * backslashes, and whitespace/control-char obfuscations.
+ */
 function isSafeCssUrl(raw: string): boolean {
+  if (!raw || CONTROL_CHAR_RE.test(raw)) return false;
   const trimmed = raw.trim();
-  if (!trimmed) return false;
+  if (!trimmed || trimmed.includes('\\') || trimmed.startsWith('//')) return false;
   if (trimmed.startsWith('#')) return /^#[A-Za-z0-9_-]+$/.test(trimmed);
-  if (safeSameOriginPath(trimmed)) return true;
-  if (safeHttpUrl(trimmed, { allowHttp: false })) return true;
-  if (safeImageUrl(trimmed, { allowRelative: false, allowHttp: false, allowDataImage: true })) return true;
-  return false;
+  if (trimmed.startsWith('/')) return safeSameOriginPath(trimmed) !== null;
+  try {
+    const parsed = new URL(trimmed, CSS_URL_BASE);
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.origin === CSS_URL_BASE) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Tokenize CSS to reject `@import`, `expression()`, unsafe `url()` schemes, and script-scheme tokens. */
+/** Tokenize CSS to reject `@import`, `expression()`, and non-allowlisted URL schemes. */
 function hasSafeCssTokens(css: string): boolean {
   let i = 0;
   while (i < css.length) {
@@ -196,8 +214,7 @@ function hasSafeCssTokens(css: string): boolean {
     if (ch === '"' || ch === "'") {
       const str = readCssString(css, i);
       if (!str) return false;
-      const lower = str.value.trim().toLowerCase();
-      if (lower.startsWith('javascript:') || lower.startsWith('vbscript:')) return false;
+      if (HAS_URI_SCHEME_RE.test(str.value) && !isSafeCssUrl(str.value)) return false;
       i = str.next;
       continue;
     }
@@ -243,8 +260,6 @@ function hasSafeCssTokens(css: string): boolean {
           i = argPos;
           continue;
         }
-      } else if (css[j] === ':' && (ident.value === 'javascript' || ident.value === 'vbscript')) {
-        return false;
       }
       i = ident.next;
       continue;
