@@ -6,7 +6,7 @@
  * here against the same limits admin-api applies (model.ts validateSettingsForm).
  */
 import { useId, useState } from 'react';
-import { compactNumber, COST_ALERT_KINDS, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
+import { compactNumber, COST_ALERT_KINDS, numberFormat, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatCount } from '@/i18n/translate';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
